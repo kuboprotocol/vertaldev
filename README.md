@@ -1,4 +1,4 @@
-# Kubo VibeDev
+# Vertal Vibe Dev
 
 > Plataforma autônoma de criação, execução e monetização de software baseada em IA.
 > Transforma ideias em produtos digitais completos — SaaS, metaversos, jogos AAA e aplicações Web3.
@@ -61,7 +61,7 @@ Os artefatos são retidos por 7 dias para facilitar a auditoria de regressões.
 
 ## Visão Geral
 
-O **Kubo VibeDev** é uma plataforma SaaS com inteligência artificial que permite a criação automática de aplicações digitais, incluindo sistemas Web2 e Web3.
+O **Vertal VibeDev** é uma plataforma SaaS com inteligência artificial que permite a criação automática de aplicações digitais, incluindo sistemas Web2 e Web3.
 
 **O que ele faz:**
 - Gera aplicações completas (frontend + backend)
