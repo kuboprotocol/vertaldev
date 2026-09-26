@@ -60,11 +60,33 @@ os shortlinks TERRA ADS para ganhar créditos extras (+0,5 cada, +5 no 10º,
 até 10 por dia). Por isso ela continua disponível em todos os planos, inclusive
 nos pagos.
 
+## Banco de dados (Supabase)
+
+A tabela `public.plan_config` espelha as mesmas regras
+(migração `supabase/migrations/20260926200000_plan_config_ads_and_sale.sql`):
+
+| Coluna | Regra |
+|---|---|
+| `ads_enabled` | `true` só para `free` e `starter` |
+| `ad_frequency_hours` | 6 (Free), 12 (Starter), `NULL` nos demais |
+| `is_for_sale` | `true` só para Free, Starter, Pro e Premium 1 |
+
+Duas `CHECK constraints` impedem regressões direto no banco:
+
+- `plan_config_ads_only_free_starter`: nenhum plano além de Free e Starter
+  pode ter anúncio ligado.
+- `plan_config_sale_price_cap`: nenhum plano acima de US$ 49,99 pode ser
+  marcado como à venda.
+
+O checkout em produção (`create-checkout`, versão 6) já recusa planos fora
+da venda.
+
 ## Como mudar
 
 - **Novo plano à venda:** adicione em `PLAN_CONFIG`, em `ESSENTIALS` e em
   `PLAN_PRICES` (valores em centavos). Se passar de US$ 49,99, ajuste também o
   teto em `src/test/pricing-cap.test.ts`, o que deve ser uma decisão explícita.
 - **Colocar ou tirar anúncio de um plano:** edite `AD_SUPPORTED_PLANS` e
-  `adFrequencyHours` em `src/lib/planConfig.ts` e atualize este documento e
-  `src/test/ad-policy.test.ts`.
+  `adFrequencyHours` em `src/lib/planConfig.ts`. Faça também uma migração
+  alterando `plan_config` e a constraint `plan_config_ads_only_free_starter`.
+  Depois atualize este documento e `src/test/ad-policy.test.ts`.
