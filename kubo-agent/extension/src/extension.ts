@@ -47,7 +47,7 @@ async function call(path: string, body?: unknown, method: "GET" | "POST" = "POST
   const secret = readConfig()?.local_secret;
   if (!secret) {
     throw new Error(
-      "KUBO Local Agent has no paired secret yet. Run \u201cKUBO: Pair this workspace\u201d first.",
+      "Vertal Local Agent has no paired secret yet. Run \u201cKUBO: Pair this workspace\u201d first.",
     );
   }
   const res = await fetch(`${baseUrl()}${path}`, {
@@ -65,9 +65,9 @@ async function refreshBalance() {
   if (!statusItem) return;
   try {
     const out = await call("/balance", undefined, "GET");
-    statusItem.text = out.ok && out.balance != null ? `$(pulse) KUBO \u00b7 ${out.balance} cr` : "$(pulse) KUBO";
+    statusItem.text = out.ok && out.balance != null ? `$(pulse) Vertal \u00b7 ${out.balance} cr` : "$(pulse) Vertal";
   } catch {
-    statusItem.text = "$(pulse) KUBO";
+    statusItem.text = "$(pulse) Vertal";
   }
 }
 
@@ -78,21 +78,21 @@ async function updateAgent() {
     if (!check.update?.available) {
       vscode.window.showInformationMessage(
         check.update?.current
-          ? `KUBO Local Agent is up to date (${check.update.current}).`
-          : "This KUBO Local Agent is a local build \u2014 auto-update is disabled.",
+          ? `Vertal Local Agent is up to date (${check.update.current}).`
+          : "This Vertal Local Agent is a local build \u2014 auto-update is disabled.",
       );
       return;
     }
     const choice = await vscode.window.showInformationMessage(
-      `KUBO Local Agent ${check.update.latest} is available (current: ${check.update.current}). Update now?`,
+      `Vertal Local Agent ${check.update.latest} is available (current: ${check.update.current}). Update now?`,
       "Update",
     );
     if (choice !== "Update") return;
     const out = await call("/update/apply");
     if (!out.ok) throw new Error(out.error ?? "update failed");
-    vscode.window.showInformationMessage(`KUBO Local Agent updated to ${out.update?.latest}. Restarting\u2026`);
+    vscode.window.showInformationMessage(`Vertal Local Agent updated to ${out.update?.latest}. Restarting\u2026`);
   } catch (err) {
-    vscode.window.showErrorMessage(`KUBO: ${err instanceof Error ? err.message : String(err)}`);
+    vscode.window.showErrorMessage(`Vertal: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -100,21 +100,21 @@ async function aiAction(action: Action, prompt?: string) {
   try {
     const out = await call("/ai", { action, prompt, project_id: projectId() });
     if (!out.ok) {
-      vscode.window.showErrorMessage(`KUBO: ${out.error ?? "request failed"}`);
+      vscode.window.showErrorMessage(`Vertal: ${out.error ?? "request failed"}`);
       return;
     }
     vscode.window.showInformationMessage(
-      `KUBO: ${COST[action]} credit(s) charged. Balance: ${out.balance_after ?? "\u2014"}`,
+      `Vertal: ${COST[action]} credit(s) charged. Balance: ${out.balance_after ?? "\u2014"}`,
     );
     refreshBalance();
   } catch (err) {
-    vscode.window.showErrorMessage(`KUBO: ${err instanceof Error ? err.message : String(err)}`);
+    vscode.window.showErrorMessage(`Vertal: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
 /** Runs a command; if the daemon flags it as destructive, asks the user to confirm before resending. */
 async function runCommand(command: string) {
-  const channel = vscode.window.createOutputChannel("KUBO");
+  const channel = vscode.window.createOutputChannel("Vertal");
   try {
     let out = await call("/run", { command, project_id: projectId(), confirmed: false });
 
@@ -135,14 +135,14 @@ async function runCommand(command: string) {
     channel.appendLine(out.logs ?? out.error ?? "");
     channel.show();
   } catch (err) {
-    vscode.window.showErrorMessage(`KUBO: ${err instanceof Error ? err.message : String(err)}`);
+    vscode.window.showErrorMessage(`Vertal: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
 async function pairWorkspace() {
   const folders = vscode.workspace.workspaceFolders;
   if (!folders?.length) {
-    vscode.window.showErrorMessage("Open a folder first, then pair it with KUBO.");
+    vscode.window.showErrorMessage("Open a folder first, then pair it with Vertal.");
     return;
   }
   const workspace = folders[0].uri.fsPath;
@@ -158,7 +158,7 @@ async function pairWorkspace() {
   const secret = readConfig()?.local_secret;
   if (!secret) {
     vscode.window.showErrorMessage(
-      "KUBO Local Agent daemon hasn't started yet (no secret found). Start it first, then retry pairing.",
+      "Vertal Local Agent daemon hasn't started yet (no secret found). Start it first, then retry pairing.",
     );
     return;
   }
@@ -170,16 +170,16 @@ async function pairWorkspace() {
   });
   const data = await res.json();
   if (data.ok) {
-    vscode.window.showInformationMessage(`KUBO: paired to ${workspace}`);
+    vscode.window.showInformationMessage(`Vertal: paired to ${workspace}`);
     refreshBalance();
   } else {
-    vscode.window.showErrorMessage(`KUBO: pairing failed \u2014 ${data.error ?? "unknown error"}`);
+    vscode.window.showErrorMessage(`Vertal: pairing failed \u2014 ${data.error ?? "unknown error"}`);
   }
 }
 
 export function activate(context: vscode.ExtensionContext) {
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-  status.text = "$(pulse) KUBO";
+  status.text = "$(pulse) Vertal";
   status.command = "kubo.status";
   status.show();
   context.subscriptions.push(status);
@@ -192,10 +192,10 @@ export function activate(context: vscode.ExtensionContext) {
         const res = await fetch(`${baseUrl()}/health`);
         const data = await res.json();
         vscode.window.showInformationMessage(
-          `KUBO Local Agent v${data.version}${data.release ? ` (${data.release})` : ""} \u2014 workspace: ${data.workspace ?? "not linked"} \u2014 paired: ${data.paired ? "yes" : "no"}`,
+          `Vertal Local Agent v${data.version}${data.release ? ` (${data.release})` : ""} \u2014 workspace: ${data.workspace ?? "not linked"} \u2014 paired: ${data.paired ? "yes" : "no"}`,
         );
       } catch {
-        vscode.window.showErrorMessage("KUBO Local Agent is not running.");
+        vscode.window.showErrorMessage("Vertal Local Agent is not running.");
       }
     }),
 
@@ -204,7 +204,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("kubo.update", () => updateAgent()),
 
     vscode.commands.registerCommand("kubo.chat", async () => {
-      const prompt = await vscode.window.showInputBox({ prompt: "Ask the KUBO agent (1 credit)" });
+      const prompt = await vscode.window.showInputBox({ prompt: "Ask the Vertal agent (1 credit)" });
       if (prompt) await aiAction("chat_message", prompt);
     }),
 

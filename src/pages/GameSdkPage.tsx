@@ -19,7 +19,7 @@ const game = createRetroGame({
   width: 160, height: 144, scale: 4, palette: 'kubo',
   update: (r, dt) => {
     r.clear(0);
-    r.text('HELLO KUBO', 40, 60, 9);
+    r.text('HELLO VERTAL', 40, 60, 9);
     r.flush();
   },
 });`,
@@ -86,7 +86,7 @@ export default function GameSdkPage() {
         // Sun
         r.rectFill(60, 50 + Math.sin(t * 2) * 4, 40, 40, 9);
         r.rectFill(64, 54 + Math.sin(t * 2) * 4, 32, 32, 10);
-        r.text('@KUBO/SDK', 50, 14, 9);
+        r.text('@VERTAL/SDK', 50, 14, 9);
         r.text(`V ${VERSION}`, 60, 24, 8);
         r.text('LIVE DEMO', 56, 110, 14);
         r.flush();
@@ -121,7 +121,7 @@ export default function GameSdkPage() {
             <Link to="/game"><Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" /> Game Hub</Button></Link>
             <div className="flex items-center gap-2">
               <Package className="w-5 h-5 text-primary" />
-              <h1 className="text-xl font-bold font-display tracking-wider">@KUBO/<span className="neon-text">SDK</span></h1>
+              <h1 className="text-xl font-bold font-display tracking-wider">@VERTAL/<span className="neon-text">SDK</span></h1>
             </div>
             <Badge variant="outline" className="font-mono">v{VERSION}</Badge>
           </div>
@@ -133,7 +133,7 @@ export default function GameSdkPage() {
         <Card className="glass-premium p-6">
           <h2 className="text-2xl font-bold font-display mb-2">Build games in one import</h2>
           <p className="text-sm text-muted-foreground max-w-2xl">
-            The KUBO SDK exposes three composable namespaces — <span className="font-mono text-primary">retro</span>,{' '}
+            The Vertal SDK exposes three composable namespaces — <span className="font-mono text-primary">retro</span>,{' '}
             <span className="font-mono text-primary">rpg</span>, and{' '}
             <span className="font-mono text-primary">metaverse</span> — plus high-level helpers that boot a working game
             in a single function call. Everything tree-shakes; import only what you ship.

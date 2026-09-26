@@ -65,7 +65,7 @@ export default function ConnectorWeb3Page() {
             <p className="font-semibold">Third-party service</p>
             <p className="text-muted-foreground text-xs">
               {provider.label} is an external provider. Limits, charges, and SLAs are the provider's
-              responsibility. KUBO only integrates the RPC using your key (AES-256-GCM encrypted).
+              responsibility. Vertal only integrates the RPC using your key (AES-256-GCM encrypted).
             </p>
           </div>
         </Card>
@@ -73,7 +73,7 @@ export default function ConnectorWeb3Page() {
         <Card className="p-4 border-primary/30 bg-primary/5 flex gap-3">
           <ShieldCheck className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
           <p className="text-xs text-muted-foreground">
-            Your API Key and RPC URL are encrypted before being stored. Only KUBO's edge functions can decrypt
+            Your API Key and RPC URL are encrypted before being stored. Only Vertal's edge functions can decrypt
             them to run connection tests on your behalf.
           </p>
         </Card>

@@ -391,7 +391,7 @@ export default function ConnectorAboutPage({ navLockMs = DEFAULT_NAV_LOCK_MS }: 
           </div>
           <p className="text-sm text-muted-foreground leading-relaxed">
             Your key is encrypted with <strong>AES-256-GCM</strong> before being stored and is never
-            returned in plaintext to the browser. Only KUBO's edge functions can decrypt it to
+            returned in plaintext to the browser. Only Vertal's edge functions can decrypt it to
             perform actions on your behalf.
           </p>
         </Card>

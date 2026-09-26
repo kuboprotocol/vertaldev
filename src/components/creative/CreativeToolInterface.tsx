@@ -33,15 +33,15 @@ interface Props {
 }
 
 const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: string }[] = [
-  { key: "chat", title: "Kubo Chat", desc: "Conversas, resumos, traduções, geração de textos", icon: MessageSquare, cost: "1 crédito" },
+  { key: "chat", title: "Vertal Chat", desc: "Conversas, resumos, traduções, geração de textos", icon: MessageSquare, cost: "1 crédito" },
   { key: "nano_banana", title: "Imagens Premium", desc: "Criação de imagens de alta qualidade", icon: ImageIcon, cost: "1 crédito" },
   { key: "downloader", title: "Downloader Universal", desc: "YouTube, Instagram, TikTok, Facebook", icon: Download, cost: "2 créditos" },
-  { key: "clips", title: "Kubo Clips", desc: "Cortes virais automáticos", icon: Scissors, cost: "1 crédito" },
-  { key: "avatar", title: "Kubo Avatar AI", desc: "Avatares falantes realistas", icon: User2, cost: "2–4 créditos" },
-  { key: "shorts", title: "Kubo Shorts", desc: "Vídeos curtos a partir de texto", icon: Video, cost: "3 créditos" },
+  { key: "clips", title: "Vertal Clips", desc: "Cortes virais automáticos", icon: Scissors, cost: "1 crédito" },
+  { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes realistas", icon: User2, cost: "2–4 créditos" },
+  { key: "shorts", title: "Vertal Shorts", desc: "Vídeos curtos a partir de texto", icon: Video, cost: "3 créditos" },
   { key: "music", title: "MusKAI Music", desc: "Redireciona para MusKAI", icon: Music, cost: "Externo" },
-  { key: "ebook", title: "Kubo Ebook AI", desc: "eBooks completos com capítulos", icon: BookOpen, cost: "10 créditos" },
-  { key: "emo", title: "Kubo EMO AI", desc: "Animação realista de fotos", icon: Sparkles, cost: "5 créditos" },
+  { key: "ebook", title: "Vertal Ebook AI", desc: "eBooks completos com capítulos", icon: BookOpen, cost: "10 créditos" },
+  { key: "emo", title: "Vertal EMO AI", desc: "Animação realista de fotos", icon: Sparkles, cost: "5 créditos" },
 ];
 
 const TOOL_CONFIGS: Record<ToolKey, { 
@@ -53,7 +53,7 @@ const TOOL_CONFIGS: Record<ToolKey, {
   options?: { key: string; label: string; type: "select" | "input" | "number" | "switch"; options?: string[]; default: any }[];
 }> = {
   chat: { 
-    title: "Kubo Chat", 
+    title: "Vertal Chat", 
     description: "Conversas, resumos, traduções e geração de textos avançada.", 
     cost: 1,
     promptLabel: "O que você deseja criar ou perguntar?",
@@ -81,14 +81,14 @@ const TOOL_CONFIGS: Record<ToolKey, {
     ]
   },
   clips: { 
-    title: "Kubo Clips", 
+    title: "Vertal Clips", 
     description: "Crie cortes virais automáticos de vídeos longos.", 
     cost: 1,
     promptLabel: "URL do vídeo ou Transcrição",
     placeholder: "Cole a URL do vídeo ou o texto para ser transformado em clips...",
   },
   avatar: { 
-    title: "Kubo Avatar AI", 
+    title: "Vertal Avatar AI", 
     description: "Avatares falantes com narração IA ultra-realista.", 
     cost: 2,
     promptLabel: "Texto para o avatar falar",
@@ -98,7 +98,7 @@ const TOOL_CONFIGS: Record<ToolKey, {
     ]
   },
   shorts: { 
-    title: "Kubo Shorts", 
+    title: "Vertal Shorts", 
     description: "Vídeos curtos verticais gerados a partir de texto.", 
     cost: 3,
     promptLabel: "Roteiro ou tema",
@@ -115,7 +115,7 @@ const TOOL_CONFIGS: Record<ToolKey, {
     ]
   },
   ebook: { 
-    title: "Kubo Ebook AI", 
+    title: "Vertal Ebook AI", 
     description: "eBooks completos com capa, capítulos e conteúdo.", 
     cost: 10,
     promptLabel: "Tema do Ebook",
@@ -125,7 +125,7 @@ const TOOL_CONFIGS: Record<ToolKey, {
     ]
   },
   emo: { 
-    title: "Kubo EMO AI", 
+    title: "Vertal EMO AI", 
     description: "Animação realista de fotos a partir de um vídeo de referência.", 
     cost: 5,
     promptLabel: "Instruções adicionais",

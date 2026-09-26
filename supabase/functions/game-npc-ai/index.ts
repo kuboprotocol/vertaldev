@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
   if (!persona || !input) return json({ error: "npcPersona_and_playerInput_required" }, 400);
   if (input.length > MAX_INPUT) return json({ error: "player_input_too_long" }, 400);
 
-  const system = `Você é um NPC dentro do KUBO Quantum Game Engine (Living Worlds).
+  const system = `Você é um NPC dentro do Vertal Quantum Game Engine (Living Worlds).
 Persona: ${persona}
 NPC ID: ${npcId}
 Mundo: ${JSON.stringify(sanitizeWorld(body.worldState))}

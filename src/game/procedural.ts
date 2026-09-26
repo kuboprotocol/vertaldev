@@ -13,8 +13,8 @@ function rng(seed: number) {
 }
 
 const NPC_PERSONAS = [
-  { id: 'mercador-aurum', persona: 'Mercador místico que negocia créditos KUBO por relíquias quânticas. Fala em sussurros e adora enigmas.' },
-  { id: 'guardiao-neon',  persona: 'Guardião cibernético do portal neon. Estoico, direto, leal ao Protocolo KUBO.' },
+  { id: 'mercador-aurum', persona: 'Mercador místico que negocia moedas do jogo por relíquias quânticas. Fala em sussurros e adora enigmas.' },
+  { id: 'guardiao-neon',  persona: 'Guardião cibernético do portal neon. Estoico, direto, leal ao Protocolo Vertal.' },
   { id: 'oraculo-flow',   persona: 'Oráculo da FLOW AI. Profetiza decisões de gameplay com metáforas de fluxo e código.' },
   { id: 'arquiteta-void', persona: 'Arquiteta do Void que constrói mundos. Curiosa, criativa, sempre propõe missões de design.' },
 ];

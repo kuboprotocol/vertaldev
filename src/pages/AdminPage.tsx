@@ -66,7 +66,7 @@ export default function AdminPage() {
         <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
           <div>
             <h1 className="text-4xl font-bold tracking-tight" style={{ fontFamily: "Orbitron, sans-serif" }}>
-              <Shield className="inline w-7 h-7 mr-2 text-primary" /> KUBO Admin
+              <Shield className="inline w-7 h-7 mr-2 text-primary" /> Vertal Admin
             </h1>
             <p className="text-muted-foreground mt-1">Operações, monitoramento e auditoria global.</p>
           </div>

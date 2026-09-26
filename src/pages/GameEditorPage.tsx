@@ -244,7 +244,7 @@ export default function GameEditorPage() {
             <div className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-primary" />
               <h1 className="text-xl font-bold font-display tracking-wider">
-                KUBO <span className="neon-text">VISUAL EDITOR</span>
+                VERTAL <span className="neon-text">VISUAL EDITOR</span>
               </h1>
             </div>
             <Badge variant="outline" className="neon-ring">BETA</Badge>

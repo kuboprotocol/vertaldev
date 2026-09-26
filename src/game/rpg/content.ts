@@ -7,7 +7,7 @@ import type { Combatant, Item, NPC, DialogueTree } from './types';
 
 export const HERO: Combatant = {
   id: 'hero',
-  name: 'Kubo',
+  name: 'Vertal',
   tint: 11,
   stats: { hp: 30, maxHp: 30, mp: 10, maxMp: 10, atk: 6, def: 4, spd: 5, level: 1, xp: 0 },
   skills: [
@@ -64,7 +64,7 @@ export const DEFAULT_DIALOGUE: DialogueTree = {
   elder_intro: {
     id: 'elder_intro',
     lines: [
-      { speaker: 'Elder', text: 'Welcome to Kubo Village, traveler.' },
+      { speaker: 'Elder', text: 'Welcome to Vertal Village, traveler.' },
       { speaker: 'Elder', text: 'A dragon roams the eastern hills.' },
       {
         speaker: 'Elder',

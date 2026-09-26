@@ -61,7 +61,7 @@ function featuresFor(plan: string): string[] {
   }
   if (plan.startsWith('business') || plan === 'enterprise') {
     feats.push('✓ Suporte prioritário')
-    feats.push('✓ Acordo de parceria KUBO')
+    feats.push('✓ Acordo de parceria Vertal')
   }
   const tierNum = Number(plan.replace('business_', '')) || 0
   if (tierNum >= 3 || plan === 'enterprise') feats.push('✓ API Access')
@@ -220,7 +220,7 @@ export default function PricingPage() {
           className="mx-auto max-w-3xl text-center"
         >
           <Badge variant="outline" className="mb-5 border-primary/30 bg-primary/5 text-primary uppercase tracking-widest">
-            <Sparkles className="mr-1.5 h-3 w-3" /> KUBO Protocol · Planos e Preços
+            <Sparkles className="mr-1.5 h-3 w-3" /> Vertal Vibe Dev · Planos e Preços
           </Badge>
           <h1 className="font-display text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
             Escolha o plano ideal

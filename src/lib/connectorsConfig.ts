@@ -35,7 +35,7 @@ export const connectors: ConnectorConfig[] = [
     authType: 'api_key',
     category: 'development',
     description: 'Sincronize repositórios e automatize deploys.',
-    longDescription: 'Conecte sua conta do GitHub para sincronizar repositórios, automatizar deploys e gerenciar seu código diretamente da plataforma KUBO.',
+    longDescription: 'Conecte sua conta do GitHub para sincronizar repositórios, automatizar deploys e gerenciar seu código diretamente da plataforma Vertal.',
     features: ['Sincronização de repositórios', 'Deploy automático', 'Webhooks', 'CI/CD Integration'],
     docsUrl: 'https://docs.github.com',
     status: 'available',
@@ -46,7 +46,7 @@ export const connectors: ConnectorConfig[] = [
     setupSteps: [
       { title: 'Acesse seu GitHub', description: 'Abra Settings → Developer settings → Personal access tokens (classic).' },
       { title: 'Gere um novo token', description: 'Selecione os escopos: repo, workflow, read:user.' },
-      { title: 'Cole o token aqui', description: 'O token será criptografado e armazenado de forma segura na KUBO.' },
+      { title: 'Cole o token aqui', description: 'O token será criptografado e armazenado de forma segura na Vertal.' },
     ],
   },
   {
@@ -89,7 +89,7 @@ export const connectors: ConnectorConfig[] = [
     apiKeyDocsUrl: 'https://www.figma.com/developers/api#access-tokens',
     setupSteps: [
       { title: 'Abra Settings no Figma', description: 'Account → Personal access tokens.' },
-      { title: 'Gere um token', description: 'Dê um nome (ex.: "KUBO") e copie o valor exibido.' },
+      { title: 'Gere um token', description: 'Dê um nome (ex.: "Vertal") e copie o valor exibido.' },
       { title: 'Cole o token aqui', description: 'Você poderá importar arquivos sem mais autenticação.' },
     ],
   },
@@ -112,7 +112,7 @@ export const connectors: ConnectorConfig[] = [
     setupSteps: [
       { title: 'Abra Account Settings', description: 'Vercel → Settings → Tokens.' },
       { title: 'Crie um novo token', description: 'Defina escopo (Full Account ou apenas um Team).' },
-      { title: 'Cole o token aqui', description: 'A KUBO usará para automatizar deploys.' },
+      { title: 'Cole o token aqui', description: 'A Vertal usará para automatizar deploys.' },
     ],
   },
   {
@@ -133,7 +133,7 @@ export const connectors: ConnectorConfig[] = [
     setupSteps: [
       { title: 'Abra seu projeto Supabase', description: 'Project Settings → API.' },
       { title: 'Copie a Service Role Key', description: 'É a chave que começa com eyJ...' },
-      { title: 'Cole aqui', description: 'A KUBO armazena cifrada e usa server-side apenas.' },
+      { title: 'Cole aqui', description: 'A Vertal armazena cifrada e usa server-side apenas.' },
     ],
   },
   {
@@ -155,7 +155,7 @@ export const connectors: ConnectorConfig[] = [
     setupSteps: [
       { title: 'Abra o Resend', description: 'Dashboard → API Keys.' },
       { title: 'Crie uma chave', description: 'Defina permissões (Full access ou Sending only).' },
-      { title: 'Cole aqui', description: 'A KUBO enviará emails em seu nome.' },
+      { title: 'Cole aqui', description: 'A Vertal enviará emails em seu nome.' },
     ],
   },
   {
@@ -222,7 +222,7 @@ export const connectors: ConnectorConfig[] = [
     setupSteps: [
       { title: 'Abra Account Settings', description: 'Render Dashboard → API Keys.' },
       { title: 'Crie uma API Key', description: 'Copie o token rnd_…' },
-      { title: 'Cole no painel', description: 'A KUBO valida e cifra antes de persistir.' },
+      { title: 'Cole no painel', description: 'A Vertal valida e cifra antes de persistir.' },
     ],
   },
   {
@@ -243,7 +243,7 @@ export const connectors: ConnectorConfig[] = [
     setupSteps: [
       { title: 'Crie uma aplicação', description: 'Discord Developer Portal → New Application.' },
       { title: 'Adicione um Bot', description: 'Bot → Add Bot → Reset Token.' },
-      { title: 'Cole o token aqui', description: 'A KUBO automatizará notificações.' },
+      { title: 'Cole o token aqui', description: 'A Vertal automatizará notificações.' },
     ],
   },
   {
@@ -265,7 +265,7 @@ export const connectors: ConnectorConfig[] = [
     setupSteps: [
       { title: 'Abra seu perfil Cloudflare', description: 'My Profile → API Tokens → Create Token.' },
       { title: 'Use template "Edit zone DNS"', description: 'Ou customize com permissões específicas.' },
-      { title: 'Cole o token aqui', description: 'A KUBO gerenciará DNS e cache automaticamente.' },
+      { title: 'Cole o token aqui', description: 'A Vertal gerenciará DNS e cache automaticamente.' },
     ],
   },
   {
@@ -287,7 +287,7 @@ export const connectors: ConnectorConfig[] = [
     setupSteps: [
       { title: 'Abra o MongoDB Atlas', description: 'Database → Connect → Drivers.' },
       { title: 'Crie um usuário do banco', description: 'Database Access → Add new user (readWrite).' },
-      { title: 'Cole a connection string aqui', description: 'A KUBO armazena cifrada e usa server-side apenas.' },
+      { title: 'Cole a connection string aqui', description: 'A Vertal armazena cifrada e usa server-side apenas.' },
     ],
   },
   {
@@ -309,7 +309,7 @@ export const connectors: ConnectorConfig[] = [
     setupSteps: [
       { title: 'Abra Account Settings', description: 'Docker Hub → Security → New Access Token.' },
       { title: 'Defina o escopo', description: 'Read & Write é recomendado para CI/CD.' },
-      { title: 'Cole o token aqui', description: 'A KUBO usará para automatizar publicações.' },
+      { title: 'Cole o token aqui', description: 'A Vertal usará para automatizar publicações.' },
     ],
   },
   {
@@ -332,7 +332,7 @@ export const connectors: ConnectorConfig[] = [
     setupSteps: [
       { title: 'Abra o Dashboard Alchemy', description: 'Apps → Create new App.' },
       { title: 'Selecione a chain', description: 'Ethereum, Polygon, Base, Arbitrum, etc.' },
-      { title: 'Cole a API Key aqui', description: 'A KUBO usará para chamadas Web3 server-side.' },
+      { title: 'Cole a API Key aqui', description: 'A Vertal usará para chamadas Web3 server-side.' },
     ],
   },
   {
@@ -355,7 +355,7 @@ export const connectors: ConnectorConfig[] = [
     setupSteps: [
       { title: 'Abra o Dashboard Infura', description: 'API Keys → Create New Key.' },
       { title: 'Habilite as networks', description: 'Marque Ethereum, Polygon, Arbitrum, etc.' },
-      { title: 'Cole o Project ID aqui', description: 'A KUBO usará para chamadas RPC server-side.' },
+      { title: 'Cole o Project ID aqui', description: 'A Vertal usará para chamadas RPC server-side.' },
     ],
   },
   {
@@ -377,7 +377,7 @@ export const connectors: ConnectorConfig[] = [
     setupSteps: [
       { title: 'Tenha sua RPC URL', description: 'Self-hosted, QuickNode, Moralis, Chainstack, etc.' },
       { title: 'Escolha a network', description: 'EVM, Solana ou UTXO (BTC/LTC/DOGE).' },
-      { title: 'Teste e salve', description: 'A KUBO valida com um ping antes de persistir.' },
+      { title: 'Teste e salve', description: 'A Vertal valida com um ping antes de persistir.' },
     ],
   },
   {
@@ -397,7 +397,7 @@ export const connectors: ConnectorConfig[] = [
     setupSteps: [
       { title: 'Abra sua carteira', description: 'MetaMask, Rabby, Coinbase Wallet ou similar.' },
       { title: 'Copie o endereço público', description: 'Começa com 0x e tem 42 caracteres.' },
-      { title: 'Cole aqui', description: 'A KUBO solicitará assinatura via WalletConnect quando necessário.' },
+      { title: 'Cole aqui', description: 'A Vertal solicitará assinatura via WalletConnect quando necessário.' },
     ],
   },
 ]

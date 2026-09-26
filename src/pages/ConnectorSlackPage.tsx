@@ -280,7 +280,7 @@ export default function ConnectorSlackPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <label className="text-xs text-muted-foreground">Username (optional)</label>
-                <Input value={composeUsername} onChange={e => setComposeUsername(e.target.value)} placeholder="KUBO Bot" />
+                <Input value={composeUsername} onChange={e => setComposeUsername(e.target.value)} placeholder="Vertal Bot" />
               </div>
               <div className="space-y-2">
                 <label className="text-xs text-muted-foreground">Emoji (optional)</label>

@@ -171,9 +171,9 @@ export default function ConnectorSetupPage() {
             <div className="space-y-2 text-sm">
               <p className="font-semibold text-foreground">Third-party service</p>
               <p className="text-muted-foreground">
-                <strong>{connector.name}</strong> is an external service, independent of KUBO. Charges,
+                <strong>{connector.name}</strong> is an external service, independent of Vertal. Charges,
                 usage limits, API policies, and account security are solely the responsibility
-                of the provider. KUBO only integrates and automates calls using your key.
+                of the provider. Vertal only integrates and automates calls using your key.
               </p>
             </div>
           </div>
@@ -185,7 +185,7 @@ export default function ConnectorSetupPage() {
             <div className="text-sm space-y-1">
               <p className="font-semibold text-foreground">GitHub Login via PAT</p>
               <p className="text-muted-foreground text-xs">
-                Sem OAuth externo. A KUBO valida seu Personal Access Token na API do GitHub e
+                Sem OAuth externo. A Vertal valida seu Personal Access Token na API do GitHub e
                 vincula sua conta automaticamente — só então você é levado ao painel do conector.
               </p>
             </div>
@@ -306,7 +306,7 @@ export default function ConnectorSetupPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <KeyRound className="h-5 w-5 text-primary" />
-              <h2 className="font-semibold">Connect à KUBO</h2>
+              <h2 className="font-semibold">Connect à Vertal</h2>
             </div>
             {connector.slug === 'github' && (
               <Badge variant="outline" className="text-[10px] uppercase font-bold text-primary border-primary/40">
@@ -333,7 +333,7 @@ export default function ConnectorSetupPage() {
             <ShieldCheck className="h-5 w-5 text-emerald-500 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-muted-foreground">
               Your key is encrypted with <strong>AES-256-GCM</strong> antes de ser persistida e nunca é
-              devolvida em claro ao navegador. Apenas as edge functions da KUBO podem descifrar para
+              devolvida em claro ao navegador. Apenas as edge functions da Vertal podem descifrar para
               executar ações em seu nome.
             </p>
           </div>
@@ -346,7 +346,7 @@ export default function ConnectorSetupPage() {
               className="mt-0.5"
             />
             <span className="text-sm text-muted-foreground">
-              I have read and accept that <strong>{connector.name}</strong> is a third-party service and that KUBO
+              I have read and accept that <strong>{connector.name}</strong> is a third-party service and that Vertal
               only integrates/automates calls using my key.
             </span>
           </label>

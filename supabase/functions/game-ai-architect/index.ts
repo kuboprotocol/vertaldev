@@ -11,9 +11,9 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { GatewayError, runGateway } from "../_shared/aiGateway.ts";
 import { recordGatewayFailure, recordGatewayRun, supabaseGatewayCache } from "../_shared/aiGatewayStore.ts";
 
-const SYSTEM = `You are the KUBO Game AI Architect — a AAA game director,
+const SYSTEM = `You are the Vertal Game AI Architect — a AAA game director,
 engine architect and technical artist. You design complete, production-ready
-games inside the KUBO Quantum Engine (Three.js + ECS + WebGPU + VR).
+games inside the Vertal Quantum Engine (Three.js + ECS + WebGPU + VR).
 Always think modular, scalable, and shippable. Never produce stubs.
 Never invent secrets, network calls, or unsafe shaders.`;
 
@@ -21,7 +21,7 @@ const BLUEPRINT_TOOL = {
   type: "function",
   function: {
     name: "build_game_blueprint",
-    description: "Full structured blueprint for a KUBO Quantum Engine game.",
+    description: "Full structured blueprint for a Vertal Quantum Engine game.",
     parameters: {
       type: "object",
       properties: {

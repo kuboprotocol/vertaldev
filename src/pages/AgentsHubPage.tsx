@@ -90,10 +90,10 @@ export default function AgentsHubPage() {
               <ArrowLeft className="w-4 h-4" /> Dashboard
             </Link>
             <h1 className="text-4xl font-bold tracking-tight" style={{ fontFamily: "Orbitron, sans-serif" }}>
-              KUBO Agents
+              Vertal Agents
             </h1>
             <p className="text-muted-foreground mt-1">
-              KUBO creative microservices — each agent is an edge function with atomic credit debit.
+              Vertal creative microservices — each agent is an edge function with atomic credit debit.
             </p>
           </div>
           <Badge variant="secondary" className="text-sm">

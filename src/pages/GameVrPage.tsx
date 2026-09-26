@@ -79,7 +79,7 @@ export default function GameVrPage() {
           <Link to="/game">
             <Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" /> Game Hub</Button>
           </Link>
-          <h1 className="text-lg sm:text-xl font-bold tracking-tight">KUBO VR · Ultra Realistic</h1>
+          <h1 className="text-lg sm:text-xl font-bold tracking-tight">Vertal VR · Ultra Realistic</h1>
         </div>
         <div className="flex items-center gap-2">
           <div className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground mr-2">

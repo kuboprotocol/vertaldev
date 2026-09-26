@@ -205,7 +205,7 @@ export default function GameMetaversePage() {
             <Link to="/game"><Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" /> Game Hub</Button></Link>
             <div className="flex items-center gap-2">
               <Globe className="w-5 h-5 text-primary" />
-              <h1 className="text-xl font-bold font-display tracking-wider">KUBO <span className="neon-text">METAVERSE</span></h1>
+              <h1 className="text-xl font-bold font-display tracking-wider">VERTAL <span className="neon-text">METAVERSE</span></h1>
             </div>
           </div>
           <div className="flex items-center gap-2">
