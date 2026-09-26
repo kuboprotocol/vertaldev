@@ -494,24 +494,44 @@ testimonials and a waitlist form.`}</Pre>
           atomic, real-time and visible in the dashboard.
         </P>
         <H3>Plans</H3>
+        <P>
+          Only plans up to <strong>US$ 49.99/month</strong> are sold. Annual billing saves
+          20%; Lifetime is a one-time payment of 6× the monthly price.
+        </P>
         <UL>
           <li>
-            <strong>Free</strong> — starter credits, basic models, public publishing.
+            <strong>Free</strong> — US$ 0 · 5 credits on signup · ads every 6h.
           </li>
           <li>
-            <strong>Starter</strong> — higher monthly credit pool, THINK mode access.
+            <strong>Starter</strong> — US$ 4.99/mo · 5 credits/day · ads every 12h.
           </li>
           <li>
-            <strong>Pro</strong> — heavy AI usage, priority queue, custom domains.
+            <strong>Pro</strong> — US$ 19.99/mo · 5 credits/day · no ads · email support.
           </li>
           <li>
-            <strong>Ultra / Studio</strong> — SHIP mode, RunwayML, Agents Hub, white-label.
+            <strong>Premium 1</strong> — US$ 49.99/mo · 5 credits/day · no ads · email support.
           </li>
         </UL>
+        <Callout type="info">
+          Premium 2, Business and Enterprise are no longer sold. Existing subscriptions keep
+          working until cancelled. Checkout rejects any plan above US$ 49.99.
+        </Callout>
+        <H3>Ads policy</H3>
+        <P>
+          Only <strong>Free</strong> and <strong>Starter</strong> show interstitial ads. Every
+          other plan is locked ad-free, with or without a partnership agreement. Admins never
+          see ads, and ads never fire on <Code>/auth</Code>, <Code>/pricing</Code>,{' '}
+          <Code>/checkout</Code> or <Code>/shortlinks</Code>. Source of truth:{' '}
+          <Code>AD_SUPPORTED_PLANS</Code> in <Code>src/lib/planConfig.ts</Code> (details in{' '}
+          <Code>docs/PLANOS_E_ANUNCIOS.md</Code>).
+        </P>
+        <P>
+          Shortlinks are opt-in on every plan: users open them only if they want extra credits.
+        </P>
         <H3>Earning credits</H3>
         <UL>
           <li>Daily streak bonuses and gamification badges.</li>
-          <li>Watch-to-earn rewards (max 10 videos per day, 0.5 credits each).</li>
+          <li>Shortlinks — up to 10 per day, +0.5 credits each and +5 on the 10th (opt-in, every plan).</li>
           <li>Referrals — 100 credits per successful invite.</li>
           <li>Public leaderboard rewards for top creators.</li>
         </UL>

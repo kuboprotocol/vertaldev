@@ -1,5 +1,5 @@
 import { APP_NAME } from '@/config/brand'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Check, Loader2, Sparkles, Crown, Zap, ArrowRight } from 'lucide-react'
@@ -207,8 +207,6 @@ export default function PricingPage() {
     }
   }
 
-  const enterpriseCfg = useMemo(() => getPlanConfig('enterprise'), [])
-
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Navbar />
@@ -293,55 +291,6 @@ export default function PricingPage() {
           </div>
         </motion.section>
 
-        {/* Grupo 2 — Enterprise */}
-        <motion.section
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-          className="mt-20"
-        >
-          <div className="relative overflow-hidden rounded-3xl border border-primary/40 bg-gradient-to-br from-primary/20 via-primary/5 to-transparent p-8 backdrop-blur-xl md:p-12">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.25),transparent_60%)]" aria-hidden />
-            <div className="relative grid gap-8 md:grid-cols-2 md:items-center">
-              <div>
-                <Badge className="mb-4 bg-primary/20 text-primary border-primary/40">
-                  <Crown className="mr-1.5 h-3 w-3" /> Enterprise
-                </Badge>
-                <h3 className="font-display text-3xl font-bold sm:text-4xl">Sob consulta</h3>
-                <p className="mt-3 text-muted-foreground">
-                  Solução personalizada para grandes empresas com necessidades específicas de escala, segurança e integração.
-                </p>
-                <ul className="mt-6 grid gap-2 text-sm sm:grid-cols-2">
-                  {[
-                    `${enterpriseCfg.dailyCredits} créditos por dia`,
-                    'API Access completo',
-                    'SLA garantido',
-                    'Manager dedicado',
-                    'Onboarding personalizado',
-                    'Acordo de parceria KUBO',
-                  ].map((f) => (
-                    <li key={f} className="flex items-start gap-2">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                      <span>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="flex flex-col items-start gap-4 md:items-end">
-                <Button
-                  size="lg"
-                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90 md:w-auto"
-                  onClick={() => setContactOpen(true)}
-                >
-                  Falar com nossa equipe <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-                <p className="text-xs text-muted-foreground">Resposta em até 24h úteis</p>
-              </div>
-            </div>
-          </div>
-        </motion.section>
-
         {/* Comparação */}
         <motion.section
           initial={{ opacity: 0, y: 20 }}
@@ -359,18 +308,18 @@ export default function PricingPage() {
                 <tr>
                   <th className="p-4 text-left font-semibold">Feature</th>
                   <th className="p-4 text-center font-semibold">Free</th>
+                  <th className="p-4 text-center font-semibold">Starter</th>
                   <th className="p-4 text-center font-semibold text-primary">Pro</th>
-                  <th className="p-4 text-center font-semibold">Premium 1</th>
-                  <th className="p-4 text-center font-semibold text-primary">Enterprise</th>
+                  <th className="p-4 text-center font-semibold text-primary">Premium 1</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
                 {[
-                  ['Créditos/dia', '5 (1x)', '5', '5', '1.200'],
-                  ['Shortlinks/dia', '10', '10', '10', '10'],
-                  ['Anúncios', '6h', '24h', '1x por semana', 'Sem'],
-                  ['Suporte', '—', 'Email', 'Email', 'Dedicado'],
-                  ['API', '—', '—', '—', '✓'],
+                  ['Preço/mês', '$0', '$4.99', '$19.99', '$49.99'],
+                  ['Créditos/dia', '5 (1x)', '5', '5', '5'],
+                  ['Shortlinks/dia (opcional)', '10', '10', '10', '10'],
+                  ['Anúncios', 'A cada 6h', 'A cada 12h', 'Sem anúncios', 'Sem anúncios'],
+                  ['Suporte', '—', '—', 'Email', 'Email'],
                 ].map((row) => (
                   <tr key={row[0]}>
                     {row.map((cell, i) => (
@@ -416,9 +365,9 @@ export default function PricingPage() {
                 </AccordionContent>
               </AccordionItem>
               <AccordionItem value="q4">
-                <AccordionTrigger className="px-4 text-left">O que é o Acordo de Parceria Enterprise?</AccordionTrigger>
+                <AccordionTrigger className="px-4 text-left">Quais planos têm anúncios?</AccordionTrigger>
                 <AccordionContent className="px-4 text-muted-foreground">
-                  No plano Enterprise, assinamos um acordo de parceria KUBO que garante suporte prioritário, SLA, integrações customizadas e coexpansão de casos de uso.
+                  Só o Free (a cada 6h) e o Starter de $4.99 (a cada 12h). Pro e Premium 1 não exibem anúncios. Os shortlinks são opcionais em todos os planos: você só vê o anúncio deles se decidir ganhar créditos extras.
                 </AccordionContent>
               </AccordionItem>
               <AccordionItem value="q5">
@@ -454,7 +403,7 @@ export default function PricingPage() {
         </motion.section>
       </main>
 
-      <ContactDialog open={contactOpen} onOpenChange={setContactOpen} defaultReason="enterprise" />
+      <ContactDialog open={contactOpen} onOpenChange={setContactOpen} defaultReason="support" />
     </div>
   )
 }
