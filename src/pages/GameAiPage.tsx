@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
+import { friendlyFunctionError, functionErrorCode } from '@/lib/functionError';
 import { toast } from 'sonner';
 import * as THREE from 'three';
 import { EDITOR_STORAGE_KEY, type SerializedScene, type SerializedEntity } from '@/game/editor/sceneIO';
@@ -191,15 +192,15 @@ export default function GameAiPage() {
       const { data, error } = await supabase.functions.invoke('game-ai-architect', {
         body: { prompt: prompt.trim() },
       });
-      if (error) throw error;
-      if (data?.error === 'rate_limited') { toast.error('Rate limit reached. Try again in a minute.'); return; }
-      if (data?.error === 'credits_required') { toast.error('Lovable AI credits required.'); return; }
-      if (data?.error) { toast.error(data.error); return; }
+      if (error) {
+        toast.error(friendlyFunctionError(await functionErrorCode(error)));
+        return;
+      }
       setBlueprint(data.blueprint ?? null);
       setDesignDoc(data.designDoc ?? '');
       toast.success(`Blueprint ready · ${data.blueprint?.title ?? 'Untitled'}`);
-    } catch (e) {
-      toast.error((e as Error).message);
+    } catch {
+      toast.error(friendlyFunctionError(null));
     } finally {
       setLoading(false);
     }
@@ -218,7 +219,7 @@ export default function GameAiPage() {
               <h1 className="text-xl font-bold font-display tracking-wider">
                 KUBO <span className="neon-text">GAME AI ARCHITECT</span>
               </h1>
-              <Badge className="neon-ring-gold ml-2">Lovable AI</Badge>
+              <Badge className="neon-ring-gold ml-2">KUBO AI</Badge>
             </div>
           </div>
         </div>

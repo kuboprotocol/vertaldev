@@ -7,7 +7,8 @@ import {
   Settings,
   ChevronRight,
   Code,
-  Activity
+  Activity,
+  Brain
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -86,6 +87,12 @@ export function VibeSidebar({ activeTab, onTabChange }: { activeTab: string; onT
           label="Atividade" 
           active={activeTab === 'activity'} 
           onClick={() => onTabChange('activity')}
+        />
+        <SidebarItem 
+          icon={Brain} 
+          label="Memória" 
+          active={activeTab === 'memory'} 
+          onClick={() => onTabChange('memory')}
         />
       </nav>
 

@@ -11,7 +11,8 @@ import {
   Monitor,
   Tablet,
   Smartphone,
-  Activity
+  Activity,
+  Brain
 } from "lucide-react";
 import { VibeSidebar } from "./VibeSidebar";
 import { VibeTopBar } from "./VibeTopBar";
@@ -22,6 +23,7 @@ import { VibeCloudSessionPanel } from "./VibeCloudSessionPanel";
 import { VibeLivePreview } from "./VibeLivePreview";
 import { VibeCheckpointTimeline } from "./VibeCheckpointTimeline";
 import { VibeAgentActivityPanel } from "./VibeAgentActivityPanel";
+import { VibePrimeMemoryPanel } from "./VibePrimeMemoryPanel";
 import { useWorkspaceProject } from "@/hooks/useWorkspaceProject";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -93,6 +95,12 @@ export default function VibeCodeLayout() {
               active={activeTab === 'activity'} 
               onClick={() => setActiveTab('activity')} 
             />
+            <MobileNavItem 
+              icon={Brain} 
+              label="Memória" 
+              active={activeTab === 'memory'} 
+              onClick={() => setActiveTab('memory')} 
+            />
           </div>
         )}
       </div>
@@ -141,6 +149,10 @@ function DesktopView({ activeTab, projectId }: { activeTab: string; setActiveTab
     return <VibeAgentActivityPanel />;
   }
 
+  if (activeTab === 'memory') {
+    return <VibePrimeMemoryPanel projectId={projectId || undefined} />;
+  }
+
   return (
     <div className="flex h-[calc(100vh-10rem)] items-center justify-center rounded-2xl border border-dashed border-border/60">
       <div className="text-center">
@@ -161,6 +173,8 @@ function MobileView({ activeTab, projectId }: { activeTab: string; projectId: st
       return <VibeCloudSessionPanel />;
     case 'activity':
       return <VibeAgentActivityPanel />;
+    case 'memory':
+      return <VibePrimeMemoryPanel projectId={projectId || undefined} />;
     case 'files':
       return (
         <div className="h-[calc(100vh-12rem)] overflow-hidden rounded-2xl border border-border/40 bg-card/20">

@@ -72,10 +72,11 @@ export function executeNPCAction(
     }
 
     case 'trade': {
-      const item = String(payload.item ?? 'relíquia');
-      const credits = clamp(Number(payload.credits ?? 1), 0, 50);
+      // Só moedas do jogo: nenhuma troca movimenta créditos KUBO nem é aposta.
+      const item = String(payload.item ?? 'relíquia').slice(0, 40);
+      const coins = clamp(Math.round(Number(payload.coins ?? payload.credits ?? 1)) || 1, 1, 50);
       world.addComponent(npcEntity, T.emote('wave'));
-      return { kind: 'traded', message: `Troca proposta: ${item} ↔ ${credits} créditos`, data: { item, credits } };
+      return { kind: 'traded', message: `Troca proposta: ${item} ↔ ${coins} moedas do jogo`, data: { item, coins } };
     }
 
     case 'attack': {

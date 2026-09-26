@@ -10,8 +10,12 @@ export const FEATURES = {
 } as const
 
 export const CREATIVE_ECONOMY_COPY = {
-  title: 'Economia Criativa em Construção',
-  message: 'Estamos construindo um ecossistema poderoso pra você e por você.',
+  title: 'Painel de Economia Criativa em construção',
+  message: 'O Painel de Economia Criativa está em construção, estamos criando algo poderoso pra você e por você.',
+  founderCta: 'Quero ser Fundador(a)',
+  founderPitch:
+    'Entre para a lista de Fundadores: você é avisado(a) primeiro quando o painel abrir e seu número de Fundador fica marcado no ecossistema.',
+  founderWelcome: (n: number) => `Você é o Fundador nº ${n} da Economia Criativa. Bem-vindo(a) ao ecossistema!`,
 } as const
 
 export function canAccessCreativeEconomy(isAdmin: boolean): boolean {

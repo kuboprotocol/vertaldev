@@ -90,3 +90,12 @@ da venda.
   `adFrequencyHours` em `src/lib/planConfig.ts`. Faça também uma migração
   alterando `plan_config` e a constraint `plan_config_ads_only_free_starter`.
   Depois atualize este documento e `src/test/ad-policy.test.ts`.
+
+## Créditos no jogo Living Worlds
+
+O jogo **não tem apostas** e não movimenta créditos KUBO. A ação "trocar"
+dos NPCs usa só **moedas do jogo** (1 a 50, limitadas em `src/game/actions.ts`),
+que não valem dinheiro nem créditos. O prompt do NPC (`game-npc-ai`) também
+proíbe falar em créditos ou apostas. Qualquer mudança nisso (ex.: gastar
+créditos dentro do jogo) precisa de decisão explícita de produto e revisão
+jurídica antes de ir ao código.

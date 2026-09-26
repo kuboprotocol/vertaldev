@@ -1,12 +1,58 @@
-import { useCallback, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Palette, Sparkles, ArrowLeft } from 'lucide-react'
+import { Palette, Sparkles, ArrowLeft, Crown, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useAuth } from '@/hooks/useAuth'
+import { supabase } from '@/integrations/supabase/client'
 import { canAccessCreativeEconomy, CREATIVE_ECONOMY_COPY } from '@/config/features'
 
+const FOUNDERS_TABLE = 'creative_economy_founders' as never
+
+/** Número de Fundador do usuário (null = ainda não entrou) e ação para entrar. */
+function useFounder() {
+  const { user } = useAuth()
+  const [number, setNumber] = useState<number | null>(null)
+  const [joining, setJoining] = useState(false)
+
+  const load = useCallback(async () => {
+    if (!user) return null
+    const { data } = await supabase
+      .from(FOUNDERS_TABLE)
+      .select('founder_number')
+      .eq('user_id', user.id)
+      .maybeSingle()
+    const n = (data as { founder_number?: number } | null)?.founder_number ?? null
+    setNumber(n)
+    return n
+  }, [user])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const join = useCallback(async () => {
+    if (!user || joining) return
+    setJoining(true)
+    try {
+      const { error } = await supabase.from(FOUNDERS_TABLE).insert({ user_id: user.id } as never)
+      // 23505 = já é Fundador: só recarrega o número.
+      if (error && error.code !== '23505') throw error
+      const n = await load()
+      if (n) toast.success(CREATIVE_ECONOMY_COPY.founderWelcome(n))
+    } catch {
+      toast.error('Não foi possível entrar na lista agora. Tente de novo em instantes.')
+    } finally {
+      setJoining(false)
+    }
+  }, [user, joining, load])
+
+  return { number, joining, join }
+}
+
 function ComingSoonBody() {
+  const { number, joining, join } = useFounder()
   return (
     <div className="flex flex-col items-center text-center">
       <div className="relative mb-6">
@@ -19,6 +65,23 @@ function ComingSoonBody() {
       <span className="mb-2 text-[10px] font-semibold uppercase tracking-[0.35em] text-primary/80">Em breve</span>
       <h2 className="font-display text-2xl font-bold sm:text-3xl">{CREATIVE_ECONOMY_COPY.title}</h2>
       <p className="mt-3 max-w-sm text-sm text-muted-foreground sm:text-base">{CREATIVE_ECONOMY_COPY.message}</p>
+
+      <div className="mt-6 w-full rounded-2xl border border-primary/25 bg-primary/5 p-4" data-testid="creative-founders">
+        {number ? (
+          <div className="flex items-center justify-center gap-2 text-sm font-medium text-primary">
+            <Crown className="h-4 w-4" />
+            <span>Fundador(a) nº {number} da Economia Criativa</span>
+          </div>
+        ) : (
+          <>
+            <p className="mb-3 text-xs text-muted-foreground">{CREATIVE_ECONOMY_COPY.founderPitch}</p>
+            <Button onClick={() => void join()} disabled={joining} className="w-full gap-2">
+              {joining ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crown className="h-4 w-4" />}
+              {CREATIVE_ECONOMY_COPY.founderCta}
+            </Button>
+          </>
+        )}
+      </div>
     </div>
   )
 }
@@ -47,7 +110,7 @@ export function useCreativeEconomyEntry() {
         <div className="py-4">
           <ComingSoonBody />
         </div>
-        <Button onClick={() => setVisible(false)} className="w-full">Entendi</Button>
+        <Button variant="ghost" onClick={() => setVisible(false)} className="w-full">Entendi</Button>
       </DialogContent>
     </Dialog>
   )
