@@ -326,6 +326,13 @@ testimonials and a waitlist form.`}</Pre>
           single panel: chat, images, video, music, ebooks, shorts, avatars and download
           utilities.
         </P>
+        <Callout type="warn">
+          <strong>Economia Criativa em Construção.</strong> Every &quot;Creative Economy&quot;
+          button and every <Code>/creative</Code> route shows the under-construction notice
+          (&quot;Estamos construindo um ecossistema poderoso pra você e por você.&quot;) until
+          the module launches. Admins keep full access for testing. The switch is{' '}
+          <Code>FEATURES.creativeEconomy</Code> in <Code>src/config/features.ts</Code>.
+        </Callout>
         <H3>Tools</H3>
         <UL>
           <li>Chat AI assistant with file attach.</li>

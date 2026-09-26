@@ -16,6 +16,7 @@ import { Progress } from '@/components/ui/progress'
 import { PromoCards } from '@/components/dashboard/PromoCards'
 import CreditLedger from '@/components/CreditLedger'
 import { Gamepad2, Sparkles, Palette } from 'lucide-react'
+import { useCreativeEconomyEntry } from '@/components/creative/CreativeEconomyComingSoon'
 
 interface Project {
   id: string
@@ -30,6 +31,7 @@ const DashboardPage = forwardRef<HTMLDivElement, any>((props, ref) => {
 
 
   const navigate = useNavigate()
+  const { open: openCreativeEconomy, dialog: creativeEconomyDialog } = useCreativeEconomyEntry()
   const { user, signOut } = useAuth()
   const { subscription, loading: subLoading, editsRemaining } = useSubscription()
   const [projects, setProjects] = useState<Project[]>([])
@@ -96,6 +98,7 @@ const DashboardPage = forwardRef<HTMLDivElement, any>((props, ref) => {
 
   return (
     <div ref={ref} className="min-h-screen bg-background relative">
+      {creativeEconomyDialog}
       <div className="absolute inset-0 gradient-mesh pointer-events-none" />
       <div className="absolute inset-0 dot-pattern opacity-20 pointer-events-none" />
 
@@ -115,7 +118,7 @@ const DashboardPage = forwardRef<HTMLDivElement, any>((props, ref) => {
               <Mail className="h-4 w-4" /> Emails
             </Button>
 
-            <Button variant="outline" size="sm" onClick={() => navigate('/creative')} className="rounded-xl gap-2 border-primary/30 text-primary hover:bg-primary/10">
+            <Button variant="outline" size="sm" onClick={openCreativeEconomy} className="rounded-xl gap-2 border-primary/30 text-primary hover:bg-primary/10">
               <Palette className="h-4 w-4" /> Creative Economy
             </Button>
             <Button variant="outline" size="sm" onClick={() => navigate('/shortlinks')} className="rounded-xl gap-2 border-primary/20 text-primary hover:bg-primary/10">
@@ -188,7 +191,7 @@ const DashboardPage = forwardRef<HTMLDivElement, any>((props, ref) => {
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }}
           className="grid lg:grid-cols-[1fr_1fr_360px] gap-4 mb-8 mt-6">
           <div
-            onClick={() => navigate('/creative')}
+            onClick={openCreativeEconomy}
             className="glass-premium hover-glow rounded-2xl p-6 cursor-pointer relative overflow-hidden group bg-gradient-to-br from-primary/10 via-background to-accent/10"
           >
             <div className="absolute inset-0 dot-pattern opacity-20 pointer-events-none" />

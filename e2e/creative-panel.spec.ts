@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { HAS_TEST_CREDENTIALS, NEEDS_LOGIN_REASON, login } from './helpers/auth';
+import { HAS_TEST_CREDENTIALS, NEEDS_ADMIN_REASON, login } from './helpers/auth';
 
 test.describe('Creative Economy Panel E2E', () => {
-  test.skip(!HAS_TEST_CREDENTIALS, NEEDS_LOGIN_REASON);
+  test.skip(!HAS_TEST_CREDENTIALS, NEEDS_ADMIN_REASON); // Economia Criativa em construção: só admin acessa
   test.beforeEach(async ({ page }) => {
     await login(page);
   });

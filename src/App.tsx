@@ -9,6 +9,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { lazy, Suspense, forwardRef } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import AdGate from "@/components/AdGate";
+import { CreativeEconomyGate } from "@/components/creative/CreativeEconomyComingSoon";
 import { shouldRedirect, buildTarget } from "@/lib/canonicalRedirect";
 
 // Lazy loading all pages
@@ -252,13 +253,13 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/domains" element={<ProtectedRoute><DomainsPage /></ProtectedRoute>} />
                 <Route path="/vibe-code" element={<ProtectedRoute><VibeCodePage /></ProtectedRoute>} />
                 
-                <Route path="/creative" element={<ProtectedRoute><CreativePage /></ProtectedRoute>} />
-                <Route path="/creative/investigation" element={<ProtectedRoute><ErrorBoundary resourceName="InvestigationPage"><InvestigationPage /></ErrorBoundary></ProtectedRoute>} />
-                <Route path="/creative/audit" element={<ProtectedRoute><ErrorBoundary resourceName="AuditTrailPage"><AuditTrailPage /></ErrorBoundary></ProtectedRoute>} />
-                <Route path="/creative/presets" element={<ProtectedRoute><ErrorBoundary resourceName="PresetsPage"><PresetsPage /></ErrorBoundary></ProtectedRoute>} />
-                <Route path="/creative/notifications" element={<ProtectedRoute><NotificationPreferencesPage /></ProtectedRoute>} />
-                <Route path="/creative/exports/:id" element={<ProtectedRoute><ErrorBoundary resourceName="ExportDetailsPage"><ExportDetailsPage /></ErrorBoundary></ProtectedRoute>} />
-                <Route path="/creative/:tool" element={<ProtectedRoute><CreativePage /></ProtectedRoute>} />
+                <Route path="/creative" element={<ProtectedRoute><CreativeEconomyGate><CreativePage /></CreativeEconomyGate></ProtectedRoute>} />
+                <Route path="/creative/investigation" element={<ProtectedRoute><CreativeEconomyGate><ErrorBoundary resourceName="InvestigationPage"><InvestigationPage /></ErrorBoundary></CreativeEconomyGate></ProtectedRoute>} />
+                <Route path="/creative/audit" element={<ProtectedRoute><CreativeEconomyGate><ErrorBoundary resourceName="AuditTrailPage"><AuditTrailPage /></ErrorBoundary></CreativeEconomyGate></ProtectedRoute>} />
+                <Route path="/creative/presets" element={<ProtectedRoute><CreativeEconomyGate><ErrorBoundary resourceName="PresetsPage"><PresetsPage /></ErrorBoundary></CreativeEconomyGate></ProtectedRoute>} />
+                <Route path="/creative/notifications" element={<ProtectedRoute><CreativeEconomyGate><NotificationPreferencesPage /></CreativeEconomyGate></ProtectedRoute>} />
+                <Route path="/creative/exports/:id" element={<ProtectedRoute><CreativeEconomyGate><ErrorBoundary resourceName="ExportDetailsPage"><ExportDetailsPage /></ErrorBoundary></CreativeEconomyGate></ProtectedRoute>} />
+                <Route path="/creative/:tool" element={<ProtectedRoute><CreativeEconomyGate><CreativePage /></CreativeEconomyGate></ProtectedRoute>} />
                 
                 <Route path="/agents" element={<ProtectedRoute><AgentsHubPage /></ProtectedRoute>} />
                 <Route path="/agents/:slug" element={<ProtectedRoute><AgentDetailPage /></ProtectedRoute>} />
