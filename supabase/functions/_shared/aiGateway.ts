@@ -242,6 +242,11 @@ export interface GatewayRequest {
   maxTokens?: number;
   /** Desliga o cache para esta chamada. */
   noCache?: boolean;
+  /**
+   * Usa só a API oficial da DeepSeek, sem fallback. Decisão de produto do
+   * Vibe Code: não trocar de "cérebro" no meio de uma tarefa sem o dev ver.
+   */
+  deepseekOnly?: boolean;
 }
 
 export interface GatewayResult {
@@ -287,7 +292,7 @@ export async function runGateway(req: GatewayRequest, deps: GatewayDeps = {}): P
   const temperature = req.temperature ?? route.temperature;
   const json = !!req.json;
 
-  const chain = providerChain(tier, env);
+  const chain = providerChain(tier, env).filter((p) => !req.deepseekOnly || p.name === "deepseek_official");
   if (chain.length === 0) throw new GatewayError("missing_secret:DEEPSEEK_API_KEY", 503, []);
 
   const useCache = route.cacheable && !req.noCache && temperature <= 0.3 && !!deps.cache;

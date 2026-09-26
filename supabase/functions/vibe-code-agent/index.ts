@@ -1,8 +1,13 @@
 // KUBO Vibe Code Agent — prompt -> plan -> real GitHub commits, streamed step by step (SSE).
 // DeepSeek-only (sem fallback Kimi/Puter/Groq), com roteador de complexidade,
 // cobrança de créditos em tempo real e checkpoints persistidos para rollback.
+// O planejamento passa pelo KUBO AI Gateway (tarefa "code"): mesmo modelo
+// DeepSeek, com cache de respostas, custo estimado e registro no painel
+// Agent Activity.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { callDeepSeek, classifyComplexity } from "../_shared/deepseekRouter.ts";
+import { classifyComplexity } from "../_shared/deepseekRouter.ts";
+import { runGateway } from "../_shared/aiGateway.ts";
+import { recordGatewayFailure, recordGatewayRun, supabaseGatewayCache } from "../_shared/aiGatewayStore.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -306,21 +311,36 @@ Deno.serve(async (req) => {
         });
 
         send({ kind: "thinking", status: "running", title: "Analisando o pedido" });
-        const llm = await callDeepSeek({
-          messages: [
-            { role: "system", content: SYSTEM },
-            { role: "user", content: prompt },
-          ],
-          json: true,
-          tier,
-          max_tokens: 6000,
-          temperature: 0.2,
-        });
+        let llm;
+        try {
+          llm = await runGateway(
+            {
+              kind: "code",
+              tier,
+              deepseekOnly: true,
+              json: true,
+              maxTokens: 6000,
+              temperature: 0.2,
+              // Aplicar direto sempre pede um plano novo; o preview pode
+              // reaproveitar a resposta de um pedido idêntico (custo zero).
+              noCache: mode === "apply",
+              messages: [
+                { role: "system", content: SYSTEM },
+                { role: "user", content: prompt },
+              ],
+            },
+            { cache: supabaseGatewayCache(admin) },
+          );
+        } catch (err) {
+          await recordGatewayFailure(admin, userId, null, "code", err).catch(() => {});
+          throw err;
+        }
+        await recordGatewayRun(admin, userId, null, llm).catch(() => null);
         send({
           kind: "thinking",
           status: "success",
           title: "Análise concluída",
-          detail: `${llm.provider} · ${llm.model} (${llm.tier})`,
+          detail: `${llm.provider} · ${llm.model} (${llm.tier})${llm.cached ? " · cache" : ""} · ~$${llm.costUsd.toFixed(4)}`,
         });
 
         let plan: Plan;

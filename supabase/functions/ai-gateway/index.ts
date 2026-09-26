@@ -20,14 +20,13 @@ import {
   ROUTES,
   runGateway,
   TASK_KINDS,
-  type GatewayCache,
   type Msg,
 } from "../_shared/aiGateway.ts";
+import { recordGatewayFailure, recordGatewayRun, supabaseGatewayCache } from "../_shared/aiGatewayStore.ts";
 
 const MAX_MESSAGES = 200;
 const MAX_TOTAL_CHARS = 400_000;
 const RATE_LIMIT_PER_MINUTE = 30;
-const CACHE_TTL_HOURS = 24;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function json(body: unknown, status = 200) {
@@ -129,26 +128,7 @@ Deno.serve(async (req) => {
     return json({ error: "rate_limited", retry_after_seconds: 60 }, 429);
   }
 
-  const cache: GatewayCache = {
-    async get(key) {
-      const { data } = await admin
-        .from("ai_gateway_cache")
-        .select("content")
-        .eq("key", key)
-        .gt("expires_at", new Date().toISOString())
-        .maybeSingle();
-      return data?.content ?? null;
-    },
-    async set(key, content, meta) {
-      await admin.from("ai_gateway_cache").upsert({
-        key,
-        content,
-        task_kind: meta.kind,
-        model: meta.model,
-        expires_at: new Date(Date.now() + CACHE_TTL_HOURS * 3_600_000).toISOString(),
-      });
-    },
-  };
+  const cache = supabaseGatewayCache(admin);
 
   try {
     const result = await runGateway(
@@ -161,26 +141,7 @@ Deno.serve(async (req) => {
       },
       { cache },
     );
-    const { data: run } = await admin
-      .from("ai_gateway_runs")
-      .insert({
-        user_id: user.id,
-        project_id: projectId,
-        task_kind: result.kind,
-        tier: result.tier,
-        provider: result.provider,
-        model: result.model,
-        cached: result.cached,
-        status: "ok",
-        prompt_tokens: result.usage?.prompt_tokens ?? null,
-        completion_tokens: result.usage?.completion_tokens ?? null,
-        cost_usd: result.costUsd,
-        duration_ms: result.durationMs,
-        attempts: result.attempts,
-        dropped_messages: result.droppedMessages,
-      })
-      .select("id")
-      .maybeSingle();
+    const runId = await recordGatewayRun(admin, user.id, projectId, result);
 
     return json({
       content: result.content,
@@ -192,19 +153,12 @@ Deno.serve(async (req) => {
       usage: result.usage,
       cost_usd: result.costUsd,
       duration_ms: result.durationMs,
-      run_id: run?.id ?? null,
+      run_id: runId,
     });
   } catch (e) {
     const status = e instanceof GatewayError ? e.status : 500;
     const message = e instanceof GatewayError ? e.message : "internal_error";
-    await admin.from("ai_gateway_runs").insert({
-      user_id: user.id,
-      project_id: projectId,
-      task_kind: isTaskKind(body.task) ? body.task : "chat",
-      status: "error",
-      error: message.slice(0, 300),
-      attempts: e instanceof GatewayError ? e.attempts : [],
-    });
+    await recordGatewayFailure(admin, user.id, projectId, isTaskKind(body.task) ? body.task : "chat", e);
     if (!(e instanceof GatewayError)) console.error("[ai-gateway]", e);
     return json({ error: message }, status);
   }

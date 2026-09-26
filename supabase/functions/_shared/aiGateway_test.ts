@@ -157,3 +157,16 @@ Deno.test("runGateway: cache só para tarefas determinísticas", async () => {
   await runGateway({ kind: "chat", messages: [{ role: "user", content: "oi" }] }, deps);
   assertEquals(calls, 3);
 });
+
+Deno.test("runGateway: deepseekOnly não cai para outro provedor", async () => {
+  const calls: string[] = [];
+  const err = await assertRejects(
+    () => runGateway(
+      { deepseekOnly: true, messages: [{ role: "user", content: "oi" }] },
+      { env, sleep: noSleep, fetch: (url) => { calls.push(String(url)); return Promise.resolve(new Response("x", { status: 503 })); } },
+    ),
+    GatewayError,
+  );
+  assertEquals(err.attempts, ["deepseek_official:503", "deepseek_official:503"]);
+  assert(calls.every((u) => u.includes("api.deepseek.com")));
+});
