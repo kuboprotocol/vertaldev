@@ -163,7 +163,6 @@ IMPORTANT: Recreate this website as a PIXEL-PERFECT single HTML file. Use the ex
 
     // Step 3: Generate clone with DeepSeek (heavy code task) or fallbacks
     const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const KIMI_API_KEY = Deno.env.get("KIMI_API_KEY");
 
     const fullMessages = [
@@ -200,32 +199,7 @@ IMPORTANT: Recreate this website as a PIXEL-PERFECT single HTML file. Use the ex
       }
     }
 
-    // FALLBACK 1: Lovable AI (Gemini)
-    if (!aiResponse && LOVABLE_API_KEY) {
-      console.log("Step 2: Fallback to Lovable AI for clone...");
-      const lovResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: fullMessages,
-          stream: true,
-        }),
-      });
-
-      if (lovResp.ok) {
-        aiResponse = lovResp;
-        console.log("Using Lovable AI for clone ✓");
-      } else {
-        const errText = await lovResp.text().catch(() => "");
-        console.error("Lovable AI failed:", lovResp.status, errText);
-      }
-    }
-
-    // FALLBACK 2: Kimi
+    // FALLBACK: Kimi
     if (!aiResponse && KIMI_API_KEY) {
       console.log("Step 2: Fallback to Kimi for clone...");
       const kimiResp = await fetch("https://api.moonshot.cn/v1/chat/completions", {

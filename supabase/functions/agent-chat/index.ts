@@ -1,5 +1,5 @@
 // Chat Inteligente — conversação multi-turno via OpenRouter Kimi (moonshotai/kimi-k2)
-// com fallback Groq → DeepSeek → Lovable Gemini.
+// com fallback DeepSeek → Groq.
 import { runAgent } from "../_shared/agentRuntime.ts";
 import { callLlm } from "../_shared/llm.ts";
 import { z } from "npm:zod@3";
@@ -29,7 +29,7 @@ Deno.serve((req) =>
     const msgs: Msg[] = [];
     msgs.push({
       role: "system",
-      content: system ?? `Você é o KUBO Chat, assistente útil e direto. Responda em ${language}.`,
+      content: system ?? `Você é o Vertal Chat, assistente útil e direto. Responda em ${language}.`,
     });
     if (messages?.length) msgs.push(...messages);
     if (prompt) msgs.push({ role: "user", content: prompt });

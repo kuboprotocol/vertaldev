@@ -1,12 +1,11 @@
 // Shared LLM caller: prefers OpenRouter with Kimi (moonshotai/kimi-k2) — the
 // project's default "cheap + strong" text model — and falls back through
-// DeepSeek official → Groq → Lovable AI Gateway (Gemini).
+// DeepSeek official → Groq.
 //
 // The order is chosen so:
 //   • Kimi handles slides / chat / agents (per project spec).
 //   • DeepSeek official API handles heavy code / SaaS generation.
 //   • Groq is used where ultra-low latency matters.
-//   • Lovable Gemini is the last-resort fallback that always works.
 //
 // Bytez has been RETIRED from the stack.
 
@@ -33,7 +32,6 @@ function buildChain(prefer: "kimi" | "deepseek" | "groq"): Provider[] {
   const OR = Deno.env.get("OPENROUTER_API_KEY");
   const DS = Deno.env.get("DEEPSEEK_API_KEY");
   const GROQ = Deno.env.get("GROQ_API_KEY");
-  const LK = Deno.env.get("LOVABLE_API_KEY");
 
   const kimi: Provider | null = OR
     ? { name: "openrouter_kimi", url: "https://openrouter.ai/api/v1/chat/completions", key: OR, model: "moonshotai/kimi-k2" }
@@ -47,16 +45,13 @@ function buildChain(prefer: "kimi" | "deepseek" | "groq"): Provider[] {
   const groq: Provider | null = GROQ
     ? { name: "groq_llama", url: "https://api.groq.com/openai/v1/chat/completions", key: GROQ, model: "llama-3.3-70b-versatile" }
     : null;
-  const lovable: Provider | null = LK
-    ? { name: "lovable_gemini", url: "https://ai.gateway.lovable.dev/v1/chat/completions", key: LK, model: "google/gemini-2.5-flash" }
-    : null;
 
   const order: (Provider | null)[] =
     prefer === "deepseek"
-      ? [deepseek, deepseekOR, kimi, groq, lovable]
+      ? [deepseek, deepseekOR, kimi, groq]
       : prefer === "groq"
-      ? [groq, kimi, deepseek, deepseekOR, lovable]
-      : [kimi, deepseek, deepseekOR, groq, lovable];
+      ? [groq, kimi, deepseek, deepseekOR]
+      : [kimi, deepseek, deepseekOR, groq];
 
   return order.filter((p): p is Provider => !!p);
 }
