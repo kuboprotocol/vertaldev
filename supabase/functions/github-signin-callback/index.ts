@@ -37,11 +37,14 @@ async function verifyState(state: string, secret: string): Promise<any | null> {
   } catch { return null }
 }
 
+// 302 de verdade: o Supabase serve respostas HTML das edge functions como
+// text/plain, então uma página com <meta refresh> aparecia como código na
+// tela e o login parava no meio (e recarregar reusava o code do GitHub).
 function pageRedirect(target: string) {
-  return new Response(
-    `<html><head><meta http-equiv="refresh" content="0;url=${target}"></head><body>Redirecting...</body></html>`,
-    { headers: { 'Content-Type': 'text/html' }, status: 200 },
-  )
+  return new Response(null, {
+    status: 302,
+    headers: { Location: target, 'Cache-Control': 'no-store' },
+  })
 }
 
 // Structured JSON logger for production observability
@@ -77,7 +80,10 @@ function safeReturnPath(p: string): string {
   return '/dashboard'
 }
 
-function resolveAppOrigin(req: Request): string {
+function resolveAppOrigin(req: Request, stateOrigin?: unknown): string {
+  // Origem gravada no state assinado pelo github-signin-initiate: volta para o
+  // mesmo domínio em que o login começou (vertal.dev, www, preview…).
+  if (typeof stateOrigin === 'string' && isAllowedOrigin(stateOrigin)) return stateOrigin.replace(/\/$/, '')
   const envApp = Deno.env.get('APP_URL')
   if (envApp && isAllowedOrigin(envApp)) return envApp.replace(/\/$/, '')
   const referer = req.headers.get('referer')
@@ -87,7 +93,7 @@ function resolveAppOrigin(req: Request): string {
       if (isAllowedOrigin(u.origin)) return u.origin
     } catch { /* ignore */ }
   }
-  return 'https://kubovibe.dev'
+  return 'https://vertal.dev'
 }
 
 export async function handleRequest(req: Request): Promise<Response> {
@@ -98,7 +104,7 @@ export async function handleRequest(req: Request): Promise<Response> {
   const stateParam = url.searchParams.get('state')
   const oauthError = url.searchParams.get('error')
 
-  const appOrigin = resolveAppOrigin(req)
+  let appOrigin = resolveAppOrigin(req)
   const errRedirect = (err: string) => {
     logEvent('callback_error', { reqId, err, durationMs: Date.now() - startedAt })
     return pageRedirect(`${appOrigin}/auth?auth_error=${encodeURIComponent(err)}&auth_req_id=${encodeURIComponent(reqId)}`)
@@ -121,6 +127,7 @@ export async function handleRequest(req: Request): Promise<Response> {
     const state = await verifyState(stateParam, stateSecret)
     if (!state || state.p !== 'signin') return errRedirect('invalid_state')
 
+    appOrigin = resolveAppOrigin(req, state.o)
     const returnUrl = safeReturnPath(state.r)
 
     // Exchange code for access token
@@ -186,6 +193,6 @@ export async function handleRequest(req: Request): Promise<Response> {
 }
 
 // Export internals for tests
-export const __test = { safeReturnPath, isAllowedOrigin, verifyState }
+export const __test = { safeReturnPath, isAllowedOrigin, verifyState, resolveAppOrigin }
 
 Deno.serve(handleRequest)

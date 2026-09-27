@@ -21,9 +21,8 @@ function makeReq(qs: Record<string, string>): Request {
 }
 
 async function readRedirectTarget(res: Response): Promise<string> {
-  const html = await res.text()
-  const m = html.match(/url=([^"]+)/)
-  return m ? decodeURIComponent(m[1]) : ''
+  assertEquals(res.status, 302)
+  return decodeURIComponent(res.headers.get('location') ?? '')
 }
 
 Deno.test('safeReturnPath: defaults non-internal paths to /dashboard', () => {
@@ -75,4 +74,12 @@ Deno.test('callback: propagates GitHub oauth_error param', async () => {
   const res = await handleRequest(makeReq({ error: 'access_denied' }))
   const target = await readRedirectTarget(res)
   assert(target.includes('auth_error=access_denied'), `got: ${target}`)
+})
+
+Deno.test('resolveAppOrigin: state origin wins, rejects foreign origins, defaults to vertal.dev', () => {
+  const { resolveAppOrigin } = __test
+  const bare = new Request('https://example.supabase.co/x')
+  assertEquals(resolveAppOrigin(bare, 'https://www.vertal.dev'), 'https://www.vertal.dev')
+  assertEquals(resolveAppOrigin(bare, 'https://evil.com'), 'https://vertal.dev')
+  assertEquals(resolveAppOrigin(bare), 'https://vertal.dev')
 })
