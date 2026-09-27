@@ -148,7 +148,7 @@ if (typeof window !== 'undefined') {
   });
 
   // Also log successful loads in preview for baseline metrics
-  const isPreview = window.location.hostname.includes('lovable.app') || window.location.search.includes('mock_preview=true');
+  const isPreview = window.location.search.includes('mock_preview=true');
   if (isPreview) {
     console.info(`[Metrics] App loaded on preview domain: ${window.location.hostname}`);
     
@@ -203,7 +203,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/docs" element={<DocsPage />} />
                 <Route path="/anywhere" element={<AnywherePage />} />
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
-                <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
+                <Route path="/oauth/consent" element={<OAuthConsent />} />
                 
                 <Route path="/m" element={<ProtectedRoute><MobileAgentPage /></ProtectedRoute>} />
                 <Route path="/mobile" element={<ProtectedRoute><MobileAgentPage /></ProtectedRoute>} />

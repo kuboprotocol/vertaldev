@@ -3,7 +3,6 @@ import AnimatedLogo from '@/components/branding/AnimatedLogo'
 import { useState, useEffect, forwardRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
-import { lovable } from '@/integrations/lovable/index'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Loader2, Mail, Lock, User, ArrowRight, KeyRound, ShieldAlert, Github } from 'lucide-react'
@@ -25,7 +24,7 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
   // lands on an authorized in-app route.
   const ALLOWED_REDIRECT_PREFIXES = [
     '/dashboard', '/connectors', '/builder', '/canvas', '/profile',
-    '/agents', '/docs', '/game', '/.lovable/oauth/consent', '/',
+    '/agents', '/docs', '/game', '/oauth/consent', '/',
   ]
   const isAllowedRedirect = (p: string): boolean => {
     if (typeof p !== 'string' || !p.startsWith('/') || p.startsWith('//')) return false
@@ -167,8 +166,11 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
   }, [searchParams])
 
   const handleGoogleLogin = async () => {
-    const { error } = await lovable.auth.signInWithOAuth('google', {
-      redirect_uri: `${window.location.origin}${safeRedirect}`,
+    // Google direto pelo Supabase Auth (precisa do provedor Google ligado no
+    // painel do Supabase antes de reativar SHOW_GOOGLE_LOGIN).
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}${safeRedirect}` },
     })
     if (error) toast.error('Error signing in with Google')
   }

@@ -6,7 +6,7 @@ import { shouldRedirect, buildTarget } from '@/lib/canonicalRedirect'
  * bootstrap de src/App.tsx. Exercitam a regra real exportada por
  * src/lib/canonicalRedirect.ts — não uma cópia.
  *
- * Regra: dev (localhost), previews (lovable.app / lovableproject.com), o
+ * Regra: dev (localhost), previews do Cloudflare (*.workers.dev), o
  * próprio canônico e o fallback *.up.railway.app ficam onde estão; qualquer
  * outro host é mandado para kubovibe.dev preservando caminho, query e hash.
  */
@@ -20,6 +20,7 @@ describe('Canonical-domain redirect → kubovibe.dev', () => {
       ['kubovibe.onrender.com'],
       ['app.vertal.dev'],          // só o apex e o www do vertal.dev são liberados
       ['vertal.dev.evil.com'],
+      ['kubo-vibe.lovable.app'],   // Lovable não hospeda mais o app
     ])('redirects when host = %s', (host) => {
       expect(shouldRedirect(host)).toBe(true)
     })
@@ -31,9 +32,8 @@ describe('Canonical-domain redirect → kubovibe.dev', () => {
       ['www.vertal.dev'],
       ['localhost'],
       ['127.0.0.1'],
-      ['id-preview--abc123.lovable.app'],         // sandbox preview
-      ['kubo-vibe.lovable.app'],
-      ['5ce8b966.lovableproject.com'],
+      ['vertaldev.kuboprotocol.workers.dev'],     // preview do Cloudflare
+      ['abc123-vertaldev.kuboprotocol.workers.dev'],
       ['kubo-vibe-dev-production.up.railway.app'], // fallback do Railway
     ])('does NOT redirect when host = %s', (host) => {
       expect(shouldRedirect(host)).toBe(false)
@@ -135,8 +135,8 @@ describe('Canonical-domain redirect → kubovibe.dev', () => {
       expect(replaceMock).not.toHaveBeenCalled()
     })
 
-    it('does not redirect from id-preview sandbox', () => {
-      stubLocation('https://id-preview--5ce8b966.lovable.app/builder')
+    it('does not redirect from a Cloudflare preview', () => {
+      stubLocation('https://abc123-vertaldev.kuboprotocol.workers.dev/builder')
       runRedirect()
       expect(replaceMock).not.toHaveBeenCalled()
     })

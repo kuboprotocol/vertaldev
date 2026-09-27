@@ -80,10 +80,6 @@ vi.mock('@/integrations/supabase/client', () => {
   }
 })
 
-vi.mock('@/integrations/lovable/index', () => ({
-  lovable: { auth: { signInWithOAuth: vi.fn(async () => ({ error: null })) } },
-}))
-
 // Stub destination — keeps the test focused on redirect logic
 const ConnectorDetailStub = () => (
   <div data-testid="connector-detail">Detalhe do conector GitHub</div>

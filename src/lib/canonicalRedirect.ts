@@ -24,9 +24,9 @@ export function isAllowedHost(host: string, live: boolean = BRAND.primaryDomainL
   return (
     host === 'localhost' ||
     host === '127.0.0.1' ||
-    host.includes('lovableproject.com') ||
-    host.includes('lovable.app') ||
     brandHosts.includes(host) ||
+    // Previews do Cloudflare Workers Builds (hospedagem atual).
+    host.endsWith('.workers.dev') ||
     // Temporário: domínio de fallback no Railway, enquanto o certificado do
     // domínio próprio não está ativo. Remover deste allowlist assim que o
     // certificado do domínio canônico estiver funcionando normalmente.
