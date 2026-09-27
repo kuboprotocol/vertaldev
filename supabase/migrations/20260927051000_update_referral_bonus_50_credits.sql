@@ -88,16 +88,18 @@ BEGIN
       INSERT INTO public.referrals (referrer_id, referred_id, credits_awarded)
       VALUES (_referrer_id, NEW.id, _bonus_credits); -- Usando 50 créditos
 
-      UPDATE public.subscriptions
-      SET edits_limit = edits_limit + _bonus_credits, updated_at = now() -- 50 créditos
-      WHERE user_id = _referrer_id AND is_active = true;
+      -- Update user_credits (new consolidated system)
+      INSERT INTO public.user_credits (user_id, balance)
+      VALUES (_referrer_id, _bonus_credits)
+      ON CONFLICT (user_id) DO UPDATE
+      SET balance = user_credits.balance + _bonus_credits, updated_at = now();
 
       BEGIN
         INSERT INTO public.credit_transactions
           (user_id, delta, balance_after, reason, category, metadata, idempotency_key)
-        SELECT _referrer_id, _bonus_credits, (edits_limit - edits_used), 'referral_bonus', 'referral',
+        SELECT _referrer_id, _bonus_credits, COALESCE(uc.balance, 0), 'referral_bonus', 'referral',
                jsonb_build_object('referred_id', NEW.id), 'referral:' || NEW.id
-        FROM public.subscriptions WHERE user_id = _referrer_id AND is_active = true
+        FROM public.user_credits uc WHERE user_id = _referrer_id
         LIMIT 1;
       EXCEPTION WHEN OTHERS THEN
         RAISE WARNING 'Failed to log referral bonus: %', SQLERRM;
@@ -139,9 +141,11 @@ BEGIN
     WHERE applied_at IS NULL AND lower(email) = lower(NEW.email);
 
     IF _pending_total > 0 THEN
-      UPDATE public.subscriptions
-        SET edits_limit = edits_limit + _pending_total, updated_at = now()
-        WHERE user_id = NEW.id AND is_active = true;
+      -- Update user_credits (new consolidated system)
+      INSERT INTO public.user_credits (user_id, balance)
+      VALUES (NEW.id, _pending_total)
+      ON CONFLICT (user_id) DO UPDATE
+      SET balance = user_credits.balance + _pending_total, updated_at = now();
 
       UPDATE public.pending_credits
         SET applied_at = now(), applied_user_id = NEW.id
@@ -150,9 +154,9 @@ BEGIN
       BEGIN
         INSERT INTO public.credit_transactions
           (user_id, delta, balance_after, reason, category, metadata)
-        SELECT NEW.id, _pending_total, (edits_limit - edits_used), 'pending_credit_grant', 'admin_grant',
+        SELECT NEW.id, _pending_total, COALESCE(uc.balance, 0), 'pending_credit_grant', 'admin_grant',
                jsonb_build_object('email', NEW.email, 'source', 'handle_new_user')
-        FROM public.subscriptions WHERE user_id = NEW.id AND is_active = true;
+        FROM public.user_credits uc WHERE user_id = NEW.id;
       EXCEPTION WHEN OTHERS THEN
         RAISE WARNING 'Failed to log pending credit transaction: %', SQLERRM;
       END;
