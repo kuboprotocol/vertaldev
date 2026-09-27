@@ -87,6 +87,17 @@ export default function AffiliateInstallsManager() {
       })
       if (error) throw error
 
+      // Verificar se há erro anti-fraude
+      if (data.error === 'affiliate_not_allowed') {
+        toast.error(`⚠️ ${data.reason}\n${data.details}`)
+        return
+      }
+
+      if (data.error) {
+        toast.error(`Erro: ${data.error}`)
+        return
+      }
+
       setInstalls([data.install, ...installs])
       setNewDomain('')
       setNewDescription('')

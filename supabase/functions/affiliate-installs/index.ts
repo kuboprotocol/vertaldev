@@ -54,6 +54,26 @@ Deno.serve(async (req) => {
         return json({ error: "invalid_domain" }, 400);
       }
 
+      // ANTI-FRAUDE: Validar se este usuário pode ser afiliado
+      const fractionResult = await db.rpc("can_be_affiliate", {
+        _user_id: userId,
+        _ip_address: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+                    req.headers.get("x-real-ip") || null,
+      });
+
+      if (fractionResult.error) {
+        return json({ error: fractionResult.error.message }, 403);
+      }
+
+      const canBeAffiliate = (fractionResult.data as any)?.[0];
+      if (!canBeAffiliate?.allowed) {
+        return json({
+          error: "affiliate_not_allowed",
+          reason: canBeAffiliate?.reason || "Você não pode criar afiliações agora",
+          details: "Sistema anti-fraude detectou atividade suspeita. Entre em contato com suporte."
+        }, 403);
+      }
+
       // Verificar se já existe install ativo para este domínio
       const { data: existing } = await db
         .from("affiliate_installs")
@@ -66,6 +86,18 @@ Deno.serve(async (req) => {
       if (existing) {
         return json({ error: "domain_already_installed" }, 400);
       }
+
+      // Log audit de nova instalação
+      await db
+        .from("affiliate_audit_log")
+        .insert({
+          affiliate_id: userId,
+          action: "create_install",
+          details: { domain: body.domain },
+          ip_address: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
+          user_agent: req.headers.get("user-agent"),
+        })
+        .catch(() => null); // Não falhar se log falhar
 
       const embedCode = generateEmbedCode();
       const { data, error } = await db
