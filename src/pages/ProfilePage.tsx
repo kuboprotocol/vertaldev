@@ -281,9 +281,18 @@ export default function ProfilePage() {
             transition={{ duration: 0.5, delay: 0.25 }}
             className="glass glass-border rounded-2xl p-8 space-y-5"
           >
-            <div className="flex items-center gap-2 mb-2">
-              <Gift className="h-4 w-4 text-primary" />
-              <h3 className="font-semibold text-foreground font-display">Programa de indicações</h3>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Gift className="h-4 w-4 text-primary" />
+                <h3 className="font-semibold text-foreground font-display">Programa de indicações e afiliados</h3>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate('/affiliate-program')}
+              >
+                Ver programa completo →
+              </Button>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
