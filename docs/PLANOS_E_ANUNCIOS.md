@@ -106,8 +106,10 @@ jurídica antes de ir ao código.
   (Perfil e Dashboard). O código é gravado no cadastro por e-mail e também no
   login com GitHub (contas novas).
 - **Indicação:** quando alguém se cadastra pelo link, o trigger
-  `handle_new_user` cria a linha em `referrals` e dá **+100 créditos** a quem
-  indicou, registrados no extrato (`credit_transactions`, `referral_bonus`).
+  `handle_new_user` cria a linha em `referrals` (sem créditos). Os **+100
+  créditos** de quem indicou saem só no **primeiro pagamento** do indicado,
+  uma vez, registrados no extrato (`credit_transactions`, `referral_bonus`).
+  Isso impede ganhar créditos criando contas falsas.
 - **Afiliação:** a cada pagamento do indicado (plano, renovação ou compra de
   créditos) o `stripe-webhook` chama `record_affiliate_commission`, que grava
   **5%** do valor em `affiliate_commissions` com status `pending`. Um pagamento
