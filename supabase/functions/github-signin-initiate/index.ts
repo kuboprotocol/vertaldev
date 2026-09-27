@@ -64,11 +64,16 @@ Deno.serve(async (req) => {
 
     // Domínio em que o login começou (o callback volta para ele).
     const origin = allowedOrigin(req.headers.get('origin'))
+    // Código de indicação (?ref=) para contas novas criadas pelo GitHub.
+    const ref = typeof body?.referralCode === 'string' && /^[a-z0-9]{4,32}$/i.test(body.referralCode)
+      ? body.referralCode
+      : null
 
     const state = await signState({
       n: crypto.randomUUID(),
       r: safeReturn,
       ...(origin ? { o: origin } : {}),
+      ...(ref ? { f: ref } : {}),
       t: Date.now(),
       p: 'signin',
     }, stateSecret)

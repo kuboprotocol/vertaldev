@@ -6,6 +6,32 @@ const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET")!;
 const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, stripe-signature" };
 const BUSINESS_PLANS = ["business_1","business_2","business_3","business_4","business_5","business_6","business_7","enterprise"];
 
+// Afiliação: 5% do valor pago vai para quem indicou o pagador (se houver).
+// Nunca derruba o webhook: o pagamento já foi aplicado antes disto.
+async function recordAffiliateCommission(
+  supabase: ReturnType<typeof createClient>,
+  referredId: string,
+  source: "subscription" | "renewal" | "credit_topup",
+  sourceRef: string,
+  amountCents: number | null | undefined,
+  currency: string | null | undefined,
+) {
+  if (!amountCents || amountCents <= 0) return;
+  try {
+    const { data, error } = await supabase.rpc("record_affiliate_commission", {
+      _referred_id: referredId,
+      _source: source,
+      _source_ref: sourceRef,
+      _amount_cents: amountCents,
+      _currency: currency ?? "usd",
+    });
+    if (error) console.warn("affiliate commission failed:", error.message);
+    else if (Number(data) > 0) console.log(`💸 Affiliate commission ${data} cents (${source} ${sourceRef})`);
+  } catch (e) {
+    console.warn("affiliate commission failed:", e);
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   const signature = req.headers.get("stripe-signature");
@@ -53,6 +79,7 @@ Deno.serve(async (req: Request) => {
           return new Response("Topup failed", { status: 500 });
         }
         console.log(`✅ Credit top-up: ${credits} credits for user ${userId}`);
+        await recordAffiliateCommission(supabase, userId, "credit_topup", session.id, session.amount_total, session.currency);
         return new Response(JSON.stringify({ received: true }), { headers: { "Content-Type": "application/json" } });
       }
 
@@ -78,6 +105,7 @@ Deno.serve(async (req: Request) => {
         } catch (e) { console.warn("partnership email failed:", e); }
       }
       console.log(`✅ Plan activated: ${plan} (${period}) for user ${userId}`);
+      await recordAffiliateCommission(supabase, userId, "subscription", session.id, session.amount_total, session.currency);
     }
 
     if (event.type === "customer.subscription.deleted") {
@@ -96,6 +124,10 @@ Deno.serve(async (req: Request) => {
         const userId = stripeSub.metadata?.supabase_user_id;
         if (userId) {
           await supabase.from("subscriptions").update({ is_active: true, paid_at: new Date().toISOString(), updated_at: new Date().toISOString() } as any).eq("user_id", userId);
+          // A primeira fatura já gerou comissão no checkout.session.completed.
+          if (invoice.billing_reason !== "subscription_create") {
+            await recordAffiliateCommission(supabase, userId, "renewal", invoice.id, invoice.amount_paid, invoice.currency);
+          }
         }
       }
     }

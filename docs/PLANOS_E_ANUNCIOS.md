@@ -99,3 +99,19 @@ que não valem dinheiro nem créditos. O prompt do NPC (`game-npc-ai`) também
 proíbe falar em créditos ou apostas. Qualquer mudança nisso (ex.: gastar
 créditos dentro do jogo) precisa de decisão explícita de produto e revisão
 jurídica antes de ir ao código.
+
+## Indicação e afiliação (5%)
+
+- **Link:** cada usuário tem um link `https://vertal.dev/auth?ref=CODIGO`
+  (Perfil e Dashboard). O código é gravado no cadastro por e-mail e também no
+  login com GitHub (contas novas).
+- **Indicação:** quando alguém se cadastra pelo link, o trigger
+  `handle_new_user` cria a linha em `referrals` e dá **+100 créditos** a quem
+  indicou, registrados no extrato (`credit_transactions`, `referral_bonus`).
+- **Afiliação:** a cada pagamento do indicado (plano, renovação ou compra de
+  créditos) o `stripe-webhook` chama `record_affiliate_commission`, que grava
+  **5%** do valor em `affiliate_commissions` com status `pending`. Um pagamento
+  gera no máximo uma comissão. O afiliado vê o total no Perfil.
+- **Pagamento ao afiliado:** ainda manual (marcar `approved`/`paid`). Definir
+  a forma de saque (Pix/Stripe Connect ou crédito na plataforma) antes de
+  divulgar o programa.

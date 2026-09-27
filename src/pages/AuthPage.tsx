@@ -81,7 +81,7 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
     const startingId = toast.loading('Starting GitHub sign-in…')
     try {
       const { data, error } = await supabase.functions.invoke('github-signin-initiate', {
-        body: { returnUrl: safeRedirect },
+        body: { returnUrl: safeRedirect, ...(refCode ? { referralCode: refCode } : {}) },
       })
       if (error) throw error
       if (data?.error === 'github_not_configured') {
