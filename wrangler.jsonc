@@ -25,5 +25,7 @@
     // SPA: rotas do React Router (/pricing, /alternativas/…) devolvem o
     // index.html em vez de 404.
     "not_found_handling": "single-page-application"
-  }
+  },
+  // Requerido pelo Wrangler 4.135.0+ para o comando `wrangler preview`.
+  "previews": {}
 }
