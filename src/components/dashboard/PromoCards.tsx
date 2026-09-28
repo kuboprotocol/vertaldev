@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/integrations/supabase/client'
 import { toast } from 'sonner'
+import { referralLink as buildReferralLink } from '@/lib/referral'
 
 export function PromoCards() {
   const navigate = useNavigate()
@@ -27,7 +28,7 @@ export function PromoCards() {
     fetchData()
   }, [user])
 
-  const referralLink = `https://kubovibe.dev/auth?ref=${referralCode}`
+  const referralLink = buildReferralLink(referralCode)
 
   const handleCopy = async () => {
     try {

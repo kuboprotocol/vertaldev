@@ -58,7 +58,7 @@ function detectPlatform(): PlatformId {
 const ONBOARDING_STEPS = [
   {
     title: "Install the daemon",
-    body: "A single signed installer drops a lightweight Rust service that runs in the background and keeps a persistent link with KUBO Core AI.",
+    body: "A single signed installer drops a lightweight Rust service that runs in the background and keeps a persistent link with Vertal Core AI.",
   },
   {
     title: "Grant a workspace folder",
@@ -169,14 +169,14 @@ export default function AnywherePage() {
           className="mx-auto max-w-3xl text-center"
         >
           <Badge variant="outline" className="mb-4 border-primary/30 bg-primary/10 text-primary">
-            KUBO Anywhere
+            Vertal Anywhere
           </Badge>
           <h1 className="font-orbitron text-3xl font-bold tracking-tight sm:text-4xl">
             One workspace. Every device.
           </h1>
           <p className="mt-4 text-sm text-muted-foreground sm:text-base">
-            On desktop the KUBO Local Agent runs everything on your own hardware. On phone and tablet the client
-            drives an ephemeral container in the KUBO Cloud — the device never executes code. Same project, same
+            On desktop the Vertal Local Agent runs everything on your own hardware. On phone and tablet the client
+            drives an ephemeral container in the Vertal Cloud — the device never executes code. Same project, same
             chat, same Git history, one credit ledger.
           </p>
           <p className="mt-3 text-xs text-muted-foreground">
@@ -187,7 +187,7 @@ export default function AnywherePage() {
         <section className="mt-14">
           <div className="mb-5 flex items-center gap-2">
             <Cpu className="h-4 w-4 text-primary" />
-            <h2 className="font-orbitron text-lg font-bold">Desktop — KUBO Local Agent</h2>
+            <h2 className="font-orbitron text-lg font-bold">Desktop — Vertal Local Agent</h2>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             {desktop.map((p) => (
@@ -219,7 +219,7 @@ export default function AnywherePage() {
         <section className="mt-14">
           <div className="mb-5 flex items-center gap-2">
             <Cloud className="h-4 w-4 text-primary" />
-            <h2 className="font-orbitron text-lg font-bold">Mobile — KUBO Mobile Agent</h2>
+            <h2 className="font-orbitron text-lg font-bold">Mobile — Vertal Mobile Agent</h2>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             {mobile.map((p) => (
@@ -299,7 +299,7 @@ export default function AnywherePage() {
                 <tr key={p.id} className="border-b border-border/30">
                   <td className="py-3 pr-4 font-semibold">{p.name}</td>
                   <td className="py-3 pr-4 text-muted-foreground">
-                    {p.execution === "cloud" ? "Remote container (KUBO Cloud)" : "User hardware"}
+                    {p.execution === "cloud" ? "Remote container (Vertal Cloud)" : "User hardware"}
                   </td>
                   <td className="py-3 pr-4 text-muted-foreground">{billingFor(p).label}</td>
                   <td className="py-3 text-muted-foreground">{p.client}</td>

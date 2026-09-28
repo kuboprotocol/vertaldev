@@ -81,6 +81,8 @@ const DocsPage = lazy(() => import("./pages/DocsPage"));
 const VibeCodePage = lazy(() => import("./pages/VibeCodePage"));
 const MobileAgentPage = lazy(() => import("./pages/MobileAgentPage"));
 const AnywherePage = lazy(() => import("./pages/AnywherePage"));
+const AffiliateProgramPage = lazy(() => import("./pages/AffiliateProgramPage"));
+const DocsMcpPage = lazy(() => import("./pages/DocsMcpPage"));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -148,7 +150,7 @@ if (typeof window !== 'undefined') {
   });
 
   // Also log successful loads in preview for baseline metrics
-  const isPreview = window.location.hostname.includes('lovable.app') || window.location.search.includes('mock_preview=true');
+  const isPreview = window.location.search.includes('mock_preview=true');
   if (isPreview) {
     console.info(`[Metrics] App loaded on preview domain: ${window.location.hostname}`);
     
@@ -203,7 +205,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/docs" element={<DocsPage />} />
                 <Route path="/anywhere" element={<AnywherePage />} />
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
-                <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
+                <Route path="/oauth/consent" element={<OAuthConsent />} />
                 
                 <Route path="/m" element={<ProtectedRoute><MobileAgentPage /></ProtectedRoute>} />
                 <Route path="/mobile" element={<ProtectedRoute><MobileAgentPage /></ProtectedRoute>} />
@@ -252,6 +254,8 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/admin/skills" element={<ProtectedRoute requireRoles={["admin"]}><AdminSkillsPage /></ProtectedRoute>} />
                 <Route path="/domains" element={<ProtectedRoute><DomainsPage /></ProtectedRoute>} />
                 <Route path="/vibe-code" element={<ProtectedRoute><VibeCodePage /></ProtectedRoute>} />
+                <Route path="/affiliate-program" element={<ProtectedRoute><AffiliateProgramPage /></ProtectedRoute>} />
+                <Route path="/docs/mcp" element={<DocsMcpPage />} />
                 
                 <Route path="/creative" element={<ProtectedRoute><CreativeEconomyGate><CreativePage /></CreativeEconomyGate></ProtectedRoute>} />
                 <Route path="/creative/investigation" element={<ProtectedRoute><CreativeEconomyGate><ErrorBoundary resourceName="InvestigationPage"><InvestigationPage /></ErrorBoundary></CreativeEconomyGate></ProtectedRoute>} />

@@ -109,7 +109,7 @@ export function AdminSessionWindow({ session, builds, projectTitle, running, onC
       const { data, error } = await supabase.functions.invoke("agent-chat", {
         body: {
           language: "en",
-          system: `You are the KUBO Cloud build assistant. Diagnose builds and suggest concrete commands. Context:\n${context}`,
+          system: `You are the Vertal Cloud build assistant. Diagnose builds and suggest concrete commands. Context:\n${context}`,
           messages: next.map((m) => ({ role: m.role, content: m.content })),
         },
       });

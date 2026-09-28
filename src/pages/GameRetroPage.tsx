@@ -129,7 +129,7 @@ export default function GameRetroPage() {
       // HUD
       renderer.rectFill(0, 0, 160, 9, 0);
       renderer.text(`GOLD ${String(s.gold).padStart(2, '0')}`, 2, 2, 9);
-      renderer.text(`KUBO RETRO`, 100, 2, 8);
+      renderer.text(`VERTAL RETRO`, 100, 2, 8);
       if (s.paused) renderer.text('PAUSED', 64, 70, 10);
       renderer.flush();
 
@@ -162,7 +162,7 @@ export default function GameRetroPage() {
             <div className="flex items-center gap-2">
               <Gamepad2 className="w-5 h-5 text-primary" />
               <h1 className="text-xl font-bold font-display tracking-wider">
-                KUBO <span className="neon-text">RETRO</span>
+                VERTAL <span className="neon-text">RETRO</span>
               </h1>
             </div>
           </div>
@@ -171,7 +171,7 @@ export default function GameRetroPage() {
             <Select value={palette} onValueChange={(v) => setPalette(v as PaletteName)}>
               <SelectTrigger className="w-32 h-8"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="kubo">KUBO 16</SelectItem>
+                <SelectItem value="kubo">Vertal 16</SelectItem>
                 <SelectItem value="pico8">PICO-8</SelectItem>
                 <SelectItem value="nes">NES</SelectItem>
                 <SelectItem value="gameboy">Game Boy</SelectItem>
@@ -212,7 +212,7 @@ export default function GameRetroPage() {
             <div className="text-xs tracking-widest text-muted-foreground mb-1">ENGINE</div>
             <p className="text-xs text-muted-foreground">
               Pixel-perfect renderer with Uint32 framebuffer, indexed-color sprites,
-              tilemap rendering and authentic 8/16-bit palettes (NES, Game Boy, PICO-8, KUBO).
+              tilemap rendering and authentic 8/16-bit palettes (NES, Game Boy, PICO-8, Vertal).
             </p>
           </div>
         </Card>

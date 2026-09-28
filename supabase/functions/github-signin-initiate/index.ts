@@ -24,6 +24,18 @@ async function signState(payload: object, secret: string) {
   return `${data}.${b64url(sig)}`
 }
 
+// Mesma allowlist do github-signin-callback.
+function allowedOrigin(raw: string | null): string | null {
+  if (!raw) return null
+  try {
+    const u = new URL(raw)
+    const h = u.hostname
+    const ok = ['kubovibe.dev', 'vertal.dev', 'localhost', '127.0.0.1'].includes(h) ||
+      h.endsWith('.kubovibe.dev') || h.endsWith('.vertal.dev') || h.endsWith('.lovable.app')
+    return ok ? u.origin : null
+  } catch { return null }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   const reqId = crypto.randomUUID()
@@ -50,9 +62,18 @@ Deno.serve(async (req) => {
     const returnUrl: string = typeof body?.returnUrl === 'string' ? body.returnUrl : ''
     const safeReturn = returnUrl.startsWith('/') && !returnUrl.startsWith('//') ? returnUrl : '/dashboard'
 
+    // Domínio em que o login começou (o callback volta para ele).
+    const origin = allowedOrigin(req.headers.get('origin'))
+    // Código de indicação (?ref=) para contas novas criadas pelo GitHub.
+    const ref = typeof body?.referralCode === 'string' && /^[a-z0-9]{4,32}$/i.test(body.referralCode)
+      ? body.referralCode
+      : null
+
     const state = await signState({
       n: crypto.randomUUID(),
       r: safeReturn,
+      ...(origin ? { o: origin } : {}),
+      ...(ref ? { f: ref } : {}),
       t: Date.now(),
       p: 'signin',
     }, stateSecret)

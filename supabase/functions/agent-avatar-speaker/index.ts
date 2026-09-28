@@ -1,6 +1,7 @@
 // Avatar Speaker — gera roteiro otimizado para avatares falantes
 // (HeyGen/D-ID/ElevenLabs). MVP entrega script + cues; integração de render é opt-in.
-import { runAgent, getSecret } from "../_shared/agentRuntime.ts";
+import { runAgent } from "../_shared/agentRuntime.ts";
+import { aiText, parseJsonObject } from "../_shared/aiText.ts";
 import { z } from "npm:zod@3";
 
 const InputSchema = z.object({
@@ -12,30 +13,22 @@ const InputSchema = z.object({
 
 Deno.serve((req) =>
   runAgent("avatar-speaker", req, async ({ input }) => {
-    const parsed = InputSchema.safeParse(input);
-    if (!parsed.success) {
-      throw new Error(`invalid_input: ${JSON.stringify(parsed.error.flatten().fieldErrors)}`);
+    const validated = InputSchema.safeParse(input);
+    if (!validated.success) {
+      throw new Error(`invalid_input: ${JSON.stringify(validated.error.flatten().fieldErrors)}`);
     }
-    const { prompt, persona, duration, language } = parsed.data;
+    const { prompt, persona, duration, language } = validated.data;
     if (!prompt) throw new Error("missing_prompt");
 
     const sys = `Você escreve roteiros para avatares falantes IA. Retorne JSON estrito: { "title": string, "persona": string, "duration_seconds": number, "scenes": [{ "text": string, "pause_after_ms": number, "emphasis_words": string[] }], "ssml": string }. Idioma: ${language}. Persona: ${persona}. Duração-alvo: ${duration}s.`;
-    const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${getSecret("LOVABLE_API_KEY")}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
-        messages: [{ role: "system", content: sys }, { role: "user", content: String(prompt) }],
-        response_format: { type: "json_object" },
-      }),
+    const content = await aiText(req, {
+      task: "marketing",
+      json: true,
+      messages: [{ role: "system", content: sys }, { role: "user", content: String(prompt) }],
     });
-    if (!r.ok) throw new Error(`ai_${r.status}`);
-    const data = await r.json();
-    let parsed: Record<string, unknown> = {};
-    try { parsed = JSON.parse(data?.choices?.[0]?.message?.content ?? "{}"); } catch { /* */ }
     return {
       output: {
-        script: parsed,
+        script: parseJsonObject(content),
         render_provider: null,
         note: "Script + SSML pronto. Conecte HeyGen/D-ID para render final.",
       },

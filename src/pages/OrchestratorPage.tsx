@@ -506,7 +506,7 @@ export default function OrchestratorPage() {
             <Link to="/" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
               <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
             </Link>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight">Orquestrador KUBO</h1>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight">Orquestrador Vertal</h1>
             <p className="text-muted-foreground">Orquestração full-stack com filas, retries e roteamento dinâmico.</p>
           </div>
           <div className="flex-1 max-w-sm mx-4">

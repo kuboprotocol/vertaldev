@@ -12,6 +12,7 @@ export type VibeStepKind =
   | "credits"
   | "connector"
   | "message"
+  | "memory"
   | "error"
   | "done";
 

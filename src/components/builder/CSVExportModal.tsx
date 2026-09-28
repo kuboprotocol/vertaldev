@@ -421,7 +421,7 @@ export default function CSVExportModal({ open, onOpenChange, logs, filterFallbac
           <div className="flex items-center justify-between">
             <div className="flex flex-col gap-1">
               <DialogTitle className="flex items-center gap-2">
-                <Download className="h-5 w-5" /> Exportar Auditoria Kubo
+                <Download className="h-5 w-5" /> Exportar Auditoria Vertal
               </DialogTitle>
               <DialogDescription>
                 Configure as colunas e o formato do arquivo antes de baixar.

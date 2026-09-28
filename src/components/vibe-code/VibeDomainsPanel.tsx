@@ -50,7 +50,7 @@ export function VibeDomainsPanel() {
             <ArrowRightLeft className="h-5 w-5" />
           </div>
           <h3 className="font-semibold text-foreground">Transferir Domínio</h3>
-          <p className="mt-1 text-[10px] leading-tight text-muted-foreground">Mova um domínio existente de outro registrador para a KUBO.</p>
+          <p className="mt-1 text-[10px] leading-tight text-muted-foreground">Mova um domínio existente de outro registrador para a Vertal.</p>
           <Button variant="ghost" className="mt-4 h-8 w-full justify-between text-xs font-medium">
             Iniciar transferência <ChevronRight className="h-3 w-3" />
           </Button>

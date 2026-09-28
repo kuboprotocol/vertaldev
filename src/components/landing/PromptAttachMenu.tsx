@@ -68,7 +68,7 @@ const menuSections = [
     items: [
       { icon: CreditCard, label: 'Payments (Stripe / AdMob)', action: 'payments', badge: 'PRO' },
       { icon: Server, label: 'MCP Servers', action: 'mcp', badge: null },
-      { icon: Rocket, label: 'MVP Builder', action: 'mvp', badge: 'KUBO' },
+      { icon: Rocket, label: 'MVP Builder', action: 'mvp', badge: 'Vertal' },
       { icon: Globe, label: 'Deploy & Publish', action: 'deploy', badge: null },
     ],
   },
@@ -343,7 +343,7 @@ export default function PromptAttachMenu({ onAttachFile, onScreenshot, onAddRefe
   const badgeClasses: Record<string, string> = {
     NEW: 'bg-accent text-accent-foreground',
     PRO: 'bg-primary/20 text-primary',
-    KUBO: 'gradient-primary text-primary-foreground',
+    Vertal: 'gradient-primary text-primary-foreground',
   }
 
   return (
@@ -379,7 +379,7 @@ export default function PromptAttachMenu({ onAttachFile, onScreenshot, onAddRefe
             <>
               <div className="flex items-center gap-2 px-3 py-2 mb-1">
                 <Sparkles className="h-3.5 w-3.5 text-primary" />
-                <span className="text-xs font-display font-bold text-primary tracking-wider uppercase">KUBO Tools</span>
+                <span className="text-xs font-display font-bold text-primary tracking-wider uppercase">Vertal Tools</span>
               </div>
 
               <div className="space-y-1">

@@ -31,7 +31,7 @@ export function VibeCloudSessionPanel() {
               Remote Workspace Sessions
             </h2>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Builds, terminal and deploys run inside ephemeral KUBO Cloud containers. Nothing is
+              Builds, terminal and deploys run inside ephemeral Vertal Cloud containers. Nothing is
               executed on the device — the mobile agent is a rich client for editor, chat, terminal
               and live preview.
             </p>

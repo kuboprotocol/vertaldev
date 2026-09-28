@@ -6,7 +6,7 @@ import { test, expect, describe } from 'vitest';
 describe('Redirect Logic Validation', () => {
   // Logic from App.tsx (normalized for testing)
   const runRedirectLogic = (host: string, currentRedirectCount: number = 0) => {
-    const isLovableApp = /(^|\.)lovable\.app$/i.test(host);
+    const isWorkersDev = /(^|\.)workers\.dev$/i.test(host);
     let target = null;
     let nextCount = currentRedirectCount;
     let cleared = false;
@@ -17,15 +17,11 @@ describe('Redirect Logic Validation', () => {
     } else if (
       host === 'localhost' || 
       host === '127.0.0.1' || 
-      host.includes('lovableproject.com') ||
-      host.includes('lovable.app') ||
+      isWorkersDev ||
       host === 'kubovibe.dev'
     ) {
       // Allowed domains
       cleared = true;
-    } else if (isLovableApp && !host.startsWith('id-preview--') && !host.startsWith('preview--')) {
-      nextCount = currentRedirectCount + 1;
-      target = `https://kubovibe.dev/`;
     } else {
       cleared = true;
     }
@@ -33,12 +29,10 @@ describe('Redirect Logic Validation', () => {
     return { target, nextCount, cleared };
   };
 
-  test('should NOT redirect on preview subdomains (*.lovable.app)', () => {
+  test('should NOT redirect on Cloudflare preview subdomains (*.workers.dev)', () => {
     const hosts = [
-      'kubovibe-main.lovable.app',
-      'preview--123.lovable.app',
-      'id-preview--abc.lovable.app',
-      'test-env.lovable.app'
+      'vertaldev.kuboprotocol.workers.dev',
+      'abc123-vertaldev.kuboprotocol.workers.dev'
     ];
 
     for (const host of hosts) {

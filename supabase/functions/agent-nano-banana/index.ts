@@ -1,6 +1,5 @@
 // Nano Banana Agent (texto) — gerador rápido de conteúdo (legendas, posts, ideias).
-// Roteia via OpenRouter Kimi (moonshotai/kimi-k2) com fallback Groq → Lovable Gemini.
-// (A geração de imagem "Nano Banana" continua em `creative-image`, via Lovable Gemini.)
+// Roteia via OpenRouter Kimi (moonshotai/kimi-k2) com fallback DeepSeek → Groq.
 import { runAgent } from "../_shared/agentRuntime.ts";
 import { callLlm } from "../_shared/llm.ts";
 import { z } from "npm:zod@3";

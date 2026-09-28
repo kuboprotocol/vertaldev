@@ -69,7 +69,7 @@ export default function DomainsPage() {
               <Globe className="w-7 h-7 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="font-orbitron text-3xl font-bold tracking-tight">KUBO Domains</h1>
+              <h1 className="font-orbitron text-3xl font-bold tracking-tight">Vertal Domains</h1>
               <p className="text-muted-foreground">Buy, transfer, and publish with professional infrastructure.</p>
             </div>
           </motion.div>
@@ -106,8 +106,8 @@ function OnboardingBanner() {
     <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}>
       <Card className="border-primary/30 bg-gradient-to-br from-primary/10 via-card/60 to-card/40 backdrop-blur">
         <CardHeader>
-          <CardTitle className="font-orbitron flex items-center gap-2"><Rocket className="w-5 h-5 text-primary" /> Welcome to KUBO Domains</CardTitle>
-          <CardDescription>Everything you need to get your brand online — using KUBO credits.</CardDescription>
+          <CardTitle className="font-orbitron flex items-center gap-2"><Rocket className="w-5 h-5 text-primary" /> Welcome to Vertal Domains</CardTitle>
+          <CardDescription>Everything you need to get your brand online — using Vertal credits.</CardDescription>
         </CardHeader>
         <CardContent className="grid md:grid-cols-3 gap-4">
           <Step icon={<Search className="w-5 h-5" />} title="1. Search" body="Find names via AI + real-time IONOS verification." />
@@ -199,7 +199,7 @@ function MineTab({ domains, loading, onChange }: { domains: Domain[]; loading: b
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remove {toDelete?.domain_name} from the dashboard?</AlertDialogTitle>
-            <AlertDialogDescription>This only removes it from the KUBO dashboard. The domain registration at IONOS is not cancelled.</AlertDialogDescription>
+            <AlertDialogDescription>This only removes it from the Vertal dashboard. The domain registration at IONOS is not cancelled.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -669,7 +669,7 @@ function ConnectTab({ onConnected }: { onConnected: () => void }) {
     <Card className="bg-card/60 backdrop-blur border-border/40 max-w-2xl">
       <CardHeader>
         <CardTitle className="font-orbitron flex items-center gap-2"><Link2 className="w-5 h-5 text-primary" /> Conectar domínio existente</CardTitle>
-        <CardDescription>Aponte os nameservers no seu registrar para usar o painel Kubo.</CardDescription>
+        <CardDescription>Aponte os nameservers no seu registrar para usar o painel Vertal.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div><Label>Domínio</Label><Input placeholder="meudominio.com" value={domain} onChange={(e) => setDomain(e.target.value)} /></div>

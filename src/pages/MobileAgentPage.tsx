@@ -64,7 +64,7 @@ export default function MobileAgentPage() {
   const [tab, setTab] = useState<Tab>("session");
   const [openPath, setOpenPath] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState("");
-  const [commitMessage, setCommitMessage] = useState("chore: update from KUBO Mobile Agent");
+  const [commitMessage, setCommitMessage] = useState("chore: update from Vertal Mobile Agent");
   const [buildCommand, setBuildCommand] = useState("npm run build");
 
   useEffect(() => {
@@ -105,7 +105,7 @@ export default function MobileAgentPage() {
       <header className="sticky top-0 z-20 border-b border-border/50 bg-background/85 px-4 py-3 backdrop-blur-xl">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h1 className="font-orbitron text-base font-bold tracking-wide">KUBO Mobile Agent</h1>
+            <h1 className="font-orbitron text-base font-bold tracking-wide">Vertal Mobile Agent</h1>
             <p className="text-[11px] text-muted-foreground">
               {device.native ? `${device.platform} · push ${device.state}` : "Web preview of the iOS client"}
             </p>
@@ -134,7 +134,7 @@ export default function MobileAgentPage() {
                 <Cloud className="h-4 w-4 text-primary" /> Remote container
               </div>
               <p className="text-xs text-muted-foreground">
-                Nothing runs on this device. Sessions execute in an ephemeral KUBO Cloud container billed at
+                Nothing runs on this device. Sessions execute in an ephemeral Vertal Cloud container billed at
                 1 credit per active minute, with a 15 minute idle timeout.
               </p>
 

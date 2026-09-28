@@ -15,7 +15,6 @@ type Health = {
   checked_at: string;
   groq: ProviderStatus;
   openrouter: ProviderStatus;
-  lovable: ProviderStatus;
   suno: ProviderStatus;
   moonshot: ProviderStatus;
   deepseek: ProviderStatus;
@@ -26,7 +25,6 @@ const PROVIDERS: { key: keyof Omit<Health, "checked_at">; label: string; purpose
   { key: "deepseek", label: "DeepSeek", purpose: "Geração de SaaS e apps" },
   { key: "groq", label: "Groq", purpose: "Chat ultra-rápido + Whisper" },
   { key: "moonshot", label: "Moonshot", purpose: "Kimi direto (fallback)" },
-  { key: "lovable", label: "Lovable AI", purpose: "Gemini + Nano Banana (imagem)" },
   { key: "suno", label: "Suno", purpose: "Geração de música" },
 ];
 

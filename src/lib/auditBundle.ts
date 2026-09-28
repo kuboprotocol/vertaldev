@@ -11,7 +11,7 @@ export function entriesToHAR(entries: PreviewLogEntry[]): unknown {
   return {
     log: {
       version: '1.2',
-      creator: { name: 'Kubo Vibe Preview Audit', version: '1.0' },
+      creator: { name: 'Vertal Vibe Preview Audit', version: '1.0' },
       browser: { name: 'iframe', version: typeof navigator !== 'undefined' ? navigator.userAgent : '' },
       pages: [{
         startedDateTime: new Date(entries[0]?.ts ?? Date.now()).toISOString(),

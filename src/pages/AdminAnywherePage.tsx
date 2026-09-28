@@ -129,7 +129,7 @@ export default function AdminAnywherePage() {
               </Link>
             </Button>
             <div>
-              <h1 className="font-orbitron text-2xl font-bold">KUBO Anywhere</h1>
+              <h1 className="font-orbitron text-2xl font-bold">Vertal Anywhere</h1>
               <p className="text-sm text-muted-foreground">Cloud sessions, credit usage and Local Agent distribution.</p>
             </div>
           </div>

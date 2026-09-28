@@ -1,368 +1,268 @@
-import AnimatedLogo from '@/components/branding/AnimatedLogo'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ArrowLeft, Video, AlertCircle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
-import { ArrowLeft, Zap, ExternalLink, Wallet, Gift, Send, Trophy } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { useAuth } from '@/hooks/useAuth'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/integrations/supabase/client'
+import { useAuth } from '@/hooks/useAuth'
+import AnimatedLogo from '@/components/branding/AnimatedLogo'
+import ShortlinksUploader from '@/components/shortlinks/ShortlinksUploader'
+import ShortlinksList from '@/components/shortlinks/ShortlinksList'
 import { toast } from 'sonner'
-import StreakCard from '@/components/shortlinks/StreakCard'
-import BadgesCard from '@/components/shortlinks/BadgesCard'
-import TerraNativeBanner from '@/components/shortlinks/TerraNativeBanner'
-import {
-  TERRA_ADS_SMARTLINK_1,
-  TERRA_ADS_SMARTLINK_LABEL,
-  openTerraSmartlink,
-} from '@/lib/terraAds'
+import { motion } from 'framer-motion'
 
-const DAILY_LIMIT = 10
-const CREDIT_PER_VIEW = 0.5
-const TENTH_BONUS = 5
-const WAIT_DURATION = 60 // 60 seconds fixed for all shortlinks
+interface Shortlink {
+  id: string
+  title: string
+  description?: string
+  video_url: string
+  video_duration_seconds: number
+  status: string
+  view_count: number
+  created_at: string
+  updated_at: string
+}
+
+interface Limits {
+  active_count: number
+  max_allowed: number
+  can_create_more: boolean
+  daily_base_reward: number
+  daily_bonus_reward: number
+  total_daily_reward: number
+}
 
 export default function ShortlinksPage() {
   const navigate = useNavigate()
-  const { user, isAdmin } = useAuth()
-  const [todayCount, setTodayCount] = useState(0)
+  const { user } = useAuth()
   const [loading, setLoading] = useState(true)
-  const [waiting, setWaiting] = useState(false)
-  const [countdown, setCountdown] = useState(0)
-  const [crediting, setCrediting] = useState(false)
-  const [showConfetti, setShowConfetti] = useState(false)
-  const [currentStreak, setCurrentStreak] = useState(0)
-  const [longestStreak, setLongestStreak] = useState(0)
-  const popupRef = useRef<Window | null>(null)
-
-  const fetchData = useCallback(async () => {
-    if (!user) return
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
-
-    const [adResult, streakResult] = await Promise.all([
-      supabase
-        .from('ad_rewards')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .gte('created_at', todayStart.toISOString()),
-      supabase
-        .from('user_streaks')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle(),
-    ])
-
-    setTodayCount(adResult.count || 0)
-    if (streakResult.data) {
-      setCurrentStreak(streakResult.data.current_streak || 0)
-      setLongestStreak(streakResult.data.longest_streak || 0)
-    }
-    setLoading(false)
-  }, [user])
-
-  useEffect(() => { fetchData() }, [fetchData])
+  const [shortlinks, setShortlinks] = useState<Shortlink[]>([])
+  const [limits, setLimits] = useState<Limits | null>(null)
+  const [userBalance, setUserBalance] = useState(0)
+  const [userDebt, setUserDebt] = useState(0)
 
   useEffect(() => {
-    if (countdown <= 0) return
-    const t = setTimeout(() => setCountdown(c => c - 1), 1000)
-    return () => clearTimeout(t)
-  }, [countdown])
+    if (!user) return
+    loadData()
+  }, [user])
 
-  const openSmartlink = () => {
-    if (!user) { navigate('/auth'); return }
-    if (todayCount >= DAILY_LIMIT) {
-      toast.info('Limite diário atingido! Volte amanhã 🌅')
-      return
-    }
-    popupRef.current = openTerraSmartlink()
-    if (!popupRef.current) {
-      toast.error('Não foi possível abrir o shortlink. Desative o bloqueador de pop-ups e tente novamente.')
-      return
-    }
-    setWaiting(true)
-    setCountdown(WAIT_DURATION)
-  }
-
-  const creditReward = async () => {
-    setCrediting(true)
+  const loadData = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const res = await supabase.functions.invoke('terra-ad-reward', {
-        body: { reward_type: 'completed' },
-        headers: { Authorization: `Bearer ${session?.access_token}` },
-      })
-      if (res.error) throw new Error(res.error.message)
-      const result = res.data as any
-      const newCount = todayCount + 1
-      setTodayCount(newCount)
+      const [shortlinksRes, limitsRes, profileRes] = await Promise.all([
+        supabase.functions.invoke('shortlinks', {
+          method: 'POST',
+          headers: { 'X-Action': 'list' },
+          body: {},
+        }),
+        supabase.functions.invoke('shortlinks', {
+          method: 'POST',
+          headers: { 'X-Action': 'get-limits' },
+          body: {},
+        }),
+        supabase.from('user_credits').select('balance, debt').eq('user_id', user!.id).single(),
+      ])
 
-      if (result?.current_streak) {
-        setCurrentStreak(result.current_streak)
-        setLongestStreak(prev => Math.max(prev, result.current_streak))
+      if (shortlinksRes.error) throw shortlinksRes.error
+      if (limitsRes.error) throw limitsRes.error
+
+      setShortlinks(shortlinksRes.data.shortlinks || [])
+      setLimits(limitsRes.data)
+
+      if (!profileRes.error && profileRes.data) {
+        setUserBalance(profileRes.data.balance || 0)
+        setUserDebt(profileRes.data.debt || 0)
       }
-
-      const bonusEarned = Number(result?.bonus_credits || 0)
-      const streakBonus = Number(result?.streak_bonus || 0)
-
-      if (newCount >= DAILY_LIMIT) {
-        toast.success(
-          `🏆 10 shortlinks completos! +${TENTH_BONUS} créditos bônus desbloqueados!${
-            streakBonus > 0 ? ` (+${streakBonus} de streak 🔥)` : ''
-          }`,
-          { duration: 6000 }
-        )
-        setShowConfetti(true)
-        setTimeout(() => setShowConfetti(false), 5000)
-      } else {
-        toast.success(`+${CREDIT_PER_VIEW} crédito ganho! 🎉`)
-      }
-      // silence unused warning when bonus applied mid-flow
-      void bonusEarned
-    } catch (err: any) {
-      toast.error(err.message || 'Erro ao creditar')
+    } catch (e: any) {
+      toast.error(`Erro ao carregar shortlinks: ${e.message}`)
     } finally {
-      setCrediting(false)
-      setWaiting(false)
-      setCountdown(0)
+      setLoading(false)
     }
   }
 
-  const creditsEarned = todayCount * CREDIT_PER_VIEW
-  const progressPercent = (todayCount / DAILY_LIMIT) * 100
-  const remaining = DAILY_LIMIT - todayCount
-  const currentShortlinkNumber = Math.min(todayCount + 1, DAILY_LIMIT)
-
-  if (!user) { navigate('/auth'); return null }
-
-  if (!isAdmin) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 text-center">
-        <div className="glass glass-border rounded-2xl p-8 max-w-md">
-          <h1 className="font-display font-bold text-2xl text-foreground mb-3">🚧 Em breve</h1>
-          <p className="text-muted-foreground mb-6">
-            Esta funcionalidade está sendo preparada e estará disponível em breve. Fique ligado!
-          </p>
-          <Button variant="hero" className="rounded-xl" onClick={() => navigate('/dashboard')}>
-            Voltar ao Dashboard
-          </Button>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
-      <AnimatePresence>
-        {showConfetti && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] pointer-events-none"
-          >
-            {Array.from({ length: 60 }).map((_, i) => (
-              <motion.div
-                key={i}
-                initial={{
-                  x: Math.random() * window.innerWidth,
-                  y: -20,
-                  rotate: 0,
-                  scale: Math.random() * 0.5 + 0.5,
-                }}
-                animate={{
-                  y: window.innerHeight + 20,
-                  rotate: Math.random() * 720 - 360,
-                  x: Math.random() * window.innerWidth,
-                }}
-                transition={{
-                  duration: Math.random() * 2 + 2,
-                  delay: Math.random() * 1.5,
-                  ease: 'easeIn',
-                }}
-                className="absolute w-3 h-3 rounded-sm"
-                style={{
-                  backgroundColor: ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8'][i % 8],
-                }}
-              />
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-      <div className="absolute inset-0 gradient-mesh pointer-events-none" />
-
-      <header className="sticky top-0 z-50 glass glass-border">
-        <div className="max-w-lg mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')} className="rounded-xl">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <AnimatedLogo size={20} />
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <Zap className="h-4 w-4 text-primary" />
-            <span className="text-primary font-bold">+{creditsEarned.toFixed(1)} créditos</span>
+    <div className="min-h-screen bg-background gradient-mesh">
+      {/* Header */}
+      <header className="glass glass-border sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/profile')} className="hover:bg-accent">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div className="flex items-center gap-2">
+            <AnimatedLogo size={15} />
+            <h1 className="text-xl font-bold text-foreground font-display">Shortlinks</h1>
           </div>
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 sm:px-6 py-8 pb-28 relative z-10">
-        {/* TERRA ADS - Smartlink section */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-          <div className="glass glass-border rounded-2xl p-5 border-primary/20">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-accent flex items-center justify-center">
-                <Wallet className="h-6 w-6 text-primary" />
-              </div>
-              <div className="flex-1">
-                <h2 className="font-display font-bold text-foreground text-lg">TERRA ADS - Smartlink</h2>
-                <p className="text-xs text-muted-foreground">{TERRA_ADS_SMARTLINK_LABEL}</p>
-                <p className="text-sm text-muted-foreground mt-1">Acesse {DAILY_LIMIT} shortlinks por dia</p>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-display font-bold text-primary">+{creditsEarned.toFixed(1)}</div>
-                <span className="text-xs text-muted-foreground">ganhos hoje</span>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-
-        <StreakCard currentStreak={currentStreak} longestStreak={longestStreak} />
-        <BadgesCard />
-
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass glass-border rounded-2xl p-4 mb-8">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-muted-foreground">Progresso diário</span>
-            <span className="text-sm font-bold text-primary">{todayCount}/{DAILY_LIMIT}</span>
-          </div>
-          <Progress value={progressPercent} className="h-3" />
-          {todayCount >= DAILY_LIMIT ? (
-            <p className="text-xs text-primary mt-2 text-center">🎉 Parabéns! Todos os créditos ganhos! Volte amanhã.</p>
-          ) : (
-            <p className="text-xs text-muted-foreground mt-2 text-center">
-              🎁 Faltam {DAILY_LIMIT - todayCount} para o bônus de +{TENTH_BONUS} créditos
-            </p>
-          )}
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.2 }} className="mb-8">
-          <AnimatePresence mode="wait">
-            {waiting ? (
-              <motion.div
-                key="waiting"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="glass glass-border rounded-2xl p-6 border-primary/30 ring-2 ring-primary/20 text-center"
-              >
-              <h3 className="font-display font-bold text-foreground text-lg mb-1">
-                  Aguarde 60s para o Shortlink {currentShortlinkNumber}
-                </h3>
-                <p className="text-muted-foreground text-sm mb-4">
-                  Permaneça na página do shortlink até o timer acabar, depois resgate seu crédito.
-                </p>
-                {countdown > 0 ? (
-                  <div className="mb-2">
-                    <div className="text-5xl font-display font-bold text-primary mb-3">{countdown}s</div>
-                    <Progress value={((WAIT_DURATION - countdown) / WAIT_DURATION) * 100} className="h-2 max-w-xs mx-auto" />
+      <main className="max-w-5xl mx-auto px-6 py-10">
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="space-y-8"
+        >
+          {/* Overview Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+            >
+              <Card className="glass glass-border">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-medium">Shortlinks Ativos</CardTitle>
+                    <Video className="h-4 w-4 text-primary" />
                   </div>
-                ) : (
-                  <Button
-                    variant="hero"
-                    className="h-14 px-10 rounded-xl text-base font-bold"
-                    onClick={creditReward}
-                    disabled={crediting}
-                  >
-                    {crediting ? 'Creditando...' : `✅ Resgatar +${CREDIT_PER_VIEW} crédito`}
-                  </Button>
-                )}
-                <div className="mt-4">
-                  <a
-                    href={TERRA_ADS_SMARTLINK_1}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-muted-foreground underline hover:text-primary"
-                  >
-                    Reabrir shortlink
-                  </a>
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div key="button" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <Button
-                  variant="hero"
-                  className="w-full h-20 rounded-2xl text-lg font-display font-bold gap-3 relative overflow-hidden"
-                  onClick={openSmartlink}
-                  disabled={todayCount >= DAILY_LIMIT || loading}
-                >
-                  {todayCount >= DAILY_LIMIT ? (
-                    <>🎉 Limite atingido! Volte amanhã</>
-                  ) : (
-                    <>
-                      <ExternalLink className="h-6 w-6" />
-                      🔗 Abrir shortlink TERRA ADS (+{CREDIT_PER_VIEW} crédito)
-                      <span className="absolute top-2 right-3 text-xs opacity-70">{remaining} restantes</span>
-                    </>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-display font-bold text-foreground">
+                    {limits?.active_count || 0}/10
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {limits?.can_create_more ? '✓ Pode criar mais' : '⚠️ Limite atingido'}
+                  </p>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.15 }}
+            >
+              <Card className="glass glass-border">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-medium">Créditos Diários</CardTitle>
+                    <Badge className="bg-primary/20 text-primary">Hoje</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-display font-bold text-foreground">
+                    +{limits?.total_daily_reward || 0}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Base: {limits?.daily_base_reward || 5} + Bônus: {limits?.daily_bonus_reward || 0}
+                  </p>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+            >
+              <Card className="glass glass-border">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-medium">Saldo</CardTitle>
+                    <span className={userDebt > 0 ? 'text-destructive' : 'text-green-500'}>
+                      {userDebt > 0 ? '⚠️' : '✓'}
+                    </span>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-display font-bold text-foreground">
+                    {userBalance}
+                  </p>
+                  {userDebt > 0 && (
+                    <p className="text-xs text-destructive mt-1">
+                      Débito: {userDebt} créditos
+                    </p>
                   )}
-                </Button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
-          <div className="glass glass-border rounded-2xl p-5">
-            <h3 className="font-display font-bold text-foreground mb-3 flex items-center gap-2">
-              <Gift className="h-5 w-5 text-primary" /> Resumo de hoje
-            </h3>
-            <div className="space-y-2">
-              {Array.from({ length: DAILY_LIMIT }).map((_, i) => {
-                const isTenth = i === DAILY_LIMIT - 1
-                const reward = isTenth ? CREDIT_PER_VIEW + TENTH_BONUS : CREDIT_PER_VIEW
-                return (
-                  <div key={i} className="flex items-center gap-3">
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${
-                      i < todayCount ? 'bg-green-500/20 text-green-500' : 'bg-muted text-muted-foreground'
-                    }`}>
-                      {i < todayCount ? '✓' : i + 1}
-                    </div>
-                    <span className={`text-sm flex-1 ${i < todayCount ? 'text-green-500' : 'text-muted-foreground'}`}>
-                      Shortlink {i + 1} {isTenth && <span className="text-primary">🎁 bônus</span>}
-                    </span>
-                    <span className={`text-sm font-bold ${i < todayCount ? 'text-primary' : 'text-muted-foreground/50'}`}>
-                      +{reward}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-            <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Total ganho hoje</span>
-              <span className="text-lg font-display font-bold text-primary">+{creditsEarned.toFixed(1)} créditos</span>
-            </div>
+                </CardContent>
+              </Card>
+            </motion.div>
           </div>
-        </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="mt-6 flex flex-col items-center gap-3">
-          <Button
-            variant="outline"
-            className="rounded-full gap-2 px-6"
-            onClick={() => navigate('/leaderboard')}
+          {/* Debt Warning */}
+          {userDebt > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.25 }}
+            >
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  ⚠️ Você tem um débito de <span className="font-semibold">{userDebt} créditos</span>. 
+                  Os créditos ganhos com shortlinks serão descontados automaticamente.
+                </AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
+
+          {/* Info Card */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            className="rounded-2xl border border-primary/20 bg-primary/5 p-6"
           >
-            <Trophy className="h-4 w-4" />
-            🏆 Ver Ranking de Streaks
-          </Button>
-          <Button
-            variant="outline"
-            className="rounded-full gap-2 px-6"
-            onClick={() => window.open('https://t.me/kubovibe', '_blank')}
+            <h3 className="font-semibold text-foreground mb-3">🎬 Como funciona</h3>
+            <div className="space-y-3 text-sm text-muted-foreground">
+              <div className="flex items-start gap-3">
+                <Badge>1</Badge>
+                <p>Faça upload de um vídeo curto (5-7 segundos)</p>
+              </div>
+              <div className="flex items-start gap-3">
+                <Badge>2</Badge>
+                <p><span className="font-semibold text-foreground">5 créditos por dia</span> por cada shortlink ativo</p>
+              </div>
+              <div className="flex items-start gap-3">
+                <Badge>3</Badge>
+                <p><span className="font-semibold text-foreground">Bônus: +5 créditos</span> para cada 10 shortlinks (ex: 10-19 = +5, 20-29 = +10)</p>
+              </div>
+              <div className="flex items-start gap-3">
+                <Badge>4</Badge>
+                <p>Máximo <span className="font-semibold text-foreground">10 shortlinks</span> ativos por vez</p>
+              </div>
+              <div className="flex items-start gap-3">
+                <Badge>5</Badge>
+                <p>Recompensas recalculadas <span className="font-semibold text-foreground">diariamente</span> (sem acumular)</p>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Upload Section */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.35 }}
           >
-            <Send className="h-4 w-4" />
-            📲 Ganhe mais créditos no Telegram
-          </Button>
+            <ShortlinksUploader
+              onSuccess={loadData}
+              canCreateMore={limits?.can_create_more || false}
+              activeCount={limits?.active_count || 0}
+            />
+          </motion.div>
+
+          {/* Shortlinks List */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+          >
+            <ShortlinksList
+              shortlinks={shortlinks}
+              onDelete={loadData}
+              dailyReward={limits?.total_daily_reward || 5}
+            />
+          </motion.div>
         </motion.div>
       </main>
-      <TerraNativeBanner />
     </div>
   )
 }

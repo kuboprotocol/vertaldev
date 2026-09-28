@@ -233,7 +233,7 @@ testimonials and a waitlist form.`}</Pre>
             edge functions.
           </li>
         </UL>
-        <H3>KUBO Tools</H3>
+        <H3>Vertal Tools</H3>
         <P>
           One-click panels inside the Builder for: template gallery, file uploads (auto
           WebP compression above 200 KB), website cloning, CSV import/export, preview
@@ -445,12 +445,12 @@ testimonials and a waitlist form.`}</Pre>
   },
   {
     id: 'anywhere',
-    title: 'KUBO Anywhere',
+    title: 'Vertal Anywhere',
     icon: Globe,
     group: 'Platform',
     content: (
       <>
-        <H2>KUBO Anywhere</H2>
+        <H2>Vertal Anywhere</H2>
         <P>
           One workspace, two execution models. The project state (branch, open files, AI
           conversation, Git history) lives in the backend, so nothing is ever trapped on a
@@ -460,11 +460,11 @@ testimonials and a waitlist form.`}</Pre>
         <P>
           On iOS, iPadOS and Android the client only <em>commands</em> remote execution: a
           native editor over a local copy of the files, a terminal client streaming an
-          ephemeral KUBO Cloud container, Git through the API (never a local binary), a live
+          ephemeral Vertal Cloud container, Git through the API (never a local binary), a live
           preview rendered from the cloud build, and a push notification when a build or
           deploy finishes. Android uses FCM where iOS uses APNs.
         </P>
-        <H3>Desktop — KUBO Local Agent</H3>
+        <H3>Desktop — Vertal Local Agent</H3>
         <P>
           On Windows, macOS and Linux a single signed background daemon runs everything on
           your own hardware: real terminal, real local <Code>git</Code>, and a bridge

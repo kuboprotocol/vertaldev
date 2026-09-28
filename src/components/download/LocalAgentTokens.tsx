@@ -94,7 +94,7 @@ export default function LocalAgentTokens() {
         <div className="flex-1 min-w-0">
           <h2 className="text-lg font-semibold text-foreground">Conecte o agent ao seu saldo</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Gere um token e cole no comando <strong className="text-foreground">KUBO: Pair this workspace</strong>{' '}
+            Gere um token e cole no comando <strong className="text-foreground">Vertal: Pair this workspace</strong>{' '}
             no VS Code/Cursor. As ações de IA feitas na sua máquina passam a ser cobradas no mesmo saldo de
             créditos do {APP_NAME}. Terminal e git continuam grátis.
           </p>

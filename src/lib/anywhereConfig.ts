@@ -27,7 +27,7 @@ export const BILLING_MODELS: Record<ExecutionModel, BillingModel> = {
     model: "cloud",
     label: "Per container minute",
     description:
-      "The device only drives a remote session. Every active minute of the ephemeral KUBO Cloud container is charged to the same credit ledger.",
+      "The device only drives a remote session. Every active minute of the ephemeral Vertal Cloud container is charged to the same credit ledger.",
   },
   local: {
     model: "local",
@@ -74,7 +74,7 @@ export const PLATFORMS: PlatformSpec[] = [
     name: "Windows",
     family: "desktop",
     execution: "local",
-    client: "KUBO Local Agent + VS Code / Cursor extension",
+    client: "Vertal Local Agent + VS Code / Cursor extension",
     status: "beta",
     capabilities: [
       "Background Rust daemon watching your workspace",
@@ -93,7 +93,7 @@ export const PLATFORMS: PlatformSpec[] = [
     name: "macOS",
     family: "desktop",
     execution: "local",
-    client: "KUBO Local Agent + Xcode integration",
+    client: "Vertal Local Agent + Xcode integration",
     status: "beta",
     capabilities: [
       "Same daemon as Windows/Linux, notarized for macOS",
@@ -109,7 +109,7 @@ export const PLATFORMS: PlatformSpec[] = [
     name: "Linux",
     family: "desktop",
     execution: "local",
-    client: "KUBO Local Agent (systemd service)",
+    client: "Vertal Local Agent (systemd service)",
     status: "beta",
     capabilities: [
       "Same daemon binary, installed as a systemd user service",
@@ -124,7 +124,7 @@ export const PLATFORMS: PlatformSpec[] = [
     name: "iOS / iPadOS",
     family: "mobile",
     execution: "cloud",
-    client: "Native shell around the KUBO Mobile Agent client",
+    client: "Native shell around the Vertal Mobile Agent client",
     status: "available",
     capabilities: [
       "Native code editor over a local copy — edits work offline",

@@ -19,6 +19,15 @@ async function pressToastAction(page: import('@playwright/test').Page, name: Reg
 const INITIATE_URL_RE = /\/functions\/v1\/github-signin-initiate/
 
 test.describe('GitHub login UI', () => {
+  // O index.html carrega um script de anúncios de terceiros que pode abrir uma
+  // camada invisível por cima da página e roubar o clique do botão do GitHub
+  // (falha intermitente, depende de o anúncio ser servido). Bloqueado aqui para
+  // o teste medir só o fluxo de login. Rotas registradas depois (os mocks de
+  // cada teste) têm prioridade sobre esta.
+  test.beforeEach(async ({ page }) => {
+    await page.route(/effectivecpmnetwork\.com/, (route: Route) => route.abort())
+  })
+
   test('initiate success: button shows loading then redirects to GitHub', async ({ page }) => {
     // Intercept GitHub itself so the test stays offline & deterministic
     await page.route('https://github.com/login/oauth/authorize**', (route: Route) =>

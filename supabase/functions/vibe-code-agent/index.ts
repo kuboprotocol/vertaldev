@@ -8,6 +8,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { classifyComplexity } from "../_shared/deepseekRouter.ts";
 import { runGateway } from "../_shared/aiGateway.ts";
 import { recordGatewayFailure, recordGatewayRun, supabaseGatewayCache } from "../_shared/aiGatewayStore.ts";
+import { extractMemories, formatMemoriesForPrompt, loadMemories, saveMemories } from "../_shared/primeMemory.ts";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -170,6 +173,7 @@ Deno.serve(async (req) => {
   );
 
   let body: {
+    projectId?: string;
     prompt?: string;
     mode?: "preview" | "apply";
     apply?: Array<{ path: string; content: string }>;
@@ -300,6 +304,26 @@ Deno.serve(async (req) => {
         if (!prompt) throw new Error("prompt_required");
         const mode = body.mode === "apply" ? "apply" : "preview";
 
+        // Projeto do usuário (RLS de projects: só o dono enxerga).
+        let projectId: string | null = null;
+        if (typeof body.projectId === "string" && UUID_RE.test(body.projectId)) {
+          const { data: proj } = await userClient.from("projects").select("id").eq("id", body.projectId).maybeSingle();
+          projectId = proj?.id ?? null;
+        }
+
+        // Memória do Prime: guarda o que o usuário pediu para lembrar e usa
+        // tudo o que já foi lembrado para este usuário/projeto.
+        const newMemories = await saveMemories(admin, userId, projectId, extractMemories(prompt, !!projectId))
+          .catch(() => []);
+        for (const m of newMemories) {
+          send({ kind: "memory", status: "success", title: "Memória salva", detail: m.content });
+        }
+        const memories = await loadMemories(admin, userId, projectId).catch(() => []);
+        if (memories.length) {
+          send({ kind: "memory", status: "success", title: `Usando ${memories.length} memória(s) do Prime` });
+        }
+        const system = SYSTEM + formatMemoriesForPrompt(memories);
+
         const tier = classifyComplexity(prompt);
         const estimatedCost = CREDIT_COST[tier];
         send({
@@ -325,17 +349,17 @@ Deno.serve(async (req) => {
               // reaproveitar a resposta de um pedido idêntico (custo zero).
               noCache: mode === "apply",
               messages: [
-                { role: "system", content: SYSTEM },
+                { role: "system", content: system },
                 { role: "user", content: prompt },
               ],
             },
             { cache: supabaseGatewayCache(admin) },
           );
         } catch (err) {
-          await recordGatewayFailure(admin, userId, null, "code", err).catch(() => {});
+          await recordGatewayFailure(admin, userId, projectId, "code", err).catch(() => {});
           throw err;
         }
-        await recordGatewayRun(admin, userId, null, llm).catch(() => null);
+        await recordGatewayRun(admin, userId, projectId, llm).catch(() => null);
         send({
           kind: "thinking",
           status: "success",

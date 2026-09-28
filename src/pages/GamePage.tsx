@@ -12,6 +12,7 @@ import { GameRenderer } from '@/game/renderer';
 import { executeNPCAction, type NPCActionEvent } from '@/game/actions';
 import { toast } from 'sonner';
 import WGSLSandbox from '@/components/WGSLSandbox';
+import { friendlyFunctionError, functionErrorCode } from '@/lib/functionError';
 
 interface DialogueEntry { role: 'user' | 'assistant'; content: string; npcId: string }
 
@@ -28,12 +29,13 @@ export default function GamePage() {
   const [playerHP, setPlayerHP] = useState<{ hp: number; max: number } | null>(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
     const world = new World();
     world.registerSystem(MovementSystem);
     world.registerSystem(EmoteSystem);
     generateWorld(world, seed);
-    const renderer = new GameRenderer(containerRef.current);
+    const renderer = new GameRenderer(container);
     worldRef.current = world;
     rendererRef.current = renderer;
 
@@ -80,10 +82,10 @@ export default function GamePage() {
         console.warn('load npc memory failed', err);
       }
     };
-    containerRef.current.addEventListener('click', onClick);
+    container.addEventListener('click', onClick);
 
     return () => {
-      containerRef.current?.removeEventListener('click', onClick);
+      container.removeEventListener('click', onClick);
       renderer.dispose();
     };
   }, [seed]);
@@ -127,9 +129,10 @@ export default function GamePage() {
           worldState: { seed, time: Math.floor(worldRef.current?.time ?? 0) },
         },
       });
-      if (error) throw error;
-      if (data?.error === 'rate_limited') { toast.error('Limite de IA atingido. Aguarde.'); return; }
-      if (data?.error === 'credits_required') { toast.error('Créditos KUBO necessários.'); return; }
+      if (error) {
+        toast.error(friendlyFunctionError(await functionErrorCode(error)));
+        return;
+      }
 
       const reply = data?.dialogue ?? '...';
       const asst: DialogueEntry = { role: 'assistant', content: reply, npcId: selectedNPC.npcId };
@@ -147,8 +150,8 @@ export default function GamePage() {
         if (evt.kind === 'rejected') toast.warning(evt.message);
         else toast.success(evt.message);
       }
-    } catch (e) {
-      toast.error((e as Error).message);
+    } catch {
+      toast.error(friendlyFunctionError(null));
     } finally { setLoading(false); }
   };
 
@@ -163,7 +166,7 @@ export default function GamePage() {
             <div className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-primary" />
               <h1 className="text-xl font-bold font-display tracking-wider">
-                KUBO <span className="neon-text">QUANTUM ENGINE</span>
+                VERTAL <span className="neon-text">QUANTUM ENGINE</span>
               </h1>
             </div>
           </div>

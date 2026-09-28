@@ -2347,7 +2347,7 @@ export function DeliveryFlow() {
 
                 <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-2">
                   <p className="text-[10px] font-bold flex items-center gap-2">
-                    <ShieldCheck className="h-3 w-3 text-primary" /> Lovable Security Guard
+                    <ShieldCheck className="h-3 w-3 text-primary" /> Vertal Security Guard
                   </p>
                   <p className="text-[9px] text-muted-foreground leading-tight">
                     Varredura de malware ativa para todos os uploads. Regras validadas antes de aceitar novos anexos. 

@@ -9,7 +9,10 @@ describe('Economia Criativa em construção', () => {
   })
 
   it('mensagem do aviso', () => {
-    expect(CREATIVE_ECONOMY_COPY.title).toBe('Economia Criativa em Construção')
-    expect(CREATIVE_ECONOMY_COPY.message).toBe('Estamos construindo um ecossistema poderoso pra você e por você.')
+    expect(CREATIVE_ECONOMY_COPY.title).toBe('Painel de Economia Criativa em construção')
+    expect(CREATIVE_ECONOMY_COPY.message).toBe(
+      'O Painel de Economia Criativa está em construção, estamos criando algo poderoso pra você e por você.',
+    )
+    expect(CREATIVE_ECONOMY_COPY.founderWelcome(27)).toContain('Fundador nº 27')
   })
 })

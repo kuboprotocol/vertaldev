@@ -100,23 +100,6 @@ const callDeepSeek = async (
     }),
   });
 
-const callLovable = async (
-  apiKey: string,
-  messages: Array<{ role: string; content: string }>,
-) =>
-  fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages,
-      stream: true,
-    }),
-  });
-
 const providerFailureMessage = (provider: string, status: number) => {
   if (status === 401) return `${provider}: chave inválida (401)`;
   if (status === 402) return `${provider}: sem créditos (402)`;
@@ -217,7 +200,6 @@ serve(async (req) => {
 
     const KIMI_API_KEY = Deno.env.get("KIMI_API_KEY");
     const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
     // Select system prompt based on KUBO FLOW mode
     const systemPrompt = MODE_PROMPTS[mode] || FLOW_PROMPT;
@@ -232,7 +214,7 @@ serve(async (req) => {
     console.log(`Request type: ${heavy ? "HEAVY CODE" : "LIGHT/MEDIUM"}`);
 
     if (heavy) {
-      console.log("Routing: DeepSeek → Kimi → Lovable AI");
+      console.log("Routing: DeepSeek → Kimi");
 
       if (DEEPSEEK_API_KEY) {
         const result = await tryProvider("DeepSeek", () => callDeepSeek(DEEPSEEK_API_KEY, fullMessages), failures);
@@ -244,12 +226,8 @@ serve(async (req) => {
         if (result) return result;
       }
 
-      if (LOVABLE_API_KEY) {
-        const result = await tryProvider("Lovable AI", () => callLovable(LOVABLE_API_KEY, fullMessages), failures);
-        if (result) return result;
-      }
     } else {
-      console.log("Routing: Kimi → DeepSeek → Lovable AI");
+      console.log("Routing: Kimi → DeepSeek");
       // Fluxo otimizado: Front-end tenta Puter.js primeiro (Nível 1).
       // Se cair aqui, é fallback ou processamento de back-end.
 
@@ -263,10 +241,6 @@ serve(async (req) => {
         if (result) return result;
       }
 
-      if (LOVABLE_API_KEY) {
-        const result = await tryProvider("Lovable AI", () => callLovable(LOVABLE_API_KEY, fullMessages), failures);
-        if (result) return result;
-      }
     }
 
     if (failures.length) console.warn("[generate-code] all providers failed:", failures.join(" | "));

@@ -1,7 +1,7 @@
 {
   "name": "kubo-vibe",
-  "displayName": "KUBO Vibe",
-  "description": "Run KUBO Vibe agents on your own machine through the KUBO Local Agent daemon.",
+  "displayName": "Vertal Vibe",
+  "description": "Run Vertal Vibe agents on your own machine through the Vertal Local Agent daemon.",
   "version": "0.1.0",
   "publisher": "kuboprotocol",
   "license": "MIT",
@@ -12,19 +12,19 @@
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
-      { "command": "kubo.status", "title": "KUBO: Agent status" },
-      { "command": "kubo.pair", "title": "KUBO: Pair this workspace" },
-      { "command": "kubo.update", "title": "KUBO: Update Local Agent" },
-      { "command": "kubo.chat", "title": "KUBO: Ask the agent (1 credit)" },
-      { "command": "kubo.edit", "title": "KUBO: Edit current file (2 credits)" },
-      { "command": "kubo.run", "title": "KUBO: Run agent task (4 credits)" },
-      { "command": "kubo.terminal", "title": "KUBO: Run command (free)" }
+      { "command": "kubo.status", "title": "Vertal: Agent status" },
+      { "command": "kubo.pair", "title": "Vertal: Pair this workspace" },
+      { "command": "kubo.update", "title": "Vertal: Update Local Agent" },
+      { "command": "kubo.chat", "title": "Vertal: Ask the agent (1 credit)" },
+      { "command": "kubo.edit", "title": "Vertal: Edit current file (2 credits)" },
+      { "command": "kubo.run", "title": "Vertal: Run agent task (4 credits)" },
+      { "command": "kubo.terminal", "title": "Vertal: Run command (free)" }
     ],
     "configuration": {
-      "title": "KUBO Vibe",
+      "title": "Vertal Vibe",
       "properties": {
         "kubo.agentPort": { "type": "number", "default": 43117, "description": "Local Agent daemon port." },
-        "kubo.projectId": { "type": "string", "default": "", "description": "KUBO project the credits are billed to." }
+        "kubo.projectId": { "type": "string", "default": "", "description": "Vertal project the credits are billed to." }
       }
     }
   },

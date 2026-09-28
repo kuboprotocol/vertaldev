@@ -568,7 +568,7 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
             {/* KUBO FLOW AI Mode Selector */}
             <div className="flex items-center justify-between px-1">
               <KuboFlowSelector mode={flowMode} onChange={handleModeChange} autoDetected={autoDetectedMode} userPlan={userPlan} />
-              <span className="text-[10px] text-muted-foreground font-display tracking-widest">KUBO FLOW AI</span>
+              <span className="text-[10px] text-muted-foreground font-display tracking-widest">VERTAL FLOW AI</span>
             </div>
             {uploadProgress !== null && (
               <div className="flex items-center gap-2 px-1">

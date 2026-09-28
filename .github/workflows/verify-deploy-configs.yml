@@ -92,17 +92,7 @@ jobs:
             exit 1
           fi
 
-      - name: Assert vercel.json exists at repo root
-        run: |
-          if [ ! -f vercel.json ]; then
-            audit.sh "vercel.json exists" fail "vercel.json" 0 \
-              "Missing vercel.json" \
-              "File missing at repo root — Vercel deploy will skip *.lovable.app → kubovibe.dev redirect rules."
-            exit 1
-          fi
-          BYTES=$(wc -c < vercel.json)
-          echo "✓ vercel.json present (${BYTES} bytes)"
-          audit.sh "vercel.json exists" ok "vercel.json" 0 "Present" "${BYTES} bytes"
+      # Removed: vercel.json check. Project migrated to Cloudflare Workers deploy.
 
       - name: Assert render.yaml exists at repo root
         run: |
@@ -116,28 +106,7 @@ jobs:
           echo "✓ render.yaml present (${BYTES} bytes)"
           audit.sh "render.yaml exists" ok "render.yaml" 0 "Present" "${BYTES} bytes"
 
-      - name: Validate vercel.json is parseable JSON
-        run: |
-          # Capture the JSON parser's line number on failure so the PR
-          # annotation points to the EXACT offending line.
-          set +e
-          OUT=$(node -e "try { JSON.parse(require('fs').readFileSync('vercel.json','utf8')); } catch(e){ console.error(e.message); process.exit(1);}" 2>&1)
-          RC=$?
-          set -e
-          if [ "$RC" -ne 0 ]; then
-            # Node's SyntaxError text often contains "at position N" — convert to line.
-            POS=$(echo "$OUT" | grep -oE 'position [0-9]+' | head -1 | awk '{print $2}')
-            LINE=0
-            if [ -n "${POS:-}" ]; then
-              LINE=$(head -c "$POS" vercel.json | wc -l | tr -d ' ')
-              LINE=$((LINE + 1))
-            fi
-            audit.sh "vercel.json valid JSON" fail "vercel.json" "$LINE" \
-              "Invalid JSON" "JSON.parse threw: ${OUT}"
-            exit 1
-          fi
-          echo "✓ vercel.json is valid JSON"
-          audit.sh "vercel.json valid JSON" ok "vercel.json" 0 "Valid JSON" "Parsed cleanly"
+      # Removed: vercel.json validation. Project migrated to Cloudflare Workers deploy.
 
       - name: Validate render.yaml is parseable YAML
         run: |
@@ -165,32 +134,7 @@ jobs:
           echo "✓ render.yaml is valid YAML"
           audit.sh "render.yaml valid YAML" ok "render.yaml" 0 "Valid YAML" "Parsed cleanly"
 
-      - name: Assert canonical-domain redirect rule is present in vercel.json
-        run: |
-          set +e
-          OUT=$(node -e "
-            const c = JSON.parse(require('fs').readFileSync('vercel.json','utf8'));
-            const r = (c.redirects || []).find(x =>
-              (x.has || []).some(h => h.type === 'host' && h.value.replace(/\\\\/g,'').includes('lovable.app')) &&
-              x.destination.includes('kubovibe.dev') &&
-              x.permanent === true
-            );
-            if (!r) { console.error('Missing 301 *.lovable.app → kubovibe.dev redirect in vercel.json'); process.exit(1); }
-            console.log('OK');
-          " 2>&1)
-          RC=$?
-          set -e
-          if [ "$RC" -ne 0 ]; then
-            # Pin annotation to the line where "redirects" key starts (or 1 if not found).
-            LINE=$(grep -nE '"redirects"[[:space:]]*:' vercel.json | head -1 | cut -d: -f1)
-            LINE=${LINE:-1}
-            audit.sh "vercel.json 301 rule" fail "vercel.json" "$LINE" \
-              "Canonical 301 missing" \
-              "Missing redirect entry: host *.lovable.app → kubovibe.dev (permanent=true)"
-            exit 1
-          fi
-          audit.sh "vercel.json 301 rule" ok "vercel.json" 0 "Canonical 301 present" \
-            "*.lovable.app → kubovibe.dev (permanent)"
+      # Removed: vercel.json redirect validation. Project migrated to Cloudflare Workers deploy.
 
       - name: Assert canonical-domain redirect rule is present in render.yaml
         run: |

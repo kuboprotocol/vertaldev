@@ -199,7 +199,7 @@ const DashboardPage = forwardRef<HTMLDivElement, any>((props, ref) => {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-3">
                   <Palette className="w-5 h-5 text-primary" />
-                  <span className="text-xs tracking-[0.3em] text-muted-foreground">KUBO CREATIVE STUDIO</span>
+                  <span className="text-xs tracking-[0.3em] text-muted-foreground">VERTAL CREATIVE STUDIO</span>
                 </div>
                 <h3 className="text-2xl font-display font-bold mb-2">
                   Dashboard of <span className="neon-text">Creative Economy</span>
@@ -224,7 +224,7 @@ const DashboardPage = forwardRef<HTMLDivElement, any>((props, ref) => {
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <Gamepad2 className="w-5 h-5 text-primary" />
-                  <span className="text-xs tracking-[0.3em] text-muted-foreground">KUBO QUANTUM ENGINE</span>
+                  <span className="text-xs tracking-[0.3em] text-muted-foreground">VERTAL QUANTUM ENGINE</span>
                 </div>
                 <h3 className="text-2xl font-display font-bold mb-2">
                   Crie <span className="neon-text">living worlds</span> com IA

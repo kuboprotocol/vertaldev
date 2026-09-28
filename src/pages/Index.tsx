@@ -58,7 +58,7 @@ Como funciona o painel:
 
 Rail lateral (desktop): Agente / Arquivos / Domínios / Deploys / Integrações / Config — igual à barra fina da Vercel.
 
-Painel do Agente (esquerda): narra passo a passo o que está fazendo ("Lendo arquivo", "Editando componente", "Chamando conector IONOS") — estilo Replit Agent, mas dentro da identidade visual da KUBO.
+Painel do Agente (esquerda): narra passo a passo o que está fazendo ("Lendo arquivo", "Editando componente", "Chamando conector IONOS") — estilo Replit Agent, mas dentro da identidade visual da Vertal.
 
 Área principal (direita): abas de Preview / Domínios / Deploys.
 

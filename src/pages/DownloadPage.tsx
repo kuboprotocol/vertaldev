@@ -30,7 +30,7 @@ const PLATFORMS: PlatformCard[] = [
     id: 'windows',
     name: 'Windows',
     icon: Monitor,
-    detail: 'KUBO Local Agent — detecta e integra com VS Code, Cursor, Trae e Antigravity automaticamente.',
+    detail: 'Vertal Local Agent — detecta e integra com VS Code, Cursor, Trae e Antigravity automaticamente.',
   },
   {
     id: 'mac',
@@ -50,7 +50,7 @@ const PLATFORMS: PlatformCard[] = [
     id: 'ios',
     name: 'iOS / iPadOS',
     icon: Smartphone,
-    detail: 'Workspace remoto na nuvem KUBO, sincronizado em tempo real.',
+    detail: 'Workspace remoto na nuvem Vertal, sincronizado em tempo real.',
   },
   {
     id: 'android',
@@ -93,7 +93,7 @@ export default function DownloadPage() {
           className="text-center mb-14"
         >
           <Badge variant="outline" className="mb-4 border-primary/30 bg-primary/5 text-primary">
-            KUBO Local Agent
+            Vertal Local Agent
           </Badge>
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-foreground">
             Leve o {APP_NAME} para sua máquina

@@ -20,7 +20,7 @@ class LogoBoundary extends Component<{ children: ReactNode; fallback: ReactNode 
 
 const LogoTextFallback = () => (
   <span className="font-display font-bold tracking-[0.18em] text-foreground" style={{ fontSize: 48 }}>
-    KUBO&nbsp;VIBE
+    VERTAL&nbsp;VIBE
   </span>
 )
 
