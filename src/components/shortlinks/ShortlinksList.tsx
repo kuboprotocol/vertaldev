@@ -37,9 +37,8 @@ export default function ShortlinksList({ shortlinks, onDelete, dailyReward }: Sh
 
     setDeleting(id)
     try {
-      const { error } = await supabase.functions.invoke('shortlinks', {
+      const { error } = await supabase.functions.invoke('shortlinks?action=delete', {
         method: 'POST',
-        headers: { 'X-Action': 'delete' },
         body: { shortlink_id: id },
       })
 
