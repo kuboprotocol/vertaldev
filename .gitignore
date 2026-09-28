@@ -33,3 +33,4 @@ reports/
 # Saídas geradas pelos testes (vitest json reporter / coverage)
 test-results/
 coverage/
+playwright-report/
