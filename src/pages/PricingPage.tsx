@@ -48,6 +48,10 @@ function featuresFor(plan: string): string[] {
     feats.push(`✓ ${cfg.signupCredits} créditos no cadastro (1x)`)
   } else {
     feats.push(`✓ ${cfg.dailyCredits} créditos por dia`)
+    // Calcular total de créditos por mês
+    const dailyFromShortlinks = 9.5 // 10 shortlinks * 9.5 créditos (5 base + 4.5 bonus)
+    const totalMonthlyCredits = Math.round((cfg.dailyCredits + dailyFromShortlinks) * 30)
+    feats.push(`✓ ~${totalMonthlyCredits} créditos por mês (estimado)`)
   }
   feats.push('✓ 10 shortlinks/dia (+9.5 créditos)')
   if (cfg.adFrequencyHours === null) {
