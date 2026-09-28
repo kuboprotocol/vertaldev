@@ -31,6 +31,14 @@ const BADGES: Record<string, { label: string; tone: 'popular' | 'value' }> = {
   premium_1: { label: '🔥 Melhor Custo-Benefício', tone: 'value' },
 }
 
+// Monthly credits per plan (hardcoded as per user requirements)
+const MONTHLY_CREDITS: Record<string, number> = {
+  free: 5,           // Just signup credits
+  starter: 50,       // $4.99/month
+  pro: 200,          // $19.99/month
+  premium_1: 650,    // $49.99/month
+}
+
 function priceFor(monthly: number, period: Period): { display: string; suffix: string } {
   if (monthly === 0) return { display: '$0', suffix: '/ para sempre' }
   if (period === 'monthly') return { display: `$${monthly.toFixed(2)}`, suffix: '/ mês' }
@@ -43,16 +51,17 @@ function priceFor(monthly: number, period: Period): { display: string; suffix: s
 
 function featuresFor(plan: string): string[] {
   const cfg = getPlanConfig(plan)
+  const monthlyCredits = MONTHLY_CREDITS[plan] || 0
   const feats: string[] = []
+
   if (plan === 'free') {
     feats.push(`✓ ${cfg.signupCredits} créditos no cadastro (1x)`)
+    feats.push(`✓ Até 5 créditos/mês via shortlinks`)
   } else {
-    feats.push(`✓ ${cfg.dailyCredits} créditos por dia`)
-    // Calcular total de créditos por mês
-    const dailyFromShortlinks = 9.5 // 10 shortlinks * 9.5 créditos (5 base + 4.5 bonus)
-    const totalMonthlyCredits = Math.round((cfg.dailyCredits + dailyFromShortlinks) * 30)
-    feats.push(`✓ ~${totalMonthlyCredits} créditos por mês (estimado)`)
+    feats.push(`✓ ${monthlyCredits} créditos por mês`)
+    feats.push(`✓ Inclui 5 créditos/dia + bônus shortlinks`)
   }
+
   feats.push('✓ 10 shortlinks/dia (+9.5 créditos)')
   if (cfg.adFrequencyHours === null) {
     feats.push('✓ Sem anúncios interruptivos')
@@ -295,6 +304,57 @@ export default function PricingPage() {
           </div>
         </motion.section>
 
+        {/* Recarga de Créditos */}
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="mt-24"
+        >
+          <div className="mb-8 flex items-center gap-3">
+            <Zap className="h-5 w-5 text-primary" />
+            <h2 className="font-display text-2xl font-bold">Recarga de Créditos</h2>
+          </div>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 max-w-4xl">
+            {[
+              { credits: 50, price: 4.99, label: 'Pequena' },
+              { credits: 150, price: 12.99, label: 'Média' },
+              { credits: 350, price: 24.99, label: 'Grande' },
+            ].map((recharge) => (
+              <motion.div
+                key={recharge.credits}
+                variants={itemAnim}
+                className="rounded-xl border border-border/60 bg-card/40 p-6 backdrop-blur-xl hover:border-primary/40 transition-all"
+              >
+                <div className="mb-4">
+                  <p className="text-sm text-muted-foreground uppercase tracking-wider">Recarga {recharge.label}</p>
+                  <p className="text-3xl font-bold mt-2">{recharge.credits}</p>
+                  <p className="text-xs text-muted-foreground">créditos</p>
+                </div>
+                <div className="mb-6">
+                  <p className="text-2xl font-bold">${recharge.price.toFixed(2)}</p>
+                </div>
+                <Button
+                  onClick={() => handleStripeCheckout(`recharge_${recharge.credits}`)}
+                  disabled={!user || loadingPlan === `recharge_${recharge.credits}`}
+                  className="w-full"
+                >
+                  {loadingPlan === `recharge_${recharge.credits}` ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando…
+                    </>
+                  ) : (
+                    <>Comprar com Stripe <ArrowRight className="ml-2 h-4 w-4" /></>
+                  )}
+                </Button>
+              </motion.div>
+            ))}
+          </div>
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            Créditos adicionais podem ser usados a qualquer momento em gerações de IA, deploys e ações premium.
+          </p>
+        </motion.section>
+
         {/* Comparação */}
         <motion.section
           initial={{ opacity: 0, y: 20 }}
@@ -320,8 +380,9 @@ export default function PricingPage() {
               <tbody className="divide-y divide-border/40">
                 {[
                   ['Preço/mês', '$0', '$4.99', '$19.99', '$49.99'],
-                  ['Créditos/dia', '5 (1x)', '5', '5', '5'],
+                  ['Créditos/mês', '5', '50', '200', '650'],
                   ['Shortlinks/dia (opcional)', '10', '10', '10', '10'],
+                  ['Bonus shortlinks/dia', 'até +9.5', 'até +9.5', 'até +9.5', 'até +9.5'],
                   ['Anúncios', 'A cada 6h', 'A cada 12h', 'Sem anúncios', 'Sem anúncios'],
                   ['Suporte', '—', '—', 'Email', 'Email'],
                 ].map((row) => (
