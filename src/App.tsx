@@ -52,6 +52,7 @@ const GameMetaversePage = lazy(() => import("./pages/GameMetaversePage"));
 const GameSdkPage = lazy(() => import("./pages/GameSdkPage"));
 const GameVrPage = lazy(() => import("./pages/GameVrPage"));
 const GameAiPage = lazy(() => import("./pages/GameAiPage"));
+const GameBuilderPage = lazy(() => import("./pages/GameBuilderPage"));
 const AdminCloudPage = lazy(() => import("./pages/AdminCloudPage"));
 const AdminAnywherePage = lazy(() => import("./pages/AdminAnywherePage"));
 const AdminProjectsPage = lazy(() => import("./pages/AdminProjectsPage"));
@@ -234,6 +235,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/app/:projectId" element={<PublicAppPage />} />
                 <Route path="/app/:projectId/:slug" element={<PublicAppPage />} />
                 <Route path="/game" element={<ProtectedRoute><GamePage /></ProtectedRoute>} />
+                <Route path="/game/builder" element={<ProtectedRoute><GameBuilderPage /></ProtectedRoute>} />
                 <Route path="/game/editor" element={<ProtectedRoute><GameEditorPage /></ProtectedRoute>} />
                 <Route path="/game/retro" element={<ProtectedRoute><GameRetroPage /></ProtectedRoute>} />
                 <Route path="/game/rpg" element={<ProtectedRoute><GameRpgPage /></ProtectedRoute>} />
