@@ -13,6 +13,28 @@ function maskHint(value: string): string {
   return `${value.slice(0, 4)}••••${value.slice(-4)}`
 }
 
+function validateEnv(): void {
+  const requiredKeys = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'CONNECTOR_ENC_KEY']
+  const missing: string[] = []
+  for (const key of requiredKeys) {
+    if (!Deno.env.get(key)) missing.push(key)
+  }
+  if (missing.length > 0) {
+    throw new Error(`FATAL: Missing environment variables: ${missing.join(', ')}`)
+  }
+
+  const encKey = Deno.env.get('CONNECTOR_ENC_KEY')!
+  try {
+    const bytes = atob(encKey)
+    if (bytes.length !== 32) {
+      throw new Error('CONNECTOR_ENC_KEY must be exactly 32 bytes (base64-encoded)')
+    }
+  } catch (e) {
+    throw new Error(`FATAL: Invalid CONNECTOR_ENC_KEY: ${e instanceof Error ? e.message : 'Invalid base64'}`)
+  }
+}
+
+validateEnv()
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })

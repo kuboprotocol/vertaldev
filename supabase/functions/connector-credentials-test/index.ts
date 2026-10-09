@@ -6,6 +6,29 @@ const BodySchema = z.object({
   connector_slug: z.string().min(1).max(64).regex(/^[a-z0-9_-]+$/),
 })
 
+function validateEnv(): void {
+  const requiredKeys = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'CONNECTOR_ENC_KEY']
+  const missing: string[] = []
+  for (const key of requiredKeys) {
+    if (!Deno.env.get(key)) missing.push(key)
+  }
+  if (missing.length > 0) {
+    throw new Error(`FATAL: Missing environment variables: ${missing.join(', ')}`)
+  }
+
+  const encKey = Deno.env.get('CONNECTOR_ENC_KEY')!
+  try {
+    const bytes = atob(encKey)
+    if (bytes.length !== 32) {
+      throw new Error('CONNECTOR_ENC_KEY must be exactly 32 bytes (base64-encoded)')
+    }
+  } catch (e) {
+    throw new Error(`FATAL: Invalid CONNECTOR_ENC_KEY: ${e instanceof Error ? e.message : 'Invalid base64'}`)
+  }
+}
+
+validateEnv()
+
 function fromB64(s: string) {
   const bin = atob(s)
   const out = new Uint8Array(bin.length)
@@ -85,7 +108,6 @@ async function testConnector(slug: string, apiKey: string): Promise<TestResult> 
       parse = (j) => j?.result?.status === 'active' ? 'Token ativo' : j?.result?.id
       break
     case 'supabase': {
-      // Supabase Service Role Key é um JWT — validamos estrutura.
       const parts = apiKey.split('.')
       if (parts.length !== 3) return { ok: false, status: 400, detail: 'Não parece um JWT válido' }
       try {
@@ -98,6 +120,36 @@ async function testConnector(slug: string, apiKey: string): Promise<TestResult> 
         return { ok: false, status: 400, detail: 'JWT corrompido' }
       }
     }
+    case 'openai':
+      url = 'https://api.openai.com/v1/models'
+      headers['Authorization'] = `Bearer ${apiKey}`
+      parse = (j) => Array.isArray(j?.data) ? `${j.data.length} modelos` : 'autenticado'
+      break
+    case 'slack':
+      url = 'https://slack.com/api/auth.test'
+      headers['Authorization'] = `Bearer ${apiKey}`
+      parse = (j) => j?.ok ? `@${j.user_id}` : j?.error ?? 'Erro desconhecido'
+      break
+    case 'linear':
+      url = 'https://api.linear.app/graphql'
+      headers['Authorization'] = `Bearer ${apiKey}`
+      headers['Content-Type'] = 'application/json'
+      return await (async () => {
+        try {
+          const res = await fetch(url, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ query: '{ viewer { email } }' })
+          })
+          const json = await res.json()
+          if (!res.ok || json?.errors) {
+            return { ok: false, status: res.status, detail: json?.errors?.[0]?.message ?? 'Erro desconhecido' }
+          }
+          return { ok: true, status: 200, account: json?.data?.viewer?.email, detail: 'Autenticado com sucesso' }
+        } catch (e) {
+          return { ok: false, status: 0, detail: (e as Error).message }
+        }
+      })()
     default:
       return { ok: false, status: 501, detail: 'Teste não implementado para este conector' }
   }
@@ -144,6 +196,8 @@ Deno.serve(async (req) => {
     }
     const userId = userData.user.id
 
+    const admin = createClient(supabaseUrl, serviceKey)
+
     const parsed = BodySchema.safeParse(await req.json())
     if (!parsed.success) {
       return new Response(JSON.stringify({ error: parsed.error.flatten().fieldErrors }), {
@@ -152,7 +206,22 @@ Deno.serve(async (req) => {
     }
     const { connector_slug } = parsed.data
 
-    const admin = createClient(supabaseUrl, serviceKey)
+    const last60s = new Date(Date.now() - 60000).toISOString()
+    const { data: recentTests, error: rateErr } = await admin
+      .from('connector_activity_logs')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('event_type', 'credential_tested')
+      .gte('created_at', last60s)
+
+    if ((recentTests?.length ?? 0) >= 10) {
+      return new Response(JSON.stringify({
+        error: 'Muitos testes em pouco tempo. Aguarde 1 minuto.',
+        detail: 'Máximo 10 testes por minuto',
+      }), {
+        status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
     const { data: cred, error: credErr } = await admin
       .from('api_credentials')
       .select('ciphertext, iv, tag, masked_hint')
