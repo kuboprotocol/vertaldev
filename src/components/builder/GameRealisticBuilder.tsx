@@ -4,6 +4,17 @@ import { ArrowLeft, Save, Play, Palette } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/integrations/supabase/client'
 
+interface GameRealisticConfig {
+  rayTracingEnabled?: boolean
+  bloomEnabled?: boolean
+  depthOfFieldEnabled?: boolean
+  giQuality?: string
+  bounces?: number
+  resolution?: string
+  targetFps?: number
+  selectedMaterial?: string
+}
+
 interface Game {
   id: string
   title: string
@@ -11,7 +22,7 @@ interface Game {
   game_type: 'realistic'
   engine: string
   cover_image_url?: string
-  config: Record<string, any>
+  config: GameRealisticConfig
 }
 
 interface GameRealisticBuilderProps {

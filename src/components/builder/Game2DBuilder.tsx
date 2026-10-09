@@ -4,6 +4,17 @@ import { ArrowLeft, Save, Play, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/integrations/supabase/client'
 
+interface Game2DConfig {
+  width?: number
+  height?: number
+  backgroundColor?: string
+  physicsEnabled?: boolean
+  gravity?: number
+  audioEnabled?: boolean
+  volume?: number
+  difficulty?: 'easy' | 'normal' | 'hard' | 'nightmare'
+}
+
 interface Game {
   id: string
   title: string
@@ -11,7 +22,7 @@ interface Game {
   game_type: '2d'
   engine: string
   cover_image_url?: string
-  config: Record<string, any>
+  config: Game2DConfig
 }
 
 interface Game2DBuilderProps {

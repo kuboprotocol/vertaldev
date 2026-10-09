@@ -9,24 +9,24 @@ export default function GameBuilderPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    checkAuth()
-  }, [])
-
-  const checkAuth = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) {
+          navigate('/login')
+        } else {
+          setIsAuthenticated(true)
+        }
+      } catch (error) {
+        console.error('Auth error:', error)
         navigate('/login')
-      } else {
-        setIsAuthenticated(true)
+      } finally {
+        setLoading(false)
       }
-    } catch (error) {
-      console.error('Auth error:', error)
-      navigate('/login')
-    } finally {
-      setLoading(false)
     }
-  }
+
+    checkAuth()
+  }, [navigate])
 
   if (loading) {
     return (

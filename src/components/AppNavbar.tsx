@@ -68,6 +68,32 @@ export default function AppNavbar({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
+    const fetchNavbarConfig = async () => {
+      try {
+        setLoading(true)
+        const response = await fetch(
+          `${supabase.supabaseUrl}/functions/v1/navbar-config?action=get&app_id=${appId}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token || ''}`,
+            },
+          }
+        )
+
+        if (response.ok) {
+          const result = await response.json()
+          setConfig(result.config)
+        } else {
+          setConfig(DEFAULT_CONFIG)
+        }
+      } catch (err) {
+        console.error('Error fetching navbar config:', err)
+        setConfig(DEFAULT_CONFIG)
+      } finally {
+        setLoading(false)
+      }
+    }
+
     if (theme === 'custom') {
       fetchNavbarConfig()
     } else if (theme === 'light') {
@@ -86,32 +112,6 @@ export default function AppNavbar({
       setLoading(false)
     }
   }, [appId, theme])
-
-  const fetchNavbarConfig = async () => {
-    try {
-      setLoading(true)
-      const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/navbar-config?action=get&app_id=${appId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token || ''}`,
-          },
-        }
-      )
-
-      if (response.ok) {
-        const result = await response.json()
-        setConfig(result.config)
-      } else {
-        setConfig(DEFAULT_CONFIG)
-      }
-    } catch (err) {
-      console.error('Error fetching navbar config:', err)
-      setConfig(DEFAULT_CONFIG)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   if (loading) {
     return (

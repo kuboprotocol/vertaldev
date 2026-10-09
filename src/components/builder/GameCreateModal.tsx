@@ -51,7 +51,7 @@ export default function GameCreateModal({ isOpen, onClose, onCreate }: GameCreat
   const handleSelectType = (typeId: string) => {
     setFormData({
       ...formData,
-      game_type: typeId as any,
+      game_type: typeId as '2d' | '3d' | 'retro' | 'realistic' | 'metaverse' | '4d',
       engine: '', // Reset engine when changing type
     })
   }

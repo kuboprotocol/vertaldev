@@ -4,6 +4,17 @@ import { ArrowLeft, Save, Play, Cube, Lightbulb } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/integrations/supabase/client'
 
+interface Game3DConfig {
+  scenes?: string[]
+  selectedScene?: string
+  ambientLightIntensity?: number
+  backgroundColor?: string
+  physicsEngine?: string
+  gravity?: number
+  shadowsEnabled?: boolean
+  reflectionsEnabled?: boolean
+}
+
 interface Game {
   id: string
   title: string
@@ -11,7 +22,7 @@ interface Game {
   game_type: '3d' | 'realistic' | 'metaverse' | '4d'
   engine: string
   cover_image_url?: string
-  config: Record<string, any>
+  config: Game3DConfig
 }
 
 interface Game3DBuilderProps {

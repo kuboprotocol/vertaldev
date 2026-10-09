@@ -4,6 +4,16 @@ import { ArrowLeft, Save, Play, Grid3X3 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/integrations/supabase/client'
 
+interface GameRetroConfig {
+  pixelSize?: number
+  resolution?: string
+  style?: string
+  fps?: number
+  chiptune?: boolean
+  selectedColor?: string
+  palette?: string[]
+}
+
 interface Game {
   id: string
   title: string
@@ -11,7 +21,7 @@ interface Game {
   game_type: 'retro'
   engine: string
   cover_image_url?: string
-  config: Record<string, any>
+  config: GameRetroConfig
 }
 
 interface GameRetroBuilderProps {

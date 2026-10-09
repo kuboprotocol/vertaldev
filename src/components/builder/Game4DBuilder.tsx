@@ -4,6 +4,21 @@ import { ArrowLeft, Save, Play, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/integrations/supabase/client'
 
+interface Game4DConfig {
+  physicsEngine?: string
+  timestep?: number
+  fluidSimulation?: boolean
+  vorticity?: boolean
+  surfaceTension?: boolean
+  timeRewinding?: boolean
+  timeSlowing?: boolean
+  rtBounces?: number
+  pathTracing?: boolean
+  superSampling?: boolean
+  gpuThreads?: number
+  vramBudget?: number
+}
+
 interface Game {
   id: string
   title: string
@@ -11,7 +26,7 @@ interface Game {
   game_type: '4d'
   engine: string
   cover_image_url?: string
-  config: Record<string, any>
+  config: Game4DConfig
 }
 
 interface Game4DBuilderProps {

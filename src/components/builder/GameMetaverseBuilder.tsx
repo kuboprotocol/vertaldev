@@ -4,6 +4,18 @@ import { ArrowLeft, Save, Play, Users, Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/integrations/supabase/client'
 
+interface GameMetaverseConfig {
+  maxPlayers?: number
+  selectedAvatarType?: string
+  nftAvatars?: boolean
+  voiceChatEnabled?: boolean
+  textChatEnabled?: boolean
+  friendSystemEnabled?: boolean
+  tradingEnabled?: boolean
+  cryptoEnabled?: boolean
+  serverType?: string
+}
+
 interface Game {
   id: string
   title: string
@@ -11,7 +23,7 @@ interface Game {
   game_type: 'metaverse'
   engine: string
   cover_image_url?: string
-  config: Record<string, any>
+  config: GameMetaverseConfig
 }
 
 interface GameMetaverseBuilderProps {
