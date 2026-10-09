@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Settings, Image, Info } from 'lucide-react'
+import { Settings, Image, Info, Wand2 } from 'lucide-react'
 import AppLogoManager from './AppLogoManager'
+import AILogoGenerator from './AILogoGenerator'
 import { Button } from '@/components/ui/button'
 
 interface AppSettingsPanelProps {
@@ -10,7 +11,7 @@ interface AppSettingsPanelProps {
 }
 
 export default function AppSettingsPanel({ appId, appName = 'Seu App' }: AppSettingsPanelProps) {
-  const [activeTab, setActiveTab] = useState<'logos' | 'branding' | 'advanced'>('logos')
+  const [activeTab, setActiveTab] = useState<'ai-generator' | 'logos' | 'branding' | 'advanced'>('ai-generator')
 
   return (
     <div className="w-full min-h-screen bg-background">
@@ -33,8 +34,9 @@ export default function AppSettingsPanel({ appId, appName = 'Seu App' }: AppSett
         </motion.div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-8 border-b border-border">
+        <div className="flex gap-2 mb-8 border-b border-border overflow-x-auto">
           {[
+            { id: 'ai-generator', label: 'IA Generator', icon: Wand2 },
             { id: 'logos', label: 'Logos', icon: Image },
             { id: 'branding', label: 'Branding', icon: Settings },
             { id: 'advanced', label: 'Avançado', icon: Info },
@@ -42,7 +44,7 @@ export default function AppSettingsPanel({ appId, appName = 'Seu App' }: AppSett
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-4 py-3 font-medium transition-all border-b-2 ${
+              className={`flex items-center gap-2 px-4 py-3 font-medium transition-all border-b-2 whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'border-primary text-primary'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -60,6 +62,12 @@ export default function AppSettingsPanel({ appId, appName = 'Seu App' }: AppSett
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
         >
+          {activeTab === 'ai-generator' && (
+            <div className="space-y-6">
+              <AILogoGenerator appId={appId} />
+            </div>
+          )}
+
           {activeTab === 'logos' && (
             <div className="space-y-6">
               <AppLogoManager appId={appId} />
