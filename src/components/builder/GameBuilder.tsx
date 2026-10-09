@@ -6,6 +6,10 @@ import { supabase } from '@/integrations/supabase/client'
 import GameCreateModal from './GameCreateModal'
 import Game2DBuilder from './Game2DBuilder'
 import Game3DBuilder from './Game3DBuilder'
+import GameRetroBuilder from './GameRetroBuilder'
+import GameRealisticBuilder from './GameRealisticBuilder'
+import GameMetaverseBuilder from './GameMetaverseBuilder'
+import Game4DBuilder from './Game4DBuilder'
 
 interface Game {
   id: string
@@ -153,11 +157,21 @@ export default function GameBuilder() {
   }
 
   if (editingGame) {
-    if (editingGame.game_type === '2d') {
-      return <Game2DBuilder game={editingGame} onBack={() => setEditingGame(null)} onSave={fetchGames} />
-    }
-    if (editingGame.game_type === '3d') {
-      return <Game3DBuilder game={editingGame} onBack={() => setEditingGame(null)} onSave={fetchGames} />
+    switch (editingGame.game_type) {
+      case '2d':
+        return <Game2DBuilder game={editingGame} onBack={() => setEditingGame(null)} onSave={fetchGames} />
+      case '3d':
+        return <Game3DBuilder game={editingGame} onBack={() => setEditingGame(null)} onSave={fetchGames} />
+      case 'retro':
+        return <GameRetroBuilder game={editingGame} onBack={() => setEditingGame(null)} onSave={fetchGames} />
+      case 'realistic':
+        return <GameRealisticBuilder game={editingGame} onBack={() => setEditingGame(null)} onSave={fetchGames} />
+      case 'metaverse':
+        return <GameMetaverseBuilder game={editingGame} onBack={() => setEditingGame(null)} onSave={fetchGames} />
+      case '4d':
+        return <Game4DBuilder game={editingGame} onBack={() => setEditingGame(null)} onSave={fetchGames} />
+      default:
+        return <Game3DBuilder game={editingGame} onBack={() => setEditingGame(null)} onSave={fetchGames} />
     }
   }
 
