@@ -112,6 +112,18 @@ export default defineConfig(({ command, mode }) => {
           categories: ['productivity', 'games'],
           icons: [
             {
+              src: 'vertal-dev-logo.jpg',
+              sizes: '192x192',
+              type: 'image/jpeg',
+              purpose: 'any',
+            },
+            {
+              src: 'vertal-dev-logo.jpg',
+              sizes: '512x512',
+              type: 'image/jpeg',
+              purpose: 'any maskable',
+            },
+            {
               src: 'pwa-192x192.png',
               sizes: '192x192',
               type: 'image/png',

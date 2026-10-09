@@ -9,6 +9,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import LandingSkeleton from "@/components/landing/LandingSkeleton";
 
 const HeroSection = lazy(() => import("@/components/landing/HeroSection"));
+const CreditsPromoSection = lazy(() => import("@/components/landing/CreditsPromoSection"));
 const CommunitySection = lazy(() => import("@/components/landing/CommunitySection"));
 const HowItWorksSection = lazy(() => import("@/components/landing/HowItWorksSection"));
 const FAQSection = lazy(() => import("@/components/landing/FAQSection"));
@@ -72,6 +73,10 @@ Mobile: some o rail e vira uma barra de abas embaixo (Agente / Preview / Domíni
       <Suspense fallback={<LandingSkeleton />}>
         <main>
           <SafeSection name="HeroSection"><HeroSection /></SafeSection>
+
+          <div className="max-w-xl mx-auto gold-line" aria-hidden="true" />
+
+          <SafeSection name="CreditsPromoSection"><CreditsPromoSection /></SafeSection>
 
           <div className="max-w-xl mx-auto gold-line" aria-hidden="true" />
 

@@ -10,7 +10,12 @@ export default function Navbar() {
     <nav className="sticky top-0 z-50 glass glass-border">
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
         <Link to="/" aria-label={APP_NAME} className="flex items-center gap-3 group">
-          <AnimatedLogo size={18} className="group-hover:scale-105 transition-transform" />
+          <img
+            src="/vertal-dev-logo.jpg"
+            alt={APP_NAME}
+            className="h-10 w-auto object-contain group-hover:scale-105 transition-transform"
+          />
+          <AnimatedLogo size={18} className="hidden sm:block group-hover:scale-105 transition-transform" />
         </Link>
 
         <div className="hidden md:flex items-center gap-1">
