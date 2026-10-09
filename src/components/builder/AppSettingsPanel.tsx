@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Settings, Image, Info, Wand2 } from 'lucide-react'
+import { Settings, Image, Info, Wand2, LayoutTemplate } from 'lucide-react'
 import AppLogoManager from './AppLogoManager'
 import AILogoGenerator from './AILogoGenerator'
+import NavbarCustomizer from './NavbarCustomizer'
 import { Button } from '@/components/ui/button'
 
 interface AppSettingsPanelProps {
@@ -11,7 +12,7 @@ interface AppSettingsPanelProps {
 }
 
 export default function AppSettingsPanel({ appId, appName = 'Seu App' }: AppSettingsPanelProps) {
-  const [activeTab, setActiveTab] = useState<'ai-generator' | 'logos' | 'branding' | 'advanced'>('ai-generator')
+  const [activeTab, setActiveTab] = useState<'ai-generator' | 'logos' | 'navbar' | 'branding' | 'advanced'>('ai-generator')
 
   return (
     <div className="w-full min-h-screen bg-background">
@@ -38,6 +39,7 @@ export default function AppSettingsPanel({ appId, appName = 'Seu App' }: AppSett
           {[
             { id: 'ai-generator', label: 'IA Generator', icon: Wand2 },
             { id: 'logos', label: 'Logos', icon: Image },
+            { id: 'navbar', label: 'Navbar', icon: LayoutTemplate },
             { id: 'branding', label: 'Branding', icon: Settings },
             { id: 'advanced', label: 'Avançado', icon: Info },
           ].map(tab => (
@@ -84,6 +86,10 @@ export default function AppSettingsPanel({ appId, appName = 'Seu App' }: AppSett
                 </ul>
               </div>
             </div>
+          )}
+
+          {activeTab === 'navbar' && (
+            <NavbarCustomizer appId={appId} appName={appName} />
           )}
 
           {activeTab === 'branding' && (
