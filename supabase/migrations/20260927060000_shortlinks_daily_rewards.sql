@@ -159,7 +159,7 @@ begin
     v_total as total_reward,
     v_new_balance as user_balance_after;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
 
 -- Function to record shortlink view
 create or replace function record_shortlink_view(
@@ -178,7 +178,7 @@ begin
   set view_count = view_count + 1
   where id = _shortlink_id;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
 
 -- Function to get user shortlinks with stats
 create or replace function get_user_shortlinks_with_stats(_user_id uuid)
@@ -209,7 +209,7 @@ begin
   where s.user_id = _user_id
   order by s.created_at desc;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
 
 -- Function to check shortlink limits
 create or replace function check_shortlink_limits(_user_id uuid)
@@ -240,7 +240,7 @@ begin
     v_bonus as daily_bonus_reward,
     5 + v_bonus as total_daily_reward;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
 
 -- Trigger to update updated_at
 create or replace function update_shortlinks_updated_at()
@@ -261,7 +261,7 @@ grant select, insert, update, delete on shortlinks to authenticated;
 grant select, insert on daily_shortlink_rewards to authenticated;
 grant insert on shortlink_views to anon, authenticated;
 grant select on daily_shortlink_rewards to authenticated;
-grant execute on function calculate_shortlink_rewards to authenticated;
+grant execute on function calculate_shortlink_rewards to service_role;
 grant execute on function record_shortlink_view to authenticated, anon;
 grant execute on function get_user_shortlinks_with_stats to authenticated;
 grant execute on function check_shortlink_limits to authenticated;

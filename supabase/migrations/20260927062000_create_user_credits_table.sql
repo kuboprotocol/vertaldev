@@ -88,10 +88,10 @@ begin
     _final_balance as new_balance,
     _new_debt as new_debt;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
 
 -- Grant execute permissions
-grant execute on function apply_credit_debt(uuid, integer) to authenticated, service_role;
+grant execute on function apply_credit_debt(uuid, integer) to service_role;
 
 -- Create function to get user credits with safety
 create or replace function get_user_credits(_user_id uuid) returns table(
@@ -108,10 +108,10 @@ begin
   from user_credits uc
   where uc.user_id = _user_id;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
 
 -- Grant execute permissions
-grant execute on function get_user_credits(uuid) to authenticated, service_role;
+grant execute on function get_user_credits(uuid) to service_role;
 
 -- Create audit trigger to track changes
 create table user_credits_audit (
@@ -150,7 +150,7 @@ begin
 
   return new;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
 
 create trigger user_credits_audit_trigger
   after update on user_credits

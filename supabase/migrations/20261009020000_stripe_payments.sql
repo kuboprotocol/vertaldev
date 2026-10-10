@@ -103,6 +103,7 @@ CREATE OR REPLACE FUNCTION public.process_stripe_payment(_transaction_id uuid, _
 RETURNS boolean
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   _user_id uuid;
