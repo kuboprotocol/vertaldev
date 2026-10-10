@@ -1,17 +1,13 @@
-import { test, chromium } from '@playwright/test';
+import { test } from '@playwright/test';
 
-test('Creative Panel - Access & Component Check', async () => {
-  const browser = await chromium.launch({
-    executablePath: '/opt/pw-browsers/chromium'
-  });
-  const page = await browser.newPage();
+test('Creative Panel - Access & Component Check', async ({ page }) => {
 
-  try {
+  {
     console.log('\n🎨 Testing Creative Chat Panel\n');
     
     // Try the chat route
     console.log('📍 Accessing /creative/chat...');
-    const response = await page.goto('http://localhost:8083/creative/chat', { 
+    const response = await page.goto('/creative/chat', { 
       waitUntil: 'networkidle', 
       timeout: 30000 
     }).catch(e => console.log('Note:', e.message.split('\n')[0]));
@@ -61,7 +57,5 @@ test('Creative Panel - Access & Component Check', async () => {
 
     console.log('\n✅ Test completed!\n');
 
-  } finally {
-    await browser.close();
   }
 });

@@ -6,7 +6,7 @@ test.use({
 
 test('slides generator should load', async ({ page }) => {
   // Try to reach the main page
-  const response = await page.goto('http://localhost:8084/', {
+  const response = await page.goto('/', {
     waitUntil: 'domcontentloaded',
     timeout: 10000,
   });
@@ -19,7 +19,7 @@ test('slides generator should load', async ({ page }) => {
 });
 
 test('creative panel components exist', async ({ page }) => {
-  await page.goto('http://localhost:8084/', {
+  await page.goto('/', {
     waitUntil: 'domcontentloaded',
   });
 
