@@ -30,6 +30,7 @@ const DownloadPage = lazy(() => import("./pages/DownloadPage"));
 const SupportPage = lazy(() => import("./pages/SupportPage"));
 const ConnectPage = lazy(() => import("./pages/ConnectPage"));
 const ConnectorsHubPage = lazy(() => import("./pages/ConnectorsHubPage"));
+const DeveloperMcpPage = lazy(() => import("./pages/DeveloperMcpPage"));
 const ConnectorDetailPage = lazy(() => import("./pages/ConnectorDetailPage"));
 const ConnectorAboutPage = lazy(() => import("./pages/ConnectorAboutPage"));
 const ConnectorSetupPage = lazy(() => import("./pages/ConnectorSetupPage"));
@@ -222,6 +223,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 
                 <Route path="/connect" element={<ProtectedRoute><ConnectPage /></ProtectedRoute>} />
                 <Route path="/connectors" element={<ProtectedRoute><ConnectorsHubPage /></ProtectedRoute>} />
+                <Route path="/developers/mcp" element={<ProtectedRoute><DeveloperMcpPage /></ProtectedRoute>} />
                 <Route path="/connectors/web3" element={<ProtectedRoute><ConnectorWeb3HubPage /></ProtectedRoute>} />
                 <Route path="/connectors/web3/:provider" element={<ProtectedRoute><ConnectorWeb3Page /></ProtectedRoute>} />
                 <Route path="/connectors/gmail" element={<ProtectedRoute><ConnectorGmailPage /></ProtectedRoute>} />
