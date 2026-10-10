@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { Sparkles, Zap, Image, Music, Code, Video, Pen, Layout } from 'lucide-react';
+import { Sparkles, Zap, Image, Music, Code, Video, Pen, Layout, BarChart3 } from 'lucide-react';
 import ChatWidget from './ChatWidget';
 import { CreativeSlides } from './CreativeSlides';
 import { CreativeImages } from './CreativeImages';
+import { CreativeSheets } from './CreativeSheets';
 import { useAuth } from '@/hooks/useAuth';
 
 interface CreativeItem {
   id: string;
-  type: 'text' | 'image' | 'audio' | 'code' | 'video' | 'slides';
+  type: 'text' | 'image' | 'audio' | 'code' | 'video' | 'slides' | 'spreadsheet';
   title: string;
   description: string;
   icon: React.ReactNode;
@@ -44,6 +45,14 @@ export default function CreativePanel() {
       description: 'Crie imagens profissionais com IA',
       icon: <Image className="w-6 h-6" />,
       color: 'from-purple-500 to-pink-500',
+    },
+    {
+      id: 'spreadsheet',
+      type: 'spreadsheet',
+      title: 'Gerador de Planilhas',
+      description: 'Crie planilhas automáticas com IA',
+      icon: <BarChart3 className="w-6 h-6" />,
+      color: 'from-cyan-500 to-blue-500',
     },
     {
       id: 'audio',
@@ -105,6 +114,25 @@ export default function CreativePanel() {
           </div>
         </div>
         <CreativeImages creditsAvailable={creditsAvailable} />
+      </div>
+    );
+  }
+
+  // Spreadsheet view
+  if (selectedType === 'spreadsheet') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+        <div className="border-b border-slate-700/50 backdrop-blur-xl bg-slate-900/50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <button
+              onClick={() => setSelectedType(null)}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 border border-slate-700 text-white rounded-lg hover:bg-slate-700 transition-all"
+            >
+              ← Voltar
+            </button>
+          </div>
+        </div>
+        <CreativeSheets creditsAvailable={creditsAvailable} />
       </div>
     );
   }
