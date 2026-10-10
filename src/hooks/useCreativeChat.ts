@@ -44,6 +44,7 @@ export interface UseCreativeChatReturn {
   updateConversationTitle: (title: string) => Promise<void>;
   deleteConversation: (conversationId: string) => Promise<void>;
   archiveConversation: (archived: boolean) => Promise<void>;
+  pinConversation: (conversationId: string, pinned: boolean) => Promise<void>;
   loadConversations: () => Promise<void>;
 }
 
@@ -205,6 +206,20 @@ export function useCreativeChat(): UseCreativeChatReturn {
     [conversationId, loadConversations]
   );
 
+  // Pin conversation
+  const pinConversationHandler = useCallback(
+    async (convId: string, pinned: boolean) => {
+      try {
+        await conversationService.pinConversation(convId, pinned);
+        await loadConversations();
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to pin conversation';
+        setError(errorMessage);
+      }
+    },
+    [loadConversations]
+  );
+
   // Send message to OpenRouter with database persistence
   const sendMessage = useCallback(
     async (content: string, creditsAvailable: number) => {
@@ -342,6 +357,7 @@ export function useCreativeChat(): UseCreativeChatReturn {
     updateConversationTitle,
     deleteConversation: deleteConversationHandler,
     archiveConversation: archiveConversationHandler,
+    pinConversation: pinConversationHandler,
     loadConversations,
   };
 }

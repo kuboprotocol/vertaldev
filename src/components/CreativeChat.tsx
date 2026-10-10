@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useCreativeChat } from '@/hooks/useCreativeChat';
 import { useAuth } from '@/hooks/useAuth';
+import { ConversationSidebar } from './ConversationSidebar';
+import { ConversationHeader } from './ConversationHeader';
 import './CreativeChat.css';
 
 export function CreativeChat() {
@@ -14,6 +16,17 @@ export function CreativeChat() {
     clearMessages,
     resetError,
     canSendMessage,
+    conversationId,
+    conversationTitle,
+    conversations,
+    loadingConversations,
+    createNewConversation,
+    loadConversation,
+    updateConversationTitle,
+    deleteConversation,
+    archiveConversation,
+    pinConversation,
+    loadConversations,
   } = useCreativeChat();
 
   const [input, setInput] = useState('');
@@ -56,20 +69,45 @@ export function CreativeChat() {
 
   return (
     <div className="creative-chat-container">
-      <div className="creative-chat-header">
-        <div className="header-content">
-          <h2>Creative Panel</h2>
-          <p className="subtitle">AI-powered creative conversations</p>
-        </div>
-        <div className="quota-badge">
+      {/* Sidebar */}
+      <ConversationSidebar
+        conversations={conversations}
+        currentConversationId={conversationId}
+        loading={loadingConversations}
+        onCreateNew={async () => {
+          const convId = await createNewConversation('New Conversation');
+          await loadConversation(convId);
+        }}
+        onSelectConversation={loadConversation}
+        onDeleteConversation={deleteConversation}
+        onArchiveConversation={archiveConversation}
+        onPinConversation={pinConversation}
+      />
+
+      {/* Main Chat Area */}
+      <div className="creative-chat-main">
+        {/* Conversation Header */}
+        <ConversationHeader
+          conversationId={conversationId}
+          conversationTitle={conversationTitle}
+          messageCount={messages.length}
+          loading={loading}
+          onUpdateTitle={updateConversationTitle}
+          onArchive={() => archiveConversation(true)}
+          onDelete={async () => {
+            await deleteConversation(conversationId!);
+          }}
+        />
+
+        {/* Quota Badge for Mobile */}
+        <div className="quota-badge-mobile">
           <div className="quota-info">
             <span className="quota-label">Quota:</span>
             <span className="quota-value">{getQuotaMessage()}</span>
           </div>
         </div>
-      </div>
 
-      <div className="creative-chat-messages">
+        <div className="creative-chat-messages">
         {messages.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">💬</div>
@@ -197,6 +235,7 @@ export function CreativeChat() {
             </div>
           </>
         )}
+      </div>
       </div>
     </div>
   );

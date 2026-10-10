@@ -1,36 +1,21 @@
 .creative-chat-container {
   display: flex;
-  flex-direction: column;
   height: 100vh;
   background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
   color: #e0e0e0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
-.creative-chat-header {
+.creative-chat-main {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(10px);
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
-.header-content h2 {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 600;
-  background: linear-gradient(135deg, #00d4ff 0%, #7c3aed 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.header-content .subtitle {
-  margin: 4px 0 0 0;
-  font-size: 14px;
-  color: #999;
+.quota-badge-mobile {
+  display: none;
 }
 
 .quota-badge {
@@ -451,14 +436,25 @@
 
 /* Responsive */
 @media (max-width: 768px) {
-  .creative-chat-header {
+  .creative-chat-container {
     flex-direction: column;
-    gap: 16px;
-    align-items: flex-start;
   }
 
-  .quota-badge {
-    align-self: flex-start;
+  /* Hide sidebar on mobile, show as top bar instead */
+  :global(.conversation-sidebar) {
+    display: none;
+  }
+
+  .creative-chat-main {
+    width: 100%;
+  }
+
+  .quota-badge-mobile {
+    display: flex;
+    padding: 12px 16px;
+    background: rgba(0, 212, 255, 0.05);
+    border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+    border-radius: 0;
   }
 
   .message-content {
