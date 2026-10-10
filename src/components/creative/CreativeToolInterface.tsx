@@ -1,9 +1,9 @@
 import heic2any from "heic2any";
 import { useState, useEffect, useCallback } from "react";
-import { 
+import {
   MessageSquare, ImageIcon, Download, Scissors, User2, Video, Music, BookOpen, Sparkles,
-  Loader2, Send, Coins, Settings2, Info, AlertCircle, Wallet, RotateCw, Upload, X, 
-  Download as DownloadIcon, Crop as CropIcon, Trash2, Sliders, History, FileText, FileCode, 
+  Loader2, Send, Coins, Settings2, Info, AlertCircle, Wallet, RotateCw, Upload, X,
+  Download as DownloadIcon, Crop as CropIcon, Trash2, Sliders, History, FileText, FileCode,
   Play, Search, Filter, PlayCircle, Package, Brain, Rocket, Zap, FileSpreadsheet
 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -21,11 +21,12 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AvatarCropDialog } from "./AvatarCropDialog";
+import { ImageEditorDialog } from "./ImageEditorDialog";
 import { AvatarProgressSteps, type AvatarStepState, type AvatarStepKey } from "./AvatarProgressSteps";
 import { cn } from "@/lib/utils";
 import { PUTER_MODELS, creativeInvoke } from "@/lib/puterAI";
 
-type ToolKey = "chat" | "nano_banana" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo";
+type ToolKey = "chat" | "nano_banana" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "image_editor";
 
 interface Props {
   toolKey: ToolKey;
@@ -35,6 +36,7 @@ interface Props {
 const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: string }[] = [
   { key: "chat", title: "Vertal Chat", desc: "Conversas, resumos, traduções, geração de textos", icon: MessageSquare, cost: "1 crédito" },
   { key: "nano_banana", title: "Imagens Premium", desc: "Criação de imagens de alta qualidade", icon: ImageIcon, cost: "1 crédito" },
+  { key: "image_editor", title: "Editor de Imagens", desc: "Edite, corte e redimensione suas imagens perfeitamente", icon: Sliders, cost: "Grátis" },
   { key: "downloader", title: "Downloader Universal", desc: "YouTube, Instagram, TikTok, Facebook", icon: Download, cost: "2 créditos" },
   { key: "clips", title: "Vertal Clips", desc: "Cortes virais automáticos", icon: Scissors, cost: "1 crédito" },
   { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes realistas", icon: User2, cost: "2–4 créditos" },
@@ -59,9 +61,9 @@ const TOOL_CONFIGS: Record<ToolKey, {
     promptLabel: "O que você deseja criar ou perguntar?",
     placeholder: "Escreva um artigo sobre economia criativa...",
   },
-  nano_banana: { 
-    title: "Imagens Premium", 
-    description: "Criação de imagens de alta qualidade (Pollinations/Gemini).", 
+  nano_banana: {
+    title: "Imagens Premium",
+    description: "Criação de imagens de alta qualidade (Pollinations/Gemini).",
     cost: 1,
     promptLabel: "Descreva a imagem",
     placeholder: "Um astronauta andando a cavalo em Marte, estilo futurista...",
@@ -69,6 +71,13 @@ const TOOL_CONFIGS: Record<ToolKey, {
       { key: "size", label: "Tamanho", type: "select", options: ["1024x1024", "1024x1792", "1792x1024"], default: "1024x1024" },
       { key: "engine", label: "Motor", type: "select", options: ["Padrão (Pollinations)", "Premium (Gemini)"], default: "Padrão (Pollinations)" }
     ]
+  },
+  image_editor: {
+    title: "Editor de Imagens",
+    description: "Editor completo com corte, redimensionamento, filtros e ajustes avançados.",
+    cost: 0,
+    promptLabel: "Cole a URL da imagem ou carregue um arquivo",
+    placeholder: "https://exemplo.com/imagem.jpg ou selecione um arquivo local...",
   },
   downloader: { 
     title: "Downloader Universal", 
@@ -165,17 +174,68 @@ export function CreativeToolInterface({ toolKey, onSuccess }: Props) {
     return saved ? JSON.parse(saved) : [];
   });
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [imageEditorOpen, setImageEditorOpen] = useState(false);
+  const [editorImageUrl, setEditorImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     localStorage.setItem(`creative_history_${toolKey}`, JSON.stringify(sessionHistory));
   }, [sessionHistory, toolKey]);
 
+  const handleImageEditorConfirm = async (blob: Blob, metadata: { width: number; height: number; format: string }) => {
+    try {
+      // Download a imagem processada
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `edited-image-${Date.now()}.${metadata.format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      // Adicionar ao histórico
+      setSessionHistory(prev => [{
+        id: crypto.randomUUID(),
+        timestamp: new Date().toLocaleTimeString(),
+        prompt: `Imagem editada: ${metadata.width}x${metadata.height}`,
+        status: "success",
+        metadata: metadata,
+      }, ...prev].slice(0, 50));
+
+      setImageEditorOpen(false);
+      toast.success("Imagem salva com sucesso!");
+    } catch (e) {
+      toast.error("Erro ao salvar imagem");
+    }
+  };
+
+  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        setPrompt(result);
+        toast.info("Imagem carregada. Clique em EXECUTAR para editar.");
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleExecute = async () => {
     if (loading) return;
-    
+
     if (toolKey === "music" || toolKey === "shorts") {
       window.open("https://muskai.kubovibe.dev", "_blank");
       toast.info("Redirecionando para MusKAI...");
+      return;
+    }
+
+    if (toolKey === "image_editor") {
+      if (!prompt.trim()) {
+        toast.error("Cole a URL da imagem ou carregue um arquivo");
+        return;
+      }
+      setEditorImageUrl(prompt);
+      setImageEditorOpen(true);
       return;
     }
 
@@ -258,12 +318,38 @@ export function CreativeToolInterface({ toolKey, onSuccess }: Props) {
         <div className="space-y-4">
           <div className="space-y-2">
             <Label className="text-xs font-bold uppercase tracking-wider opacity-60">{config.promptLabel}</Label>
-            <Textarea
-              placeholder={config.placeholder}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              className="min-h-[120px] bg-background/50 border-border/10 focus:border-gold/30 transition-all resize-none text-sm"
-            />
+            {toolKey === "image_editor" ? (
+              <div className="space-y-2">
+                <Textarea
+                  placeholder={config.placeholder}
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  className="min-h-[80px] bg-background/50 border-border/10 focus:border-gold/30 transition-all resize-none text-sm"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => document.getElementById("image-file-input")?.click()}
+                >
+                  <Upload className="h-4 w-4 mr-2" /> Ou Carregue um Arquivo
+                </Button>
+                <input
+                  id="image-file-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageFileUpload}
+                  className="hidden"
+                />
+              </div>
+            ) : (
+              <Textarea
+                placeholder={config.placeholder}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                className="min-h-[120px] bg-background/50 border-border/10 focus:border-gold/30 transition-all resize-none text-sm"
+              />
+            )}
           </div>
 
           {config.options && (
@@ -372,7 +458,7 @@ export function CreativeToolInterface({ toolKey, onSuccess }: Props) {
             <History className="h-4 w-4" />
             <h4 className="text-xs font-bold uppercase tracking-widest">Histórico da Sessão</h4>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {sessionHistory.map((item) => (
               <Card key={item.id} className="p-4 bg-background/20 backdrop-blur-md border-border/5 hover:border-gold/20 transition-all group overflow-hidden">
@@ -387,15 +473,15 @@ export function CreativeToolInterface({ toolKey, onSuccess }: Props) {
                     <span className="text-[10px] font-bold text-gold/60">-{item.metadata.credits} cred</span>
                   )}
                 </div>
-                
+
                 <p className="text-xs text-foreground/90 font-medium line-clamp-2 mb-3 leading-relaxed">{item.prompt}</p>
-                
+
                 {item.assetUrl && (
                   <div className="relative aspect-video rounded-lg overflow-hidden bg-black/40 border border-border/10 mb-3 group-hover:border-gold/30 transition-all">
                     <img src={item.assetUrl} alt="Preview" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                    <a 
-                      href={item.assetUrl} 
-                      target="_blank" 
+                    <a
+                      href={item.assetUrl}
+                      target="_blank"
                       rel="noopener noreferrer"
                       className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all"
                     >
@@ -414,6 +500,13 @@ export function CreativeToolInterface({ toolKey, onSuccess }: Props) {
           </div>
         </div>
       )}
+
+      <ImageEditorDialog
+        open={imageEditorOpen}
+        imageUrl={editorImageUrl}
+        onCancel={() => setImageEditorOpen(false)}
+        onConfirm={handleImageEditorConfirm}
+      />
     </div>
   );
 }
