@@ -149,6 +149,9 @@ ALTER TABLE public.game_entities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.game_scripts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.game_builds ENABLE ROW LEVEL SECURITY;
 
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.games, public.game_scenes, public.game_assets,
+  public.game_entities, public.game_scripts, public.game_builds TO authenticated;
+
 -- ============================================================
 -- GAMES TABLE POLICIES
 -- ============================================================

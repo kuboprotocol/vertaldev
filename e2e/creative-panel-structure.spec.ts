@@ -4,7 +4,7 @@ test('Creative Panel - Component Structure Test', async ({ page }) => {
   console.log('\n🚀 Testing Creative Panel Structure...\n');
   
   // Navigate to the app
-  await page.goto('http://localhost:8083/', { waitUntil: 'networkidle', timeout: 30000 });
+  await page.goto('/', { waitUntil: 'networkidle', timeout: 30000 });
   console.log('✅ Page loaded successfully');
 
   // Check for main components
