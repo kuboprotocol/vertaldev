@@ -370,12 +370,33 @@ local://song-123.mp3
 
 1. ✅ Documentar arquitetura de IA (este arquivo)
 2. ✅ Implementar Music Generator (Phase 4)
-3. ⏳ Remover Groq e consolidar em OpenRouter
-4. ⏳ Adicionar transcrição de áudio via Whisper
-5. ⏳ Integrar chat melhorado (Claude via OpenRouter)
+3. ✅ Remover Groq e consolidar em OpenRouter
+4. ✅ Adicionar transcrição de áudio via Whisper
+5. ✅ Integrar chat melhorado (Claude via OpenRouter)
+6. ✅ Criar Editor de Imagens (corte, resize, filtros)
 
 ---
 
 **Última atualização**: 2026-10-10  
-**Mantido por**: Claude Code (KUBO Protocol)  
+**Mantido por**: Claude Code (KUBO Protocol)
+
+## Ferramentas Adicionais
+
+### Editor de Imagens (Novo)
+
+**Status**: ✅ Implementado (v1.0)
+
+**Localização**: `src/components/creative/ImageEditorDialog.tsx`
+
+**Funcionalidades**:
+- Corte com proporções preconfiguradas (1:1, 4:5, 9:16, 16:9, etc.)
+- Redimensionamento para qualquer tamanho
+- Filtros: brilho, contraste, saturação, rotação
+- Qualidade de exportação configurável
+- Upload local ou via URL
+- Processamento 100% no cliente (sem servidor)
+
+**Custo**: Grátis (0 créditos)
+
+**Documentação**: `/docs/IMAGE_EDITOR.md`  
 **Versão**: 2.0 (Music Generator + OpenRouter consolidation)
