@@ -197,7 +197,8 @@ WHERE uil1.created_at > now() - interval '30 days'
   AND uil2.created_at > now() - interval '30 days'
 GROUP BY r.referrer_id, r.referred_id, uil1.ip_address, uil2.ip_address, r.created_at;
 
-GRANT SELECT ON public.potential_fraud_referrals TO authenticated;
+REVOKE ALL ON public.potential_fraud_referrals FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON public.potential_fraud_referrals TO service_role;
 
 -- Log para auditoria de afiliados
 CREATE TABLE IF NOT EXISTS public.affiliate_audit_log (
@@ -214,3 +215,15 @@ CREATE INDEX IF NOT EXISTS affiliate_audit_log_affiliate_id_idx ON public.affili
 CREATE INDEX IF NOT EXISTS affiliate_audit_log_action_idx ON public.affiliate_audit_log(action);
 
 GRANT INSERT ON public.affiliate_audit_log TO authenticated;
+
+-- IP logs and fraud data are server-only (SECURITY DEFINER functions / service_role).
+ALTER TABLE public.user_ip_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.fraud_flags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.linked_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.affiliate_audit_log ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Affiliates log their own actions" ON public.affiliate_audit_log;
+CREATE POLICY "Affiliates log their own actions"
+  ON public.affiliate_audit_log FOR INSERT
+  TO authenticated
+  WITH CHECK (auth.uid() = affiliate_id);
