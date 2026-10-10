@@ -85,6 +85,7 @@ const AnywherePage = lazy(() => import("./pages/AnywherePage"));
 const AffiliateProgramPage = lazy(() => import("./pages/AffiliateProgramPage"));
 const DocsMcpPage = lazy(() => import("./pages/DocsMcpPage"));
 const GameManagerPage = lazy(() => import("./pages/GameManagerPage"));
+const GameScenePage = lazy(() => import("./pages/GameScenePage"));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -244,6 +245,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/game/sdk" element={<ProtectedRoute><GameSdkPage /></ProtectedRoute>} />
                 <Route path="/game/vr" element={<ProtectedRoute><GameVrPage /></ProtectedRoute>} />
                 <Route path="/game/ai" element={<ProtectedRoute><GameAiPage /></ProtectedRoute>} />
+                <Route path="/game/scene" element={<ProtectedRoute><GameScenePage /></ProtectedRoute>} />
                 <Route path="/games" element={<ProtectedRoute><GameManagerPage /></ProtectedRoute>} />
                 <Route path="/admin/cloud" element={<ProtectedRoute requireRoles={["admin"]}><AdminCloudPage /></ProtectedRoute>} />
                 <Route path="/admin/anywhere" element={<ProtectedRoute requireRoles={["admin"]}><AdminAnywherePage /></ProtectedRoute>} />

@@ -1,0 +1,308 @@
+{
+  "version": 1,
+  "name": "Super Mario World: Echoes of the Mushroom Kingdom",
+  "description": "Classic 2D retro game with Babylon.js 3D rendering",
+  "createdAt": "2026-10-10T08:32:48.125Z",
+  "engine": "babylon",
+  "game_type": "retro",
+  "entities": [
+    {
+      "id": 1,
+      "name": "Mario",
+      "transform": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "rot": 0
+      },
+      "renderable": {
+        "mesh": "sprite",
+        "texture": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png",
+        "textureUrl": "https://cdn.jsdelivr.net/npm/@kenney/game-assets@latest/mario-sprite.png",
+        "color": 15017249,
+        "scale": 1.5,
+        "emissive": 0.2
+      },
+      "npc": {
+        "npcId": "Mario",
+        "persona": "The heroic plumber, balanced and agile, always ready for adventure.",
+        "health": 100,
+        "speed": 5
+      }
+    },
+    {
+      "id": 2,
+      "name": "Luigi",
+      "transform": {
+        "x": 2,
+        "y": 0,
+        "z": 0,
+        "rot": 0
+      },
+      "renderable": {
+        "mesh": "sprite",
+        "textureUrl": "https://cdn.jsdelivr.net/npm/@kenney/game-assets@latest/luigi-sprite.png",
+        "color": 4436039,
+        "scale": 1.5,
+        "emissive": 0.2
+      },
+      "npc": {
+        "npcId": "Luigi",
+        "persona": "Mario's taller, younger brother, known for his high jumps and slight cowardice.",
+        "health": 100,
+        "speed": 5.5
+      }
+    },
+    {
+      "id": 3,
+      "name": "Princess Peach",
+      "transform": {
+        "x": -2,
+        "y": 0,
+        "z": 0,
+        "rot": 0
+      },
+      "renderable": {
+        "mesh": "sprite",
+        "textureUrl": "https://cdn.jsdelivr.net/npm/@kenney/game-assets@latest/peach-sprite.png",
+        "color": 16503016,
+        "scale": 1.5,
+        "emissive": 0.2
+      },
+      "npc": {
+        "npcId": "Princess Peach",
+        "persona": "The graceful ruler of the Mushroom Kingdom, with the ability to float.",
+        "health": 80,
+        "speed": 4
+      }
+    },
+    {
+      "id": 4,
+      "name": "Toad",
+      "transform": {
+        "x": 0,
+        "y": 0,
+        "z": 2,
+        "rot": 0
+      },
+      "renderable": {
+        "mesh": "sprite",
+        "textureUrl": "https://cdn.jsdelivr.net/npm/@kenney/game-assets@latest/toad-sprite.png",
+        "color": 16777215,
+        "scale": 1.2,
+        "emissive": 0.15
+      },
+      "npc": {
+        "npcId": "Toad",
+        "persona": "A speedy and cheerful resident of the Mushroom Kingdom.",
+        "health": 60,
+        "speed": 6
+      }
+    },
+    {
+      "id": 5,
+      "name": "Yoshi",
+      "transform": {
+        "x": 0,
+        "y": 0,
+        "z": -2,
+        "rot": 0
+      },
+      "renderable": {
+        "mesh": "sprite",
+        "textureUrl": "https://cdn.jsdelivr.net/npm/@kenney/game-assets@latest/yoshi-sprite.png",
+        "color": 42577,
+        "scale": 1.8,
+        "emissive": 0.2
+      },
+      "npc": {
+        "npcId": "Yoshi",
+        "persona": "A friendly dinosaur with a flutter jump and egg-throwing abilities.",
+        "health": 90,
+        "speed": 5.2
+      }
+    },
+    {
+      "id": 6,
+      "name": "Bowser",
+      "transform": {
+        "x": 4,
+        "y": 0,
+        "z": 0,
+        "rot": 0
+      },
+      "renderable": {
+        "mesh": "sprite",
+        "textureUrl": "https://cdn.jsdelivr.net/npm/@kenney/game-assets@latest/bowser-sprite.png",
+        "color": 16763904,
+        "scale": 2,
+        "emissive": 0.3
+      },
+      "npc": {
+        "npcId": "Bowser",
+        "persona": "The mighty Koopa King, who can breathe fire and smash obstacles.",
+        "health": 150,
+        "speed": 3,
+        "boss": true
+      }
+    },
+    {
+      "id": 7,
+      "name": "Donkey Kong",
+      "transform": {
+        "x": -4,
+        "y": 0,
+        "z": 0,
+        "rot": 0
+      },
+      "renderable": {
+        "mesh": "sprite",
+        "textureUrl": "https://cdn.jsdelivr.net/npm/@kenney/game-assets@latest/donkey-kong-sprite.png",
+        "color": 9127187,
+        "scale": 2,
+        "emissive": 0.25
+      },
+      "npc": {
+        "npcId": "Donkey Kong",
+        "persona": "A powerful ape with incredible strength and climbing skills.",
+        "health": 120,
+        "speed": 3.5
+      }
+    },
+    {
+      "id": 8,
+      "name": "Toadsworth",
+      "transform": {
+        "x": 1,
+        "y": 0,
+        "z": 1,
+        "rot": 0
+      },
+      "renderable": {
+        "mesh": "sprite",
+        "textureUrl": "https://cdn.jsdelivr.net/npm/@kenney/game-assets@latest/toadsworth-sprite.png",
+        "color": 16766720,
+        "scale": 1.4,
+        "emissive": 0.2
+      },
+      "npc": {
+        "npcId": "Toadsworth",
+        "persona": "Peach's loyal steward, offering guidance and tutorials.",
+        "health": 70,
+        "speed": 2.5
+      }
+    },
+    {
+      "id": 9,
+      "name": "Goomba",
+      "transform": {
+        "x": 5,
+        "y": 0,
+        "z": 5,
+        "rot": 0
+      },
+      "renderable": {
+        "mesh": "sprite",
+        "textureUrl": "https://cdn.jsdelivr.net/npm/@kenney/game-assets@latest/goomba-sprite.png",
+        "color": 10506797,
+        "scale": 0.8,
+        "emissive": 0.1
+      },
+      "npc": {
+        "npcId": "Goomba",
+        "persona": "A common enemy that walks back and forth.",
+        "health": 20,
+        "speed": 2,
+        "enemy": true
+      }
+    },
+    {
+      "id": 10,
+      "name": "Koopa Troopa",
+      "transform": {
+        "x": -5,
+        "y": 0,
+        "z": 5,
+        "rot": 0
+      },
+      "renderable": {
+        "mesh": "sprite",
+        "textureUrl": "https://cdn.jsdelivr.net/npm/@kenney/game-assets@latest/koopa-sprite.png",
+        "color": 65280,
+        "scale": 1,
+        "emissive": 0.15
+      },
+      "npc": {
+        "npcId": "Koopa Troopa",
+        "persona": "A turtle enemy that can be kicked into a shell.",
+        "health": 30,
+        "speed": 2.5,
+        "enemy": true
+      }
+    },
+    {
+      "id": 11,
+      "name": "Question Block",
+      "transform": {
+        "x": 3,
+        "y": 2,
+        "z": 3,
+        "rot": 0
+      },
+      "renderable": {
+        "mesh": "cube",
+        "textureUrl": "https://cdn.jsdelivr.net/npm/@kenney/game-assets@latest/block-question.png",
+        "color": 16766720,
+        "scale": 1,
+        "emissive": 0.1
+      }
+    },
+    {
+      "id": 12,
+      "name": "Coin",
+      "transform": {
+        "x": -3,
+        "y": 0,
+        "z": -3,
+        "rot": 0
+      },
+      "renderable": {
+        "mesh": "sphere",
+        "textureUrl": "https://cdn.jsdelivr.net/npm/@kenney/game-assets@latest/coin.png",
+        "color": 16766720,
+        "scale": 0.6,
+        "emissive": 0.4
+      }
+    }
+  ],
+  "camera": {
+    "position": {
+      "x": 0,
+      "y": 5,
+      "z": 10
+    },
+    "target": {
+      "x": 0,
+      "y": 2,
+      "z": 0
+    }
+  },
+  "environment": {
+    "ambientLight": {
+      "color": "#ffffff",
+      "intensity": 0.6
+    },
+    "directionalLight": {
+      "color": "#ffffff",
+      "intensity": 0.8,
+      "direction": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      }
+    },
+    "backgroundColor": "#87ceeb",
+    "fogColor": "#87ceeb",
+    "fogDensity": 0.001
+  }
+}
