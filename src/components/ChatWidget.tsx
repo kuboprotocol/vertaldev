@@ -50,7 +50,7 @@ export default function ChatWidget({ onClose }: ChatWidgetProps) {
     setLoading(true);
 
     try {
-      // Call OpenRouter API
+      // Call OpenRouter API with Claude 3 Haiku (optimal for chat speed)
       const response = await fetch('https://openrouter.io/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -60,7 +60,7 @@ export default function ChatWidget({ onClose }: ChatWidgetProps) {
           'X-Title': 'KUBO Vibe Creative Panel',
         },
         body: JSON.stringify({
-          model: 'openai/gpt-3.5-turbo',
+          model: 'anthropic/claude-3-haiku',
           messages: messages.map((msg) => ({
             role: msg.role,
             content: msg.content,

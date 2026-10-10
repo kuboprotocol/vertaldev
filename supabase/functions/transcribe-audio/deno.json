@@ -1,0 +1,6 @@
+{
+  "imports": {
+    "std/": "https://deno.land/std@0.208.0/",
+    "cors": "https://deno.land/std@0.208.0/http/cors.ts"
+  }
+}
