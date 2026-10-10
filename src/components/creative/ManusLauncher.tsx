@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
+import { PENDING_IMAGE_KEY } from "./CreativeToolInterface";
 
 type Item = {
   key: string;
@@ -25,13 +26,12 @@ const ITEMS: Item[] = [
   { key: "skills", label: "Adicionar Habilidades", icon: Puzzle, onSelect: ({ navigate }) => navigate("/agents"), divider: true },
   { key: "site", label: "Criar website", icon: Code2, onSelect: ({ navigate }) => navigate("/builder") },
   { key: "apps", label: "Desenvolver aplicativos", icon: Smartphone, onSelect: ({ navigate }) => navigate("/builder?mode=app") },
-  { key: "slides", label: "Criar slides", icon: Presentation, badge: "AI", onSelect: ({ setActive }) => setActive("slides") },
-  { key: "image", label: "Criar imagem", icon: ImageIcon, badge: "AI", onSelect: ({ setActive }) => setActive("nano_banana") },
+  { key: "slides", label: "Criar slides", icon: Presentation, badge: "AI", onSelect: ({ setActive }) => setActive("slides") },  { key: "image", label: "Criar imagem", icon: ImageIcon, badge: "AI", onSelect: ({ setActive }) => setActive("nano_banana") },
   { key: "edit_image", label: "Editar imagem", icon: Wand2, onSelect: ({ setActive }) => setActive("image_editor") },
   { key: "research", label: "Wide Research", icon: Search, onSelect: ({ setActive }) => setActive("chat") },
   { key: "chat_mode", label: "Modo de conversa", icon: MessageSquare, onSelect: ({ setActive }) => setActive("chat") },
   { key: "schedule", label: "Tarefas agendadas", icon: Calendar, onSelect: ({ navigate }) => navigate("/creative/investigation") },
-  { key: "sheet", label: "Criar planilha", icon: Table2, onSelect: ({ setActive }) => setActive("chat") },
+  { key: "sheet", label: "Criar planilha", icon: Table2, onSelect: ({ setActive }) => setActive("sheet") },
   { key: "music", label: "Música IA", icon: Music, onSelect: ({ setActive }) => setActive("music") },
   { key: "video_studio", label: "Criar vídeo com fotos", icon: Clapperboard, badge: "NOVO", onSelect: ({ setActive }) => setActive("video_studio") },
   { key: "shorts", label: "Shorts/Vídeo IA", icon: Video, onSelect: ({ setActive }) => setActive("shorts") },
@@ -54,18 +54,26 @@ export function ManusLauncher({ setActive }: Props) {
     { key: "file", label: "Arquivo", icon: Paperclip, onClick: () => fileRef.current?.click() },
   ];
 
-  const handleFile = (kind: string, toolKey: string = "nano_banana") => (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Foto/imagem enviada no painel vai para o Editor de Imagens já carregada
+  const handleFile = (kind: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
+    e.target.value = "";
     if (!f) return;
-    toast.success(`${kind} pronto: ${f.name}`, { description: "Iniciando processamento com IA..." });
-    setActive(toolKey);
+    try {
+      sessionStorage.setItem(PENDING_IMAGE_KEY, URL.createObjectURL(f));
+    } catch {
+      toast.error("Não foi possível abrir a imagem no editor");
+      return;
+    }
+    toast.success(`${kind} pronto: ${f.name}`, { description: "Abrindo no Editor de Imagens..." });
+    setActive("image_editor");
   };
 
   return (
     <div className="space-y-4">
-      <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={handleFile("Foto capturada", "nano_banana")} />
-      <input ref={imageRef} type="file" accept="image/*" hidden onChange={handleFile("Imagem selecionada", "nano_banana")} />
-      <input ref={fileRef} type="file" hidden onChange={handleFile("Arquivo carregado", "chat")} />
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={handleFile("Foto capturada")} />
+      <input ref={imageRef} type="file" accept="image/*" hidden onChange={handleFile("Imagem selecionada")} />
+      <input ref={fileRef} type="file" accept="image/*" hidden onChange={handleFile("Arquivo carregado")} />
 
       <div className="grid grid-cols-3 gap-3">
         {tiles.map((t) => (
