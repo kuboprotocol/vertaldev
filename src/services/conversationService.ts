@@ -3,7 +3,7 @@
  * Manages conversation persistence to Supabase database
  */
 
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Conversation,
   ConversationMessage,
