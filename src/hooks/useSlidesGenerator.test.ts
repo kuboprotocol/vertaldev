@@ -3,11 +3,51 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import { useSlidesGenerator } from './useSlidesGenerator';
-import * as slideGeneratorService from '@/services/slideGeneratorService';
+import { slideGeneratorService, type Presentation, type Slide } from '@/services/slideGeneratorService';
 
-vi.mock('@/services/slideGeneratorService');
+vi.mock('@/services/slideGeneratorService', () => ({
+  slideGeneratorService: {
+    generatePresentation: vi.fn(),
+    calculateCost: vi.fn((n: number) => Math.max(1, n)),
+    exportAsHTML: vi.fn(() => '<html>Test</html>'),
+    exportPresentation: vi.fn(() => '{}'),
+  },
+}));
+
+const service = vi.mocked(slideGeneratorService);
+
+const slide = (id: string, overrides: Partial<Slide> = {}): Slide => ({
+  id,
+  type: 'content',
+  title: id,
+  content: 'Content',
+  order: 0,
+  ...overrides,
+});
+
+const presentation = (slides: Slide[], overrides: Partial<Presentation> = {}): Presentation => ({
+  id: 'pres-1',
+  title: 'Test Presentation',
+  description: 'Test',
+  slides: slides.map((s, i) => ({ ...s, order: i })),
+  theme: 'modern',
+  createdAt: '2024-01-01T00:00:00Z',
+  updatedAt: '2024-01-01T00:00:00Z',
+  creditsUsed: 1,
+  ...overrides,
+});
+
+/** Puts `pres` into hook state through the public API (a mocked generation). */
+async function renderWith(pres: Presentation, credits = 100) {
+  service.generatePresentation.mockResolvedValueOnce(pres);
+  const hook = renderHook(() => useSlidesGenerator(credits));
+  await act(async () => {
+    await hook.result.current.generatePresentation({ topic: 'Test', numSlides: Math.max(1, pres.slides.length) });
+  });
+  return hook;
+}
 
 describe('useSlidesGenerator', () => {
   beforeEach(() => {
@@ -24,131 +64,38 @@ describe('useSlidesGenerator', () => {
   });
 
   it('should generate presentation with valid request', async () => {
-    const mockPresentation: slideGeneratorService.Presentation = {
-      id: 'pres-1',
-      title: 'Test Presentation',
-      description: 'Test',
-      slides: [
-        {
-          id: 'slide-1',
-          type: 'title',
-          title: 'Welcome',
-          content: 'Test content',
-          order: 0,
-        },
-      ],
-      theme: 'modern',
-      createdAt: '2024-01-01T00:00:00Z',
-      updatedAt: '2024-01-01T00:00:00Z',
-      creditsUsed: 1,
-    };
+    const { result } = await renderWith(presentation([slide('slide-1', { type: 'title', title: 'Welcome' })]));
 
-    vi.spyOn(slideGeneratorService, 'slideGeneratorService').mockReturnValue({
-      generatePresentation: vi.fn().mockResolvedValue(mockPresentation),
-      calculateCost: vi.fn().mockReturnValue(1),
-    } as any);
-
-    const { result } = renderHook(() => useSlidesGenerator(100));
-
-    await act(async () => {
-      await result.current.generatePresentation({
-        topic: 'Test',
-        numSlides: 1,
-      });
-    });
-
-    await waitFor(() => {
-      expect(result.current.isGenerating).toBe(false);
-    });
-
-    expect(result.current.currentPresentation).toBeTruthy();
+    expect(result.current.isGenerating).toBe(false);
+    expect(result.current.currentPresentation?.id).toBe('pres-1');
     expect(result.current.presentations).toHaveLength(1);
+    expect(result.current.slidesCost).toBe(1);
   });
 
   it('should throw error when insufficient credits', async () => {
     const { result } = renderHook(() => useSlidesGenerator(0));
 
     await act(async () => {
-      try {
-        await result.current.generatePresentation({
-          topic: 'Test',
-          numSlides: 5,
-        });
-      } catch (e) {
-        // Expected
-      }
+      await expect(result.current.generatePresentation({ topic: 'Test', numSlides: 5 })).rejects.toThrow(/Insufficient credits/);
     });
 
-    expect(result.current.error).toBeTruthy();
+    expect(result.current.error).toMatch(/Insufficient credits/);
+    expect(service.generatePresentation).not.toHaveBeenCalled();
   });
 
-  it('should update slide content', () => {
-    const mockPresentation: slideGeneratorService.Presentation = {
-      id: 'pres-1',
-      title: 'Test',
-      description: 'Test',
-      slides: [
-        {
-          id: 'slide-1',
-          type: 'content',
-          title: 'Original Title',
-          content: 'Original content',
-          order: 0,
-        },
-      ],
-      theme: 'modern',
-      createdAt: '2024-01-01T00:00:00Z',
-      updatedAt: '2024-01-01T00:00:00Z',
-      creditsUsed: 1,
-    };
-
-    const { result } = renderHook(() => useSlidesGenerator(100));
-
-    // Set current presentation
-    act(() => {
-      result.current.currentPresentation = mockPresentation;
-    });
+  it('should update slide content', async () => {
+    const { result } = await renderWith(presentation([slide('slide-1', { title: 'Original Title', content: 'Original content' })]));
 
     act(() => {
-      result.current.updateSlide('slide-1', {
-        title: 'Updated Title',
-        content: 'Updated content',
-      });
+      result.current.updateSlide('slide-1', { title: 'Updated Title', content: 'Updated content' });
     });
 
-    expect(result.current.currentPresentation?.slides[0].title).toBe(
-      'Updated Title'
-    );
-    expect(result.current.currentPresentation?.slides[0].content).toBe(
-      'Updated content'
-    );
+    expect(result.current.currentPresentation?.slides[0].title).toBe('Updated Title');
+    expect(result.current.currentPresentation?.slides[0].content).toBe('Updated content');
   });
 
-  it('should add new slide', () => {
-    const mockPresentation: slideGeneratorService.Presentation = {
-      id: 'pres-1',
-      title: 'Test',
-      description: 'Test',
-      slides: [
-        {
-          id: 'slide-1',
-          type: 'title',
-          title: 'Title',
-          content: 'Content',
-          order: 0,
-        },
-      ],
-      theme: 'modern',
-      createdAt: '2024-01-01T00:00:00Z',
-      updatedAt: '2024-01-01T00:00:00Z',
-      creditsUsed: 1,
-    };
-
-    const { result } = renderHook(() => useSlidesGenerator(100));
-
-    act(() => {
-      result.current.currentPresentation = mockPresentation;
-    });
+  it('should add new slide', async () => {
+    const { result } = await renderWith(presentation([slide('slide-1', { type: 'title' })]));
 
     act(() => {
       result.current.addSlide('content');
@@ -158,115 +105,31 @@ describe('useSlidesGenerator', () => {
     expect(result.current.currentPresentation?.slides[1].type).toBe('content');
   });
 
-  it('should delete slide', () => {
-    const mockPresentation: slideGeneratorService.Presentation = {
-      id: 'pres-1',
-      title: 'Test',
-      description: 'Test',
-      slides: [
-        {
-          id: 'slide-1',
-          type: 'title',
-          title: 'Title',
-          content: 'Content',
-          order: 0,
-        },
-        {
-          id: 'slide-2',
-          type: 'content',
-          title: 'Slide 2',
-          content: 'Content 2',
-          order: 1,
-        },
-      ],
-      theme: 'modern',
-      createdAt: '2024-01-01T00:00:00Z',
-      updatedAt: '2024-01-01T00:00:00Z',
-      creditsUsed: 1,
-    };
-
-    const { result } = renderHook(() => useSlidesGenerator(100));
-
-    act(() => {
-      result.current.currentPresentation = mockPresentation;
-    });
+  it('should delete slide', async () => {
+    const { result } = await renderWith(presentation([slide('slide-1'), slide('slide-2')]));
 
     act(() => {
       result.current.deleteSlide('slide-1');
     });
 
     expect(result.current.currentPresentation?.slides).toHaveLength(1);
-    expect(result.current.currentPresentation?.slides[0].id).toBe('slide-2');
+    expect(result.current.currentPresentation?.slides[0]).toMatchObject({ id: 'slide-2', order: 0 });
   });
 
-  it('should reorder slides', () => {
-    const mockPresentation: slideGeneratorService.Presentation = {
-      id: 'pres-1',
-      title: 'Test',
-      description: 'Test',
-      slides: [
-        {
-          id: 'slide-1',
-          type: 'title',
-          title: 'First',
-          content: 'Content',
-          order: 0,
-        },
-        {
-          id: 'slide-2',
-          type: 'content',
-          title: 'Second',
-          content: 'Content',
-          order: 1,
-        },
-        {
-          id: 'slide-3',
-          type: 'content',
-          title: 'Third',
-          content: 'Content',
-          order: 2,
-        },
-      ],
-      theme: 'modern',
-      createdAt: '2024-01-01T00:00:00Z',
-      updatedAt: '2024-01-01T00:00:00Z',
-      creditsUsed: 1,
-    };
+  it('should reorder slides', async () => {
+    const { result } = await renderWith(presentation([slide('slide-1'), slide('slide-2'), slide('slide-3')]));
 
-    const { result } = renderHook(() => useSlidesGenerator(100));
-
-    act(() => {
-      result.current.currentPresentation = mockPresentation;
-    });
-
-    // Move first slide to position 2
     act(() => {
       result.current.reorderSlides(0, 2);
     });
 
-    const slides = result.current.currentPresentation?.slides || [];
-    expect(slides[0].id).toBe('slide-2');
-    expect(slides[1].id).toBe('slide-3');
-    expect(slides[2].id).toBe('slide-1');
+    const slides = result.current.currentPresentation?.slides ?? [];
+    expect(slides.map((s) => s.id)).toEqual(['slide-2', 'slide-3', 'slide-1']);
+    expect(slides.map((s) => s.order)).toEqual([0, 1, 2]);
   });
 
-  it('should update theme', () => {
-    const mockPresentation: slideGeneratorService.Presentation = {
-      id: 'pres-1',
-      title: 'Test',
-      description: 'Test',
-      slides: [],
-      theme: 'modern',
-      createdAt: '2024-01-01T00:00:00Z',
-      updatedAt: '2024-01-01T00:00:00Z',
-      creditsUsed: 1,
-    };
-
-    const { result } = renderHook(() => useSlidesGenerator(100));
-
-    act(() => {
-      result.current.currentPresentation = mockPresentation;
-    });
+  it('should update theme', async () => {
+    const { result } = await renderWith(presentation([]));
 
     act(() => {
       result.current.updateTheme('dark');
@@ -275,55 +138,32 @@ describe('useSlidesGenerator', () => {
     expect(result.current.currentPresentation?.theme).toBe('dark');
   });
 
-  it('should export presentation as HTML', () => {
-    const mockPresentation: slideGeneratorService.Presentation = {
-      id: 'pres-1',
-      title: 'Test',
-      description: 'Test',
-      slides: [
-        {
-          id: 'slide-1',
-          type: 'title',
-          title: 'Test Slide',
-          content: 'Content',
-          order: 0,
-        },
-      ],
-      theme: 'modern',
-      createdAt: '2024-01-01T00:00:00Z',
-      updatedAt: '2024-01-01T00:00:00Z',
-      creditsUsed: 1,
-    };
-
-    vi.spyOn(slideGeneratorService, 'slideGeneratorService').mockReturnValue({
-      exportAsHTML: vi.fn().mockReturnValue('<html>Test</html>'),
-    } as any);
-
-    const { result } = renderHook(() => useSlidesGenerator(100));
-
-    act(() => {
-      result.current.currentPresentation = mockPresentation;
-    });
+  it('should export presentation as HTML', async () => {
+    const { result } = await renderWith(presentation([slide('slide-1', { type: 'title' })]));
 
     const html = result.current.exportPresentation('html');
-    expect(html).toBeTruthy();
+
+    expect(html).toBe('<html>Test</html>');
+    expect(service.exportAsHTML).toHaveBeenCalledWith(result.current.currentPresentation, 'modern');
+  });
+
+  it('should refuse to export without a presentation', () => {
+    const { result } = renderHook(() => useSlidesGenerator(100));
+    expect(() => result.current.exportPresentation('html')).toThrow('No presentation to export');
   });
 
   it('should calculate slides cost', () => {
     const { result } = renderHook(() => useSlidesGenerator(100));
 
-    const cost = result.current.getSlidesCost(5);
-    expect(cost).toBe(5);
+    expect(result.current.getSlidesCost(5)).toBe(5);
   });
 
-  it('should clear error', () => {
-    const { result } = renderHook(() => useSlidesGenerator(100));
-
-    act(() => {
-      result.current.error = 'Test error';
+  it('should clear error', async () => {
+    const { result } = renderHook(() => useSlidesGenerator(0));
+    await act(async () => {
+      await result.current.generatePresentation({ topic: 'Test', numSlides: 5 }).catch(() => {});
     });
-
-    expect(result.current.error).toBe('Test error');
+    expect(result.current.error).toBeTruthy();
 
     act(() => {
       result.current.clearError();
@@ -332,24 +172,8 @@ describe('useSlidesGenerator', () => {
     expect(result.current.error).toBeNull();
   });
 
-  it('should delete presentation', () => {
-    const mockPresentation: slideGeneratorService.Presentation = {
-      id: 'pres-1',
-      title: 'Test',
-      description: 'Test',
-      slides: [],
-      theme: 'modern',
-      createdAt: '2024-01-01T00:00:00Z',
-      updatedAt: '2024-01-01T00:00:00Z',
-      creditsUsed: 1,
-    };
-
-    const { result } = renderHook(() => useSlidesGenerator(100));
-
-    act(() => {
-      result.current.presentations = [mockPresentation];
-      result.current.currentPresentation = mockPresentation;
-    });
+  it('should delete presentation', async () => {
+    const { result } = await renderWith(presentation([]));
 
     act(() => {
       result.current.deletePresentation('pres-1');
