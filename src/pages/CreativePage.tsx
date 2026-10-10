@@ -23,8 +23,10 @@ import { ManusLauncher } from "@/components/creative/ManusLauncher";
 import { CreativeToolInterface } from "@/components/creative/CreativeToolInterface";
 import { SkillExecutionsList } from "@/components/creative/SkillExecutionsList";
 import { ApiStatusPanel } from "@/components/creative/ApiStatusPanel";
+import { CreativeSlides } from "@/components/CreativeSlides";
+import { CreativeSheets } from "@/components/CreativeSheets";
 
-type ToolKey = "dashboard" | "chat" | "nano_banana" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "video_studio" | "image_editor" | "unified_history";
+type ToolKey = "dashboard" | "chat" | "nano_banana" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "video_studio" | "image_editor" | "unified_history" | "slides" | "sheet";
 
 const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: string }[] = [
   { key: "video_studio", title: "Vertal Video Studio", desc: "1 a 10 fotos viram clipe musical, meme ou anúncio com IA realista", icon: Clapperboard, cost: "a partir de 2 créditos" },
@@ -1284,6 +1286,19 @@ export default function CreativePage() {
               <SkillExecutionsList />
             </div>
           </TabsContent>
+
+          {(["slides", "sheet"] as const).map((key) => (
+            <TabsContent key={key} value={key}>
+              <div className="space-y-6">
+                <Button variant="ghost" size="sm" onClick={() => { setActive("dashboard"); navigate("/creative"); }} className="mb-2">
+                  <ArrowLeft className="h-4 w-4 mr-2" /> Voltar ao Painel
+                </Button>
+                {key === "slides"
+                  ? <CreativeSlides creditsAvailable={editsRemaining} />
+                  : <CreativeSheets creditsAvailable={editsRemaining} />}
+              </div>
+            </TabsContent>
+          ))}
 
           {TOOLS.map((t) => (
             <TabsContent key={t.key} value={t.key}>
