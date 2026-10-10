@@ -16,7 +16,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
   MessageSquare, Image as ImageIcon, Download, Scissors, User2,
   Video, Music, BookOpen, Sparkles, Loader2, Coins, ArrowLeft, RotateCw, AlertTriangle, Upload,
-  FileDown, History, Check, Search, ArrowRight, Settings2, X, AlertCircle, ListTodo
+  FileDown, History, Check, Search, ArrowRight, Settings2, X, AlertCircle, ListTodo, Clapperboard, SlidersHorizontal
 } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { ManusLauncher } from "@/components/creative/ManusLauncher";
@@ -24,9 +24,11 @@ import { CreativeToolInterface } from "@/components/creative/CreativeToolInterfa
 import { SkillExecutionsList } from "@/components/creative/SkillExecutionsList";
 import { ApiStatusPanel } from "@/components/creative/ApiStatusPanel";
 
-type ToolKey = "dashboard" | "chat" | "nano_banana" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "unified_history";
+type ToolKey = "dashboard" | "chat" | "nano_banana" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "video_studio" | "image_editor" | "unified_history";
 
 const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: string }[] = [
+  { key: "video_studio", title: "Vertal Video Studio", desc: "1 a 10 fotos viram clipe musical, meme ou anúncio com IA realista", icon: Clapperboard, cost: "a partir de 2 créditos" },
+  { key: "image_editor", title: "Editor de Imagens", desc: "Corte, redimensione e ajuste qualquer imagem", icon: SlidersHorizontal, cost: "Grátis" },
   { key: "chat", title: "Vertal Chat", desc: "Conversas, resumos, traduções, geração de textos", icon: MessageSquare, cost: "1 crédito/msg" },
   { key: "nano_banana", title: "Nano Banana", desc: "Criar e editar imagens com IA", icon: ImageIcon, cost: "1 crédito" },
   { key: "downloader", title: "Downloader Universal", desc: "YouTube, Instagram, TikTok, Facebook, Kwai", icon: Download, cost: "2 créditos" },
