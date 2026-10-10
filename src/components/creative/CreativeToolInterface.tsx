@@ -22,11 +22,12 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AvatarCropDialog } from "./AvatarCropDialog";
 import { ImageEditorDialog } from "./ImageEditorDialog";
+import { VideoStudio } from "./VideoStudio";
 import { AvatarProgressSteps, type AvatarStepState, type AvatarStepKey } from "./AvatarProgressSteps";
 import { cn } from "@/lib/utils";
 import { PUTER_MODELS, creativeInvoke } from "@/lib/puterAI";
 
-type ToolKey = "chat" | "nano_banana" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "image_editor";
+type ToolKey = "chat" | "nano_banana" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "image_editor" | "video_studio";
 
 interface Props {
   toolKey: ToolKey;
@@ -36,6 +37,7 @@ interface Props {
 const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: string }[] = [
   { key: "chat", title: "Vertal Chat", desc: "Conversas, resumos, traduções, geração de textos", icon: MessageSquare, cost: "1 crédito" },
   { key: "nano_banana", title: "Imagens Premium", desc: "Criação de imagens de alta qualidade", icon: ImageIcon, cost: "1 crédito" },
+  { key: "video_studio", title: "Vertal Video Studio", desc: "1 a 10 fotos viram clipe, meme ou anúncio com IA", icon: Video, cost: "A partir de 2 créditos" },
   { key: "image_editor", title: "Editor de Imagens", desc: "Edite, corte e redimensione suas imagens perfeitamente", icon: Sliders, cost: "Grátis" },
   { key: "downloader", title: "Downloader Universal", desc: "YouTube, Instagram, TikTok, Facebook", icon: Download, cost: "2 créditos" },
   { key: "clips", title: "Vertal Clips", desc: "Cortes virais automáticos", icon: Scissors, cost: "1 crédito" },
@@ -71,6 +73,13 @@ const TOOL_CONFIGS: Record<ToolKey, {
       { key: "size", label: "Tamanho", type: "select", options: ["1024x1024", "1024x1792", "1792x1024"], default: "1024x1024" },
       { key: "engine", label: "Motor", type: "select", options: ["Padrão (Pollinations)", "Premium (Gemini)"], default: "Padrão (Pollinations)" }
     ]
+  },
+  video_studio: {
+    title: "Vertal Video Studio",
+    description: "Clipes musicais, memes, anúncios e stories a partir de 1 a 10 fotos.",
+    cost: 2,
+    promptLabel: "",
+    placeholder: "",
   },
   image_editor: {
     title: "Editor de Imagens",
@@ -155,6 +164,11 @@ const TOOL_TO_FN: Record<string, string> = {
 };
 
 export function CreativeToolInterface({ toolKey, onSuccess }: Props) {
+  if (toolKey === "video_studio") return <VideoStudio />;
+  return <StandardToolInterface toolKey={toolKey} onSuccess={onSuccess} />;
+}
+
+function StandardToolInterface({ toolKey, onSuccess }: Props) {
   const config = TOOL_CONFIGS[toolKey];
   const { editsRemaining } = useSubscription();
   const [prompt, setPrompt] = useState("");
@@ -297,11 +311,11 @@ export function CreativeToolInterface({ toolKey, onSuccess }: Props) {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <Card className="p-6 bg-background/40 backdrop-blur-xl border-border/10 border-gold/10 relative overflow-hidden group shadow-2xl">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-gold/30 to-transparent" />
+      <Card className="p-6 bg-background/40 backdrop-blur-xl border-border/10 border-primary/10 relative overflow-hidden group shadow-2xl">
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
         
         <div className="flex items-center gap-3 mb-6">
-          <div className="p-2.5 rounded-xl bg-gold/10 text-gold shadow-[0_0_15px_rgba(201,148,26,0.1)] group-hover:shadow-[0_0_20px_rgba(201,148,26,0.2)] transition-all">
+          <div className="p-2.5 rounded-xl bg-primary/10 text-primary shadow-[0_0_15px_rgba(201,148,26,0.1)] group-hover:shadow-[0_0_20px_rgba(201,148,26,0.2)] transition-all">
             {TOOLS.find(t => t.key === toolKey)?.icon && 
               (() => {
                 const Icon = TOOLS.find(t => t.key === toolKey)?.icon;
@@ -324,7 +338,7 @@ export function CreativeToolInterface({ toolKey, onSuccess }: Props) {
                   placeholder={config.placeholder}
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
-                  className="min-h-[80px] bg-background/50 border-border/10 focus:border-gold/30 transition-all resize-none text-sm"
+                  className="min-h-[80px] bg-background/50 border-border/10 focus:border-primary/30 transition-all resize-none text-sm"
                 />
                 <Button
                   variant="outline"
@@ -347,7 +361,7 @@ export function CreativeToolInterface({ toolKey, onSuccess }: Props) {
                 placeholder={config.placeholder}
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                className="min-h-[120px] bg-background/50 border-border/10 focus:border-gold/30 transition-all resize-none text-sm"
+                className="min-h-[120px] bg-background/50 border-border/10 focus:border-primary/30 transition-all resize-none text-sm"
               />
             )}
           </div>
@@ -385,10 +399,10 @@ export function CreativeToolInterface({ toolKey, onSuccess }: Props) {
           )}
 
           {toolKey === "chat" && (
-            <div className="p-4 rounded-xl bg-gold/5 border border-gold/10 space-y-4">
+            <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 space-y-4">
               <div className="flex items-center gap-2 mb-2">
-                <Settings2 className="h-4 w-4 text-gold" />
-                <span className="text-xs font-bold uppercase tracking-widest text-gold/80">Configurações de IA</span>
+                <Settings2 className="h-4 w-4 text-primary" />
+                <span className="text-xs font-bold uppercase tracking-widest text-primary/80">Configurações de IA</span>
               </div>
               
               <div className="space-y-3">
@@ -439,7 +453,7 @@ export function CreativeToolInterface({ toolKey, onSuccess }: Props) {
             <Button
               onClick={handleExecute}
               disabled={loading}
-              className="bg-gold hover:bg-gold/90 text-black font-bold font-orbitron px-8 h-12 shadow-[0_0_20px_rgba(201,148,26,0.3)] hover:shadow-[0_0_30px_rgba(201,148,26,0.5)] transition-all group"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold font-orbitron px-8 h-12 shadow-[0_0_20px_rgba(201,148,26,0.3)] hover:shadow-[0_0_30px_rgba(201,148,26,0.5)] transition-all group"
             >
               {loading ? (
                 <Loader2 className="h-5 w-5 animate-spin mr-2" />
@@ -461,7 +475,7 @@ export function CreativeToolInterface({ toolKey, onSuccess }: Props) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {sessionHistory.map((item) => (
-              <Card key={item.id} className="p-4 bg-background/20 backdrop-blur-md border-border/5 hover:border-gold/20 transition-all group overflow-hidden">
+              <Card key={item.id} className="p-4 bg-background/20 backdrop-blur-md border-border/5 hover:border-primary/20 transition-all group overflow-hidden">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] opacity-40 font-mono">{item.timestamp}</span>
@@ -470,14 +484,14 @@ export function CreativeToolInterface({ toolKey, onSuccess }: Props) {
                     </Badge>
                   </div>
                   {item.metadata?.credits && (
-                    <span className="text-[10px] font-bold text-gold/60">-{item.metadata.credits} cred</span>
+                    <span className="text-[10px] font-bold text-primary/60">-{item.metadata.credits} cred</span>
                   )}
                 </div>
 
                 <p className="text-xs text-foreground/90 font-medium line-clamp-2 mb-3 leading-relaxed">{item.prompt}</p>
 
                 {item.assetUrl && (
-                  <div className="relative aspect-video rounded-lg overflow-hidden bg-black/40 border border-border/10 mb-3 group-hover:border-gold/30 transition-all">
+                  <div className="relative aspect-video rounded-lg overflow-hidden bg-black/40 border border-border/10 mb-3 group-hover:border-primary/30 transition-all">
                     <img src={item.assetUrl} alt="Preview" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                     <a
                       href={item.assetUrl}
@@ -485,7 +499,7 @@ export function CreativeToolInterface({ toolKey, onSuccess }: Props) {
                       rel="noopener noreferrer"
                       className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all"
                     >
-                      <DownloadIcon className="h-6 w-6 text-gold" />
+                      <DownloadIcon className="h-6 w-6 text-primary" />
                     </a>
                   </div>
                 )}
