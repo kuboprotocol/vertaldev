@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { Sparkles, Zap, Image, Music, Code, Video, Pen } from 'lucide-react';
+import { Sparkles, Zap, Image, Music, Code, Video, Pen, Layout } from 'lucide-react';
 import ChatWidget from './ChatWidget';
+import { CreativeSlides } from './CreativeSlides';
+import { useAuth } from '@/hooks/useAuth';
 
 interface CreativeItem {
   id: string;
-  type: 'text' | 'image' | 'audio' | 'code' | 'video';
+  type: 'text' | 'image' | 'audio' | 'code' | 'video' | 'slides';
   title: string;
   description: string;
   icon: React.ReactNode;
@@ -12,8 +14,10 @@ interface CreativeItem {
 }
 
 export default function CreativePanel() {
+  const { user } = useAuth();
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [showChat, setShowChat] = useState(false);
+  const [creditsAvailable] = useState(100); // TODO: Get from user account
 
   const creativeItems: CreativeItem[] = [
     {
@@ -23,6 +27,14 @@ export default function CreativePanel() {
       description: 'Crie textos, artigos e conteúdo com IA',
       icon: <Pen className="w-6 h-6" />,
       color: 'from-blue-500 to-cyan-500',
+    },
+    {
+      id: 'slides',
+      type: 'slides',
+      title: 'Gerador de Slides',
+      description: 'Crie apresentações profissionais com IA',
+      icon: <Layout className="w-6 h-6" />,
+      color: 'from-green-500 to-teal-500',
     },
     {
       id: 'image',
@@ -38,7 +50,7 @@ export default function CreativePanel() {
       title: 'Produtor de Áudio',
       description: 'Crie músicas e áudio com IA',
       icon: <Music className="w-6 h-6" />,
-      color: 'from-green-500 to-emerald-500',
+      color: 'from-yellow-500 to-orange-500',
     },
     {
       id: 'code',
@@ -57,6 +69,25 @@ export default function CreativePanel() {
       color: 'from-indigo-500 to-blue-500',
     },
   ];
+
+  // Slides view
+  if (selectedType === 'slides') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+        <div className="border-b border-slate-700/50 backdrop-blur-xl bg-slate-900/50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <button
+              onClick={() => setSelectedType(null)}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 border border-slate-700 text-white rounded-lg hover:bg-slate-700 transition-all"
+            >
+              ← Voltar
+            </button>
+          </div>
+        </div>
+        <CreativeSlides creditsAvailable={creditsAvailable} />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -94,7 +125,7 @@ export default function CreativePanel() {
         )}
 
         {/* Creative Tools Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
           {creativeItems.map((item) => (
             <button
               key={item.id}
