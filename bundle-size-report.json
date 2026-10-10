@@ -1,11 +1,12 @@
 {
-  "totalSizeMB": 0.3011341094970703,
+  "totalSizeMB": 0.31957435607910156,
   "exceeded": false,
   "largeFiles": [],
-  "timestamp": "2026-10-09T03:50:11.253Z",
+  "timestamp": "2026-10-10T09:36:05.140Z",
   "files": {
-    "index-BwzPr_Md.css": 0.14171981811523438,
     "CanvasPage-DfQgqW1p.css": 0.07699108123779297,
+    "index-BNK7gUXo.css": 0.1469707489013672,
+    "CreativeChatPage-BG4k49L3.css": 0.013189315795898438,
     "robot-coding-CeXG8g3f.png": 0.08242321014404297
   },
   "evidence": {
