@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inteligência Artificial - Apresentação KUBO Vibe</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #1e293b;
+      overflow: hidden;
+    }
+
+    .slide-container {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+      color: #1e293b;
+      font-size: 24px;
+      padding: 60px;
+      text-align: center;
+      page-break-after: always;
+      position: relative;
+    }
+
+    .slide-modern {
+      background: linear-gradient(135deg, #6366f1 0%, #ec4899 100%);
+      color: white;
+    }
+
+    .slide-minimal {
+      background: white;
+      color: #333;
+      border: 2px solid #e5e7eb;
+    }
+
+    .slide-dark {
+      background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+      color: #f3f4f6;
+    }
+
+    .slide-corporate {
+      background: linear-gradient(135deg, #f5f5f5 0%, #e5e5e5 100%);
+      color: #003366;
+    }
+
+    .slide-creative {
+      background: linear-gradient(135deg, #ffe66d 0%, #ff6b6b 100%);
+      color: #2d3436;
+    }
+
+    h1 {
+      font-size: 56px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+    }
+
+    h2 {
+      font-size: 44px;
+      font-weight: 700;
+      margin-bottom: 30px;
+      color: inherit;
+    }
+
+    .subtitle {
+      font-size: 32px;
+      font-weight: 300;
+      margin-bottom: 40px;
+      opacity: 0.9;
+    }
+
+    ul {
+      text-align: left;
+      display: inline-block;
+      margin: 30px 0;
+    }
+
+    li {
+      font-size: 28px;
+      margin: 20px 0;
+      line-height: 1.6;
+    }
+
+    .slide-number {
+      position: absolute;
+      bottom: 20px;
+      right: 30px;
+      font-size: 14px;
+      opacity: 0.6;
+    }
+
+    blockquote {
+      font-size: 36px;
+      font-style: italic;
+      margin: 40px 0;
+      color: inherit;
+      border-left: 4px solid currentColor;
+      padding-left: 30px;
+    }
+
+    .author {
+      font-size: 20px;
+      margin-top: 30px;
+      font-style: normal;
+      color: inherit;
+      opacity: 0.8;
+    }
+
+    .slide-modern h1, .slide-modern h2 {
+      color: white;
+    }
+
+    .slide-corporate h1, .slide-corporate h2 {
+      color: #003366;
+    }
+
+    .slide-dark h1, .slide-dark h2 {
+      color: #10b981;
+    }
+
+    .slide-creative h1, .slide-creative h2 {
+      color: #d63031;
+    }
+
+    .generated-info {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      font-size: 12px;
+      opacity: 0.5;
+      color: #666;
+      z-index: 10;
+    }
+
+    .instructions {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      font-size: 12px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 10px;
+      border-radius: 4px;
+      z-index: 10;
+    }
+
+    /* Navigation */
+    .nav-buttons {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 15px;
+      z-index: 20;
+    }
+
+    button {
+      padding: 10px 20px;
+      background: rgba(99, 102, 241, 0.9);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s;
+    }
+
+    button:hover {
+      background: rgba(99, 102, 241, 1);
+      transform: scale(1.05);
+    }
+
+    .slide-info {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      color: #666;
+      font-size: 14px;
+      background: white;
+      padding: 10px 15px;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+  <div class="instructions">
+    ⌨️ Use ← → ou clique para navegar
+  </div>
+
+  <div id="slide-container"></div>
+
+  <div class="nav-buttons">
+    <button onclick="previousSlide()">← Anterior</button>
+    <span id="slide-counter" style="color: #666; padding: 10px 15px; background: white; border-radius: 6px; font-weight: 600;"></span>
+    <button onclick="nextSlide()">Próximo →</button>
+  </div>
+
+  <div class="generated-info">
+    Gerado com KUBO Vibe Slides Generator | Tema: Modern
+  </div>
+
+  <script>
+    const slides = [
+      {
+        type: 'title',
+        theme: 'modern',
+        title: 'Inteligência Artificial',
+        subtitle: 'Transformando o Futuro com Tecnologia',
+      },
+      {
+        type: 'content',
+        theme: 'modern',
+        title: 'O que é Inteligência Artificial?',
+        content: [
+          'Sistemas computacionais que simulam inteligência humana',
+          'Aprendizado a partir de dados e padrões',
+          'Tomada de decisões autônomas e inteligentes',
+          'Aplicações em praticamente todas as indústrias'
+        ],
+      },
+      {
+        type: 'content',
+        theme: 'modern',
+        title: 'Tipos Principais de IA',
+        content: [
+          'IA Fraca - Sistemas especializados em tarefas específicas',
+          'IA Forte - Sistemas com inteligência geral (em desenvolvimento)',
+          'Machine Learning - Aprendizado automático de padrões',
+          'Deep Learning - Redes neurais artificiais profundas'
+        ],
+      },
+      {
+        type: 'content',
+        theme: 'modern',
+        title: 'Aplicações Práticas',
+        content: [
+          'Assistentes Virtuais (Alexa, Siri, Google Assistant)',
+          'Recomendações Personalizadas (Netflix, Spotify, Amazon)',
+          'Processamento de Linguagem Natural (ChatGPT, Claude)',
+          'Visão Computacional (Reconhecimento de rostos, análise de imagens)',
+          'Carros Autônomos (Tesla, Waymo)',
+        ],
+      },
+      {
+        type: 'content',
+        theme: 'modern',
+        title: 'Tendências Futuras',
+        content: [
+          'IA Generativa - Criação de conteúdo original',
+          'IA Explicável - Sistemas transparentes e interpretáveis',
+          'IA Responsável - Foco em ética e segurança',
+          'Democratização da IA - Acesso mais fácil para todos',
+        ],
+      },
+      {
+        type: 'quote',
+        theme: 'modern',
+        title: 'Conclusão',
+        quote: '"A inteligência artificial não é apenas uma tecnologia, é uma transformação fundamental de como trabalhamos e vivemos"',
+        author: 'Satya Nadella, CEO da Microsoft',
+      },
+    ];
+
+    let currentSlideIndex = 0;
+
+    function renderSlide(index) {
+      const slide = slides[index];
+      const container = document.getElementById('slide-container');
+      const themeClass = `slide-${slide.theme}`;
+
+      let html = `<div class="slide-container ${themeClass}">`;
+
+      if (slide.type === 'title') {
+        html += `
+          <div>
+            <h1>${slide.title}</h1>
+            <p class="subtitle">${slide.subtitle}</p>
+          </div>
+        `;
+      } else if (slide.type === 'content') {
+        html += `
+          <div style="max-width: 900px;">
+            <h2>${slide.title}</h2>
+            <ul>
+              ${slide.content.map(item => `<li>✦ ${item}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+      } else if (slide.type === 'quote') {
+        html += `
+          <div>
+            <blockquote>${slide.quote}</blockquote>
+            <p class="author">— ${slide.author}</p>
+          </div>
+        `;
+      }
+
+      html += `<div class="slide-number">Slide ${index + 1} de ${slides.length}</div>`;
+      html += `</div>`;
+
+      container.innerHTML = html;
+      document.getElementById('slide-counter').textContent = `${index + 1} / ${slides.length}`;
+    }
+
+    function nextSlide() {
+      currentSlideIndex = (currentSlideIndex + 1) % slides.length;
+      renderSlide(currentSlideIndex);
+    }
+
+    function previousSlide() {
+      currentSlideIndex = (currentSlideIndex - 1 + slides.length) % slides.length;
+      renderSlide(currentSlideIndex);
+    }
+
+    // Keyboard navigation
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') nextSlide();
+      if (e.key === 'ArrowLeft') previousSlide();
+      if (e.key === ' ') {
+        e.preventDefault();
+        nextSlide();
+      }
+    });
+
+    // Initial render
+    renderSlide(0);
+  </script>
+</body>
+</html>

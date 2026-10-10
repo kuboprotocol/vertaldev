@@ -1,12 +1,13 @@
 {
-  "totalSizeMB": 0.5241289138793945,
+  "totalSizeMB": 0.31957435607910156,
   "exceeded": false,
   "largeFiles": [],
-  "timestamp": "2026-06-28T01:50:46.678Z",
+  "timestamp": "2026-10-10T10:06:41.433Z",
   "files": {
-    "logo-kubovibe-3d-Cf0s30Mg.png": 0.31453895568847656,
-    "robot-coding-CeXG8g3f.png": 0.08242321014404297,
-    "index-B8d-Dfas.css": 0.127166748046875
+    "CanvasPage-DfQgqW1p.css": 0.07699108123779297,
+    "index-BNK7gUXo.css": 0.1469707489013672,
+    "CreativeChatPage-BG4k49L3.css": 0.013189315795898438,
+    "robot-coding-CeXG8g3f.png": 0.08242321014404297
   },
   "evidence": {
     "screenshots": [

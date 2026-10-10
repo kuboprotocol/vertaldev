@@ -31,7 +31,6 @@ function createKeyPreview(fullKey: string): string {
   return `${start}***${end}`;
 }
 
-// Hash SHA-256 da chave para armazenar de forma segura
 async function hashKey(key: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(key);
@@ -40,6 +39,19 @@ async function hashKey(key: string): Promise<string> {
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
 }
+
+function validateEnv(): void {
+  const requiredKeys = ['SUPABASE_URL', 'SUPABASE_ANON_KEY']
+  const missing: string[] = []
+  for (const key of requiredKeys) {
+    if (!Deno.env.get(key)) missing.push(key)
+  }
+  if (missing.length > 0) {
+    throw new Error(`FATAL: Missing environment variables: ${missing.join(', ')}`)
+  }
+}
+
+validateEnv()
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });

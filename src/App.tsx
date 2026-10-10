@@ -52,6 +52,7 @@ const GameMetaversePage = lazy(() => import("./pages/GameMetaversePage"));
 const GameSdkPage = lazy(() => import("./pages/GameSdkPage"));
 const GameVrPage = lazy(() => import("./pages/GameVrPage"));
 const GameAiPage = lazy(() => import("./pages/GameAiPage"));
+const GameBuilderPage = lazy(() => import("./pages/GameBuilderPage"));
 const AdminCloudPage = lazy(() => import("./pages/AdminCloudPage"));
 const AdminAnywherePage = lazy(() => import("./pages/AdminAnywherePage"));
 const AdminProjectsPage = lazy(() => import("./pages/AdminProjectsPage"));
@@ -83,6 +84,12 @@ const MobileAgentPage = lazy(() => import("./pages/MobileAgentPage"));
 const AnywherePage = lazy(() => import("./pages/AnywherePage"));
 const AffiliateProgramPage = lazy(() => import("./pages/AffiliateProgramPage"));
 const DocsMcpPage = lazy(() => import("./pages/DocsMcpPage"));
+<<<<<<< HEAD
+=======
+const GameManagerPage = lazy(() => import("./pages/GameManagerPage"));
+const GameScenePage = lazy(() => import("./pages/GameScenePage"));
+const CreativeChatPage = lazy(() => import("./pages/CreativeChatPage"));
+>>>>>>> claude/kubo-vibe-dev-continue-vw754h
 
 // Loading fallback component
 const PageLoader = () => (
@@ -234,6 +241,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/app/:projectId" element={<PublicAppPage />} />
                 <Route path="/app/:projectId/:slug" element={<PublicAppPage />} />
                 <Route path="/game" element={<ProtectedRoute><GamePage /></ProtectedRoute>} />
+                <Route path="/game/builder" element={<ProtectedRoute><GameBuilderPage /></ProtectedRoute>} />
                 <Route path="/game/editor" element={<ProtectedRoute><GameEditorPage /></ProtectedRoute>} />
                 <Route path="/game/retro" element={<ProtectedRoute><GameRetroPage /></ProtectedRoute>} />
                 <Route path="/game/rpg" element={<ProtectedRoute><GameRpgPage /></ProtectedRoute>} />
@@ -241,6 +249,9 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/game/sdk" element={<ProtectedRoute><GameSdkPage /></ProtectedRoute>} />
                 <Route path="/game/vr" element={<ProtectedRoute><GameVrPage /></ProtectedRoute>} />
                 <Route path="/game/ai" element={<ProtectedRoute><GameAiPage /></ProtectedRoute>} />
+                <Route path="/game/scene" element={<ProtectedRoute><GameScenePage /></ProtectedRoute>} />
+                <Route path="/games" element={<ProtectedRoute><GameManagerPage /></ProtectedRoute>} />
+                <Route path="/creative/chat" element={<ProtectedRoute><CreativeChatPage /></ProtectedRoute>} />
                 <Route path="/admin/cloud" element={<ProtectedRoute requireRoles={["admin"]}><AdminCloudPage /></ProtectedRoute>} />
                 <Route path="/admin/anywhere" element={<ProtectedRoute requireRoles={["admin"]}><AdminAnywherePage /></ProtectedRoute>} />
                 <Route path="/admin/projects" element={<ProtectedRoute requireRoles={["admin"]}><AdminProjectsPage /></ProtectedRoute>} />

@@ -9,6 +9,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import LandingSkeleton from "@/components/landing/LandingSkeleton";
 
 const HeroSection = lazy(() => import("@/components/landing/HeroSection"));
+const CreditsPromoSection = lazy(() => import("@/components/landing/CreditsPromoSection"));
 const CommunitySection = lazy(() => import("@/components/landing/CommunitySection"));
 const HowItWorksSection = lazy(() => import("@/components/landing/HowItWorksSection"));
 const FAQSection = lazy(() => import("@/components/landing/FAQSection"));
@@ -75,6 +76,10 @@ Mobile: some o rail e vira uma barra de abas embaixo (Agente / Preview / Domíni
 
           <div className="max-w-xl mx-auto gold-line" aria-hidden="true" />
 
+          <SafeSection name="CreditsPromoSection"><CreditsPromoSection /></SafeSection>
+
+          <div className="max-w-xl mx-auto gold-line" aria-hidden="true" />
+
           <SafeSection name="CommunitySection"><CommunitySection /></SafeSection>
           <SafeSection name="HowItWorksSection"><HowItWorksSection /></SafeSection>
           <SafeSection name="DomainSection"><DomainSection /></SafeSection>
@@ -122,7 +127,14 @@ Mobile: some o rail e vira uma barra de abas embaixo (Agente / Preview / Domíni
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col md:flex-row items-start justify-between gap-10 mb-10">
             <div className="space-y-3">
-              <p className="text-sm font-semibold text-foreground tracking-wide">{APP_NAME}</p>
+              <div className="flex items-center gap-3">
+                <img
+                  src="/vertal-dev-logo.jpg"
+                  alt={APP_NAME}
+                  className="h-8 w-auto object-contain"
+                />
+                <p className="text-sm font-semibold text-foreground tracking-wide">{APP_NAME}</p>
+              </div>
               <p className="text-xs text-muted-foreground leading-relaxed max-w-xs">
                 A product by KUBO PROTOCOL
                 <br />

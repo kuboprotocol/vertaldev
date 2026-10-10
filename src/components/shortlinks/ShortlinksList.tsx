@@ -37,9 +37,14 @@ export default function ShortlinksList({ shortlinks, onDelete, dailyReward }: Sh
 
     setDeleting(id)
     try {
+<<<<<<< HEAD
       const { error } = await supabase.functions.invoke('shortlinks', {
         method: 'POST',
         headers: { 'X-Action': 'delete' },
+=======
+      const { error } = await supabase.functions.invoke('shortlinks?action=delete', {
+        method: 'POST',
+>>>>>>> claude/kubo-vibe-dev-continue-vw754h
         body: { shortlink_id: id },
       })
 

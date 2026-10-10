@@ -51,14 +51,12 @@ export default function ShortlinksPage() {
   const loadData = async () => {
     try {
       const [shortlinksRes, limitsRes, profileRes] = await Promise.all([
-        supabase.functions.invoke('shortlinks', {
+        supabase.functions.invoke('shortlinks?action=list', {
           method: 'POST',
-          headers: { 'X-Action': 'list' },
           body: {},
         }),
-        supabase.functions.invoke('shortlinks', {
+        supabase.functions.invoke('shortlinks?action=get-limits', {
           method: 'POST',
-          headers: { 'X-Action': 'get-limits' },
           body: {},
         }),
         supabase.from('user_credits').select('balance, debt').eq('user_id', user!.id).single(),

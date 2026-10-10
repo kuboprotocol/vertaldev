@@ -95,10 +95,9 @@ export default function ShortlinksUploader({ onSuccess, canCreateMore, activeCou
 
       // Create shortlink record via edge function
       const { data: createData, error: createError } = await supabase.functions.invoke(
-        'shortlinks',
+        'shortlinks?action=create',
         {
           method: 'POST',
-          headers: { 'X-Action': 'create' },
           body: {
             title: title.trim(),
             description: description.trim(),

@@ -13,7 +13,7 @@ export default defineConfig(({ command, mode }) => {
 
   return {
     server: {
-      host: '::',
+      host: '0.0.0.0',
       port: 8080,
       strictPort: false,
       cors: { origin: '*' },
@@ -111,6 +111,18 @@ export default defineConfig(({ command, mode }) => {
           scope: '/',
           categories: ['productivity', 'games'],
           icons: [
+            {
+              src: 'vertal-dev-logo.jpg',
+              sizes: '192x192',
+              type: 'image/jpeg',
+              purpose: 'any',
+            },
+            {
+              src: 'vertal-dev-logo.jpg',
+              sizes: '512x512',
+              type: 'image/jpeg',
+              purpose: 'any maskable',
+            },
             {
               src: 'pwa-192x192.png',
               sizes: '192x192',
