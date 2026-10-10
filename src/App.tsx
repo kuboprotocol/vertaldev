@@ -84,12 +84,9 @@ const MobileAgentPage = lazy(() => import("./pages/MobileAgentPage"));
 const AnywherePage = lazy(() => import("./pages/AnywherePage"));
 const AffiliateProgramPage = lazy(() => import("./pages/AffiliateProgramPage"));
 const DocsMcpPage = lazy(() => import("./pages/DocsMcpPage"));
-<<<<<<< HEAD
-=======
 const GameManagerPage = lazy(() => import("./pages/GameManagerPage"));
 const GameScenePage = lazy(() => import("./pages/GameScenePage"));
 const CreativeChatPage = lazy(() => import("./pages/CreativeChatPage"));
->>>>>>> claude/kubo-vibe-dev-continue-vw754h
 
 // Loading fallback component
 const PageLoader = () => (
