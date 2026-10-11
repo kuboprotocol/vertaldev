@@ -19,12 +19,12 @@ export const BRAND = {
   /** Domínio anterior; passa a redirecionar para `domain` quando a troca liga. */
   legacyDomain: 'kubovibe.dev',
   /**
-   * Liga a troca de domínio. Só vire para `true` depois que vertal.dev e
-   * www.vertal.dev estiverem verificados e com SSL no Railway: a partir daí
-   * kubovibe.dev redireciona para vertal.dev e todo o SEO (canonical,
-   * og:url, sitemap) aponta para o domínio novo. Virar antes derruba o site.
+   * Liga a troca de domínio: kubovibe.dev redireciona para vertal.dev e todo o
+   * SEO (canonical, og:url, sitemap) aponta para o domínio novo. Ligado desde
+   * que vertal.dev e www.vertal.dev passaram a servir com SSL pelo Cloudflare
+   * Worker "vertaldev" (rotas em `wrangler.jsonc`).
    */
-  primaryDomainLive: false,
+  primaryDomainLive: true,
 } as const
 
 export const APP_NAME = BRAND.appName

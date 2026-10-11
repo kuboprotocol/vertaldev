@@ -1,10 +1,9 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
-import { getUser, deductCredits, recordAsset, sanitizeError } from "../_shared/creative.ts";
+import { getUser, deductCredits, recordAsset, sanitizeError, withRefundOnFailure } from "../_shared/creative.ts";
 
 const COST = 5;
 
-serve(async (req) => {
+Deno.serve(withRefundOnFailure(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   
   const authHeader = req.headers.get("Authorization");
@@ -33,28 +32,16 @@ serve(async (req) => {
       throw new Error(`Missing source_image or driving_video. Received: ${JSON.stringify(body)}`);
     }
 
-    const ded = await deductCredits(user.id, COST, "creative_emo", { rawImg, rawVid }, user.email, idempotencyKey);
-    if (!ded.ok) return new Response(JSON.stringify({ error: ded.error }), { status: (ded as any).status ?? 402, headers: corsHeaders });
-
-    // Call external FastAPI backend
     const EMO_BACKEND_URL = Deno.env.get("EMO_BACKEND_URL");
-    
     if (!EMO_BACKEND_URL) {
-      console.warn("EMO_BACKEND_URL not set, returning mock result.");
-      
-      const asset_id = await recordAsset(user.id, {
-        tool: "emo",
-        prompt: "EMO Animation",
-        status: "completed",
-        credits_spent: COST,
-        output_url: "https://vjrqosvkvfyzfqqyqyqy.supabase.co/storage/v1/object/public/uploads/demo/emo_result.mp4",
-        metadata: { source_image: rawImg, driving_video: rawVid }
-      });
-
-      return new Response(JSON.stringify({ status: "success", video: "output/result.mp4", asset_id }), {
+      return new Response(JSON.stringify({ error: "emo_backend_not_configured" }), {
+        status: 503,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const ded = await deductCredits(user.id, COST, "creative_emo", { rawImg, rawVid }, user.email, idempotencyKey);
+    if (!ded.ok) return new Response(JSON.stringify({ error: ded.error }), { status: (ded as any).status ?? 402, headers: corsHeaders });
 
     const formData = new FormData();
     const imgRes = await fetch(rawImg);
@@ -96,4 +83,4 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

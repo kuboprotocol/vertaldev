@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { PENDING_IMAGE_KEY } from "./CreativeToolInterface";
+import { PENDING_IMAGE_KEY } from "./toolRequests";
 
 type Item = {
   key: string;

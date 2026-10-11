@@ -1,5 +1,51 @@
 // Shared helpers for the Creative Economy panel edge functions
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+interface Charge {
+  userId: string;
+  amount: number;
+  reason: string;
+  key: string;
+}
+/** Credits charged while handling the current request (set up by withRefundOnFailure). */
+const requestCharges = new AsyncLocalStorage<Charge[]>();
+
+/**
+ * Wraps a Deno.serve handler so that every charge made through deductCredits during the request is
+ * refunded when the handler throws or answers with a non-2xx status: the user got nothing for it.
+ * Refunds are idempotent (keyed on the charge's idempotency key).
+ */
+export function withRefundOnFailure(handler: (req: Request) => Response | Promise<Response>) {
+  return (req: Request): Promise<Response> =>
+    requestCharges.run([], async () => {
+      let res: Response;
+      try {
+        res = await handler(req);
+      } catch (e) {
+        await refundCharges(requestCharges.getStore() ?? []);
+        throw e;
+      }
+      if (!res.ok) await refundCharges(requestCharges.getStore() ?? []);
+      return res;
+    });
+}
+
+async function refundCharges(charges: Charge[]) {
+  if (!charges.length) return;
+  const admin = supaAdmin();
+  for (const c of charges.splice(0)) {
+    const { error } = await admin.rpc("execute_atomic_credit_topup", {
+      _user_id: c.userId,
+      _amount: c.amount,
+      _reason: `refund:${c.reason}`,
+      _category: "creative_refund",
+      _metadata: { charge_idempotency_key: c.key },
+      _idempotency_key: `refund:${c.key}`,
+    });
+    if (error) console.error("[refundCharges] refund failed:", error);
+  }
+}
 
 export function sanitizeError(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);
@@ -77,6 +123,8 @@ export async function deductCredits(
   metadata: Record<string, unknown> = {},
   userEmail?: string | null,
   idempotencyKey?: string | null,
+  /** rateLimit: false for metered charges inside one request (e.g. per agent step), already rate limited at its start. */
+  opts: { rateLimit?: boolean } = {},
 ): Promise<{ ok: true; replayed?: boolean } | { ok: false; error: string; status?: number }> {
   if (amount <= 0) return { ok: true };
   // Admin bypass (rate limit + credits)
@@ -85,8 +133,10 @@ export async function deductCredits(
   if (adminData) return { ok: true };
 
   // Per-tool rate limit (20 req/min)
-  const rl = await enforceRateLimit(userId, reason, { max: 20, windowSeconds: 60, userEmail });
-  if (!rl.ok) return { ok: false, error: rl.error, status: 429 };
+  if (opts.rateLimit !== false) {
+    const rl = await enforceRateLimit(userId, reason, { max: 20, windowSeconds: 60, userEmail });
+    if (!rl.ok) return { ok: false, error: rl.error, status: 429 };
+  }
 
   const idem = idempotencyKey && idempotencyKey.length > 0
     ? idempotencyKey
@@ -110,8 +160,13 @@ export async function deductCredits(
     console.warn("[deductCredits] deduction failed (insufficient funds?)", data);
     return { ok: false, error: "deduction_failed" };
   }
-  
-  return { ok: true, replayed: !!(data as any)?.replayed };
+
+  // A replayed key means this exact request was already paid for (and possibly served or refunded).
+  // Callers do the work after a successful deduction, so serving a replay would be free usage.
+  if ((data as any)?.replayed) return { ok: false, error: "duplicate_request", status: 409 };
+
+  requestCharges.getStore()?.push({ userId, amount, reason, key: idem });
+  return { ok: true };
 }
 
 export async function recordSkillExecution(

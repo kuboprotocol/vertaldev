@@ -1,6 +1,6 @@
 // Kubo Music AI — Suno API integration. Async: start + status.
 import { corsHeaders, sanitizeError } from "../_shared/cors.ts";
-import { getUser, deductCredits, recordAsset, supaAdmin } from "../_shared/creative.ts";
+import { getUser, deductCredits, recordAsset, supaAdmin, withRefundOnFailure } from "../_shared/creative.ts";
 
 const COST_GEN = 1;            // rounded from 0.001
 const COST_DOWNLOAD_MP3 = 1;
@@ -8,7 +8,7 @@ const COST_DOWNLOAD_WAV = 2;
 
 const SUNO_BASE = Deno.env.get("SUNO_API_BASE") ?? "https://apibox.erweima.ai";
 
-Deno.serve(async (req) => {
+Deno.serve(withRefundOnFailure(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   const user = await getUser(req.headers.get("Authorization"));
   if (!user) return j(401, { error: "Unauthorized" });
@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
     console.error("[creative-music] error:", e);
     return j(500, { error: sanitizeError(e) });
   }
-});
+}));
 
 function j(s: number, b: unknown) {
   return new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });

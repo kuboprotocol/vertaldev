@@ -72,7 +72,7 @@ export async function handleRequest(req: Request): Promise<Response> {
   }
 }
 
-Deno.serve(handleRequest);
+Deno.serve(creative.withRefundOnFailure(handleRequest));
 
 async function submit(
   user: { id: string; email?: string | null },

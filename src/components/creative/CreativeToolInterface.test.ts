@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
 
-import { TOOL_REQUESTS, summarizeResult } from "./CreativeToolInterface";
+import { TOOL_REQUESTS, summarizeResult } from "./toolRequests";
 
 describe("TOOL_REQUESTS", () => {
   it.each([

@@ -1,10 +1,10 @@
 // Kubo Clips — analisa transcript/descrição de vídeo longo e sugere até 15 cortes com timestamps.
 import { corsHeaders } from "../_shared/cors.ts";
-import { getUser, deductCredits, recordAsset, sanitizeError } from "../_shared/creative.ts";
+import { getUser, deductCredits, recordAsset, sanitizeError, withRefundOnFailure } from "../_shared/creative.ts";
 
 const COST_PROCESS = 1;
 
-Deno.serve(async (req) => {
+Deno.serve(withRefundOnFailure(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   const user = await getUser(req.headers.get("Authorization"));
   if (!user) return j(401, { error: "Unauthorized" });
@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
     console.error("[creative-clips] error:", e);
     return j(500, { error: sanitizeError(e) });
   }
-});
+}));
 
 function j(s: number, b: unknown) {
   return new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });

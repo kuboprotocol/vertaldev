@@ -3,7 +3,7 @@
 //   - "chat":       streamed chat completion (llama-3.3-70b-versatile by default)
 //   - "transcribe": audio transcription via Groq Whisper Large v3
 import { corsHeaders } from "../_shared/cors.ts";
-import { getUser, deductCredits, recordAsset, sanitizeError } from "../_shared/creative.ts";
+import { getUser, deductCredits, recordAsset, sanitizeError, withRefundOnFailure } from "../_shared/creative.ts";
 
 const CHAT_COST = 1;
 const TRANSCRIBE_COST = 2;
@@ -14,7 +14,7 @@ const ALLOWED_CHAT = new Set([
   "mixtral-8x7b-32768",
 ]);
 
-Deno.serve(async (req) => {
+Deno.serve(withRefundOnFailure(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   const user = await getUser(req.headers.get("Authorization"));
   if (!user) return j(401, { error: "Unauthorized" });
@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
     console.error("[creative-groq] error:", e);
     return j(500, { error: sanitizeError(e) });
   }
-});
+}));
 
 function j(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {

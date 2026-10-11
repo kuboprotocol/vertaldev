@@ -21,6 +21,7 @@ import {
   Layers,
   Mail,
   Globe,
+  Workflow,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -394,6 +395,47 @@ testimonials and a waitlist form.`}</Pre>
         <Callout type="info">
           Agents are composable — chain them together by passing the output of one job as
           the input of another using the orchestrator at <Code>/orchestrator</Code>.
+        </Callout>
+      </>
+    ),
+  },
+  {
+    id: 'vibe-agents',
+    title: 'Vibe Agents',
+    icon: Workflow,
+    group: 'Creative Suite',
+    content: (
+      <>
+        <H2>Vibe Agents</H2>
+        <P>
+          At <Code>/vibe-agents</Code> users describe an agent in plain language. The AI picks its
+          tools, the user approves them in <strong>Explain Mode</strong>, and every run shows a
+          step-by-step timeline. Agents can create and run other agents.
+        </P>
+        <H3>Tools</H3>
+        <UL>
+          <li><strong>Read web pages</strong> — public https pages only; every redirect is re-validated.</li>
+          <li><strong>Slack, e-mail (Gmail), GitHub</strong> — through the user&apos;s own connections, never a platform-wide key.</li>
+          <li><strong>Run Python</strong> — an E2B sandbox per run with Pandas, NumPy, scikit-learn and Matplotlib.</li>
+          <li><strong>Create / run agents</strong> — a created agent never gets more tools than its creator.</li>
+        </UL>
+        <H3>Credits</H3>
+        <P>
+          Metered like the rest of the platform, plus 1 credit per run: <strong>1 credit</strong> per
+          run, <strong>1 per AI step</strong> (like a chat message, sub-agents included) and{' '}
+          <strong>1 per Python run</strong> (like a generation). A run starts at 2 credits. If credits
+          run out mid-run the agent stops and keeps only what it used; a failed run is fully refunded.
+        </P>
+        <H3>Guardrails</H3>
+        <UL>
+          <li>Per run, shared with sub-agents: 12 AI steps, 5 external actions (messages, e-mails, issues), nesting depth 2.</li>
+          <li>Python: code sent base64-encoded, 60 s per execution, pip installs only from an allowlist.</li>
+          <li>Agents and runs are private to their owner (RLS); writes go through the <Code>vibe-agents</Code> edge function.</li>
+        </UL>
+        <Callout type="info">
+          Secrets: <Code>OPENROUTER_API_KEY</Code> (required), <Code>E2B_API_KEY</Code> (Python),
+          optional <Code>VIBE_AGENT_MODEL</Code> and <Code>VIBE_SANDBOX_TEMPLATE</Code>. Full
+          reference in <Code>docs/VIBE_AGENTS.md</Code>.
         </Callout>
       </>
     ),

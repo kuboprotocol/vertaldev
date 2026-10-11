@@ -19,7 +19,7 @@ class LogoBoundary extends Component<{ children: ReactNode; fallback: ReactNode 
 }
 
 const LogoTextFallback = () => (
-  <span className="font-display font-bold tracking-[0.18em] text-foreground" style={{ fontSize: 48 }}>
+  <span className="font-display font-bold tracking-[0.18em] text-foreground" style={{ fontSize: 'min(48px, calc((100vw - 48px) / 13))' }}>
     VERTAL&nbsp;VIBE
   </span>
 )
@@ -146,7 +146,7 @@ export default function HeroSection() {
         >
           <LogoBoundary fallback={<LogoTextFallback />}>
             <Suspense fallback={<LogoTextFallback />}>
-              <AnimatedLogo size={48} className="drop-shadow-2xl" />
+              <AnimatedLogo size={48} fit className="drop-shadow-2xl" />
             </Suspense>
           </LogoBoundary>
         </motion.div>

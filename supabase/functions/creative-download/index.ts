@@ -1,12 +1,12 @@
 // Downloader Universal — usa a API pública do cobalt.tools.
 import { corsHeaders } from "../_shared/cors.ts";
-import { getUser, deductCredits, recordAsset, sanitizeError } from "../_shared/creative.ts";
+import { getUser, deductCredits, recordAsset, sanitizeError, withRefundOnFailure } from "../_shared/creative.ts";
 import { validatePublicUrl } from "../_shared/security.ts";
 
 const COST = 2;
 const COBALT = Deno.env.get("COBALT_API_URL") ?? "https://api.cobalt.tools/api/json";
 
-Deno.serve(async (req) => {
+Deno.serve(withRefundOnFailure(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   const user = await getUser(req.headers.get("Authorization"));
   if (!user) return j(401, { error: "Unauthorized" });
@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
     console.error("[creative-download] error:", e);
     return j(500, { error: sanitizeError(e) });
   }
-});
+}));
 
 function j(s: number, b: unknown) {
   return new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
