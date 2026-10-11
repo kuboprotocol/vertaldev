@@ -10,7 +10,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import {
-  VIBE_AGENT_RUN_CREDITS,
+  VIBE_AGENT_MIN_RUN_CREDITS,
+  VIBE_AGENT_PRICING,
   VIBE_TOOLS,
   VIBE_TOOL_IDS,
   type VibeToolId,
@@ -23,7 +24,7 @@ interface Readiness { connector: string; label: string; setup_route: string | nu
 type Step =
   | { type: 'thought' | 'final'; agent: string; text: string }
   | { type: 'tool'; agent: string; tool: VibeToolId; args: Record<string, unknown>; ok: boolean; result: string }
-interface RunResult { status: 'completed' | 'failed'; output: string; steps: Step[] }
+interface RunResult { status: 'completed' | 'failed'; output: string; steps: Step[]; credits_charged?: number }
 
 const ERRORS: Record<string, string> = {
   agent_model_not_configured: 'O modelo dos agentes ainda não está ativo (falta a chave do OpenRouter).',
@@ -267,8 +268,13 @@ function AgentCard({ agent, advanced, onDelete, onRan }: { agent: SavedAgent; ad
           <Textarea value={task} onChange={(e) => setTask(e.target.value)} placeholder="O que o agente deve fazer agora?" maxLength={4000} />
           <Button onClick={runAgent} disabled={running || !task.trim()} className="gap-2">
             {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-            {running ? 'Executando…' : `Executar (${VIBE_AGENT_RUN_CREDITS} créditos)`}
+            {running ? 'Executando…' : `Executar (a partir de ${VIBE_AGENT_MIN_RUN_CREDITS} créditos)`}
           </Button>
+          <p className="text-xs text-muted-foreground">
+            {VIBE_AGENT_PRICING.runFee} crédito por execução + {VIBE_AGENT_PRICING.perStep} por passo da IA
+            {agent.tools.includes('python_run') ? ` + ${VIBE_AGENT_PRICING.perPythonRun} por execução de Python` : ''}.
+            Se a execução falhar, os créditos voltam.
+          </p>
           {result && <RunTimeline result={result} advanced={advanced} />}
         </div>
       )}
@@ -302,7 +308,10 @@ function RunTimeline({ result, advanced }: { result: RunResult; advanced: boolea
           )}
         </li>
       ))}
-      {result.status === 'failed' && <li className="text-destructive text-sm">Falhou: {result.output}</li>}
+      {result.status === 'failed' && <li className="text-destructive text-sm">Falhou: {result.output} (créditos devolvidos)</li>}
+      {result.status === 'completed' && result.credits_charged != null && (
+        <li className="text-xs text-muted-foreground">Custo desta execução: {result.credits_charged} créditos</li>
+      )}
     </ol>
   )
 }

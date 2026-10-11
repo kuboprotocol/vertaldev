@@ -50,7 +50,7 @@ function fakeAdmin(tables: Record<string, any[]>) {
 
 type ModelTurn = { content?: string; tool_calls?: { name: string; args: unknown }[] };
 
-function setup(opts: { model?: ModelTurn[]; openrouter?: boolean; connected?: string[]; agentTools?: string[]; e2b?: boolean; pyExit?: number } = {}) {
+function setup(opts: { model?: ModelTurn[]; openrouter?: boolean; connected?: string[]; agentTools?: string[]; e2b?: boolean; pyExit?: number; balance?: number } = {}) {
   const tables: Record<string, any[]> = {
     vibe_agents: [{ id: "agent-1", user_id: USER, name: "Pesquisador", instructions: "Pesquise.", tools: opts.agentTools ?? ["web_fetch", "slack_post", "create_agent", "run_agent"] }],
     vibe_agent_runs: [],
@@ -59,6 +59,8 @@ function setup(opts: { model?: ModelTurn[]; openrouter?: boolean; connected?: st
     github_connections: [],
   };
   const deductions: number[] = [];
+  const reasons: string[] = [];
+  let balance = opts.balance ?? Infinity;
   const turns = [...(opts.model ?? [{ content: "pronto" }])];
   const requests: any[] = [];
   const outbound: string[] = [];
@@ -95,7 +97,13 @@ function setup(opts: { model?: ModelTurn[]; openrouter?: boolean; connected?: st
 
   __setDeps({
     getUser: async (h: string | null) => (h === "Bearer ok" ? { id: USER, email: "u@x.dev" } : null),
-    deductCredits: async (_u: string, amount: number) => (deductions.push(amount), { ok: true }),
+    deductCredits: async (_u: string, amount: number, reason: string) => {
+      if (amount > balance) return { ok: false, error: "deduction_failed" };
+      balance -= amount;
+      deductions.push(amount);
+      reasons.push(reason);
+      return { ok: true };
+    },
     admin: () => fakeAdmin(tables),
     fetch: fakeFetch,
     env: (k: string) => env[k],
@@ -108,7 +116,7 @@ function setup(opts: { model?: ModelTurn[]; openrouter?: boolean; connected?: st
     const res = await handleRequest(new Request("https://fn/vibe-agents", { method: "POST", headers: { Authorization: auth }, body: JSON.stringify(body) }));
     return { status: res.status, body: await res.json() };
   };
-  return { call, tables, deductions, requests, outbound, sandbox };
+  return { call, tables, deductions, reasons, requests, outbound, sandbox };
 }
 
 const run = (task = "faça") => ({ action: "run", agent_id: "agent-1", task });
@@ -132,7 +140,7 @@ Deno.test("run without OPENROUTER_API_KEY returns 503 before charging", async ()
   assertEquals(t.deductions.length, 0);
 });
 
-Deno.test("runs tools, records every step and charges once", async () => {
+Deno.test("runs tools, records every step and meters credits: 1 fee + 1 per AI step", async () => {
   const t = setup({
     connected: ["slack"],
     model: [
@@ -145,7 +153,9 @@ Deno.test("runs tools, records every step and charges once", async () => {
   assertEquals(r.status, 200);
   assertEquals(r.body.status, "completed");
   assertEquals(r.body.output, "Postei o resumo.");
-  assertEquals(t.deductions, [3]);
+  assertEquals(t.reasons, ["vibe_agent_run", "vibe_agent_step", "vibe_agent_step", "vibe_agent_step"]);
+  assertEquals(r.body.credits_charged, 4);
+  assertEquals(t.tables.vibe_agent_runs[0].credits_spent, 4);
   const tools = toolSteps(r.body);
   assertEquals(tools.map((s: any) => [s.tool, s.ok]), [["web_fetch", true], ["slack_post", true]]);
   assertEquals(tools[0].result, "Olá", "script/markup stripped");
@@ -251,6 +261,8 @@ Deno.test("python_run reuses one sandbox per run, installs only allowed packages
   assert(!t.sandbox.commands[1].includes("pip install"));
   assertEquals(toolSteps(r.body)[0].result, `ran: ${code}`, "code reaches the sandbox byte for byte");
   assertEquals(t.sandbox.destroyed.length, 1);
+  assertEquals(t.reasons.filter((x) => x === "vibe_agent_python").length, 2, "1 credit per Python run");
+  assertEquals(r.body.credits_charged, 1 + 3 + 2);
 });
 
 Deno.test("python_run reports a non-zero exit and still cleans up when the run fails", async () => {
@@ -280,4 +292,42 @@ Deno.test("sub-agents share the parent's sandbox", async () => {
   assertEquals(t.sandbox.created.length, 1);
   assertEquals(t.sandbox.commands.length, 2);
   assertEquals(t.sandbox.destroyed.length, 1);
+});
+
+Deno.test("out of credits mid-run: the agent stops, keeps what it did and charges only what was used", async () => {
+  const t = setup({
+    balance: 3, // fee + 2 steps
+    model: [
+      { tool_calls: [{ name: "web_fetch", args: { url: "https://example.com" } }] },
+      { tool_calls: [{ name: "web_fetch", args: { url: "https://example.com/2" } }] },
+      { content: "nunca chega aqui" },
+    ],
+  });
+  const r = await t.call(run());
+  assertEquals(r.status, 200);
+  assertEquals(r.body.status, "completed");
+  assertEquals(toolSteps(r.body).length, 2);
+  assert(r.body.output.includes("créditos acabaram"));
+  assertEquals(r.body.credits_charged, 3);
+  assertEquals(t.requests.length, 2, "no model call without a paid step");
+});
+
+Deno.test("balance only covers the fee: the run fails (so the fee is refunded) without calling the model", async () => {
+  const t = setup({ balance: 1 });
+  const r = await t.call(run());
+  assertEquals(r.status, 502);
+  assertEquals(r.body.output, "insufficient_credits");
+  assertEquals(t.requests.length, 0);
+});
+
+Deno.test("python_run without credits left reports it to the agent instead of running", async () => {
+  const t = setup({
+    e2b: true,
+    balance: 2, // fee + 1 step, nothing for Python
+    agentTools: ["python_run"],
+    model: [{ tool_calls: [{ name: "python_run", args: { code: "print(1)" } }] }],
+  });
+  const r = await t.call(run());
+  assert(toolSteps(r.body)[0].result.includes("insufficient_credits"));
+  assertEquals(t.sandbox.created.length, 0, "no sandbox when the run cannot pay for it");
 });

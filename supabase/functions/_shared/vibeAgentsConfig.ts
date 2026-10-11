@@ -186,8 +186,19 @@ export const VIBE_AGENT_LIMITS = {
   sandboxLifetimeSeconds: 300,
 } as const;
 
-/** Credits per run: a flat fee covers the model calls of a run (up to maxSteps). */
-export const VIBE_AGENT_RUN_CREDITS = 3;
+/**
+ * Metered like the rest of Vertal: each AI step is a chat turn (1 credit, as in Kubo Chat), each Python run is
+ * a generation (1 credit, as an image), plus a 1-credit fee per run. Sub-agents' steps count too.
+ * A run is capped at 1 + maxSteps + Python runs.
+ */
+export const VIBE_AGENT_PRICING = {
+  runFee: 1,
+  perStep: 1,
+  perPythonRun: 1,
+} as const;
+
+/** Cheapest possible run (fee + one AI step), shown before running. */
+export const VIBE_AGENT_MIN_RUN_CREDITS = VIBE_AGENT_PRICING.runFee + VIBE_AGENT_PRICING.perStep;
 
 export function isVibeToolId(v: unknown): v is VibeToolId {
   return typeof v === "string" && v in VIBE_TOOLS;

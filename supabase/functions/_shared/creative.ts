@@ -123,6 +123,8 @@ export async function deductCredits(
   metadata: Record<string, unknown> = {},
   userEmail?: string | null,
   idempotencyKey?: string | null,
+  /** rateLimit: false for metered charges inside one request (e.g. per agent step), already rate limited at its start. */
+  opts: { rateLimit?: boolean } = {},
 ): Promise<{ ok: true; replayed?: boolean } | { ok: false; error: string; status?: number }> {
   if (amount <= 0) return { ok: true };
   // Admin bypass (rate limit + credits)
@@ -131,8 +133,10 @@ export async function deductCredits(
   if (adminData) return { ok: true };
 
   // Per-tool rate limit (20 req/min)
-  const rl = await enforceRateLimit(userId, reason, { max: 20, windowSeconds: 60, userEmail });
-  if (!rl.ok) return { ok: false, error: rl.error, status: 429 };
+  if (opts.rateLimit !== false) {
+    const rl = await enforceRateLimit(userId, reason, { max: 20, windowSeconds: 60, userEmail });
+    if (!rl.ok) return { ok: false, error: rl.error, status: 429 };
+  }
 
   const idem = idempotencyKey && idempotencyKey.length > 0
     ? idempotencyKey
