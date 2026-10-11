@@ -1,9 +1,9 @@
 // supabase/functions/creative-video/index.ts
 // Kubo Shorts + Avatar — text/image to short video.
 import { corsHeaders } from "../_shared/cors.ts";
-import { getUser, deductCredits, recordAsset, sanitizeError } from "../_shared/creative.ts";
+import { getUser, deductCredits, recordAsset, sanitizeError, withRefundOnFailure } from "../_shared/creative.ts";
 
-Deno.serve(async (req) => {
+Deno.serve(withRefundOnFailure(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   
   const authHeader = req.headers.get("Authorization");
@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
     console.error("[creative-video] critical error:", e);
     return j(500, { error: sanitizeError(e) });
   }
-});
+}));
 
 function j(s: number, b: unknown) {
   return new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });

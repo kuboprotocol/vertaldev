@@ -11,7 +11,7 @@
 //   "moonshot/<model>"  -> Moonshot direct
 //   otherwise           -> OpenRouter
 import { corsHeaders } from "../_shared/cors.ts";
-import { getUser, deductCredits, recordAsset, sanitizeError } from "../_shared/creative.ts";
+import { getUser, deductCredits, recordAsset, sanitizeError, withRefundOnFailure } from "../_shared/creative.ts";
 import { z } from "npm:zod@3";
 
 const InputSchema = z.object({
@@ -26,7 +26,7 @@ const InputSchema = z.object({
 
 const COST = 1;
 
-Deno.serve(async (req) => {
+Deno.serve(withRefundOnFailure(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const user = await getUser(req.headers.get("Authorization"));
@@ -130,4 +130,4 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));
