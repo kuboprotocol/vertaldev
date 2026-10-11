@@ -75,12 +75,12 @@ function b64ToText(value: unknown): string {
   }
 }
 
-async function e2bCreate(sessionId: string, projectId: string, userId: string, timeoutSeconds: number): Promise<Provisioned> {
+async function e2bCreate(sessionId: string, projectId: string, userId: string, timeoutSeconds: number, template = E2B_TEMPLATE): Promise<Provisioned> {
   const res = await fetch(`${E2B_API}/sandboxes`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-API-KEY": E2B_API_KEY! },
     body: JSON.stringify({
-      templateID: E2B_TEMPLATE,
+      templateID: template,
       timeout: timeoutSeconds,
       metadata: { session_id: sessionId, project_id: projectId, user_id: userId },
     }),
@@ -171,9 +171,11 @@ export async function provisionContainer(
   projectId: string,
   userId: string,
   timeoutSeconds = 900,
+  /** E2B template override (e.g. a Python data-science image); other drivers ignore it. */
+  template?: string,
 ): Promise<Provisioned> {
   const driver = orchestratorDriver();
-  if (driver === "e2b") return e2bCreate(sessionId, projectId, userId, timeoutSeconds);
+  if (driver === "e2b") return e2bCreate(sessionId, projectId, userId, timeoutSeconds, template);
   if (driver === "http") {
     const res = await fetch(`${CONTAINER_API_URL}/containers`, {
       method: "POST",

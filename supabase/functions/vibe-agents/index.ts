@@ -3,6 +3,7 @@
 //   POST { action: "readiness", tools }            → which connectors the tools need and whether they are connected
 //   POST { action: "save", name, instructions, tools, agent_id? } → create or update an agent
 //   POST { action: "run", agent_id, task }         → run it; returns the run with every step
+// python_run executes code in one E2B sandbox per run (shared with sub-agents, destroyed when the run ends).
 // Agents only get the tools the user approved. Steps and side effects (sends, issues) are capped per run and
 // shared with sub-agents, so agents creating and running agents cannot loop or spam.
 import { corsHeaders } from "../_shared/cors.ts";
@@ -10,13 +11,17 @@ import * as creative from "../_shared/creative.ts";
 import { decryptSecret } from "../_shared/connectorCrypto.ts";
 import { getFreshAccessToken, loadAccount } from "../_shared/gmailToken.ts";
 import { validatePublicUrl } from "../_shared/security.ts";
+import { destroyContainer, execInContainer, provisionContainer } from "../_shared/orchestrator.ts";
 import {
   VIBE_AGENT_LIMITS as LIMITS,
   VIBE_AGENT_RUN_CREDITS,
   VIBE_CONNECTORS,
+  VIBE_PLATFORM_REQUIREMENTS,
   VIBE_TOOLS,
   VIBE_TOOL_IDS,
   requiredConnectors,
+  requiredPlatform,
+  sanitizePackages,
   sanitizeTools,
   type VibeConnector,
   type VibeToolId,
@@ -24,6 +29,8 @@ import {
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_MODEL = "openai/gpt-4o-mini";
+/** E2B template with Python + pandas/numpy/scikit-learn/matplotlib preinstalled. */
+const DEFAULT_SANDBOX_TEMPLATE = "code-interpreter-v1";
 
 type Agent = { id: string; user_id: string; name: string; instructions: string; tools: VibeToolId[] };
 type Step =
@@ -33,6 +40,8 @@ type Step =
 interface RunBudget {
   steps: number;
   sideEffects: number;
+  /** Sandbox of this run, created on the first python_run. */
+  sandboxRef?: string;
 }
 
 const defaultDeps = {
@@ -42,6 +51,12 @@ const defaultDeps = {
   fetch: (input: string, init?: RequestInit) => fetch(input, init),
   env: (k: string): string | undefined => Deno.env.get(k),
   decrypt: decryptSecret,
+  sandbox: {
+    create: async (runId: string, userId: string, template: string) =>
+      (await provisionContainer(runId, "vibe-agent", userId, LIMITS.sandboxLifetimeSeconds, template)).container_ref,
+    exec: (ref: string, command: string, timeoutMs: number) => execInContainer(ref, command, "python", timeoutMs),
+    destroy: (ref: string) => destroyContainer(ref),
+  },
   gmailToken: async (admin: any, userId: string): Promise<{ token: string; email: string } | null> => {
     const { data } = await admin.from("gmail_accounts").select("id").eq("user_id", userId).limit(1).maybeSingle();
     if (!data) return null;
@@ -114,14 +129,26 @@ async function design(userId: string, description: unknown) {
 }
 
 async function readiness(userId: string, tools: VibeToolId[]) {
-  return await Promise.all(
+  const connectors = await Promise.all(
     requiredConnectors(tools).map(async (c) => ({
-      connector: c,
+      connector: c as string,
       label: VIBE_CONNECTORS[c].label,
-      setup_route: VIBE_CONNECTORS[c].setupRoute,
+      setup_route: VIBE_CONNECTORS[c].setupRoute as string | null,
       connected: await isConnected(userId, c),
     })),
   );
+  // Platform capabilities: the user cannot connect these, so there is no setup route.
+  const platform = requiredPlatform(tools).map((r) => ({
+    connector: r as string,
+    label: VIBE_PLATFORM_REQUIREMENTS[r].label,
+    setup_route: null,
+    connected: sandboxConfigured(),
+  }));
+  return [...connectors, ...platform];
+}
+
+function sandboxConfigured(): boolean {
+  return !!deps.env("E2B_API_KEY");
 }
 
 async function isConnected(userId: string, c: VibeConnector): Promise<boolean> {
@@ -184,7 +211,7 @@ async function run(user: { id: string; email?: string | null }, agentId: unknown
   if (error || !runRow) throw new Error(`run_insert_failed:${error?.message}`);
 
   const steps: Step[] = [];
-  const budget: RunBudget = { steps: 0, sideEffects: 0 };
+  const budget: RunBudget & { runId: string } = { steps: 0, sideEffects: 0, runId: runRow.id };
   let output = "";
   let status: "completed" | "failed" = "completed";
   try {
@@ -193,6 +220,8 @@ async function run(user: { id: string; email?: string | null }, agentId: unknown
     status = "failed";
     output = creative.sanitizeError(e);
     console.error("[vibe-agents] run failed:", e);
+  } finally {
+    if (budget.sandboxRef) await deps.sandbox.destroy(budget.sandboxRef).catch(() => {});
   }
   await admin
     .from("vibe_agent_runs")
@@ -209,7 +238,7 @@ async function loadAgent(userId: string, agentId: string): Promise<Agent | null>
   return data ? { ...data, tools: sanitizeTools(data.tools) } : null;
 }
 
-async function executeAgent(userId: string, agent: Agent, task: string, steps: Step[], budget: RunBudget, depth: number): Promise<string> {
+async function executeAgent(userId: string, agent: Agent, task: string, steps: Step[], budget: RunBudget & { runId: string }, depth: number): Promise<string> {
   const tools = agent.tools.map((id) => ({
     type: "function",
     function: { name: id, description: VIBE_TOOLS[id].description, parameters: VIBE_TOOLS[id].parameters },
@@ -263,7 +292,7 @@ async function executeAgent(userId: string, agent: Agent, task: string, steps: S
 interface ToolCtx {
   agent: Agent;
   steps: Step[];
-  budget: RunBudget;
+  budget: RunBudget & { runId: string };
   depth: number;
 }
 
@@ -284,6 +313,8 @@ async function runTool(userId: string, tool: VibeToolId, args: Record<string, un
       return await githubList(userId, s("repo", 200));
     case "github_create_issue":
       return await githubIssue(userId, s("repo", 200), s("title", 256), s("body"));
+    case "python_run":
+      return await pythonRun(userId, s("code", 20000), sanitizePackages(args.packages), ctx.budget);
     case "create_agent": {
       if (ctx.depth >= LIMITS.maxDepth) throw new Error("agent_depth_limit");
       const res = await createAgent(userId, {
@@ -303,6 +334,19 @@ async function runTool(userId: string, tool: VibeToolId, args: Record<string, un
       return await executeAgent(userId, sub, s("task", LIMITS.maxTaskChars), ctx.steps, ctx.budget, ctx.depth + 1);
     }
   }
+}
+
+async function pythonRun(userId: string, code: string, packages: string[], budget: RunBudget & { runId: string }): Promise<string> {
+  if (!code.trim()) throw new Error("code_required");
+  if (!sandboxConfigured()) throw new Error("sandbox_not_configured");
+  budget.sandboxRef ??= await deps.sandbox.create(budget.runId, userId, deps.env("VIBE_SANDBOX_TEMPLATE") || DEFAULT_SANDBOX_TEMPLATE);
+  // The code travels base64-encoded, so nothing in it is interpreted by the shell.
+  const b64 = btoa(String.fromCharCode(...new TextEncoder().encode(code)));
+  const install = packages.length ? `pip install -q ${packages.join(" ")} > /tmp/pip.log 2>&1 || tail -3 /tmp/pip.log; ` : "";
+  const cmd = `set -o pipefail; cd /home/user && echo ${b64} | base64 -d > main.py && ${install}timeout ${LIMITS.pythonTimeoutSeconds} python3 main.py 2>&1 | head -c 20000`;
+  const res = await deps.sandbox.exec(budget.sandboxRef, cmd, (LIMITS.pythonTimeoutSeconds + 60) * 1000);
+  const out = res.logs.trim() || "(sem saída: use print() para mostrar resultados)";
+  return res.exit_code === 0 ? out : `${out}\n[exit ${res.exit_code}]`;
 }
 
 async function webFetch(raw: string): Promise<string> {
