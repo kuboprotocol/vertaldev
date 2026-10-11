@@ -15,7 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Progress } from '@/components/ui/progress'
 import { PromoCards } from '@/components/dashboard/PromoCards'
 import CreditLedger from '@/components/CreditLedger'
-import { Gamepad2, Sparkles, Palette } from 'lucide-react'
+import { Gamepad2, Sparkles, Palette, Bot } from 'lucide-react'
 import { useCreativeEconomyEntry } from '@/components/creative/CreativeEconomyComingSoon'
 
 interface Project {
@@ -120,6 +120,9 @@ const DashboardPage = forwardRef<HTMLDivElement, any>((props, ref) => {
 
             <Button variant="outline" size="sm" onClick={openCreativeEconomy} className="rounded-xl gap-2 border-primary/30 text-primary hover:bg-primary/10">
               <Palette className="h-4 w-4" /> Creative Economy
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate('/vibe-agents')} className="rounded-xl gap-2 border-primary/30 text-primary hover:bg-primary/10">
+              <Bot className="h-4 w-4" /> Vibe Agents
             </Button>
             <Button variant="outline" size="sm" onClick={() => navigate('/shortlinks')} className="rounded-xl gap-2 border-primary/20 text-primary hover:bg-primary/10">
               <Gift className="h-4 w-4" /> Earn Credits
