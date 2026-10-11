@@ -1,16 +1,46 @@
-import { CSSProperties } from 'react'
+import { CSSProperties, useLayoutEffect, useRef, useState } from 'react'
 import { BRAND } from '@/config/brand'
 
 interface AnimatedLogoProps {
   size?: number // height in px for the text
   className?: string
+  /** Shrink the text (and the cube) so the wordmark never overflows its parent; `size` becomes the maximum. */
+  fit?: boolean
 }
+
+const MIN_FIT_SIZE = 16
 
 /**
  * AnimatedLogo — wordmark da marca (BRAND.wordmark) with a 3D metallic gold cube orbiting the text,
  * spinning in 3D like a rotating planet. Pure CSS 3D, GPU-accelerated.
  */
-export default function AnimatedLogo({ size = 32, className = '' }: AnimatedLogoProps) {
+export default function AnimatedLogo({ size: maxSize = 32, className = '', fit = false }: AnimatedLogoProps) {
+  const [size, setSize] = useState(maxSize)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const textRef = useRef<HTMLSpanElement>(null)
+  const sizeRef = useRef(maxSize)
+  sizeRef.current = size
+
+  // The wordmark's width grows linearly with its font size, so measure it once at the current size and
+  // scale to the parent's width. Re-run on resize and once web fonts finish loading.
+  useLayoutEffect(() => {
+    if (!fit) return setSize(maxSize)
+    const box = rootRef.current?.parentElement
+    const text = textRef.current
+    if (!box || !text) return
+    const update = () => {
+      const widthPerPx = text.offsetWidth / sizeRef.current
+      if (!widthPerPx) return
+      const next = Math.floor(Math.max(MIN_FIT_SIZE, Math.min(maxSize, (box.clientWidth * 0.94) / widthPerPx)))
+      if (next !== sizeRef.current) setSize(next)
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(box)
+    document.fonts?.ready.then(update).catch(() => {})
+    return () => ro.disconnect()
+  }, [fit, maxSize])
+
   const cube = size * 0.85
   const orbitRadius = size * 2.2
 
@@ -86,7 +116,7 @@ export default function AnimatedLogo({ size = 32, className = '' }: AnimatedLogo
   ]
 
   return (
-    <div className={`relative inline-flex items-center justify-center ${className}`} style={sceneStyle}>
+    <div ref={rootRef} className={`relative inline-flex items-center justify-center ${className}`} style={sceneStyle}>
       <style>{`
         @keyframes kubo-spin {
           0%   { transform: translate(-50%, -50%) rotateX(0deg) rotateY(0deg); }
@@ -108,6 +138,7 @@ export default function AnimatedLogo({ size = 32, className = '' }: AnimatedLogo
       `}</style>
 
       <span
+        ref={textRef}
         className="font-display font-bold tracking-[0.18em] text-foreground select-none whitespace-nowrap"
         style={{ fontSize: size, lineHeight: 1 }}
       >
