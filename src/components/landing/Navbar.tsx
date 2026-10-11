@@ -18,7 +18,7 @@ export default function Navbar() {
           <AnimatedLogo size={18} className="hidden sm:block group-hover:scale-105 transition-transform" />
         </Link>
 
-        <div className="hidden md:flex items-center gap-1">
+        <div className="hidden xl:flex items-center gap-1">
           {['Home', 'Download', 'Pricing', 'Alternativas', 'Docs', 'Shortlinks', 'Support'].map((item) => (
             <Button
               key={item}
