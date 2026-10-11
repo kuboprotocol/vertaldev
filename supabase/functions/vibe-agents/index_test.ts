@@ -50,7 +50,7 @@ function fakeAdmin(tables: Record<string, any[]>) {
 
 type ModelTurn = { content?: string; tool_calls?: { name: string; args: unknown }[] };
 
-function setup(opts: { model?: ModelTurn[]; openrouter?: boolean; connected?: string[]; agentTools?: string[] } = {}) {
+function setup(opts: { model?: ModelTurn[]; openrouter?: boolean; connected?: string[]; agentTools?: string[]; e2b?: boolean; pyExit?: number } = {}) {
   const tables: Record<string, any[]> = {
     vibe_agents: [{ id: "agent-1", user_id: USER, name: "Pesquisador", instructions: "Pesquise.", tools: opts.agentTools ?? ["web_fetch", "slack_post", "create_agent", "run_agent"] }],
     vibe_agent_runs: [],
@@ -80,6 +80,18 @@ function setup(opts: { model?: ModelTurn[]; openrouter?: boolean; connected?: st
 
   const env: Record<string, string> = {};
   if (opts.openrouter !== false) env.OPENROUTER_API_KEY = "or-test";
+  if (opts.e2b) env.E2B_API_KEY = "e2b-test";
+
+  const sandbox = { created: [] as string[], commands: [] as string[], destroyed: [] as string[] };
+  const fakeSandbox = {
+    create: async (runId: string, _u: string, template: string) => (sandbox.created.push(template), `e2b:sbx-${runId}:t`),
+    exec: async (_ref: string, cmd: string) => {
+      sandbox.commands.push(cmd);
+      const code = new TextDecoder().decode(Uint8Array.from(atob(cmd.match(/echo (\S+) \| base64 -d/)![1]), (c) => c.charCodeAt(0)));
+      return { logs: `ran: ${code}`, exit_code: opts.pyExit ?? 0 };
+    },
+    destroy: async (ref: string) => void sandbox.destroyed.push(ref),
+  };
 
   __setDeps({
     getUser: async (h: string | null) => (h === "Bearer ok" ? { id: USER, email: "u@x.dev" } : null),
@@ -89,13 +101,14 @@ function setup(opts: { model?: ModelTurn[]; openrouter?: boolean; connected?: st
     env: (k: string) => env[k],
     decrypt: async () => "xoxb-token",
     gmailToken: async () => null,
+    sandbox: fakeSandbox,
   } as any);
 
   const call = async (body: unknown, auth = "Bearer ok") => {
     const res = await handleRequest(new Request("https://fn/vibe-agents", { method: "POST", headers: { Authorization: auth }, body: JSON.stringify(body) }));
     return { status: res.status, body: await res.json() };
   };
-  return { call, tables, deductions, requests, outbound };
+  return { call, tables, deductions, requests, outbound, sandbox };
 }
 
 const run = (task = "faça") => ({ action: "run", agent_id: "agent-1", task });
@@ -201,4 +214,70 @@ Deno.test("hitting the step limit fails the run (non-2xx, so the charge is refun
   assertEquals(r.body.status, "failed");
   assertEquals(t.tables.vibe_agent_runs[0].status, "failed");
   assertEquals(t.requests.length, 12);
+});
+
+Deno.test("python_run without E2B is reported as unavailable, not as something to connect", async () => {
+  const t = setup({
+    model: [
+      { content: JSON.stringify({ name: "Analista", instructions: "Analise.", tools: ["python_run"] }) },
+    ],
+  });
+  const d = await t.call({ action: "design", description: "analise uma planilha de vendas" });
+  assertEquals(d.body.connectors, [{ connector: "sandbox", label: "Sandbox Python", setup_route: null, connected: false }]);
+
+  const t2 = setup({ agentTools: ["python_run"], model: [{ tool_calls: [{ name: "python_run", args: { code: "print(1)" } }] }, { content: "sem sandbox" }] });
+  const r = await t2.call(run());
+  assert(toolSteps(r.body)[0].result.includes("sandbox_not_configured"));
+  assertEquals(t2.sandbox.created.length, 0);
+});
+
+Deno.test("python_run reuses one sandbox per run, installs only allowed packages and destroys it at the end", async () => {
+  const code = "import pandas as pd\nprint(pd.DataFrame({'a': [1, 2]}).sum())";
+  const t = setup({
+    e2b: true,
+    agentTools: ["python_run"],
+    model: [
+      { tool_calls: [{ name: "python_run", args: { code, packages: ["openpyxl", "evil-pkg; rm -rf /", "OpenPyXL"] } }] },
+      { tool_calls: [{ name: "python_run", args: { code: "print('again')" } }] },
+      { content: "feito" },
+    ],
+  });
+  const r = await t.call(run());
+  assertEquals(r.status, 200);
+  assertEquals(t.sandbox.created, ["code-interpreter-v1"]);
+  assertEquals(t.sandbox.commands.length, 2);
+  assert(t.sandbox.commands[0].includes("pip install -q openpyxl >"), "only the allowed package, once");
+  assert(!t.sandbox.commands[0].includes("evil"));
+  assert(!t.sandbox.commands[1].includes("pip install"));
+  assertEquals(toolSteps(r.body)[0].result, `ran: ${code}`, "code reaches the sandbox byte for byte");
+  assertEquals(t.sandbox.destroyed.length, 1);
+});
+
+Deno.test("python_run reports a non-zero exit and still cleans up when the run fails", async () => {
+  const loop = Array.from({ length: 20 }, () => ({ tool_calls: [{ name: "python_run", args: { code: "1/0" } }] }));
+  const t = setup({ e2b: true, pyExit: 1, agentTools: ["python_run"], model: loop });
+  const r = await t.call(run());
+  assertEquals(r.status, 502);
+  assert(toolSteps(r.body)[0].result.endsWith("[exit 1]"));
+  assertEquals(t.sandbox.created.length, 1);
+  assertEquals(t.sandbox.destroyed.length, 1);
+});
+
+Deno.test("sub-agents share the parent's sandbox", async () => {
+  const t = setup({
+    e2b: true,
+    agentTools: ["python_run", "run_agent"],
+    model: [
+      { tool_calls: [{ name: "python_run", args: { code: "x = 1" } }] },
+      { tool_calls: [{ name: "run_agent", args: { agent_id: "agent-1", task: "continue" } }] },
+      { tool_calls: [{ name: "python_run", args: { code: "print(x)" } }] },
+      { content: "sub ok" },
+      { content: "pai ok" },
+    ],
+  });
+  const r = await t.call(run());
+  assertEquals(r.status, 200);
+  assertEquals(t.sandbox.created.length, 1);
+  assertEquals(t.sandbox.commands.length, 2);
+  assertEquals(t.sandbox.destroyed.length, 1);
 });

@@ -32,7 +32,10 @@ describe('Vibe Agents page', () => {
     invoke.mockResolvedValueOnce({
       data: {
         agent: { name: 'Resumo diário', instructions: 'Leia e poste.', tools: ['web_fetch', 'slack_post'] },
-        connectors: [{ connector: 'slack', label: 'Slack', setup_route: '/connectors/slack/setup', connected: false }],
+        connectors: [
+          { connector: 'slack', label: 'Slack', setup_route: '/connectors/slack/setup', connected: false },
+          { connector: 'sandbox', label: 'Sandbox Python', setup_route: null, connected: false },
+        ],
       },
       error: null,
     })
@@ -43,6 +46,8 @@ describe('Vibe Agents page', () => {
     const draft = await screen.findByTestId('agent-draft')
     expect(invoke).toHaveBeenCalledWith('vibe-agents', expect.objectContaining({ body: { action: 'design', description: 'resuma notícias e poste no slack' } }))
     expect(draft).toHaveTextContent('Slack não conectado')
+    expect(draft).toHaveTextContent('Sandbox Python aguardando ativação')
+    expect(screen.getAllByRole('button', { name: 'Conectar' })).toHaveLength(1)
     expect(screen.getByRole('button', { name: /Postar no Slack/ })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: /Enviar e-mail/ })).toHaveAttribute('aria-pressed', 'false')
 

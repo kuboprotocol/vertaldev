@@ -18,7 +18,8 @@ import {
 
 interface AgentDraft { name: string; instructions: string; tools: VibeToolId[] }
 interface SavedAgent extends AgentDraft { id: string; created_at: string }
-interface Readiness { connector: string; label: string; setup_route: string; connected: boolean }
+/** setup_route is null for platform capabilities (e.g. the Python sandbox) that the user cannot connect. */
+interface Readiness { connector: string; label: string; setup_route: string | null; connected: boolean }
 type Step =
   | { type: 'thought' | 'final'; agent: string; text: string }
   | { type: 'tool'; agent: string; tool: VibeToolId; args: Record<string, unknown>; ok: boolean; result: string }
@@ -27,6 +28,7 @@ interface RunResult { status: 'completed' | 'failed'; output: string; steps: Ste
 const ERRORS: Record<string, string> = {
   agent_model_not_configured: 'O modelo dos agentes ainda não está ativo (falta a chave do OpenRouter).',
   deduction_failed: 'Créditos insuficientes para executar o agente.',
+  sandbox_not_configured: 'A sandbox Python ainda não foi ativada na plataforma.',
   agent_limit_reached: 'Você chegou ao limite de agentes. Apague algum para criar outro.',
   description_required: 'Descreva o que o agente deve fazer.',
   duplicate_request: 'Essa execução já foi enviada.',
@@ -192,10 +194,11 @@ export default function VibeAgentsPage() {
                     <div key={r.connector} className="flex items-center justify-between gap-3 rounded-xl bg-secondary/60 px-3 py-2 text-sm">
                       <span className="flex items-center gap-2">
                         {r.connected ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <Plug className="h-4 w-4 text-amber-500" />}
-                        {r.label} {r.connected ? 'conectado' : 'não conectado'}
+                        {r.label}{' '}
+                        {r.connected ? (r.setup_route ? 'conectado' : 'disponível') : r.setup_route ? 'não conectado' : 'aguardando ativação'}
                       </span>
-                      {!r.connected && (
-                        <Button size="sm" variant="outline" onClick={() => navigate(r.setup_route)}>Conectar</Button>
+                      {!r.connected && r.setup_route && (
+                        <Button size="sm" variant="outline" onClick={() => navigate(r.setup_route!)}>Conectar</Button>
                       )}
                     </div>
                   ))}
