@@ -38,6 +38,12 @@ BEGIN
     RAISE EXCEPTION 'amount_must_be_positive';
   END IF;
 
+  -- Lock first, then check the key: a concurrent refund with the same key waits here and replays.
+  SELECT * INTO _sub FROM public.subscriptions WHERE user_id = _user_id AND is_active = true FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'subscription_not_found';
+  END IF;
+
   IF _idempotency_key IS NOT NULL THEN
     SELECT id, balance_after INTO _existing
     FROM public.credit_transactions
@@ -46,11 +52,6 @@ BEGIN
     IF FOUND THEN
       RETURN jsonb_build_object('success', true, 'replayed', true, 'transaction_id', _existing.id, 'balance_after', _existing.balance_after);
     END IF;
-  END IF;
-
-  SELECT * INTO _sub FROM public.subscriptions WHERE user_id = _user_id AND is_active = true FOR UPDATE;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'subscription_not_found';
   END IF;
 
   UPDATE public.subscriptions SET edits_limit = edits_limit + _amount, updated_at = now() WHERE id = _sub.id;
