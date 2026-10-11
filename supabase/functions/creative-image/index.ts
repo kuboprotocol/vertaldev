@@ -1,11 +1,11 @@
 // Image generation: Lovable Gateway (Nano Banana / gemini-2.5-flash-image).
 // Bytez has been retired from the stack.
 import { corsHeaders } from "../_shared/cors.ts";
-import { getUser, deductCredits, recordAsset, sanitizeError } from "../_shared/creative.ts";
+import { getUser, deductCredits, recordAsset, sanitizeError, withRefundOnFailure } from "../_shared/creative.ts";
 
 const COST = 1;
 
-Deno.serve(async (req) => {
+Deno.serve(withRefundOnFailure(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   const user = await getUser(req.headers.get("Authorization"));
   if (!user) return j(401, { error: "Unauthorized" });
@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
     console.error("[creative-image] error:", e);
     return j(500, { error: sanitizeError(e) });
   }
-});
+}));
 
 function j(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
