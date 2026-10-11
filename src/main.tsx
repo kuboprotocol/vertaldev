@@ -9,12 +9,14 @@ import { clearTelemetry, getTelemetryEvents, saveTelemetryEvent } from "./utils/
 import { installRuntimeReporter, reportRuntime } from "./lib/runtimeReporter";
 import { initSentry, addBreadcrumb } from "./lib/sentry";
 import { redirectNativeToMobileClient } from "./lib/nativeEntry";
+import { installServiceWorkerAutoReload } from "./lib/swAutoReload";
 
 // Install error beacons FIRST so we catch errors thrown during boot.
 initSentry();
 installRuntimeReporter();
 addBreadcrumb("boot", "app", { at: new Date().toISOString() });
 redirectNativeToMobileClient();
+installServiceWorkerAutoReload();
 
 try {
   assertFrontendEnv();
