@@ -1,407 +1,404 @@
-import { useState, useCallback, useRef, useEffect } from "react";
-import Cropper, { Area } from "react-easy-crop";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Loader2, Crop, ZoomIn, RotateCw, Download, Trash2, Upload, AlertTriangle, Settings, Eye, Grid3x3, FileImage } from "lucide-react";
+import { Loader2, Crop, RotateCw, RotateCcw, Download, Upload, Eye, Settings, Grid3x3, Share2, ArrowLeft, Maximize, Hand } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { FreeCropper } from "./FreeCropper";
+import { fitRect, toPixels, type CropRect } from "@/lib/cropGeometry";
+import {
+  cssFilter, exportCrop, ImageAccessError, loadEditableSource, NO_ADJUSTMENTS, outputSize, rotateSource,
+  shareImage, triggerDownload, type Adjustments, type ExportFormat,
+} from "@/lib/imageExport";
+
+export interface EditedImageMeta {
+  width: number;
+  height: number;
+  format: ExportFormat;
+}
 
 interface Props {
   open: boolean;
   imageUrl: string | null;
   onCancel: () => void;
-  onConfirm: (blob: Blob, metadata: { width: number; height: number; format: string }) => void | Promise<void>;
+  /** Called once per exported image (e.g. to add it to the history). The dialog handles download/share itself. */
+  onConfirm?: (blob: Blob, metadata: EditedImageMeta) => void | Promise<void>;
 }
 
-async function getCroppedImage(imageSrc: string, area: Area, quality: number): Promise<Blob> {
-  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = imageSrc;
-  });
+/** Pixel aspect (w/h); undefined = free. */
+const ASPECTS: { label: string; value?: number }[] = [
+  { label: "Livre" },
+  { label: "1:1", value: 1 },
+  { label: "4:5", value: 4 / 5 },
+  { label: "9:16", value: 9 / 16 },
+  { label: "16:9", value: 16 / 9 },
+  { label: "3:2", value: 3 / 2 },
+  { label: "2:3", value: 2 / 3 },
+];
 
-  const canvas = document.createElement("canvas");
-  canvas.width = area.width;
-  canvas.height = area.height;
+const SIZE_PRESETS = [
+  { label: "Original", width: 0, height: 0 },
+  { label: "1080×1080 (Feed)", width: 1080, height: 1080 },
+  { label: "1080×1350 (Retrato)", width: 1080, height: 1350 },
+  { label: "1080×1920 (Stories)", width: 1080, height: 1920 },
+  { label: "1280×720 (HD)", width: 1280, height: 720 },
+  { label: "1920×1080 (Full HD)", width: 1920, height: 1080 },
+  { label: "512×512 (Avatar)", width: 512, height: 512 },
+];
 
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas context indisponível");
+const MAX_SIDE = 8192;
 
-  ctx.drawImage(image, area.x, area.y, area.width, area.height, 0, 0, area.width, area.height);
+interface Source {
+  url: string;
+  width: number;
+  height: number;
+}
 
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error("Falha ao gerar imagem"))),
-      "image/png",
-      quality / 100
-    );
-  });
+function loadErrorMessage(e: unknown) {
+  if (e instanceof ImageAccessError) {
+    if (e.message === "not_an_image") return "Esse link não é uma imagem.";
+    return "O site dessa imagem não permite editá-la direto pelo link. Baixe a imagem e use \"Carregar arquivo\".";
+  }
+  return "Não foi possível abrir a imagem.";
 }
 
 export function ImageEditorDialog({ open, imageUrl, onCancel, onConfirm }: Props) {
-  const [crop, setCrop] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
-  const [aspect, setAspect] = useState<number | undefined>(undefined);
-  const [croppedArea, setCroppedArea] = useState<Area | null>(null);
-  const [processing, setProcessing] = useState(false);
-  const [quality, setQuality] = useState(95);
+  const [original, setOriginal] = useState<Source | null>(null);
+  const [source, setSource] = useState<Source | null>(null); // original after rotation
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [rotation, setRotation] = useState(0);
-  const [brightness, setBrightness] = useState(100);
-  const [contrast, setContrast] = useState(100);
-  const [saturation, setSaturation] = useState(100);
-  const [previewWidth, setPreviewWidth] = useState<number | null>(null);
-  const [previewHeight, setPreviewHeight] = useState<number | null>(null);
+  const [aspect, setAspect] = useState<number | undefined>(undefined);
+  const [rect, setRect] = useState<CropRect>(fitRect());
+  const [adjust, setAdjust] = useState<Adjustments>(NO_ADJUSTMENTS);
+  const [outW, setOutW] = useState<number | null>(null);
+  const [outH, setOutH] = useState<number | null>(null);
+  const [format, setFormat] = useState<ExportFormat>("png");
+  const [quality, setQuality] = useState(92);
+  const [processing, setProcessing] = useState(false);
+  const [result, setResult] = useState<{ blob: Blob; url: string; meta: EditedImageMeta; name: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const aspectOptions = [
-    { label: "Livre", value: undefined },
-    { label: "1:1 (Quadrado)", value: 1 },
-    { label: "16:9 (Widescreen)", value: 16/9 },
-    { label: "9:16 (Vertical)", value: 9/16 },
-    { label: "4:5 (Retrato)", value: 0.8 },
-    { label: "3:2 (Clássico)", value: 1.5 },
-    { label: "2:3 (Clássico Inv)", value: 2/3 },
-  ];
-
-  const sizePresets = [
-    { label: "640x480", width: 640, height: 480 },
-    { label: "800x600", width: 800, height: 600 },
-    { label: "1024x768", width: 1024, height: 768 },
-    { label: "1280x720", width: 1280, height: 720 },
-    { label: "1920x1080", width: 1920, height: 1080 },
-    { label: "2560x1440", width: 2560, height: 1440 },
-    { label: "512x512 (Avatar)", width: 512, height: 512 },
-    { label: "1024x1024 (Quadrado)", width: 1024, height: 1024 },
-  ];
-
-  const onCropComplete = useCallback((_: Area, areaPixels: Area) => {
-    setCroppedArea(areaPixels);
-    setPreviewWidth(Math.round(areaPixels.width));
-    setPreviewHeight(Math.round(areaPixels.height));
-  }, []);
-
-  const handleRotate = () => {
-    setRotation((prev) => (prev + 90) % 360);
+  // Object URLs we created; revoked when replaced or when the dialog closes.
+  const urls = useRef(new Set<string>());
+  const track = <T extends { url: string }>(s: T) => (urls.current.add(s.url), s);
+  const revokeAll = () => {
+    urls.current.forEach((u) => URL.revokeObjectURL(u));
+    urls.current.clear();
   };
 
-  const handleResetAdjustments = () => {
-    setBrightness(100);
-    setContrast(100);
-    setSaturation(100);
+  const reset = () => {
     setRotation(0);
-    toast.info("Ajustes reiniciados");
+    setAspect(undefined);
+    setRect(fitRect());
+    setAdjust(NO_ADJUSTMENTS);
+    setOutW(null);
+    setOutH(null);
+    setResult(null);
   };
 
-  const handleApplySize = (width: number, height: number) => {
-    setPreviewWidth(width);
-    setPreviewHeight(height);
-    setAspect(width / height);
-    toast.info(`Proporção definida para ${width}x${height}`);
+  const openSource = async (src: string) => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const s = track(await loadEditableSource(src));
+      setOriginal(s);
+      setSource(s);
+      reset();
+    } catch (e) {
+      setOriginal(null);
+      setSource(null);
+      setLoadError(loadErrorMessage(e));
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleConfirm = async () => {
-    if (!imageUrl || !croppedArea) return;
+  useEffect(() => {
+    if (open && imageUrl) openSource(imageUrl);
+    if (!open) {
+      setOriginal(null);
+      setSource(null);
+      setResult(null);
+      setLoadError(null);
+      revokeAll();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, imageUrl]);
+
+  useEffect(() => revokeAll, []);
+
+  // ratio in image fractions = pixel aspect × height / width
+  const ratio = useMemo(
+    () => (aspect && source ? (aspect * source.height) / source.width : undefined),
+    [aspect, source],
+  );
+
+  const chooseAspect = (value?: number) => {
+    setAspect(value);
+    if (source) setRect(fitRect(value ? (value * source.height) / source.width : undefined));
+  };
+
+  const rotate = async (delta: number) => {
+    if (!original) return;
+    const next = (rotation + delta + 360) % 360;
+    setLoading(true);
+    try {
+      const s = next === 0 ? original : track(await rotateSource(original.url, next));
+      setRotation(next);
+      setSource(s);
+      setRect(fitRect(aspect ? (aspect * s.height) / s.width : undefined));
+    } catch {
+      toast.error("Não foi possível girar a imagem");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const area = source ? toPixels(rect, source.width, source.height) : null;
+  const size = area ? outputSize(area.width, area.height, outW, outH) : null;
+  const tooBig = !!size && (size.width > MAX_SIDE || size.height > MAX_SIDE);
+
+  const applySizePreset = (width: number, height: number) => {
+    if (!width) {
+      setOutW(null);
+      setOutH(null);
+      return;
+    }
+    setOutW(width);
+    setOutH(height);
+    chooseAspect(width / height);
+  };
+
+  const handleExport = async () => {
+    if (!source || !area || !size || tooBig) return;
     setProcessing(true);
     try {
-      const blob = await getCroppedImage(imageUrl, croppedArea, quality);
-      await onConfirm(blob, {
-        width: Math.round(croppedArea.width),
-        height: Math.round(croppedArea.height),
-        format: "png",
-      });
-      toast.success("Imagem editada com sucesso!");
+      const blob = await exportCrop({ url: source.url, area, size, adjustments: adjust, format, quality });
+      const meta = { width: size.width, height: size.height, format };
+      const ext = format === "jpeg" ? "jpg" : format;
+      const out = track({ blob, url: URL.createObjectURL(blob), meta, name: `vertal-imagem-${size.width}x${size.height}-${Date.now()}.${ext}` });
+      if (result) {
+        URL.revokeObjectURL(result.url);
+        urls.current.delete(result.url);
+      }
+      setResult(out);
+      await onConfirm?.(blob, meta);
     } catch (e) {
-      toast.error("Erro ao processar imagem");
       console.error(e);
+      toast.error("Erro ao gerar a imagem");
     } finally {
       setProcessing(false);
     }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result as string;
-        // Aqui você precisaria passar a nova URL para o componente
-        // Por enquanto, apenas mostra a mensagem
-        toast.info("Imagem carregada. Agora você pode editar.");
-      };
-      reader.readAsDataURL(file);
+  const handleDownload = () => {
+    if (!result) return;
+    triggerDownload(result.url, result.name);
+    toast.success("Download iniciado");
+  };
+
+  const handleShare = async () => {
+    if (!result) return;
+    try {
+      const ok = await shareImage(result.blob, result.name);
+      if (!ok) handleDownload();
+    } catch {
+      toast.error("Não foi possível compartilhar; use Baixar");
     }
   };
 
-  const filterStyle: React.CSSProperties = {
-    filter: `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%) rotate(${rotation}deg)`,
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Escolha um arquivo de imagem");
+      return;
+    }
+    openSource(track({ url: URL.createObjectURL(file) }).url);
   };
+
+  const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
+  const filter = cssFilter(adjust);
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onCancel()}>
-      <DialogContent className="max-w-4xl bg-card border-border/40 max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl w-[calc(100vw-1rem)] sm:w-full bg-card border-border/40 max-h-[92vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Crop className="h-5 w-5 text-primary" /> Editor de Imagens
           </DialogTitle>
           <DialogDescription>
-            Edite sua imagem com corte, redimensionamento, filtros e muito mais.
+            {result ? "Pronto! Baixe ou salve sua imagem." : "Arraste com o dedo para escolher o corte. Puxe os cantos para ajustar."}
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="crop" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="crop">Cortar</TabsTrigger>
-            <TabsTrigger value="filters">Filtros</TabsTrigger>
-            <TabsTrigger value="size">Tamanho</TabsTrigger>
-          </TabsList>
+        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFile} className="hidden" data-testid="editor-file-input" />
 
-          {/* Aba Cortar */}
-          <TabsContent value="crop" className="space-y-4">
-            <div className="relative w-full h-[400px] bg-black/40 rounded-lg overflow-hidden border border-border/20">
-              {imageUrl && (
-                <Cropper
-                  image={imageUrl}
-                  crop={crop}
-                  zoom={zoom}
-                  aspect={aspect}
-                  cropShape="rect"
-                  showGrid={true}
-                  onCropChange={setCrop}
-                  onZoomChange={setZoom}
-                  onCropComplete={onCropComplete}
-                  style={{
-                    containerStyle: { ...filterStyle },
-                  }}
-                />
+        {result ? (
+          <div className="space-y-4" data-testid="editor-result">
+            <div className="flex items-center justify-center rounded-lg border border-border/20 bg-black/40 p-3">
+              <img src={result.url} alt="Imagem cortada" className="max-h-[55vh] max-w-full rounded" />
+            </div>
+            <p className="text-center text-xs text-muted-foreground">
+              {result.meta.width} × {result.meta.height} px · {result.meta.format.toUpperCase()} · {(result.blob.size / 1024).toFixed(0)} KB
+              {canShare && <span className="block sm:hidden">No celular, "Salvar / compartilhar" leva a imagem para a galeria.</span>}
+            </p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <Button onClick={handleDownload} className="bg-primary hover:bg-primary/90">
+                <Download className="mr-2 h-4 w-4" /> Baixar imagem
+              </Button>
+              {canShare && (
+                <Button variant="outline" onClick={handleShare}>
+                  <Share2 className="mr-2 h-4 w-4" /> Salvar / compartilhar
+                </Button>
+              )}
+              <Button variant="ghost" onClick={() => setResult(null)}>
+                <ArrowLeft className="mr-2 h-4 w-4" /> Ajustar de novo
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Tabs defaultValue="crop" className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="crop">Cortar</TabsTrigger>
+              <TabsTrigger value="filters">Filtros</TabsTrigger>
+              <TabsTrigger value="size">Tamanho</TabsTrigger>
+            </TabsList>
+
+            <div className="mt-3 flex min-h-[240px] items-center justify-center overflow-hidden rounded-lg border border-border/20 bg-black/40 p-4">
+              {loading ? (
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              ) : source ? (
+                <FreeCropper src={source.url} rect={rect} onChange={setRect} ratio={ratio} imageStyle={{ filter }} />
+              ) : (
+                <div className="space-y-3 text-center text-sm text-muted-foreground">
+                  <p>{loadError ?? "Nenhuma imagem carregada."}</p>
+                  <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                    <Upload className="mr-2 h-4 w-4" /> Carregar arquivo
+                  </Button>
+                </div>
               )}
             </div>
 
-            <div className="space-y-4">
+            {area && (
+              <p className="mt-2 flex items-center justify-center gap-1 text-[11px] text-muted-foreground">
+                <Hand className="h-3 w-3" /> Corte: {area.width} × {area.height} px
+                {size && (size.width !== area.width || size.height !== area.height) && <> → saída {size.width} × {size.height} px</>}
+              </p>
+            )}
+
+            <TabsContent value="crop" className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">Proporção</Label>
-                <Select value={aspect?.toString() || "undefined"} onValueChange={(v) => setAspect(v === "undefined" ? undefined : parseFloat(v))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Escolha proporção" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {aspectOptions.map((o) => (
-                      <SelectItem key={o.value?.toString() || "undefined"} value={o.value?.toString() || "undefined"}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs flex items-center gap-2 text-muted-foreground">
-                  <ZoomIn className="h-3 w-3" /> Zoom ({zoom.toFixed(1)}x)
-                </Label>
-                <Slider
-                  value={[zoom]}
-                  min={1}
-                  max={4}
-                  step={0.05}
-                  onValueChange={(v) => setZoom(v[0])}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 p-3 rounded bg-muted/30 border border-border/20">
-                <div>
-                  <Label className="text-[10px] text-muted-foreground">Largura (px)</Label>
-                  <Input
-                    type="number"
-                    value={previewWidth || ""}
-                    onChange={(e) => setPreviewWidth(e.target.value ? parseInt(e.target.value) : null)}
-                    placeholder="Auto"
-                    className="h-8 text-xs"
-                  />
-                </div>
-                <div>
-                  <Label className="text-[10px] text-muted-foreground">Altura (px)</Label>
-                  <Input
-                    type="number"
-                    value={previewHeight || ""}
-                    onChange={(e) => setPreviewHeight(e.target.value ? parseInt(e.target.value) : null)}
-                    placeholder="Auto"
-                    className="h-8 text-xs"
-                  />
+                <div className="flex flex-wrap gap-2">
+                  {ASPECTS.map((a) => (
+                    <Button
+                      key={a.label}
+                      type="button"
+                      size="sm"
+                      variant={aspect === a.value ? "default" : "outline"}
+                      aria-pressed={aspect === a.value}
+                      className="h-8 px-3 text-xs"
+                      onClick={() => chooseAspect(a.value)}
+                    >
+                      {a.label}
+                    </Button>
+                  ))}
                 </div>
               </div>
-            </div>
-          </TabsContent>
-
-          {/* Aba Filtros */}
-          <TabsContent value="filters" className="space-y-4">
-            <div className="relative w-full h-[300px] bg-black/40 rounded-lg overflow-hidden border border-border/20">
-              {imageUrl && (
-                <img
-                  src={imageUrl}
-                  alt="Preview"
-                  style={filterStyle}
-                  className="w-full h-full object-cover"
-                />
-              )}
-            </div>
-
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-xs flex items-center gap-2 text-muted-foreground">
-                  <Eye className="h-3 w-3" /> Brilho ({brightness}%)
-                </Label>
-                <Slider
-                  value={[brightness]}
-                  min={0}
-                  max={200}
-                  step={5}
-                  onValueChange={(v) => setBrightness(v[0])}
-                />
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => rotate(-90)} disabled={!source || loading}>
+                  <RotateCcw className="mr-2 h-3 w-3" /> Girar
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => rotate(90)} disabled={!source || loading}>
+                  <RotateCw className="mr-2 h-3 w-3" /> Girar
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setRect(fitRect(ratio))} disabled={!source}>
+                  <Maximize className="mr-2 h-3 w-3" /> Corte máximo
+                </Button>
               </div>
+            </TabsContent>
 
-              <div className="space-y-2">
-                <Label className="text-xs flex items-center gap-2 text-muted-foreground">
-                  <Settings className="h-3 w-3" /> Contraste ({contrast}%)
-                </Label>
-                <Slider
-                  value={[contrast]}
-                  min={0}
-                  max={200}
-                  step={5}
-                  onValueChange={(v) => setContrast(v[0])}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs flex items-center gap-2 text-muted-foreground">
-                  Saturação ({saturation}%)
-                </Label>
-                <Slider
-                  value={[saturation]}
-                  min={0}
-                  max={200}
-                  step={5}
-                  onValueChange={(v) => setSaturation(v[0])}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs flex items-center gap-2 text-muted-foreground">
-                  <RotateCw className="h-3 w-3" /> Rotação ({rotation}°)
-                </Label>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleRotate}
-                    className="flex-1"
-                  >
-                    <RotateCw className="h-3 w-3 mr-2" /> Girar 90°
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleResetAdjustments}
-                  >
-                    <Trash2 className="h-3 w-3" /> Reiniciar
-                  </Button>
+            <TabsContent value="filters" className="space-y-4">
+              {([
+                ["brightness", "Brilho", Eye],
+                ["contrast", "Contraste", Settings],
+                ["saturation", "Saturação", Grid3x3],
+              ] as const).map(([key, label, Icon]) => (
+                <div key={key} className="space-y-2">
+                  <Label className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Icon className="h-3 w-3" /> {label} ({adjust[key]}%)
+                  </Label>
+                  <Slider value={[adjust[key]]} min={0} max={200} step={5} onValueChange={(v) => setAdjust((p) => ({ ...p, [key]: v[0] }))} />
                 </div>
-              </div>
-            </div>
-          </TabsContent>
+              ))}
+              <Button type="button" variant="ghost" size="sm" onClick={() => setAdjust(NO_ADJUSTMENTS)}>
+                Reiniciar filtros
+              </Button>
+            </TabsContent>
 
-          {/* Aba Tamanho */}
-          <TabsContent value="size" className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Redimensionar para</Label>
+            <TabsContent value="size" className="space-y-4">
               <div className="grid grid-cols-2 gap-2">
-                {sizePresets.map((preset) => (
-                  <Button
-                    key={preset.label}
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleApplySize(preset.width, preset.height)}
-                    className="h-8 text-xs"
-                  >
-                    <Grid3x3 className="h-3 w-3 mr-1" /> {preset.label}
+                {SIZE_PRESETS.map((p) => (
+                  <Button key={p.label} type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => applySizePreset(p.width, p.height)}>
+                    {p.label}
                   </Button>
                 ))}
               </div>
-            </div>
-
-            <div className="space-y-4 p-4 rounded-lg border border-border/20 bg-muted/30">
-              <Label className="text-xs font-bold">Tamanho Customizado</Label>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-[10px] text-muted-foreground">Largura (px)</Label>
-                  <Input
-                    type="number"
-                    value={previewWidth || ""}
-                    onChange={(e) => setPreviewWidth(e.target.value ? parseInt(e.target.value) : null)}
-                    placeholder="Digite a largura"
-                    className="h-8 text-xs"
-                  />
+              <div className="grid grid-cols-2 gap-3 rounded-lg border border-border/20 bg-muted/30 p-3">
+                <div className="space-y-1">
+                  <Label htmlFor="out-w" className="text-[10px] text-muted-foreground">Largura de saída (px)</Label>
+                  <Input id="out-w" type="number" min={1} max={MAX_SIDE} inputMode="numeric" value={outW ?? ""} placeholder="Auto" className="h-8 text-xs"
+                    onChange={(e) => setOutW(e.target.value ? Math.max(1, parseInt(e.target.value)) : null)} />
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-[10px] text-muted-foreground">Altura (px)</Label>
-                  <Input
-                    type="number"
-                    value={previewHeight || ""}
-                    onChange={(e) => setPreviewHeight(e.target.value ? parseInt(e.target.value) : null)}
-                    placeholder="Digite a altura"
-                    className="h-8 text-xs"
-                  />
+                <div className="space-y-1">
+                  <Label htmlFor="out-h" className="text-[10px] text-muted-foreground">Altura de saída (px)</Label>
+                  <Input id="out-h" type="number" min={1} max={MAX_SIDE} inputMode="numeric" value={outH ?? ""} placeholder="Auto" className="h-8 text-xs"
+                    onChange={(e) => setOutH(e.target.value ? Math.max(1, parseInt(e.target.value)) : null)} />
                 </div>
+                <p className="col-span-2 text-[10px] text-muted-foreground">Preencha só um lado para manter a proporção do corte.</p>
               </div>
-            </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Formato</Label>
+                  <Select value={format} onValueChange={(v) => setFormat(v as ExportFormat)}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="png">PNG (sem perda)</SelectItem>
+                      <SelectItem value="jpeg">JPG (menor)</SelectItem>
+                      <SelectItem value="webp">WebP (web)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {format !== "png" && (
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Qualidade ({quality}%)</Label>
+                    <Slider value={[quality]} min={50} max={100} step={1} onValueChange={(v) => setQuality(v[0])} />
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+        )}
 
-            <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Qualidade</Label>
-              <Slider
-                value={[quality]}
-                min={50}
-                max={100}
-                step={5}
-                onValueChange={(v) => setQuality(v[0])}
-              />
-              <p className="text-[10px] text-muted-foreground text-right">Qualidade: {quality}%</p>
-            </div>
-          </TabsContent>
-        </Tabs>
-
-        <DialogFooter className="flex gap-2">
-          <Button variant="ghost" onClick={onCancel} disabled={processing}>
-            Cancelar
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={processing}
-          >
-            <Upload className="h-3 w-3 mr-2" /> Carregar Imagem
-          </Button>
-          <Input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleImageUpload}
-            className="hidden"
-          />
-          <Button
-            onClick={handleConfirm}
-            disabled={processing || !croppedArea}
-            className="bg-primary hover:bg-primary/90"
-          >
-            {processing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
-            {processing ? "Processando..." : "Salvar Imagem"}
-          </Button>
-        </DialogFooter>
+        {!result && (
+          <DialogFooter className="flex-col-reverse gap-2 sm:flex-row">
+            <Button variant="ghost" onClick={onCancel} disabled={processing}>Cancelar</Button>
+            <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={processing}>
+              <Upload className="mr-2 h-4 w-4" /> Carregar arquivo
+            </Button>
+            <Button onClick={handleExport} disabled={processing || !source || loading || tooBig} className="bg-primary hover:bg-primary/90">
+              {processing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Crop className="mr-2 h-4 w-4" />}
+              {processing ? "Processando..." : tooBig ? `Máximo ${MAX_SIDE}px` : "Cortar e salvar"}
+            </Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );
