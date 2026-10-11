@@ -195,43 +195,28 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
     localStorage.setItem(`creative_history_${toolKey}`, JSON.stringify(sessionHistory));
   }, [sessionHistory, toolKey]);
 
-  const handleImageEditorConfirm = async (blob: Blob, metadata: { width: number; height: number; format: string }) => {
-    try {
-      // Download a imagem processada
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `edited-image-${Date.now()}.${metadata.format}`;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      // Adicionar ao histórico
-      setSessionHistory(prev => [{
-        id: crypto.randomUUID(),
-        timestamp: new Date().toLocaleTimeString(),
-        prompt: `Imagem editada: ${metadata.width}x${metadata.height}`,
-        status: "success",
-        metadata: metadata,
-      }, ...prev].slice(0, 50));
-
-      setImageEditorOpen(false);
-      toast.success("Imagem salva com sucesso!");
-    } catch (e) {
-      toast.error("Erro ao salvar imagem");
-    }
+  // The editor shows the result with its own Baixar / Salvar buttons; here we only record it in the history.
+  const handleImageEditorConfirm = (_blob: Blob, metadata: { width: number; height: number; format: string }) => {
+    setSessionHistory(prev => [{
+      id: crypto.randomUUID(),
+      timestamp: new Date().toLocaleTimeString(),
+      prompt: `Imagem editada: ${metadata.width}x${metadata.height}`,
+      status: "success",
+      metadata: metadata,
+    }, ...prev].slice(0, 50));
   };
 
   const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result as string;
-        setPrompt(result);
-        toast.info("Imagem carregada. Clique em EXECUTAR para editar.");
-      };
-      reader.readAsDataURL(file);
-    }
+    e.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      // Open the editor straight away; the data URL is too long to show in the prompt box.
+      setEditorImageUrl(event.target?.result as string);
+      setImageEditorOpen(true);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleExecute = async () => {

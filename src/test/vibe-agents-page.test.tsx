@@ -60,6 +60,7 @@ describe('Vibe Agents page', () => {
       data: {
         status: 'completed',
         output: 'Postei o resumo.',
+        credits_charged: 3,
         steps: [
           { type: 'tool', agent: 'Resumo diário', tool: 'web_fetch', args: { url: 'https://example.com' }, ok: true, result: 'Olá' },
           { type: 'final', agent: 'Resumo diário', text: 'Postei o resumo.' },
@@ -70,11 +71,13 @@ describe('Vibe Agents page', () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /Executar/ }))
     fireEvent.change(screen.getByPlaceholderText(/O que o agente deve fazer/), { target: { value: 'resuma hoje' } })
-    fireEvent.click(screen.getByRole('button', { name: /Executar \(3 créditos\)/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Executar \(a partir de 2 créditos\)/ }))
 
     const timeline = await screen.findByTestId('run-timeline')
     expect(timeline).toHaveTextContent('Ler páginas da web')
     expect(timeline).toHaveTextContent('Postei o resumo.')
+    expect(timeline).toHaveTextContent('Custo desta execução: 3 créditos')
+    expect(screen.getByText(/1 crédito por execução \+ 1 por passo da IA/)).toBeInTheDocument()
     const [, opts] = invoke.mock.calls[0]
     expect(opts.body).toEqual({ action: 'run', agent_id: 'a1', task: 'resuma hoje' })
     expect(opts.headers['X-Idempotency-Key']).toBeTruthy()
@@ -89,7 +92,7 @@ describe('Vibe Agents page', () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /Executar/ }))
     fireEvent.change(screen.getByPlaceholderText(/O que o agente deve fazer/), { target: { value: 'x' } })
-    fireEvent.click(screen.getByRole('button', { name: /Executar \(3 créditos\)/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Executar \(a partir de 2 créditos\)/ }))
     await waitFor(() => expect(screen.getByTestId('run-timeline')).toHaveTextContent('slack_not_connected'))
     expect(screen.getByTestId('run-timeline')).toHaveTextContent('Falhou')
   })

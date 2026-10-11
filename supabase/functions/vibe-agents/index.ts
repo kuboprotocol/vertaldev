@@ -3,6 +3,8 @@
 //   POST { action: "readiness", tools }            → which connectors the tools need and whether they are connected
 //   POST { action: "save", name, instructions, tools, agent_id? } → create or update an agent
 //   POST { action: "run", agent_id, task }         → run it; returns the run with every step
+// Billing is metered like the rest of Vertal (VIBE_AGENT_PRICING): a run fee, then 1 credit before each AI step
+// and each Python run. Out of credits mid-run, the agent stops and returns what it has; a failed run is refunded.
 // python_run executes code in one E2B sandbox per run (shared with sub-agents, destroyed when the run ends).
 // Agents only get the tools the user approved. Steps and side effects (sends, issues) are capped per run and
 // shared with sub-agents, so agents creating and running agents cannot loop or spam.
@@ -14,7 +16,7 @@ import { validatePublicUrl } from "../_shared/security.ts";
 import { destroyContainer, execInContainer, provisionContainer } from "../_shared/orchestrator.ts";
 import {
   VIBE_AGENT_LIMITS as LIMITS,
-  VIBE_AGENT_RUN_CREDITS,
+  VIBE_AGENT_PRICING as PRICING,
   VIBE_CONNECTORS,
   VIBE_PLATFORM_REQUIREMENTS,
   VIBE_TOOLS,
@@ -40,6 +42,9 @@ type Step =
 interface RunBudget {
   steps: number;
   sideEffects: number;
+  /** Credits charged so far in this run. */
+  credits: number;
+  user: { id: string; email?: string | null };
   /** Sandbox of this run, created on the first python_run. */
   sandboxRef?: string;
 }
@@ -199,19 +204,19 @@ async function run(user: { id: string; email?: string | null }, agentId: unknown
   const agent = await loadAgent(user.id, agentId);
   if (!agent) return j(404, { error: "not_found" });
 
-  const ded = await deps.deductCredits(user.id, VIBE_AGENT_RUN_CREDITS, "vibe_agent_run", { agent_id: agent.id }, user.email, idempotencyKey);
-  if (!ded.ok) return j(ded.status ?? 402, { error: ded.error, credits_required: VIBE_AGENT_RUN_CREDITS });
+  const ded = await deps.deductCredits(user.id, PRICING.runFee, "vibe_agent_run", { agent_id: agent.id }, user.email, idempotencyKey);
+  if (!ded.ok) return j(ded.status ?? 402, { error: ded.error, credits_required: PRICING.runFee + PRICING.perStep });
 
   const admin = deps.admin();
   const { data: runRow, error } = await admin
     .from("vibe_agent_runs")
-    .insert({ agent_id: agent.id, user_id: user.id, status: "running", task: task.slice(0, LIMITS.maxTaskChars), credits_spent: VIBE_AGENT_RUN_CREDITS })
+    .insert({ agent_id: agent.id, user_id: user.id, status: "running", task: task.slice(0, LIMITS.maxTaskChars), credits_spent: PRICING.runFee })
     .select("id")
     .single();
   if (error || !runRow) throw new Error(`run_insert_failed:${error?.message}`);
 
   const steps: Step[] = [];
-  const budget: RunBudget & { runId: string } = { steps: 0, sideEffects: 0, runId: runRow.id };
+  const budget: RunBudget & { runId: string } = { steps: 0, sideEffects: 0, credits: PRICING.runFee, user, runId: runRow.id };
   let output = "";
   let status: "completed" | "failed" = "completed";
   try {
@@ -225,10 +230,10 @@ async function run(user: { id: string; email?: string | null }, agentId: unknown
   }
   await admin
     .from("vibe_agent_runs")
-    .update({ status, output, steps, finished_at: new Date().toISOString() })
+    .update({ status, output, steps, credits_spent: budget.credits, finished_at: new Date().toISOString() })
     .eq("id", runRow.id);
 
-  const result = { run_id: runRow.id, status, output, steps, credits_charged: VIBE_AGENT_RUN_CREDITS };
+  const result = { run_id: runRow.id, status, output, steps, credits_charged: budget.credits };
   // A failed run delivered nothing: a non-2xx answer makes withRefundOnFailure refund the charge.
   return j(status === "completed" ? 200 : 502, result);
 }
@@ -254,6 +259,13 @@ async function executeAgent(userId: string, agent: Agent, task: string, steps: S
   ];
 
   while (budget.steps < LIMITS.maxSteps) {
+    if (!(await charge(budget, PRICING.perStep, "vibe_agent_step"))) {
+      // Nothing done yet: fail the run so the fee is refunded instead of charging for nothing.
+      if (budget.steps === 0) throw new Error("insufficient_credits");
+      const text = "Parei aqui: seus créditos acabaram. O que foi feito até agora está acima.";
+      steps.push({ type: "final", agent: agent.name, text });
+      return text;
+    }
     budget.steps++;
     const msg = await chat(messages, tools.length ? { tools } : {});
     messages.push(msg);
@@ -336,9 +348,21 @@ async function runTool(userId: string, tool: VibeToolId, args: Record<string, un
   }
 }
 
+/**
+ * Charges metered credits inside a run. The run start was already rate limited, so per-step charges skip it.
+ * Returns false when the balance is not enough (the caller stops gracefully).
+ */
+async function charge(budget: RunBudget, amount: number, reason: string): Promise<boolean> {
+  const ded = await deps.deductCredits(budget.user.id, amount, reason, {}, budget.user.email, null, { rateLimit: false });
+  if (!ded.ok) return false;
+  budget.credits += amount;
+  return true;
+}
+
 async function pythonRun(userId: string, code: string, packages: string[], budget: RunBudget & { runId: string }): Promise<string> {
   if (!code.trim()) throw new Error("code_required");
   if (!sandboxConfigured()) throw new Error("sandbox_not_configured");
+  if (!(await charge(budget, PRICING.perPythonRun, "vibe_agent_python"))) throw new Error("insufficient_credits");
   budget.sandboxRef ??= await deps.sandbox.create(budget.runId, userId, deps.env("VIBE_SANDBOX_TEMPLATE") || DEFAULT_SANDBOX_TEMPLATE);
   // The code travels base64-encoded, so nothing in it is interpreted by the shell.
   const b64 = btoa(String.fromCharCode(...new TextEncoder().encode(code)));

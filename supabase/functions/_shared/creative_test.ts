@@ -21,7 +21,10 @@ function fakeDb(opts: { replayed?: boolean } = {}) {
       : { success: true, replayed: fn === "execute_atomic_credit_deduction" && !!opts.replayed };
     return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
   }) as typeof fetch;
-  return { refunds: () => calls.filter((c) => c.fn === "execute_atomic_credit_topup") };
+  return {
+    refunds: () => calls.filter((c) => c.fn === "execute_atomic_credit_topup"),
+    rateLimitChecks: () => calls.filter((c) => c.fn === "bump_rate_limit").length,
+  };
 }
 
 const charge = () => deductCredits(USER, 3, "creative_test", {}, null, "key-1");
@@ -74,4 +77,12 @@ Deno.test("a replayed idempotency key is refused instead of served for free", as
   });
   assertEquals(res.status, 409);
   assertEquals(db.refunds().length, 0, "nothing was charged, so nothing is refunded");
+});
+
+Deno.test("metered charges can skip the per-minute rate limit; the default still applies it", async () => {
+  const db = fakeDb();
+  await deductCredits(USER, 1, "creative_test", {}, null, null);
+  assertEquals(db.rateLimitChecks(), 1);
+  await deductCredits(USER, 1, "creative_test", {}, null, null, { rateLimit: false });
+  assertEquals(db.rateLimitChecks(), 1);
 });
