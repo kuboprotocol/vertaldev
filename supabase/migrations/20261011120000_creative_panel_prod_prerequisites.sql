@@ -99,4 +99,4 @@ CREATE TRIGGER update_skill_executions_updated_at
 
 -- creative-video-studio stores the client's x-idempotency-key on the asset.
 ALTER TABLE public.creative_assets ADD COLUMN IF NOT EXISTS idempotency_key text;
-CREATE INDEX IF NOT EXISTS idx_creative_assets_idempotency_key ON public.creative_assets(idempotency_key);
+CREATE INDEX IF NOT EXISTS idx_creative_assets_idempotency_key ON public.creative_assets(idempotency_key); 
