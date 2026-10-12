@@ -13,6 +13,9 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "vertaldev",
   "compatibility_date": "2026-09-25",
+  // Worker na frente dos assets: monetização da Cloudflare (Pay Per Crawl e
+  // Monetization Gateway). Detalhes em docs/CLOUDFLARE_MONETIZATION.md.
+  "main": "./worker/index.ts",
   // Rotas com `/*`: sem o curinga a rota só casa com a página inicial e
   // /pricing, /alternativas etc. não chegam ao Worker. O deploy recria as
   // rotas a partir daqui, então não dependem do painel.
@@ -24,7 +27,26 @@
     "directory": "./dist",
     // SPA: rotas do React Router (/pricing, /alternativas/…) devolvem o
     // index.html em vez de 404.
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS",
+    // O Worker roda antes das páginas (precisa definir Crawler-Price e
+    // validar pagamentos); arquivos com hash e do PWA vão direto do CDN.
+    "run_worker_first": [
+      "/*",
+      "!/assets/*",
+      "!/js/*",
+      "!/sw.js",
+      "!/workbox-*",
+      "!/manifest.webmanifest",
+      "!/registerSW.js",
+      "!/robots.txt",
+      "!/sitemap.xml"
+    ]
+  },
+  "vars": {
+    // Prefixos cobrados via Monetization Gateway (x402), separados por
+    // vírgula — ex.: "/api/paid". Vazio = nenhuma rota exige pagamento.
+    "MONETIZATION_GATEWAY_PATHS": ""
   },
   // Requerido pelo Wrangler 4.135.0+ para o comando `wrangler preview`.
   "previews": {}
