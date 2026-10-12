@@ -4,10 +4,11 @@
 // Configuração no painel: docs/CLOUDFLARE_MONETIZATION.md.
 import { crawlPriceFor, formatCrawlerPrice, isInBandPricing } from './payPerCrawl';
 import { isPaidPath, parsePaidPrefixes, verifyPaymentContext } from './monetizationGateway';
+import { PAID_API_PREFIX, handlePaidApi } from './paidApi';
 
 export interface Env {
   ASSETS: { fetch(request: Request): Promise<Response> };
-  /** Prefixos protegidos pelo Monetization Gateway, separados por vírgula. */
+  /** Prefixos pagos extras (além de /api/paid), separados por vírgula. */
   MONETIZATION_GATEWAY_PATHS?: string;
 }
 
@@ -32,7 +33,9 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    const paid = isPaidPath(url.pathname, parsePaidPrefixes(env.MONETIZATION_GATEWAY_PATHS));
+    // /api/paid é sempre pago, mesmo se a variável for esvaziada por engano.
+    const paidPrefixes = [PAID_API_PREFIX, ...parsePaidPrefixes(env.MONETIZATION_GATEWAY_PATHS)];
+    const paid = isPaidPath(url.pathname, paidPrefixes);
     if (paid) {
       const check = await verifyPaymentContext(request);
       // Sem contexto válido a requisição não passou pelo Gateway (ou o JWT é
@@ -40,7 +43,9 @@ export default {
       if (!check.ok) return json(402, { error: 'payment_required', reason: check.reason });
     }
 
-    const assetResponse = await env.ASSETS.fetch(request);
+    // A API paga é servida pelo próprio Worker; o resto vem do build estático.
+    const isPaidApi = isPaidPath(url.pathname, [PAID_API_PREFIX]);
+    const assetResponse = isPaidApi ? handlePaidApi(request) : await env.ASSETS.fetch(request);
     const response = new Response(assetResponse.body, assetResponse);
     for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
       if (!response.headers.has(name)) response.headers.set(name, value);
