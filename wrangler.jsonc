@@ -44,8 +44,9 @@
     ]
   },
   "vars": {
-    // Prefixos cobrados via Monetization Gateway (x402), separados por
-    // vírgula — ex.: "/api/paid". Vazio = nenhuma rota exige pagamento.
+    // Prefixos cobrados via Monetization Gateway (x402) além de /api/paid
+    // (sempre pago, ver worker/paidApi.ts), separados por vírgula. Têm de
+    // bater com as regras configuradas no painel do Gateway.
     "MONETIZATION_GATEWAY_PATHS": ""
   },
   // Requerido pelo Wrangler 4.135.0+ para o comando `wrangler preview`.

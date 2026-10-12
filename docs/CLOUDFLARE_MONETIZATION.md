@@ -40,13 +40,23 @@ Para mudar preços, edite `RULES` em `worker/payPerCrawl.ts`.
 2. Configure a carteira de recebimento (`payTo`), a rede e o preço das rotas.
 
 ### O que o Worker faz
-Rotas listadas em `MONETIZATION_GATEWAY_PATHS` (`wrangler.jsonc → vars`, separadas
-por vírgula, ex.: `"/api/paid"`) só são servidas com um `PAYMENT-CONTEXT` válido:
-JWT Ed25519 assinado pelo JWKS fixo `https://payments.cloudflare.com/certs`, dentro
-da validade e com `aud` igual à URL pedida. Sem isso o Worker devolve **402** e
-nunca entrega o conteúdo pago. Hoje a lista está vazia: nenhuma rota é cobrada.
+`/api/paid/*` é a API paga, servida pelo próprio Worker (`worker/paidApi.ts`):
 
-Preço variável (`upto`, header `PAYMENT-SETTLEMENT`) ainda não é usado.
+| Endpoint | Conteúdo |
+|---|---|
+| `GET /api/paid` | lista dos recursos |
+| `GET /api/paid/alternatives` | todas as comparações Vertal vs outras ferramentas, em JSON |
+| `GET /api/paid/alternatives/{slug}` | uma comparação |
+
+Toda requisição em `/api/paid/*` (e nos prefixos extras de `MONETIZATION_GATEWAY_PATHS`
+em `wrangler.jsonc → vars`) só é atendida com um `PAYMENT-CONTEXT` válido: JWT Ed25519
+assinado pelo JWKS fixo `https://payments.cloudflare.com/certs`, dentro da validade e
+com `aud` igual à URL pedida. Sem isso o Worker devolve **402** e nunca entrega o
+conteúdo. `/api/paid` é sempre pago, mesmo com a variável vazia.
+
+**No painel do Gateway**, a regra de cobrança tem de cobrir `vertal.dev/api/paid*`
+com preço fixo (`exact`). Preço variável (`upto`, `PAYMENT-SETTLEMENT`) não é usado.
+O Pay Per Crawl não cobra em `/api/*`, para o agente não pagar duas vezes.
 
 ## Custos e observações
 - O Worker roda antes de todas as páginas (exceto `/assets/*`, `/js/*` e arquivos do PWA), então cada visita a uma página conta como requisição de Worker (plano gratuito: 100 mil/dia).

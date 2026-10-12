@@ -23,6 +23,8 @@ const RULES: PriceRule[] = [
   { match: prefix('/terms'), priceUSD: 0 },
   { match: prefix('/support'), priceUSD: 0 },
   { match: prefix('/download'), priceUSD: 0 },
+  // A API paga já é cobrada pelo Monetization Gateway; não cobrar duas vezes.
+  { match: prefix('/api'), priceUSD: 0 },
   // Premium: conteúdo editorial e técnico, o que mais vale para IA.
   { match: prefix('/docs'), priceUSD: 0.01 },
   { match: prefix('/alternativas'), priceUSD: 0.005 },
