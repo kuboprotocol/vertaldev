@@ -1,23 +1,12 @@
 import { motion } from "framer-motion";
 import { Globe, ArrowRight, RefreshCw, ShoppingCart, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 
 const DomainSection = () => {
-  const handleBuyDomain = () => {
-    window.open(
-      "https://www.ionos.com/domains/domain-checker",
-      "_blank",
-      "noopener noreferrer"
-    );
-  };
-
-  const handleTransferDomain = () => {
-    window.open(
-      "https://www.ionos.com/domains/domain-transfer",
-      "_blank",
-      "noopener noreferrer"
-    );
-  };
+  const navigate = useNavigate();
+  const handleBuyDomain = () => navigate("/domains?tab=buy");
+  const handleTransferDomain = () => navigate("/domains?tab=transfer");
 
   return (
     <section className="py-24 px-6 relative overflow-hidden">
@@ -30,12 +19,12 @@ const DomainSection = () => {
           viewport={{ once: true }}
           className="text-center mb-16"
         >
-          <span className="text-xs font-medium text-primary uppercase tracking-widest mb-3 block">Professional Domains</span>
+          <span className="text-xs font-medium text-primary uppercase tracking-widest mb-3 block">Vertal Domínios - Parceiros</span>
           <h2 className="text-3xl md:text-4xl font-display font-bold text-foreground">
             Your professional domain in minutes
           </h2>
           <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">
-            Buy a new domain or transfer an existing one to connect your brand to the world.
+            Build your app first, then buy or transfer a domain and add subdomains — all inside Vertal.
           </p>
         </motion.div>
 
@@ -103,15 +92,7 @@ const DomainSection = () => {
           transition={{ delay: 0.5 }}
           className="text-center text-xs text-muted-foreground mt-12"
         >
-          Service powered by the partner infrastructure of{" "}
-          <a
-            href="https://www.ionos.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline hover:text-foreground transition-colors font-medium"
-          >
-            Ionos
-          </a>.
+          Vertal Domínios - Parceiros · registration and DNS powered by Cloudflare.
         </motion.p>
       </div>
     </section>
