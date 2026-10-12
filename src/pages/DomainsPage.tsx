@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Globe, Search, ArrowLeftRight, Link2, ServerCog, Loader2, Check, X, Sparkles, Plus, Trash2, Shield, Zap, ArrowLeft, RefreshCw, Terminal, KeyRound, Rocket, Info, Ban, Download, Mail } from "lucide-react";
+import { Globe, Search, ArrowLeftRight, Link2, ServerCog, Loader2, Check, X, Sparkles, Plus, Trash2, Shield, Zap, ArrowLeft, RefreshCw, Terminal, KeyRound, Rocket, Info, Ban, Download, Mail, Network, Copy, Handshake } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,9 +17,10 @@ type Domain = {
   id: string; domain_name: string; tld: string; source: string;
   status: string; ssl_status: string; expires_at: string | null;
   project_id: string | null; credits_spent: number; created_at: string;
-  nameservers: string[] | null;
+  nameservers: string[] | null; metadata?: { provider?: string; cf_zone_id?: string; registration_state?: string; price_usd?: number } | null;
 };
-type SearchResult = { domain: string; tld: string; available: boolean | null; price_credits: number; note?: string; reason?: string };
+type Subdomain = { id: string; hostname: string; kind: "vertal" | "custom"; target: string; status: string; domain_id: string | null; created_at: string };
+type SearchResult = { domain: string; tld: string; available: boolean | null; price_credits: number; provider?: string; price_usd?: number | null; renewal_usd?: number | null; premium?: boolean; note?: string; reason?: string };
 type DnsRecord = { id: string; record_type: string; name: string; value: string; ttl: number; priority: number | null; ionos_record_id: string | null };
 type Transfer = {
   id: string; domain_name: string; status: string; status_message: string | null;
@@ -36,8 +37,22 @@ type DebugLog = {
 
 const RECORD_TYPES = ["A", "AAAA", "CNAME", "TXT", "MX", "SRV", "NS"] as const;
 
+const PARTNER_NAME = "Vertal Domínios - Parceiros";
+const PROVIDER_LABEL: Record<string, string> = { cloudflare: "Cloudflare", ionos: "IONOS", manual: "Manual" };
+const TABS = ["mine", "buy", "transfer", "connect", "subdomains", "dns", "debug"] as const;
+
+function PartnerBadge({ provider }: { provider?: string | null }) {
+  if (!provider || provider === "none") return null;
+  return (
+    <Badge variant="outline" className="text-[10px] gap-1 border-primary/30 text-primary">
+      <Handshake className="w-3 h-3" /> {PARTNER_NAME.split(" - ")[1]} · {PROVIDER_LABEL[provider] ?? provider}
+    </Badge>
+  );
+}
+
 export default function DomainsPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [domains, setDomains] = useState<Domain[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,6 +71,8 @@ export default function DomainsPage() {
   useEffect(() => { load(); }, []);
 
   const showOnboarding = !loading && domains.length === 0 && transfers.length === 0;
+  const tabParam = searchParams.get("tab");
+  const requestedTab = (TABS as readonly string[]).includes(tabParam ?? "") ? tabParam! : null;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -69,8 +86,8 @@ export default function DomainsPage() {
               <Globe className="w-7 h-7 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="font-orbitron text-3xl font-bold tracking-tight">Vertal Domains</h1>
-              <p className="text-muted-foreground">Buy, transfer, and publish with professional infrastructure.</p>
+              <h1 className="font-orbitron text-3xl font-bold tracking-tight">Vertal Domínios <span className="text-primary">- Parceiros</span></h1>
+              <p className="text-muted-foreground">Compre, transfira, conecte e crie subdomínios para o seu app — infraestrutura Cloudflare.</p>
             </div>
           </motion.div>
         </div>
@@ -79,12 +96,13 @@ export default function DomainsPage() {
       <div className="container mx-auto px-4 py-8 space-y-6">
         {showOnboarding && <OnboardingBanner />}
 
-        <Tabs defaultValue={showOnboarding ? "buy" : "mine"} className="space-y-6">
-          <TabsList className="grid grid-cols-6 w-full max-w-4xl bg-card/60 backdrop-blur border border-border/40">
-            <TabsTrigger value="mine"><Globe className="w-4 h-4 mr-2" />Mine</TabsTrigger>
-            <TabsTrigger value="buy"><Search className="w-4 h-4 mr-2" />Buy</TabsTrigger>
-            <TabsTrigger value="transfer"><ArrowLeftRight className="w-4 h-4 mr-2" />Transfer</TabsTrigger>
-            <TabsTrigger value="connect"><Link2 className="w-4 h-4 mr-2" />Connect</TabsTrigger>
+        <Tabs key={loading ? "loading" : "ready"} defaultValue={requestedTab ?? (showOnboarding ? "buy" : "mine")} className="space-y-6">
+          <TabsList className="flex w-full max-w-5xl overflow-x-auto justify-start bg-card/60 backdrop-blur border border-border/40">
+            <TabsTrigger value="mine"><Globe className="w-4 h-4 mr-2" />Meus</TabsTrigger>
+            <TabsTrigger value="buy"><Search className="w-4 h-4 mr-2" />Comprar</TabsTrigger>
+            <TabsTrigger value="transfer"><ArrowLeftRight className="w-4 h-4 mr-2" />Transferir</TabsTrigger>
+            <TabsTrigger value="connect"><Link2 className="w-4 h-4 mr-2" />Conectar</TabsTrigger>
+            <TabsTrigger value="subdomains"><Network className="w-4 h-4 mr-2" />Subdomínios</TabsTrigger>
             <TabsTrigger value="dns"><ServerCog className="w-4 h-4 mr-2" />DNS</TabsTrigger>
             <TabsTrigger value="debug"><Terminal className="w-4 h-4 mr-2" />Debug</TabsTrigger>
           </TabsList>
@@ -93,6 +111,7 @@ export default function DomainsPage() {
           <TabsContent value="buy"><BuyTab onPurchased={load} /></TabsContent>
           <TabsContent value="transfer"><TransferTab transfers={transfers} onTransferred={load} /></TabsContent>
           <TabsContent value="connect"><ConnectTab onConnected={load} /></TabsContent>
+          <TabsContent value="subdomains"><SubdomainsTab domains={domains} /></TabsContent>
           <TabsContent value="dns"><DnsTab domains={domains} /></TabsContent>
           <TabsContent value="debug"><DebugTab /></TabsContent>
         </Tabs>
@@ -106,13 +125,13 @@ function OnboardingBanner() {
     <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}>
       <Card className="border-primary/30 bg-gradient-to-br from-primary/10 via-card/60 to-card/40 backdrop-blur">
         <CardHeader>
-          <CardTitle className="font-orbitron flex items-center gap-2"><Rocket className="w-5 h-5 text-primary" /> Welcome to Vertal Domains</CardTitle>
-          <CardDescription>Everything you need to get your brand online — using Vertal credits.</CardDescription>
+          <CardTitle className="font-orbitron flex items-center gap-2"><Rocket className="w-5 h-5 text-primary" /> Bem-vindo ao {PARTNER_NAME}</CardTitle>
+          <CardDescription>Crie seu app primeiro e depois coloque sua marca no ar — tudo pago com créditos Vertal.</CardDescription>
         </CardHeader>
         <CardContent className="grid md:grid-cols-3 gap-4">
-          <Step icon={<Search className="w-5 h-5" />} title="1. Search" body="Find names via AI + real-time IONOS verification." />
-          <Step icon={<Zap className="w-5 h-5" />} title="2. Pay with credits" body="Atomic debit — if anything fails, your credits are preserved." />
-          <Step icon={<Shield className="w-5 h-5" />} title="3. SSL + Auto DNS" body="Certificate provisioned and DNS editor ready to use." />
+          <Step icon={<Search className="w-5 h-5" />} title="1. Busque" body="Sugestões com IA + disponibilidade e preço em tempo real via Cloudflare." />
+          <Step icon={<Zap className="w-5 h-5" />} title="2. Pague com créditos" body="Débito atômico — se o registro falhar, os créditos voltam automaticamente." />
+          <Step icon={<Network className="w-5 h-5" />} title="3. DNS + Subdomínios" body="SSL, editor DNS e subdomínios (app.suamarca.com) prontos para usar." />
         </CardContent>
       </Card>
     </motion.div>
@@ -149,6 +168,15 @@ function StatusBadge({ status }: { status: string }) {
 
 function MineTab({ domains, loading, onChange }: { domains: Domain[]; loading: boolean; onChange: () => void }) {
   const [toDelete, setToDelete] = useState<Domain | null>(null);
+  const [refreshing, setRefreshing] = useState<string | null>(null);
+  const refreshStatus = async (d: Domain) => {
+    setRefreshing(d.id);
+    const { data, error } = await supabase.functions.invoke("domain-purchase", { body: { action: "status", domain_id: d.id } });
+    setRefreshing(null);
+    if (error || data?.error) { toast.error(error?.message ?? data.error); return; }
+    toast.success(`Registro: ${data?.state ?? data?.domain?.status}`);
+    onChange();
+  };
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>;
   if (!domains.length) {
     return (
@@ -179,13 +207,22 @@ function MineTab({ domains, loading, onChange }: { domains: Domain[]; loading: b
                   <div>
                     <CardTitle className="font-orbitron text-lg break-all">{d.domain_name}</CardTitle>
                     <CardDescription className="text-xs mt-1 uppercase tracking-wide">{d.source} · .{d.tld}</CardDescription>
+                    <div className="mt-2"><PartnerBadge provider={d.metadata?.provider} /></div>
                   </div>
                   <StatusBadge status={d.status} />
                 </div>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <div className="flex items-center gap-2 text-muted-foreground"><Shield className="w-3.5 h-3.5" /> SSL: <span className="text-foreground">{d.ssl_status}</span></div>
-                <div className="flex items-center gap-2 text-muted-foreground"><Zap className="w-3.5 h-3.5" /> Credits: <span className="text-foreground">{d.credits_spent}</span></div>
+                <div className="flex items-center gap-2 text-muted-foreground"><Zap className="w-3.5 h-3.5" /> Créditos: <span className="text-foreground">{d.credits_spent}</span></div>
+                {!!d.nameservers?.length && (
+                  <div className="text-xs text-muted-foreground"><ServerCog className="w-3.5 h-3.5 inline mr-1" />NS: <span className="font-mono text-foreground">{d.nameservers.join(", ")}</span></div>
+                )}
+                {d.metadata?.provider === "cloudflare" && d.source === "purchase" && ["processing", "pending"].includes(d.status) && (
+                  <Button size="sm" variant="outline" onClick={() => refreshStatus(d)} disabled={refreshing === d.id}>
+                    {refreshing === d.id ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <RefreshCw className="w-3.5 h-3.5 mr-1" />} Atualizar status
+                  </Button>
+                )}
                 <Button size="sm" variant="ghost" className="text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={() => setToDelete(d)}>
                   <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove
                 </Button>
@@ -199,7 +236,7 @@ function MineTab({ domains, loading, onChange }: { domains: Domain[]; loading: b
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remove {toDelete?.domain_name} from the dashboard?</AlertDialogTitle>
-            <AlertDialogDescription>This only removes it from the Vertal dashboard. The domain registration at IONOS is not cancelled.</AlertDialogDescription>
+            <AlertDialogDescription>Isso só remove do painel Vertal. O registro do domínio no parceiro (Cloudflare/IONOS) não é cancelado.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -225,7 +262,7 @@ function BuyTab({ onPurchased }: { onPurchased: () => void }) {
     setSearching(false);
     if (error) { toast.error(error.message); return; }
     setResults(data?.results ?? []);
-    if (!data?.has_ionos) toast.warning("IONOS not configured — availability is indicative.");
+    if (!data?.has_cloudflare && !data?.has_ionos) toast.warning("Nenhum parceiro configurado — disponibilidade indicativa.");
   };
 
   const doBuy = async () => {
@@ -237,7 +274,8 @@ function BuyTab({ onPurchased }: { onPurchased: () => void }) {
     setBuying(null);
     if (error) { toast.error(error.message); return; }
     if (data?.error) { toast.error(data.error); return; }
-    toast.success(`✓ ${r.domain} registered · balance: ${data?.balance_after ?? "?"}`);
+    if (data?.state && data.state !== "succeeded") toast.info(`${r.domain}: registro em andamento (${data.state}). Acompanhe em "Meus".`);
+    else toast.success(`✓ ${r.domain} registrado · saldo: ${data?.balance_after ?? "?"}`);
     onPurchased();
   };
 
@@ -245,14 +283,14 @@ function BuyTab({ onPurchased }: { onPurchased: () => void }) {
     <>
       <Card className="bg-card/60 backdrop-blur border-border/40">
         <CardHeader>
-          <CardTitle className="font-orbitron flex items-center gap-2"><Sparkles className="w-5 h-5 text-primary" /> Search Domain</CardTitle>
-          <CardDescription>AI-generated suggestions + real-time verification via IONOS.</CardDescription>
+          <CardTitle className="font-orbitron flex items-center gap-2"><Sparkles className="w-5 h-5 text-primary" /> Comprar domínio</CardTitle>
+          <CardDescription>{PARTNER_NAME}: sugestões com IA + disponibilidade e preço em tempo real (Cloudflare Registrar, com IONOS para extensões como .com.br).</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-2">
-            <Input placeholder="mybrand or mybrand.com" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && search()} className="bg-background/60" />
+            <Input placeholder="minhamarca ou minhamarca.com" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && search()} className="bg-background/60" />
             <Button onClick={search} disabled={searching} className="bg-gradient-to-r from-primary to-purple-600">
-              {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />} Search
+              {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />} Buscar
             </Button>
           </div>
           <div className="grid gap-2">
@@ -264,7 +302,10 @@ function BuyTab({ onPurchased }: { onPurchased: () => void }) {
                   {r.available === null && <span className="w-5 h-5 rounded-full bg-muted shrink-0" title={r.note ?? r.reason} />}
                   <div className="min-w-0">
                     <div className="font-mono text-sm truncate">{r.domain}</div>
-                    <div className="text-xs text-muted-foreground">.{r.tld} · {r.price_credits} credits</div>
+                    <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-2">
+                      <span>.{r.tld} · {r.price_credits} créditos{r.price_usd ? ` · renova US$ ${r.renewal_usd ?? r.price_usd}/ano` : ""}</span>
+                      <PartnerBadge provider={r.provider} />
+                    </div>
                   </div>
                 </div>
                 <Button size="sm" disabled={r.available === false || buying === r.domain} onClick={() => setConfirmBuy(r)} variant={r.available === true ? "default" : "secondary"}>
@@ -279,21 +320,22 @@ function BuyTab({ onPurchased }: { onPurchased: () => void }) {
       <AlertDialog open={!!confirmBuy} onOpenChange={(o) => !o && setConfirmBuy(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="font-orbitron">Confirm registration</AlertDialogTitle>
+            <AlertDialogTitle className="font-orbitron">Confirmar registro</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3">
                 <p>You are about to register:</p>
                 <div className="p-3 rounded-lg bg-muted/40 border border-border/40">
                   <div className="font-mono text-lg text-foreground">{confirmBuy?.domain}</div>
-                  <div className="text-sm text-muted-foreground mt-1">.{confirmBuy?.tld} · <span className="text-primary font-semibold">{confirmBuy?.price_credits} credits</span></div>
+                  <div className="text-sm text-muted-foreground mt-1">.{confirmBuy?.tld} · <span className="text-primary font-semibold">{confirmBuy?.price_credits} créditos</span></div>
+                  <div className="mt-2"><PartnerBadge provider={confirmBuy?.provider} /></div>
                 </div>
-                <p className="text-xs">The debit is atomic and idempotent. In case of post-debit failure, open a ticket for a refund.</p>
+                <p className="text-xs">Registro por 1 ano via {PARTNER_NAME}. O débito é atômico e idempotente; se o registro falhar, os créditos são devolvidos automaticamente.</p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={doBuy} className="bg-gradient-to-r from-primary to-purple-600">Confirm and pay</AlertDialogAction>
+            <AlertDialogAction onClick={doBuy} className="bg-gradient-to-r from-primary to-purple-600">Confirmar e pagar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -436,9 +478,10 @@ function TransferTab({ transfers, onTransferred }: { transfers: Transfer[]; onTr
 
   return (
     <div className="space-y-6">
+      <CloudflareTransferGuide onConnected={onTransferred} />
       <Card className="bg-card/60 backdrop-blur border-border/40 max-w-2xl">
         <CardHeader>
-          <CardTitle className="font-orbitron flex items-center gap-2"><ArrowLeftRight className="w-5 h-5 text-primary" /> Transfer Domain</CardTitle>
+          <CardTitle className="font-orbitron flex items-center gap-2"><ArrowLeftRight className="w-5 h-5 text-primary" /> Transferir domínio (registro completo)</CardTitle>
           <CardDescription>Average time: 5–7 days. You need the AUTH/EPP code from the current registrar.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -653,6 +696,7 @@ function ConnectTab({ onConnected }: { onConnected: () => void }) {
   const [domain, setDomain] = useState("");
   const [ns, setNs] = useState("");
   const [busy, setBusy] = useState(false);
+  const [assignedNs, setAssignedNs] = useState<string[]>([]);
 
   const connect = async () => {
     setBusy(true);
@@ -660,7 +704,8 @@ function ConnectTab({ onConnected }: { onConnected: () => void }) {
     const { data, error } = await supabase.functions.invoke("domain-connect", { body: { domain, nameservers } });
     setBusy(false);
     if (error || data?.error) { toast.error(error?.message ?? data.error); return; }
-    toast.success("Domínio conectado");
+    toast.success(data?.provider === "cloudflare" ? "Domínio adicionado à Cloudflare — atualize os nameservers no seu registrador" : "Domínio conectado");
+    setAssignedNs(data?.provider === "cloudflare" ? (data?.nameservers ?? []) : []);
     setDomain(""); setNs("");
     onConnected();
   };
@@ -669,7 +714,7 @@ function ConnectTab({ onConnected }: { onConnected: () => void }) {
     <Card className="bg-card/60 backdrop-blur border-border/40 max-w-2xl">
       <CardHeader>
         <CardTitle className="font-orbitron flex items-center gap-2"><Link2 className="w-5 h-5 text-primary" /> Conectar domínio existente</CardTitle>
-        <CardDescription>Aponte os nameservers no seu registrar para usar o painel Vertal.</CardDescription>
+        <CardDescription>Já tem domínio? Ele entra na rede Cloudflare do {PARTNER_NAME}: você recebe os nameservers, troca no seu registrador e passa a gerenciar DNS e subdomínios aqui.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div><Label>Domínio</Label><Input placeholder="meudominio.com" value={domain} onChange={(e) => setDomain(e.target.value)} /></div>
@@ -677,6 +722,7 @@ function ConnectTab({ onConnected }: { onConnected: () => void }) {
         <Button onClick={connect} disabled={busy || !domain} className="w-full bg-gradient-to-r from-primary to-purple-600">
           {busy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Link2 className="w-4 h-4 mr-2" />} Conectar
         </Button>
+        {!!assignedNs.length && <NameserverBox nameservers={assignedNs} />}
       </CardContent>
     </Card>
   );
@@ -709,7 +755,7 @@ function DnsTab({ domains }: { domains: Domain[] }) {
     });
     setCreating(false);
     if (error || data?.error) { toast.error(error?.message ?? data.error); return; }
-    toast.success(data?.synced ? "Registro criado e sincronizado" : "Registro salvo (IONOS sem sync)");
+    toast.success(data?.synced ? `Registro criado e sincronizado (${PROVIDER_LABEL[data?.provider] ?? "parceiro"})` : "Registro salvo (sem sync com o parceiro)");
     setForm({ type: "A", name: "@", value: "", ttl: 3600, priority: "" });
     load(selected);
   };
@@ -785,7 +831,7 @@ function DebugTab() {
     const { data } = await supabase
       .from("connector_activity_logs")
       .select("id, event_type, status, message, metadata, created_at")
-      .eq("connector_slug", "ionos")
+      .in("connector_slug", ["cloudflare", "ionos"])
       .order("created_at", { ascending: false })
       .limit(100);
     setLogs((data as DebugLog[]) ?? []);
@@ -808,7 +854,7 @@ function DebugTab() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `ionos-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `domain-partner-logs-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     toast.success(`${logs.length} log(s) exportados`);
@@ -819,7 +865,7 @@ function DebugTab() {
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle className="font-orbitron flex items-center gap-2"><Terminal className="w-5 h-5 text-primary" /> Debug logs IONOS</CardTitle>
+            <CardTitle className="font-orbitron flex items-center gap-2"><Terminal className="w-5 h-5 text-primary" /> Debug logs — Parceiros</CardTitle>
             <CardDescription>Últimos 100 eventos: busca, compra, transferência, status, retry, cancelamento.</CardDescription>
           </div>
           <div className="flex gap-2">
@@ -861,5 +907,178 @@ function DebugTab() {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function NameserverBox({ nameservers }: { nameservers: string[] }) {
+  const copy = () => { navigator.clipboard?.writeText(nameservers.join("\n")); toast.success("Nameservers copiados"); };
+  return (
+    <div className="p-3 rounded-lg bg-primary/5 border border-primary/30 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-semibold">Troque os nameservers no seu registrador atual para:</div>
+        <Button size="sm" variant="ghost" onClick={copy}><Copy className="w-3.5 h-3.5 mr-1" />Copiar</Button>
+      </div>
+      {nameservers.map((n) => <div key={n} className="font-mono text-sm text-primary">{n}</div>)}
+      <p className="text-xs text-muted-foreground">A propagação leva de alguns minutos até 24h. Depois disso DNS, SSL e subdomínios ficam ativos no painel.</p>
+    </div>
+  );
+}
+
+function CloudflareTransferGuide({ onConnected }: { onConnected: () => void }) {
+  const [domain, setDomain] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [ns, setNs] = useState<string[]>([]);
+
+  const start = async () => {
+    setBusy(true);
+    const { data, error } = await supabase.functions.invoke("domain-connect", { body: { domain: domain.trim().toLowerCase() } });
+    setBusy(false);
+    if (error || data?.error) { toast.error(error?.message ?? data.error); return; }
+    if (data?.provider !== "cloudflare") { toast.warning("Cloudflare não configurado — domínio conectado em modo manual."); onConnected(); return; }
+    setNs(data?.nameservers ?? []);
+    toast.success(`${domain} adicionado à rede ${PARTNER_NAME}`);
+    onConnected();
+  };
+
+  return (
+    <Card className="bg-gradient-to-br from-primary/10 via-card/60 to-card/40 backdrop-blur border-primary/30 max-w-2xl">
+      <CardHeader>
+        <CardTitle className="font-orbitron flex items-center gap-2"><Handshake className="w-5 h-5 text-primary" /> Transferir para {PARTNER_NAME}</CardTitle>
+        <CardDescription>Traga seu domínio de qualquer registrador para a infraestrutura Cloudflare da Vertal, sem tirar o site do ar.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <ol className="space-y-2 text-sm">
+          <li><strong>1.</strong> Adicione o domínio abaixo — geramos a zona DNS e os nameservers Cloudflare.</li>
+          <li><strong>2.</strong> Troque os nameservers no registrador atual. DNS e subdomínios já passam a funcionar pelo painel.</li>
+          <li><strong>3.</strong> Desbloqueie o domínio e envie o código AUTH/EPP no formulário abaixo para concluir a transferência do registro.</li>
+        </ol>
+        <div className="flex gap-2">
+          <Input placeholder="meudominio.com" value={domain} onChange={(e) => setDomain(e.target.value)} className="bg-background/60" />
+          <Button onClick={start} disabled={busy || !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(domain.trim())} className="bg-gradient-to-r from-primary to-purple-600">
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowLeftRight className="w-4 h-4 mr-1" />} Iniciar
+          </Button>
+        </div>
+        {!!ns.length && <NameserverBox nameservers={ns} />}
+      </CardContent>
+    </Card>
+  );
+}
+
+function SubdomainsTab({ domains }: { domains: Domain[] }) {
+  const [subs, setSubs] = useState<Subdomain[]>([]);
+  const [meta, setMeta] = useState<{ root_domain: string | null; vertal_enabled: boolean; free_limit: number }>({ root_domain: null, vertal_enabled: false, free_limit: 3 });
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [kind, setKind] = useState<"vertal" | "custom">("custom");
+  const [domainId, setDomainId] = useState("");
+  const [label, setLabel] = useState("");
+  const [target, setTarget] = useState("");
+  const [manual, setManual] = useState<{ type: string; name: string; value: string } | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.functions.invoke("domain-subdomains", { body: { action: "list" } });
+    setLoading(false);
+    if (error) { toast.error(error.message); return; }
+    setSubs(data?.subdomains ?? []);
+    setMeta({ root_domain: data?.root_domain ?? null, vertal_enabled: !!data?.vertal_enabled, free_limit: data?.free_limit ?? 3 });
+    if (!domains.length && data?.vertal_enabled) setKind("vertal");
+  };
+  useEffect(() => { load(); }, []);
+  useEffect(() => { if (domains.length && !domainId) setDomainId(domains[0].id); }, [domains, domainId]);
+
+  const parent = kind === "vertal" ? meta.root_domain : domains.find((d) => d.id === domainId)?.domain_name;
+  const cleanLabel = label.trim().toLowerCase();
+
+  const create = async () => {
+    setBusy(true); setManual(null);
+    const { data, error } = await supabase.functions.invoke("domain-subdomains", {
+      body: { action: "create", kind, label: cleanLabel, domain_id: kind === "custom" ? domainId : undefined, target: target.trim() || undefined },
+    });
+    setBusy(false);
+    if (error || data?.error) { toast.error(error?.message ?? data.error); return; }
+    if (data?.manual_record) setManual(data.manual_record);
+    toast.success(data?.synced ? `${data.subdomain.hostname} ativo` : `${data.subdomain.hostname} criado — falta o registro DNS`);
+    setLabel(""); setTarget("");
+    load();
+  };
+
+  const remove = async (id: string) => {
+    const { data, error } = await supabase.functions.invoke("domain-subdomains", { body: { action: "delete", id } });
+    if (error || data?.error) { toast.error(error?.message ?? data.error); return; }
+    toast.success("Subdomínio removido");
+    load();
+  };
+
+  const vertalCount = subs.filter((s) => s.kind === "vertal").length;
+
+  return (
+    <div className="space-y-4">
+      <Card className="bg-card/60 backdrop-blur border-border/40">
+        <CardHeader>
+          <CardTitle className="font-orbitron flex items-center gap-2"><Network className="w-5 h-5 text-primary" /> Subdomínios</CardTitle>
+          <CardDescription>Publique seu app em <span className="font-mono">app.suamarca.com</span> ou, antes de comprar um domínio, num subdomínio grátis Vertal.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant={kind === "custom" ? "default" : "outline"} onClick={() => setKind("custom")} disabled={!domains.length}>No meu domínio</Button>
+            <Button size="sm" variant={kind === "vertal" ? "default" : "outline"} onClick={() => setKind("vertal")} disabled={!meta.vertal_enabled}>
+              Grátis Vertal {meta.root_domain ? `(.${meta.root_domain})` : ""} · {vertalCount}/{meta.free_limit}
+            </Button>
+          </div>
+
+          {kind === "custom" && !domains.length ? (
+            <p className="text-sm text-muted-foreground">Compre, transfira ou conecte um domínio para criar subdomínios nele.</p>
+          ) : (
+            <div className="grid gap-2 md:grid-cols-[1fr_auto_1fr_auto] items-end">
+              <div><Label className="text-xs">Subdomínio</Label><Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="app" /></div>
+              <div className="pb-2 font-mono text-sm text-muted-foreground">
+                {kind === "custom" ? (
+                  <Select value={domainId} onValueChange={setDomainId}>
+                    <SelectTrigger className="h-9 min-w-40"><SelectValue /></SelectTrigger>
+                    <SelectContent>{domains.map((d) => <SelectItem key={d.id} value={d.id}>.{d.domain_name}</SelectItem>)}</SelectContent>
+                  </Select>
+                ) : <>.{meta.root_domain}</>}
+              </div>
+              <div><Label className="text-xs">Destino (CNAME, opcional)</Label><Input value={target} onChange={(e) => setTarget(e.target.value)} placeholder="padrão: app Vertal publicado" /></div>
+              <Button onClick={create} disabled={busy || !cleanLabel || !parent} className="bg-gradient-to-r from-primary to-purple-600">
+                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Plus className="w-4 h-4 mr-1" />Criar</>}
+              </Button>
+            </div>
+          )}
+          {cleanLabel && parent && <p className="text-xs text-muted-foreground">Vai ficar: <span className="font-mono text-foreground">{cleanLabel}.{parent}</span></p>}
+
+          {manual && (
+            <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm">
+              <div className="font-semibold mb-1"><Info className="w-4 h-4 inline mr-1" />Adicione este registro no DNS do seu domínio:</div>
+              <div className="font-mono text-xs">{manual.type} · {manual.name} → {manual.value}</div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="bg-card/60 backdrop-blur border-border/40">
+        <CardContent className="pt-6">
+          {loading ? <div className="py-8 text-center"><Loader2 className="w-5 h-5 animate-spin mx-auto text-primary" /></div> : !subs.length ? (
+            <p className="py-8 text-center text-muted-foreground">Nenhum subdomínio ainda.</p>
+          ) : (
+            <div className="space-y-2">
+              {subs.map((s) => (
+                <div key={s.id} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-background/40 border border-border/30">
+                  <div className="min-w-0">
+                    <a href={`https://${s.hostname}`} target="_blank" rel="noopener noreferrer" className="font-mono text-sm hover:text-primary truncate block">{s.hostname}</a>
+                    <div className="text-xs text-muted-foreground truncate">CNAME → {s.target} · {s.kind === "vertal" ? "grátis Vertal" : "domínio próprio"}</div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <StatusBadge status={s.status} />
+                    <Button size="sm" variant="ghost" onClick={() => remove(s.id)} className="text-red-400 hover:bg-red-500/10"><Trash2 className="w-3.5 h-3.5" /></Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

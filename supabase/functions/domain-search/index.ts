@@ -1,6 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, sanitizeError } from "../_shared/cors.ts";
+import { cfConfig, cfDomainCheck, cfDomainSearch, usdToCredits } from "../_shared/cloudflare.ts";
 
 const IONOS_API = "https://api.hosting.ionos.com/domains/v1";
 
@@ -80,33 +81,57 @@ Deno.serve(async (req) => {
 
     const apiKey = buildIonosKey();
     const hasIonos = !!apiKey;
+    const cf = cfConfig();
 
-    // Build candidate list: direct query + tld variations + AI suggestions
+    // Build candidate list: direct query + tld variations + AI suggestions (+ Cloudflare suggestions)
     const base = query.includes(".") ? query.split(".")[0] : query;
     const directs = query.includes(".") ? [query] : [];
     const variants = ["com", "io", "dev", "app", "ai", "co", "xyz", "com.br"].map((t) => `${base}.${t}`);
-    const ai = await aiSuggest(base, 6);
-    const candidates = Array.from(new Set([...directs, ...variants, ...ai])).slice(0, 16);
+    const [ai, cfSuggested] = await Promise.all([
+      aiSuggest(base, 6),
+      cf.enabled ? cfDomainSearch(base, 6).then((r) => r.map((d) => d.name.toLowerCase())) : Promise.resolve([] as string[]),
+    ]);
+    const candidates = Array.from(new Set([...directs, ...variants, ...cfSuggested, ...ai])).slice(0, 20);
+
+    // Primary partner: Cloudflare Registrar (real-time registry check + at-cost pricing).
+    const cfQuotes = new Map<string, any>();
+    if (cf.enabled) {
+      for (const q of await cfDomainCheck(candidates)) cfQuotes.set(q.name.toLowerCase(), q);
+    }
 
     const results = await Promise.all(candidates.map(async (d) => {
       const tld = tldOf(d);
+      const q = cfQuotes.get(d);
+      if (q && (q.registrable || q.reason === "domain_unavailable")) {
+        const usd = Number(q.pricing?.registration_cost ?? 0);
+        return {
+          domain: d, tld, provider: "cloudflare",
+          available: q.registrable === true,
+          price_credits: q.registrable && usd > 0 ? await usdToCredits(svc, usd) : (TLD_PRICES_CREDITS[tld] ?? 20),
+          price_usd: usd || null,
+          renewal_usd: q.pricing?.renewal_cost ? Number(q.pricing.renewal_cost) : null,
+          premium: q.tier && q.tier !== "standard",
+          reason: q.reason,
+        };
+      }
+      // Fallback partner: IONOS (TLDs the Cloudflare API beta doesn't cover yet, e.g. .com.br)
       const price = TLD_PRICES_CREDITS[tld] ?? 20;
-      if (!hasIonos) return { domain: d, tld, available: null, price_credits: price, note: "IONOS_API_KEY not set" };
+      if (!hasIonos) return { domain: d, tld, provider: cf.enabled ? "cloudflare" : "none", available: cf.enabled && q ? false : null, price_credits: price, reason: q?.reason, note: cf.enabled ? "extension_not_supported_via_api" : "no_registrar_configured" };
       const av = await checkIonosAvailability(d, apiKey);
-      return { domain: d, tld, available: av.available, price_credits: price, reason: av.reason };
+      return { domain: d, tld, provider: "ionos", available: av.available, price_credits: price, reason: av.reason };
     }));
 
     const availableCount = results.filter((r) => r.available === true).length;
     try {
       await svc.from("connector_activity_logs").insert({
-        connector_slug: "ionos", user_id: userId, event_type: "search",
+        connector_slug: cf.enabled ? "cloudflare" : "ionos", user_id: userId, event_type: "search",
         status: "success",
         message: `Busca "${query}" → ${results.length} candidatos, ${availableCount} disponíveis`,
-        metadata: { query, count: results.length, available: availableCount, has_ionos: hasIonos },
+        metadata: { query, count: results.length, available: availableCount, has_ionos: hasIonos, has_cloudflare: cf.enabled },
       });
     } catch { /* ignore */ }
 
-    return new Response(JSON.stringify({ query, results, has_ionos: hasIonos }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ query, results, has_ionos: hasIonos, has_cloudflare: cf.enabled, partner: "Vertal Domínios - Parceiros" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e: any) {
     console.error("[domain-search] error:", e);
     return new Response(JSON.stringify({ error: sanitizeError(e) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
