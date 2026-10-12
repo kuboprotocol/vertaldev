@@ -13,7 +13,7 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     // e2e/ e tests/ são specs do Playwright (rodam com `playwright test`,
     // não com o Vitest); kubo-agent/ tem o próprio toolchain.
-    include: ['src/**/*.{test,spec}.{ts,tsx}', 'vite-plugins/**/*.{test,spec}.ts'],
+    include: ['src/**/*.{test,spec}.{ts,tsx}', 'vite-plugins/**/*.{test,spec}.ts', 'worker/**/*.{test,spec}.ts'],
     exclude: ['node_modules/**', 'dist/**', 'e2e/**', 'tests/**', 'kubo-agent/**'],
     reporters: ['default', 'json'],
     outputFile: {
