@@ -21,6 +21,8 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AvatarCropDialog } from "./AvatarCropDialog";
+import { AvatarStudio } from "./AvatarStudio";
+import { quoteAvatar } from "@/config/avatar";
 import { ImageEditorDialog } from "./ImageEditorDialog";
 import { VideoStudio } from "./VideoStudio";
 import { EbookStudio } from "./EbookStudio";
@@ -43,7 +45,7 @@ const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: strin
   { key: "image_editor", title: "Editor de Imagens", desc: "Edite, corte e redimensione suas imagens perfeitamente", icon: Sliders, cost: "Grátis" },
   { key: "downloader", title: "Downloader Universal", desc: "YouTube, Instagram, TikTok, Facebook", icon: Download, cost: "2 créditos" },
   { key: "clips", title: "Vertal Clips", desc: "Cortes virais automáticos", icon: Scissors, cost: "1 crédito" },
-  { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes realistas", icon: User2, cost: "2–4 créditos" },
+  { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes realistas", icon: User2, cost: `${quoteAvatar(15).credits}–${quoteAvatar(60).credits} créditos` },
   { key: "shorts", title: "Vertal Shorts", desc: "Vídeos curtos a partir de texto", icon: Video, cost: "3 créditos" },
   { key: "music", title: "MusKAI Music", desc: "Redireciona para MusKAI", icon: Music, cost: "Externo" },
   { key: "ebook", title: "Vertal Ebook AI", desc: "eBooks completos com capítulos", icon: BookOpen, cost: `a partir de ${ebookCost(EBOOK_MIN_CHAPTERS).credits} créditos` },
@@ -158,7 +160,7 @@ const TOOL_TO_FN: Record<string, string> = {
   nano_banana: "creative-router",
   downloader: "creative-download",
   clips: "creative-clips",
-  avatar: "creative-video",
+  avatar: "creative-avatar",
   shorts: "creative-video",
   music: "creative-router",
   ebook: "creative-ebook",
@@ -168,6 +170,7 @@ const TOOL_TO_FN: Record<string, string> = {
 export function CreativeToolInterface({ toolKey, onSuccess }: Props) {
   if (toolKey === "video_studio") return <VideoStudio />;
   if (toolKey === "ebook") return <EbookStudio />;
+  if (toolKey === "avatar") return <AvatarStudio />;
   return <StandardToolInterface toolKey={toolKey} onSuccess={onSuccess} />;
 }
 
