@@ -23,10 +23,11 @@ import { Badge } from "@/components/ui/badge";
 import { AvatarCropDialog } from "./AvatarCropDialog";
 import { ImageEditorDialog } from "./ImageEditorDialog";
 import { VideoStudio } from "./VideoStudio";
+import { EbookStudio } from "./EbookStudio";
 import { AvatarProgressSteps, type AvatarStepState, type AvatarStepKey } from "./AvatarProgressSteps";
 import { cn } from "@/lib/utils";
 import { PUTER_MODELS, creativeInvoke } from "@/lib/puterAI";
-import { EBOOK_DEFAULT_CHAPTERS, EBOOK_LAUNCH_DISCOUNT_PERCENT, EBOOK_MAX_CHAPTERS, EBOOK_MIN_CHAPTERS, ebookCost } from "@/config/ebookPricing";
+import { EBOOK_DEFAULT_CHAPTERS, EBOOK_MAX_CHAPTERS, EBOOK_MIN_CHAPTERS, ebookCost } from "@/config/ebookPricing";
 
 type ToolKey = "chat" | "nano_banana" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "image_editor" | "video_studio";
 
@@ -166,6 +167,7 @@ const TOOL_TO_FN: Record<string, string> = {
 
 export function CreativeToolInterface({ toolKey, onSuccess }: Props) {
   if (toolKey === "video_studio") return <VideoStudio />;
+  if (toolKey === "ebook") return <EbookStudio />;
   return <StandardToolInterface toolKey={toolKey} onSuccess={onSuccess} />;
 }
 
@@ -249,27 +251,6 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
     setStreamingContent("");
 
     try {
-      if (toolKey === "ebook") {
-        const { data, error } = await supabase.functions.invoke("creative-ebook", {
-          body: { topic: prompt, chapters: metadata.chapters },
-        });
-        if (error) throw error;
-        setSessionHistory(prev => [{
-          id: crypto.randomUUID(),
-          timestamp: new Date().toLocaleTimeString(),
-          prompt: data?.title || prompt,
-          status: "success",
-          assetUrl: data?.cover,
-          output_text: data?.content,
-          metadata: { ...metadata, credits: data?.credits, model: data?.model },
-        }, ...prev].slice(0, 50));
-        setExecutionPhase("done");
-        toast.success("E-book criado com sucesso!");
-        setPrompt("");
-        onSuccess?.();
-        return;
-      }
-
       const { data: { session } } = await supabase.auth.getSession();
       
       let body: any = { tool: toolKey === "nano_banana" ? "image" : toolKey, prompt, metadata };
@@ -452,21 +433,9 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
           <div className="flex items-center justify-between pt-4">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-background/60 border border-border/10">
               <Coins className="h-4 w-4 text-amber-500" />
-              {toolKey === "ebook" ? (() => {
-                const price = ebookCost(metadata.chapters);
-                return (
-                  <span className="text-xs font-bold text-amber-500/90 tracking-tight flex items-center gap-1.5">
-                    {price.tier.label}:
-                    <span className="line-through opacity-50 font-normal">{price.listCredits}</span>
-                    {price.credits} créditos
-                    <Badge variant="secondary" className="text-[9px] h-4">-{EBOOK_LAUNCH_DISCOUNT_PERCENT}% lançamento</Badge>
-                  </span>
-                );
-              })() : (
-                <span className="text-xs font-bold text-amber-500/90 tracking-tight">
-                  Custo: {config.cost} {config.cost === 1 ? 'crédito' : 'créditos'}
-                </span>
-              )}
+              <span className="text-xs font-bold text-amber-500/90 tracking-tight">
+                Custo: {config.cost} {config.cost === 1 ? 'crédito' : 'créditos'}
+              </span>
             </div>
             
             <Button
