@@ -14,16 +14,12 @@ type ProviderStatus = {
 type Health = {
   checked_at: string;
   openrouter: ProviderStatus;
-  suno: ProviderStatus;
-  moonshot: ProviderStatus;
   deepseek: ProviderStatus;
 };
 
 const PROVIDERS: { key: keyof Omit<Health, "checked_at">; label: string; purpose: string }[] = [
   { key: "openrouter", label: "OpenRouter", purpose: "Claude, Llama, chat, slides, código" },
   { key: "deepseek", label: "DeepSeek", purpose: "Geração de SaaS e apps" },
-  { key: "moonshot", label: "Moonshot", purpose: "Kimi (fallback)" },
-  { key: "suno", label: "Suno", purpose: "Geração de música e áudio" },
 ];
 
 export function ApiStatusPanel() {
