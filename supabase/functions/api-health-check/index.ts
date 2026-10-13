@@ -28,6 +28,9 @@ Deno.serve(async (req) => {
   const OR = Deno.env.get("OPENROUTER_API_KEY");
   const DEEPSEEK = Deno.env.get("DEEPSEEK_API_KEY");
 
+  // Secret names only (never values): helps spot a key saved under the wrong name.
+  const similar = Object.keys(Deno.env.toObject()).filter((k) => /open.?router/i.test(k) && k !== "OPENROUTER_API_KEY");
+
   const [openrouter, deepseek] = await Promise.all([
     ping("openrouter", OR, () => fetch("https://openrouter.ai/api/v1/key", {
       headers: { Authorization: `Bearer ${OR}` },
@@ -36,6 +39,10 @@ Deno.serve(async (req) => {
       headers: { Authorization: `Bearer ${DEEPSEEK}` },
     })),
   ]);
+
+  if (openrouter.status === "missing" && similar.length) {
+    openrouter.message += `; found ${similar.join(", ")} instead`;
+  }
 
   const body = {
     checked_at: new Date().toISOString(),

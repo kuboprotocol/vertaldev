@@ -35,7 +35,7 @@ const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: strin
   { key: "clips", title: "Vertal Clips", desc: "Cortes virais automáticos de vídeos longos", icon: Scissors, cost: "1 crédito" },
   { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes com narração IA", icon: User2, cost: "2–4 créditos" },
   { key: "shorts", title: "Vertal Shorts", desc: "Vídeos curtos verticais a partir de texto", icon: Video, cost: "3 créditos" },
-  { key: "music", title: "Vertal Music AI", desc: "Música original via Suno", icon: Music, cost: "1 crédito" },
+  { key: "music", title: "Vertal Music AI", desc: "Música original via MusKAI", icon: Music, cost: "1 crédito" },
   { key: "ebook", title: "Vertal Ebook AI", desc: "eBooks completos com capa e capítulos", icon: BookOpen, cost: "10 créditos" },
   { key: "emo", title: "Vertal EMO AI", desc: "Animação realista de fotos a partir de vídeo", icon: Sparkles, cost: "5 créditos" },
 ];

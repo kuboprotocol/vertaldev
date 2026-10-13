@@ -17,7 +17,7 @@ const InputSchema = z.object({
 
 // Credit costs based on prompt instructions
 const COSTS: Record<string, number> = {
-  chat: 1,      // Message simple (Featherless) or premium light
+  chat: 1,      // Message via OpenRouter
   chat_premium: 4, // Message premium frontier (Claude Sonnet)
   image: 1,     // Pollinations / Nano Banana
   video: 36,    // MusKAI / Sogni (est.)
@@ -86,89 +86,53 @@ Deno.serve(withRefundOnFailure(async (req) => {
 }));
 
 async function handleChat(userId: string, messages: any[], requestedModel?: string, temperature?: number, max_tokens?: number, cost?: number) {
-  const FEATHERLESS_KEY = Deno.env.get("FEATHERLESS_API_KEY");
+  // Every chat model in the Creative panel goes through OpenRouter.
   const OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY");
-  
+  if (!OPENROUTER_KEY) {
+    return new Response(JSON.stringify({ error: "OPENROUTER_API_KEY not configured" }), {
+      status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const model = requestedModel ?? "meta-llama/llama-3.1-70b-instruct";
   const sys = {
     role: "system",
     content: "Você é o assistente KUBO Vibe. Seja direto, técnico e profissional. Idioma: Português Brasileiro.",
   };
-  const payload = {
-    messages: [sys, ...messages],
-    temperature: temperature ?? 0.7,
-    max_tokens: max_tokens ?? 1500, // Hard limit from prompt
-    stream: true,
-  };
 
-  // Tier 1: Featherless (Fixed Cost) - Default for simple tasks or Free users
-  // Tier 2: OpenRouter (Frontier) - For complex tasks or requested frontier models
-  
-  const isFrontierRequested = requestedModel?.includes("sonnet") || requestedModel?.includes("gpt-4o");
-  
-  if (!isFrontierRequested && FEATHERLESS_KEY) {
-    try {
-      const resp = await fetchWithRetry("https://api.featherless.ai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${FEATHERLESS_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...payload,
-          model: requestedModel ?? "meta-llama/llama-3.1-70b-instruct",
-        }),
-      });
+  const resp = await fetchWithRetry("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${OPENROUTER_KEY}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://kubovibe.dev",
+      "X-Title": "KUBO Vibe",
+    },
+    body: JSON.stringify({
+      model,
+      messages: [sys, ...messages],
+      temperature: temperature ?? 0.7,
+      max_tokens: max_tokens ?? 1500, // Hard limit from prompt
+      stream: true,
+    }),
+  });
 
-      if (resp.ok && resp.body) {
-        recordAsset(userId, {
-          tool: "chat",
-          prompt: messages[messages.length - 1]?.content?.slice(0, 1000),
-          credits_spent: cost ?? 1,
-          metadata: { engine: "featherless", model: requestedModel ?? "llama-3.1-70b" },
-        }).catch(console.error);
-        
-        return new Response(resp.body, {
-          headers: { ...corsHeaders, "Content-Type": "text/event-stream", "X-Engine": "featherless" },
-        });
-      }
-      console.warn("[creative-router] Featherless failed, falling back to OpenRouter");
-    } catch (e) {
-      console.error("[creative-router] Featherless error:", e);
-    }
-  }
+  if (resp.ok && resp.body) {
+    recordAsset(userId, {
+      tool: "chat",
+      prompt: messages[messages.length - 1]?.content?.slice(0, 1000),
+      credits_spent: cost ?? 1,
+      metadata: { engine: "openrouter", model },
+    }).catch(console.error);
 
-  // Fallback or explicit Frontier
-  if (OPENROUTER_KEY) {
-    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${OPENROUTER_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://kubovibe.dev",
-        "X-Title": "KUBO Vibe",
-      },
-      body: JSON.stringify({
-        ...payload,
-        model: requestedModel ?? "openai/gpt-4o-mini",
-      }),
+    return new Response(resp.body, {
+      headers: { ...corsHeaders, "Content-Type": "text/event-stream", "X-Engine": "openrouter" },
     });
-
-    if (resp.ok && resp.body) {
-      recordAsset(userId, {
-        tool: "chat",
-        prompt: messages[messages.length - 1]?.content?.slice(0, 1000),
-        credits_spent: cost ?? 1,
-        metadata: { engine: "openrouter", model: requestedModel ?? "gpt-4o-mini" },
-      }).catch(console.error);
-      
-      return new Response(resp.body, {
-        headers: { ...corsHeaders, "Content-Type": "text/event-stream", "X-Engine": "openrouter" },
-      });
-    }
   }
 
-  return new Response(JSON.stringify({ error: "Nenhum motor de IA disponível" }), {
-    status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
+  console.error("[creative-router] OpenRouter failed:", resp.status, await resp.text().catch(() => ""));
+  return new Response(JSON.stringify({ error: `openrouter_http_${resp.status}` }), {
+    status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
 
