@@ -26,20 +26,11 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const OR = Deno.env.get("OPENROUTER_API_KEY");
-  const SUNO = Deno.env.get("SUNO_API_KEY");
-  const MOONSHOT = Deno.env.get("MOONSHOT_API_KEY");
   const DEEPSEEK = Deno.env.get("DEEPSEEK_API_KEY");
-  const SUNO_BASE = Deno.env.get("SUNO_API_BASE") ?? "https://apibox.erweima.ai";
 
-  const [openrouter, suno, moonshot, deepseek] = await Promise.all([
+  const [openrouter, deepseek] = await Promise.all([
     ping("openrouter", OR, () => fetch("https://openrouter.ai/api/v1/key", {
       headers: { Authorization: `Bearer ${OR}` },
-    })),
-    ping("suno", SUNO, () => fetch(`${SUNO_BASE}/api/v1/generate/credit`, {
-      headers: { Authorization: `Bearer ${SUNO}` },
-    })),
-    ping("moonshot", MOONSHOT, () => fetch("https://api.moonshot.cn/v1/models", {
-      headers: { Authorization: `Bearer ${MOONSHOT}` },
     })),
     ping("deepseek", DEEPSEEK, () => fetch("https://api.deepseek.com/models", {
       headers: { Authorization: `Bearer ${DEEPSEEK}` },
@@ -48,7 +39,7 @@ Deno.serve(async (req) => {
 
   const body = {
     checked_at: new Date().toISOString(),
-    openrouter, suno, moonshot, deepseek,
+    openrouter, deepseek,
   };
   return new Response(JSON.stringify(body), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
