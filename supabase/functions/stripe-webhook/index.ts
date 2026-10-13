@@ -90,11 +90,11 @@ Deno.serve(async (req: Request) => {
       const { data: existingSub } = await supabase.from("subscriptions").select("id").eq("user_id", userId).maybeSingle();
       const subPayload: any = { plan, is_active: true, paid_at: now, stripe_session_id: session.id, stripe_subscription_id: (session.subscription as string) || null, updated_at: now };
 
-      if (existingSub) {
-        await supabase.from("subscriptions").update(subPayload).eq("id", existingSub.id);
-      } else {
-        await supabase.from("subscriptions").insert({ user_id: userId, edits_used: 0, edits_limit: 0, ...subPayload });
-      }
+      const { error: subError } = existingSub
+        ? await supabase.from("subscriptions").update(subPayload).eq("id", existingSub.id)
+        : await supabase.from("subscriptions").insert({ user_id: userId, edits_used: 0, edits_limit: 0, ...subPayload });
+      // Falha aqui precisa virar 500 para o Stripe reenviar o evento.
+      if (subError) throw new Error(`subscription upsert failed: ${subError.message}`);
 
       if (BUSINESS_PLANS.includes(plan)) {
         try {
@@ -112,7 +112,8 @@ Deno.serve(async (req: Request) => {
       const subscription = event.data.object as Stripe.Subscription;
       const userId = subscription.metadata?.supabase_user_id;
       if (userId) {
-        await supabase.from("subscriptions").update({ plan: "free", is_active: false, stripe_subscription_id: null, updated_at: new Date().toISOString() } as any).eq("user_id", userId);
+        const { error } = await supabase.from("subscriptions").update({ plan: "free", is_active: false, stripe_subscription_id: null, updated_at: new Date().toISOString() } as any).eq("user_id", userId);
+        if (error) throw new Error(`subscription cancel failed: ${error.message}`);
       }
     }
 
@@ -123,7 +124,8 @@ Deno.serve(async (req: Request) => {
         const stripeSub = await stripe.subscriptions.retrieve(subId);
         const userId = stripeSub.metadata?.supabase_user_id;
         if (userId) {
-          await supabase.from("subscriptions").update({ is_active: true, paid_at: new Date().toISOString(), updated_at: new Date().toISOString() } as any).eq("user_id", userId);
+          const { error } = await supabase.from("subscriptions").update({ is_active: true, paid_at: new Date().toISOString(), updated_at: new Date().toISOString() } as any).eq("user_id", userId);
+          if (error) throw new Error(`subscription renewal failed: ${error.message}`);
           // A primeira fatura já gerou comissão no checkout.session.completed.
           if (invoice.billing_reason !== "subscription_create") {
             await recordAffiliateCommission(supabase, userId, "renewal", invoice.id, invoice.amount_paid, invoice.currency);
