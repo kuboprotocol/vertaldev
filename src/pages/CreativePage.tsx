@@ -21,6 +21,7 @@ import {
 import { useDebounce } from "@/hooks/use-debounce";
 import { ManusLauncher } from "@/components/creative/ManusLauncher";
 import { CreativeToolInterface } from "@/components/creative/CreativeToolInterface";
+import { EBOOK_DEFAULT_CHAPTERS, EBOOK_MIN_CHAPTERS, ebookCost } from "@/config/ebookPricing";
 import { SkillExecutionsList } from "@/components/creative/SkillExecutionsList";
 import { ApiStatusPanel } from "@/components/creative/ApiStatusPanel";
 
@@ -36,7 +37,7 @@ const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: strin
   { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes com narração IA", icon: User2, cost: "2–4 créditos" },
   { key: "shorts", title: "Vertal Shorts", desc: "Vídeos curtos verticais a partir de texto", icon: Video, cost: "3 créditos" },
   { key: "music", title: "Vertal Music AI", desc: "Música original via MusKAI", icon: Music, cost: "1 crédito" },
-  { key: "ebook", title: "Vertal Ebook AI", desc: "eBooks completos com capa e capítulos", icon: BookOpen, cost: "10 créditos" },
+  { key: "ebook", title: "Vertal Ebook AI", desc: "eBooks completos com capa e capítulos", icon: BookOpen, cost: `a partir de ${ebookCost(EBOOK_MIN_CHAPTERS).credits} créditos` },
   { key: "emo", title: "Vertal EMO AI", desc: "Animação realista de fotos a partir de vídeo", icon: Sparkles, cost: "5 créditos" },
 ];
 
@@ -63,7 +64,7 @@ const RERUN_MAP: Record<string, { fn: string; build: (a: any) => any }> = {
   avatar: { fn: "creative-video", build: (a) => ({ mode: "avatar", prompt: a.prompt, duration: a.metadata?.duration ?? 30 }) },
   shorts: { fn: "creative-video", build: (a) => ({ mode: "shorts", prompt: a.prompt, duration: 30 }) },
   music: { fn: "creative-music", build: (a) => ({ action: "generate", prompt: a.prompt, instrumental: a.metadata?.instrumental ?? false }) },
-  ebook: { fn: "creative-ebook", build: (a) => ({ topic: a.prompt, chapters: a.metadata?.chapters ?? 5 }) },
+  ebook: { fn: "creative-ebook", build: (a) => ({ topic: a.prompt, chapters: a.metadata?.chapters ?? EBOOK_DEFAULT_CHAPTERS }) },
   emo: { fn: "emo-animate", build: (a) => ({ source_image: a.metadata?.source_image, driving_video: a.metadata?.driving_video }) },
 };
 

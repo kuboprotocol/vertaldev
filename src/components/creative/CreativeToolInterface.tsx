@@ -26,6 +26,7 @@ import { VideoStudio } from "./VideoStudio";
 import { AvatarProgressSteps, type AvatarStepState, type AvatarStepKey } from "./AvatarProgressSteps";
 import { cn } from "@/lib/utils";
 import { PUTER_MODELS, creativeInvoke } from "@/lib/puterAI";
+import { EBOOK_DEFAULT_CHAPTERS, EBOOK_LAUNCH_DISCOUNT_PERCENT, EBOOK_MAX_CHAPTERS, EBOOK_MIN_CHAPTERS, ebookCost } from "@/config/ebookPricing";
 
 type ToolKey = "chat" | "nano_banana" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "image_editor" | "video_studio";
 
@@ -44,7 +45,7 @@ const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: strin
   { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes realistas", icon: User2, cost: "2–4 créditos" },
   { key: "shorts", title: "Vertal Shorts", desc: "Vídeos curtos a partir de texto", icon: Video, cost: "3 créditos" },
   { key: "music", title: "MusKAI Music", desc: "Redireciona para MusKAI", icon: Music, cost: "Externo" },
-  { key: "ebook", title: "Vertal Ebook AI", desc: "eBooks completos com capítulos", icon: BookOpen, cost: "10 créditos" },
+  { key: "ebook", title: "Vertal Ebook AI", desc: "eBooks completos com capítulos", icon: BookOpen, cost: `a partir de ${ebookCost(EBOOK_MIN_CHAPTERS).credits} créditos` },
   { key: "emo", title: "Vertal EMO AI", desc: "Animação realista de fotos", icon: Sparkles, cost: "5 créditos" },
 ];
 
@@ -135,11 +136,11 @@ const TOOL_CONFIGS: Record<ToolKey, {
   ebook: { 
     title: "Vertal Ebook AI", 
     description: "eBooks completos com capa, capítulos e conteúdo.", 
-    cost: 10,
+    cost: ebookCost(EBOOK_DEFAULT_CHAPTERS).credits,
     promptLabel: "Tema do Ebook",
     placeholder: "Guia definitivo para Marketing Digital em 2024...",
     options: [
-      { key: "chapters", label: "Número de capítulos", type: "number", default: 5 }
+      { key: "chapters", label: `Capítulos (${EBOOK_MIN_CHAPTERS}–${EBOOK_MAX_CHAPTERS})`, type: "number", default: EBOOK_DEFAULT_CHAPTERS }
     ]
   },
   emo: { 
@@ -248,6 +249,27 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
     setStreamingContent("");
 
     try {
+      if (toolKey === "ebook") {
+        const { data, error } = await supabase.functions.invoke("creative-ebook", {
+          body: { topic: prompt, chapters: metadata.chapters },
+        });
+        if (error) throw error;
+        setSessionHistory(prev => [{
+          id: crypto.randomUUID(),
+          timestamp: new Date().toLocaleTimeString(),
+          prompt: data?.title || prompt,
+          status: "success",
+          assetUrl: data?.cover,
+          output_text: data?.content,
+          metadata: { ...metadata, credits: data?.credits, model: data?.model },
+        }, ...prev].slice(0, 50));
+        setExecutionPhase("done");
+        toast.success("E-book criado com sucesso!");
+        setPrompt("");
+        onSuccess?.();
+        return;
+      }
+
       const { data: { session } } = await supabase.auth.getSession();
       
       let body: any = { tool: toolKey === "nano_banana" ? "image" : toolKey, prompt, metadata };
@@ -430,9 +452,21 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
           <div className="flex items-center justify-between pt-4">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-background/60 border border-border/10">
               <Coins className="h-4 w-4 text-amber-500" />
-              <span className="text-xs font-bold text-amber-500/90 tracking-tight">
-                Custo: {config.cost} {config.cost === 1 ? 'crédito' : 'créditos'}
-              </span>
+              {toolKey === "ebook" ? (() => {
+                const price = ebookCost(metadata.chapters);
+                return (
+                  <span className="text-xs font-bold text-amber-500/90 tracking-tight flex items-center gap-1.5">
+                    {price.tier.label}:
+                    <span className="line-through opacity-50 font-normal">{price.listCredits}</span>
+                    {price.credits} créditos
+                    <Badge variant="secondary" className="text-[9px] h-4">-{EBOOK_LAUNCH_DISCOUNT_PERCENT}% lançamento</Badge>
+                  </span>
+                );
+              })() : (
+                <span className="text-xs font-bold text-amber-500/90 tracking-tight">
+                  Custo: {config.cost} {config.cost === 1 ? 'crédito' : 'créditos'}
+                </span>
+              )}
             </div>
             
             <Button
