@@ -1,9 +1,16 @@
-// Kubo Ebook AI — generates a multi-chapter ebook using DeepSeek (primary) + Lovable AI fallback.
-// Cover image via Lovable AI Nano Banana.
+// Vertal Ebook Engine — gera um eBook completo: esboço → capítulos (em paralelo) → capa.
+// IA (OpenRouter Kimi K2.6 + fallbacks, capa Nano Banana): ../_shared/ebookAi.ts.
+// A estrutura do livro (metadata.doc) é a que o editor abre.
+// Preço em créditos: ../_shared/ebookPricing.ts (mesma tabela exibida no painel).
 import { corsHeaders } from "../_shared/cors.ts";
 import { getUser, deductCredits, recordAsset, sanitizeError, withRefundOnFailure } from "../_shared/creative.ts";
+import { clampChapters, ebookCost } from "../_shared/ebookPricing.ts";
+import { coverPrompt, ebookChat as chat, ebookImage, mapLimit } from "../_shared/ebookAi.ts";
+import { ebookToMarkdown, type EbookDoc } from "../_shared/ebookDoc.ts";
 
-const COST = 10;
+type Outline = { title: string; subtitle?: string; chapters: { title: string; summary: string }[] };
+
+const CHAPTER_CONCURRENCY = 5;
 
 Deno.serve(withRefundOnFailure(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -12,75 +19,68 @@ Deno.serve(withRefundOnFailure(async (req) => {
 
   const idempotencyKey = req.headers.get("X-Idempotency-Key") ?? undefined;
   try {
-    const { topic, chapters = 5, language = "pt-BR" } = await req.json();
+    const body = await req.json();
+    const topic = String(body?.topic ?? "").trim();
+    const language = String(body?.language ?? "pt-BR");
     if (!topic) return j(400, { error: "topic required" });
+    const chapters = clampChapters(body?.chapters);
+    const { tier, listCredits, credits } = ebookCost(chapters);
 
-    const ded = await deductCredits(user.id, COST, "creative_ebook", { topic, chapters }, user.email, idempotencyKey);
-    if (!ded.ok) return j((ded as any).status ?? 402, { error: ded.error });
+    const ded = await deductCredits(user.id, credits, "creative_ebook", { topic, chapters, tier: tier.id, list_credits: listCredits }, user.email, idempotencyKey);
+    if (!ded.ok) return j(ded.status ?? 402, { error: ded.error });
 
-    const sys = `Você é um autor profissional. Escreva um eBook em ${language} sobre o tema dado. Gere um título envolvente, um sumário, e ${chapters} capítulos completos, cada um com pelo menos 400 palavras. Use markdown. Comece com # TÍTULO.`;
-    const messages = [
-      { role: "system", content: sys },
+    // 1) Esboço
+    const outlineRes = await chat([
+      { role: "system", content: `Você é um editor-chefe de livros best-seller. Planeje um eBook em ${language}. Responda APENAS JSON: {"title": string, "subtitle": string, "chapters": [{"title": string, "summary": string}]} com exatamente ${chapters} capítulos, em ordem lógica e sem repetição de conteúdo.` },
       { role: "user", content: topic },
-    ];
+    ], 2000, true);
+    const outline = parseOutline(outlineRes.content, topic, chapters);
 
-    let text = "";
-    const DS = Deno.env.get("DEEPSEEK_API_KEY");
-    const LK = Deno.env.get("LOVABLE_API_KEY");
-    const tries: Array<{ url: string; key?: string; model: string }> = [];
-    if (DS) tries.push({ url: "https://api.deepseek.com/chat/completions", key: DS, model: "deepseek-chat" });
-    if (LK) tries.push({ url: "https://ai.gateway.lovable.dev/v1/chat/completions", key: LK, model: "google/gemini-3-flash-preview" });
+    // 2) Capítulos em paralelo (lotes)
+    const toc = outline.chapters.map((c, i) => `${i + 1}. ${c.title}`).join("\n");
+    const results = await mapLimit(outline.chapters, CHAPTER_CONCURRENCY, (c, i) => chat([
+      { role: "system", content: `Você é um autor profissional escrevendo o livro "${outline.title}" em ${language}. Sumário:\n${toc}\n\nEscreva SOMENTE o capítulo pedido, entre 1200 e 1600 palavras, em markdown, com subtítulos (##), exemplos práticos e um fechamento que conecte ao próximo capítulo. Não repita o título do capítulo no início.` },
+      { role: "user", content: `Capítulo ${i + 1}: ${c.title}\nResumo: ${c.summary}` },
+    ], 3000));
+    const bodies = results.map((r) => r.content.trim());
+    const model = results[results.length - 1]?.model ?? outlineRes.model;
+    if (bodies.some((b) => !b)) return j(503, { error: "Falha ao gerar conteúdo" });
 
-    for (const t of tries) {
-      const r = await fetch(t.url, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${t.key}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model: t.model, messages, max_tokens: 4000 }),
-      });
-      if (r.ok) {
-        const d = await r.json();
-        text = d?.choices?.[0]?.message?.content ?? "";
-        if (text) break;
-      }
-    }
-    if (!text) return j(503, { error: "Falha ao gerar conteúdo" });
+    // 3) Capa (best-effort)
+    const cover = await ebookImage(coverPrompt(outline.title, topic), user.id, "cover");
 
-    // Cover image (best-effort)
-    let cover: string | null = null;
-    if (LK) {
-      try {
-        const ir = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${LK}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash-image",
-            messages: [{ role: "user", content: `Modern minimalist ebook cover for: ${topic}. Premium typography, no text artifacts.` }],
-            modalities: ["image", "text"],
-          }),
-        });
-        const id = await ir.json();
-        cover = id?.choices?.[0]?.message?.images?.[0]?.image_url?.url ?? null;
-      } catch (_) { /* ignore */ }
-    }
-
-    const titleMatch = text.match(/^#\s+(.+)$/m);
-    const title = titleMatch?.[1]?.trim() ?? topic;
+    const doc: EbookDoc = {
+      title: outline.title,
+      subtitle: outline.subtitle,
+      language,
+      cover,
+      chapters: outline.chapters.map((c, i) => ({ title: c.title, content: bodies[i] })),
+    };
+    const text = ebookToMarkdown(doc);
 
     const assetId = await recordAsset(user.id, {
       tool: "ebook",
       prompt: topic,
       output_text: text,
       output_url: cover ?? undefined,
-      credits_spent: COST,
-      metadata: { title, chapters, language, cover },
+      credits_spent: credits,
+      metadata: { title: outline.title, chapters, language, cover, tier: tier.id, list_credits: listCredits, model, doc },
     });
 
-    return j(200, { ok: true, title, content: text, cover, asset_id: assetId });
+    return j(200, { ok: true, title: outline.title, content: text, cover, doc, asset_id: assetId, credits, list_credits: listCredits, tier: tier.id, model });
   } catch (e) {
     console.error("[creative-ebook] error:", e);
     return j(500, { error: sanitizeError(e) });
   }
 }));
+
+function parseOutline(raw: string, topic: string, chapters: number): Outline {
+  let o: Partial<Outline> = {};
+  try { o = JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g, "")); } catch { /* fallback abaixo */ }
+  const list = Array.isArray(o.chapters) ? o.chapters.filter((c) => c && c.title).slice(0, chapters) : [];
+  while (list.length < chapters) list.push({ title: `Parte ${list.length + 1}`, summary: topic });
+  return { title: String(o.title || topic), subtitle: o.subtitle ? String(o.subtitle) : undefined, chapters: list };
+}
 
 function j(s: number, b: unknown) {
   return new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });

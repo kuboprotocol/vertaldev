@@ -23,9 +23,11 @@ import { Badge } from "@/components/ui/badge";
 import { AvatarCropDialog } from "./AvatarCropDialog";
 import { ImageEditorDialog } from "./ImageEditorDialog";
 import { VideoStudio } from "./VideoStudio";
+import { EbookStudio } from "./EbookStudio";
 import { AvatarProgressSteps, type AvatarStepState, type AvatarStepKey } from "./AvatarProgressSteps";
 import { cn } from "@/lib/utils";
 import { PUTER_MODELS, creativeInvoke } from "@/lib/puterAI";
+import { EBOOK_DEFAULT_CHAPTERS, EBOOK_MAX_CHAPTERS, EBOOK_MIN_CHAPTERS, ebookCost } from "@/config/ebookPricing";
 
 type ToolKey = "chat" | "nano_banana" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "image_editor" | "video_studio";
 
@@ -44,7 +46,7 @@ const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: strin
   { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes realistas", icon: User2, cost: "2–4 créditos" },
   { key: "shorts", title: "Vertal Shorts", desc: "Vídeos curtos a partir de texto", icon: Video, cost: "3 créditos" },
   { key: "music", title: "MusKAI Music", desc: "Redireciona para MusKAI", icon: Music, cost: "Externo" },
-  { key: "ebook", title: "Vertal Ebook AI", desc: "eBooks completos com capítulos", icon: BookOpen, cost: "10 créditos" },
+  { key: "ebook", title: "Vertal Ebook AI", desc: "eBooks completos com capítulos", icon: BookOpen, cost: `a partir de ${ebookCost(EBOOK_MIN_CHAPTERS).credits} créditos` },
   { key: "emo", title: "Vertal EMO AI", desc: "Animação realista de fotos", icon: Sparkles, cost: "5 créditos" },
 ];
 
@@ -135,11 +137,11 @@ const TOOL_CONFIGS: Record<ToolKey, {
   ebook: { 
     title: "Vertal Ebook AI", 
     description: "eBooks completos com capa, capítulos e conteúdo.", 
-    cost: 10,
+    cost: ebookCost(EBOOK_DEFAULT_CHAPTERS).credits,
     promptLabel: "Tema do Ebook",
     placeholder: "Guia definitivo para Marketing Digital em 2024...",
     options: [
-      { key: "chapters", label: "Número de capítulos", type: "number", default: 5 }
+      { key: "chapters", label: `Capítulos (${EBOOK_MIN_CHAPTERS}–${EBOOK_MAX_CHAPTERS})`, type: "number", default: EBOOK_DEFAULT_CHAPTERS }
     ]
   },
   emo: { 
@@ -165,6 +167,7 @@ const TOOL_TO_FN: Record<string, string> = {
 
 export function CreativeToolInterface({ toolKey, onSuccess }: Props) {
   if (toolKey === "video_studio") return <VideoStudio />;
+  if (toolKey === "ebook") return <EbookStudio />;
   return <StandardToolInterface toolKey={toolKey} onSuccess={onSuccess} />;
 }
 
