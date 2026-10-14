@@ -43,7 +43,8 @@ export interface EcosystemProduct {
   mcp: EcosystemMcp
 }
 
-const VERTAL_DEV_MCP_URL = `${
+/** Servidor MCP do Vertal Dev (Supabase Edge Function `mcp`). */
+export const VERTAL_DEV_MCP_URL = `${
   (import.meta.env.VITE_SUPABASE_URL as string | undefined) || 'https://sccizjlpwezsgaxkclot.supabase.co'
 }/functions/v1/mcp`
 

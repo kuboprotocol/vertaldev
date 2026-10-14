@@ -13,6 +13,7 @@ import AffiliateInstallsManager from '@/components/affiliate/AffiliateInstallsMa
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 import { AFFILIATE_RATE, formatCents } from '@/lib/referral'
+import { VERTAL_DEV_MCP_URL } from '@/lib/ecosystem'
 
 interface CommissionSummary {
   pending: number
@@ -253,7 +254,7 @@ export default function AffiliateProgramPage() {
                       <div>
                         <h4 className="font-semibold text-foreground mb-1">2. Usar em requisições</h4>
                         <code className="block bg-muted p-2 rounded text-xs font-mono mt-1">
-                          curl -X POST https://vertal.app/functions/v1/mcp \<br />
+                          curl -X POST {VERTAL_DEV_MCP_URL} \<br />
                           &nbsp;&nbsp;-H "Authorization: Bearer YOUR_KEY" \<br />
                           &nbsp;&nbsp;-H "Content-Type: application/json" \<br />
                           &nbsp;&nbsp;-d '{"{jsonrpc: \"2.0\", ...}"}'

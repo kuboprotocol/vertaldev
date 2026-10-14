@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import AnimatedLogo from '@/components/branding/AnimatedLogo'
 import { motion } from 'framer-motion'
+import { VERTAL_DEV_MCP_URL } from '@/lib/ecosystem'
 
 export default function DocsMcpPage() {
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
@@ -22,16 +23,16 @@ export default function DocsMcpPage() {
   }
 
   const codeBlocks = {
-    curl: `curl -X POST https://vertal.app/functions/v1/mcp \\
+    curl: `curl -X POST ${VERTAL_DEV_MCP_URL} \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "jsonrpc": "2.0",
-    "method": "your_method",
+    "method": "tools/list",
     "params": {},
     "id": 1
   }'`,
-    javascript: `const response = await fetch('https://vertal.app/functions/v1/mcp', {
+    javascript: `const response = await fetch('${VERTAL_DEV_MCP_URL}', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer YOUR_API_KEY',
@@ -39,7 +40,7 @@ export default function DocsMcpPage() {
   },
   body: JSON.stringify({
     jsonrpc: '2.0',
-    method: 'your_method',
+    method: 'tools/list',
     params: {},
     id: 1
   })
@@ -57,13 +58,13 @@ headers = {
 
 payload = {
     'jsonrpc': '2.0',
-    'method': 'your_method',
+    'method': 'tools/list',
     'params': {},
     'id': 1
 }
 
 response = requests.post(
-    'https://vertal.app/functions/v1/mcp',
+    '${VERTAL_DEV_MCP_URL}',
     headers=headers,
     json=payload
 )
@@ -214,7 +215,7 @@ print(data)`,
                   <CardHeader>
                     <CardTitle>Endpoint Principal</CardTitle>
                     <CardDescription>
-                      POST https://vertal.app/functions/v1/mcp
+                      POST {VERTAL_DEV_MCP_URL}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">

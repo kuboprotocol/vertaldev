@@ -61,3 +61,19 @@ describe('Ecossistema Vertal', () => {
     expect(dialog.textContent).toContain('create_deployment')
   })
 })
+
+describe('documentação do MCP', () => {
+  it('aponta para a Edge Function do Vertal Dev, não para vertal.app', async () => {
+    const { VERTAL_DEV_MCP_URL } = await import('@/lib/ecosystem')
+    expect(VERTAL_DEV_MCP_URL).toMatch(/^https:\/\/[a-z0-9]+\.supabase\.co\/functions\/v1\/mcp$/)
+    const { default: DocsMcpPage } = await import('@/pages/DocsMcpPage')
+    const { container } = render(
+      <MemoryRouter>
+        <DocsMcpPage />
+      </MemoryRouter>,
+    )
+    expect(container.textContent).toContain(VERTAL_DEV_MCP_URL)
+    expect(container.textContent).not.toContain('vertal.app/functions')
+    expect(container.textContent).not.toContain('your_method')
+  })
+})
