@@ -199,10 +199,9 @@ testimonials and a waitlist form.`}</Pre>
         </UL>
         <H3>Infrastructure</H3>
         <UL>
-          <li>Vercel for the marketing site and frontend builds.</li>
-          <li>Render for long-running microservices.</li>
+          <li>Cloudflare (Workers and Pages) for the marketing site, frontend builds, edge caching and DDoS protection.</li>
+          <li>Vertal Cloud containers for builds, renders and long-running services.</li>
           <li>IPFS (web3.storage) for decentralised app hosting.</li>
-          <li>Cloudflare for edge caching and DDoS protection.</li>
         </UL>
       </>
     ),
@@ -731,22 +730,19 @@ testimonials and a waitlist form.`}</Pre>
     content: (
       <>
         <H2>Deployment</H2>
-        <H3>Vercel (frontend)</H3>
+        <H3>Cloudflare (frontend and edge)</H3>
         <UL>
-          <li>Connect the GitHub repo and Vercel auto-deploys on every push to <Code>main</Code>.</li>
+          <li>Connect the GitHub repo and Cloudflare deploys on every push to <Code>main</Code>, with a preview for each branch.</li>
           <li>
-            Configure env vars in Vercel Dashboard → Settings → Environment Variables:{' '}
+            Configure env vars in Cloudflare Dashboard → Workers &amp; Pages → Settings → Variables:{' '}
             <Code>VITE_SENTRY_DSN</Code>, <Code>VITE_API_URL</Code>.
           </li>
-          <li>Custom domains and cron jobs are managed under Vercel → Settings.</li>
+          <li>Custom domains and DNS are managed in the same Cloudflare account.</li>
         </UL>
-        <H3>Render (backend services)</H3>
+        <H3>Vertal Cloud (containers)</H3>
         <UL>
-          <li>The repo ships a <Code>render.yaml</Code> blueprint.</li>
-          <li>
-            Set <Code>VITE_SUPABASE_*</Code> with <Code>sync: false</Code> for each
-            service.
-          </li>
+          <li>Builds, renders, terminals and backend services run in isolated Vertal Cloud containers.</li>
+          <li>Each run is billed in credits and the container is closed when the session ends.</li>
         </UL>
         <H3>IPFS (decentralised)</H3>
         <P>

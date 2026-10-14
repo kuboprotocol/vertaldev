@@ -141,13 +141,13 @@ Deno.serve(async (req) => {
       const { data: target } = await supa.from("deployments").select("*")
         .eq("status", "ready").eq("healthy", true).neq("id", deployment.id)
         .not("commit_sha", "is", null).order("started_at", { ascending: false }).limit(1).maybeSingle();
-      const hookUrl = Deno.env.get("VERCEL_DEPLOY_HOOK_URL") || Deno.env.get("LOVABLE_DEPLOY_HOOK_URL");
+      const hookUrl = Deno.env.get("CLOUDFLARE_DEPLOY_HOOK_URL") || Deno.env.get("LOVABLE_DEPLOY_HOOK_URL");
       if (target && hookUrl) {
         const final = `${hookUrl}${hookUrl.includes("?") ? "&" : "?"}sha=${encodeURIComponent(target.commit_sha)}`;
         const r = await fetch(final, { method: "POST" }).catch(() => null);
         await supa.from("deployments").insert({
           source: "auto-rollback",
-          provider: hookUrl.includes("vercel") ? "vercel" : "lovable",
+          provider: hookUrl.includes("cloudflare") ? "cloudflare" : "lovable",
           status: r?.ok ? "building" : "error",
           trigger_reason: "Auto-rollback: smoke test failed",
           commit_sha: target.commit_sha,

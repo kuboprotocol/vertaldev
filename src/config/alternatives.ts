@@ -118,7 +118,7 @@ export const ALTERNATIVES: Alternative[] = [
       'Você ainda não tem o app: o Vertal cria e publica',
       'Você quer backend, banco e autenticação sem montar a infraestrutura',
     ],
-    together: 'O código gerado pelo Vertal é um projeto padrão e pode ser hospedado também na Vercel.',
+    together: 'No Vertal o deploy já vem incluído: seu app é publicado na Cloudflare ou em containers do Vertal Cloud.',
   },
   {
     slug: 'railway',
@@ -129,7 +129,7 @@ export const ALTERNATIVES: Alternative[] = [
       'Você quer criar o app antes de pensar em infraestrutura',
       'Você quer IA, Web3 e conectores prontos',
     ],
-    together: 'O Vertal pode publicar seu app em infraestruturas como a Railway.',
+    together: 'No Vertal o deploy já vem incluído: backend e serviços rodam em containers do Vertal Cloud.',
   },
   {
     slug: 'cloudflare',

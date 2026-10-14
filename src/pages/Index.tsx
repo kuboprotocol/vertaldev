@@ -51,13 +51,13 @@ Prioridade: interpretar corretamente a intenção antes de agir, execute integra
 
 Faça o seguinte:
 
-Monte um  um protótipo do painel da Vibe Code — combinando o melhor da Vercel Vibe code VO (deploy, domínios, status) com o melhor do Replit (agente narrando passo a passo, preview ao vivo), responsivo (mobile vira abas embaixo, desktop vira app baixável via wrapper tipo Tauri), e com a compra/transferência de domínio bem visível.
+Monte um  um protótipo do painel da Vibe Code — combinando um painel de deploy completo (deploy, domínios, status) com o melhor do Replit (agente narrando passo a passo, preview ao vivo), responsivo (mobile vira abas embaixo, desktop vira app baixável via wrapper tipo Tauri), e com a compra/transferência de domínio bem visível.
 
 Executou 2 comandos, criou um arquivo, leu um arquivo
 
 Como funciona o painel:
 
-Rail lateral (desktop): Agente / Arquivos / Domínios / Deploys / Integrações / Config — igual à barra fina da Vercel.
+Rail lateral (desktop): Agente / Arquivos / Domínios / Deploys / Integrações / Config — uma barra lateral fina e minimalista.
 
 Painel do Agente (esquerda): narra passo a passo o que está fazendo ("Lendo arquivo", "Editando componente", "Chamando conector IONOS") — estilo Replit Agent, mas dentro da identidade visual da Vertal.
 

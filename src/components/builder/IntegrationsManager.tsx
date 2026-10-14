@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client'
 
 interface Integration {
   id: string
-  provider: 'github' | 'vercel' | 'railway'
+  provider: 'github'
   provider_account_id: string
   status: 'connected' | 'disconnected' | 'error' | 'expired'
   last_sync?: string
@@ -33,22 +33,6 @@ const PROVIDERS = [
     description: 'Sincronize seu repositório e configure CI/CD',
     color: 'text-gray-700',
     bgColor: 'bg-gray-100',
-  },
-  {
-    id: 'vercel',
-    name: 'Vercel',
-    icon: Zap,
-    description: 'Deploy automático para Vercel',
-    color: 'text-black',
-    bgColor: 'bg-black',
-  },
-  {
-    id: 'railway',
-    name: 'Railway',
-    icon: Zap,
-    description: 'Deploy de backend na Railway',
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-100',
   },
 ]
 

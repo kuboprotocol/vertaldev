@@ -1,5 +1,5 @@
 // Admin-only: trigger a manual redeploy by calling the configured deploy hook URL.
-// Requires secret VERCEL_DEPLOY_HOOK_URL (or LOVABLE_DEPLOY_HOOK_URL).
+// Requires secret CLOUDFLARE_DEPLOY_HOOK_URL (or LOVABLE_DEPLOY_HOOK_URL).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
 
 const corsHeaders = {
@@ -29,8 +29,8 @@ Deno.serve(async (req) => {
     const reason: string = body.reason || "Manual redeploy";
     const commitSha: string | undefined = body.commit_sha;
 
-    const hookUrl = Deno.env.get("VERCEL_DEPLOY_HOOK_URL") || Deno.env.get("LOVABLE_DEPLOY_HOOK_URL");
-    if (!hookUrl) return jh({ error: "deploy hook not configured. Set VERCEL_DEPLOY_HOOK_URL." }, 500);
+    const hookUrl = Deno.env.get("CLOUDFLARE_DEPLOY_HOOK_URL") || Deno.env.get("LOVABLE_DEPLOY_HOOK_URL");
+    if (!hookUrl) return jh({ error: "deploy hook not configured. Set CLOUDFLARE_DEPLOY_HOOK_URL." }, 500);
 
     const hookFinal = commitSha ? `${hookUrl}${hookUrl.includes("?") ? "&" : "?"}sha=${encodeURIComponent(commitSha)}` : hookUrl;
 
@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
     const now = new Date().toISOString();
     const { data: inserted, error } = await supa.from("deployments").insert({
       source: "manual",
-      provider: hookUrl.includes("vercel") ? "vercel" : "lovable",
+      provider: hookUrl.includes("cloudflare") ? "cloudflare" : "lovable",
       status: "queued",
       triggered_by: user.id,
       trigger_reason: reason,
