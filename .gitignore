@@ -34,3 +34,6 @@ reports/
 test-results/
 coverage/
 playwright-report/
+
+# Estado local do wrangler dev
+.wrangler/

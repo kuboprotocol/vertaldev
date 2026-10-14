@@ -21,6 +21,7 @@ import {
 import { useDebounce } from "@/hooks/use-debounce";
 import { ManusLauncher } from "@/components/creative/ManusLauncher";
 import { CreativeToolInterface } from "@/components/creative/CreativeToolInterface";
+import { EBOOK_DEFAULT_CHAPTERS, EBOOK_MIN_CHAPTERS, ebookCost } from "@/config/ebookPricing";
 import { SkillExecutionsList } from "@/components/creative/SkillExecutionsList";
 import { ApiStatusPanel } from "@/components/creative/ApiStatusPanel";
 import { CreativeSlides } from "@/components/CreativeSlides";
@@ -35,10 +36,10 @@ const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: strin
   { key: "nano_banana", title: "Nano Banana", desc: "Criar e editar imagens com IA", icon: ImageIcon, cost: "1 crédito" },
   { key: "downloader", title: "Downloader Universal", desc: "YouTube, Instagram, TikTok, Facebook, Kwai", icon: Download, cost: "2 créditos" },
   { key: "clips", title: "Vertal Clips", desc: "Cortes virais automáticos de vídeos longos", icon: Scissors, cost: "1 crédito" },
-  { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes com narração IA", icon: User2, cost: "2–4 créditos" },
+  { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes com narração IA", icon: User2, cost: "A partir de 1 crédito" },
   { key: "shorts", title: "Vertal Shorts", desc: "Vídeos curtos verticais a partir de texto", icon: Video, cost: "3 créditos" },
-  { key: "music", title: "Vertal Music AI", desc: "Música original via Suno", icon: Music, cost: "1 crédito" },
-  { key: "ebook", title: "Vertal Ebook AI", desc: "eBooks completos com capa e capítulos", icon: BookOpen, cost: "10 créditos" },
+  { key: "music", title: "Vertal Music AI", desc: "Música original via MusKAI", icon: Music, cost: "1 crédito" },
+  { key: "ebook", title: "Vertal Ebook AI", desc: "eBooks completos com capa e capítulos", icon: BookOpen, cost: `a partir de ${ebookCost(EBOOK_MIN_CHAPTERS).credits} créditos` },
   { key: "emo", title: "Vertal EMO AI", desc: "Animação realista de fotos a partir de vídeo", icon: Sparkles, cost: "5 créditos" },
 ];
 
@@ -62,10 +63,10 @@ const RERUN_MAP: Record<string, { fn: string; build: (a: any) => any }> = {
   nano_banana: { fn: "creative-image", build: (a) => ({ prompt: a.prompt, size: a.metadata?.size }) },
   downloader: { fn: "creative-download", build: (a) => ({ url: a.metadata?.url ?? a.prompt, format: a.metadata?.format ?? "mp4" }) },
   clips: { fn: "creative-clips", build: (a) => ({ transcript: a.prompt, source_url: a.metadata?.source_url }) },
-  avatar: { fn: "creative-video", build: (a) => ({ mode: "avatar", prompt: a.prompt, duration: a.metadata?.duration ?? 30 }) },
+  avatar: { fn: "creative-video", build: (a) => ({ mode: "avatar", prompt: a.prompt, voice: a.metadata?.voice, image_url: a.metadata?.image_url ?? undefined }) },
   shorts: { fn: "creative-video", build: (a) => ({ mode: "shorts", prompt: a.prompt, duration: 30 }) },
   music: { fn: "creative-music", build: (a) => ({ action: "generate", prompt: a.prompt, instrumental: a.metadata?.instrumental ?? false }) },
-  ebook: { fn: "creative-ebook", build: (a) => ({ topic: a.prompt, chapters: a.metadata?.chapters ?? 5 }) },
+  ebook: { fn: "creative-ebook", build: (a) => ({ topic: a.prompt, chapters: a.metadata?.chapters ?? EBOOK_DEFAULT_CHAPTERS }) },
   emo: { fn: "emo-animate", build: (a) => ({ source_image: a.metadata?.source_image, driving_video: a.metadata?.driving_video }) },
 };
 

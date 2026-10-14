@@ -1,10 +1,11 @@
 import heic2any from "heic2any";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   MessageSquare, ImageIcon, Download, Scissors, User2, Video, Music, BookOpen, Sparkles,
   Loader2, Send, Coins, Settings2, Info, AlertCircle, Wallet, RotateCw, Upload, X,
   Download as DownloadIcon, Crop as CropIcon, Trash2, Sliders, History, FileText, FileCode,
-  Play, Search, Filter, PlayCircle, Package, Brain, Rocket, Zap, FileSpreadsheet
+  Play, Search, Filter, PlayCircle, Package, Brain, Rocket, Zap, FileSpreadsheet,
+  Camera, Images
 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -23,9 +24,12 @@ import { Badge } from "@/components/ui/badge";
 import { AvatarCropDialog } from "./AvatarCropDialog";
 import { ImageEditorDialog } from "./ImageEditorDialog";
 import { VideoStudio } from "./VideoStudio";
+import { EbookStudio } from "./EbookStudio";
 import { AvatarProgressSteps, type AvatarStepState, type AvatarStepKey } from "./AvatarProgressSteps";
 import { cn } from "@/lib/utils";
 import { PUTER_MODELS, creativeInvoke } from "@/lib/puterAI";
+import { AVATAR_LIMITS, quoteAvatar } from "@/config/avatarPricing";
+import { EBOOK_DEFAULT_CHAPTERS, EBOOK_MAX_CHAPTERS, EBOOK_MIN_CHAPTERS, ebookCost } from "@/config/ebookPricing";
 
 import type { ToolKey } from "./toolRequests";
 import { PENDING_IMAGE_KEY, TOOL_REQUESTS, summarizeResult } from "./toolRequests";
@@ -42,10 +46,10 @@ const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: strin
   { key: "image_editor", title: "Editor de Imagens", desc: "Edite, corte e redimensione suas imagens perfeitamente", icon: Sliders, cost: "Grátis" },
   { key: "downloader", title: "Downloader Universal", desc: "YouTube, Instagram, TikTok, Facebook", icon: Download, cost: "2 créditos" },
   { key: "clips", title: "Vertal Clips", desc: "Cortes virais automáticos", icon: Scissors, cost: "1 crédito" },
-  { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes realistas", icon: User2, cost: "2–4 créditos" },
+  { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes realistas", icon: User2, cost: "A partir de 1 crédito" },
   { key: "shorts", title: "Vertal Shorts", desc: "Vídeos curtos a partir de texto", icon: Video, cost: "3 créditos" },
   { key: "music", title: "MusKAI Music", desc: "Redireciona para MusKAI", icon: Music, cost: "Externo" },
-  { key: "ebook", title: "Vertal Ebook AI", desc: "eBooks completos com capítulos", icon: BookOpen, cost: "10 créditos" },
+  { key: "ebook", title: "Vertal Ebook AI", desc: "eBooks completos com capítulos", icon: BookOpen, cost: `a partir de ${ebookCost(EBOOK_MIN_CHAPTERS).credits} créditos` },
   { key: "emo", title: "Vertal EMO AI", desc: "Animação realista de fotos", icon: Sparkles, cost: "5 créditos" },
 ];
 
@@ -136,11 +140,11 @@ const TOOL_CONFIGS: Record<ToolKey, {
   ebook: { 
     title: "Vertal Ebook AI", 
     description: "eBooks completos com capa, capítulos e conteúdo.", 
-    cost: 10,
+    cost: ebookCost(EBOOK_DEFAULT_CHAPTERS).credits,
     promptLabel: "Tema do Ebook",
     placeholder: "Guia definitivo para Marketing Digital em 2024...",
     options: [
-      { key: "chapters", label: "Número de capítulos", type: "number", default: 5 }
+      { key: "chapters", label: `Capítulos (${EBOOK_MIN_CHAPTERS}–${EBOOK_MAX_CHAPTERS})`, type: "number", default: EBOOK_DEFAULT_CHAPTERS }
     ]
   },
   emo: { 
@@ -155,6 +159,7 @@ const TOOL_CONFIGS: Record<ToolKey, {
 
 export function CreativeToolInterface({ toolKey, onSuccess }: Props) {
   if (toolKey === "video_studio") return <VideoStudio />;
+  if (toolKey === "ebook") return <EbookStudio />;
   return <StandardToolInterface toolKey={toolKey} onSuccess={onSuccess} />;
 }
 
@@ -180,6 +185,11 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [imageEditorOpen, setImageEditorOpen] = useState(false);
   const [editorImageUrl, setEditorImageUrl] = useState<string | null>(null);
+  // Avatar photo: optional. Without it the avatar is generated from the text alone.
+  const [avatarCropSrc, setAvatarCropSrc] = useState<string | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarImageUrl, setAvatarImageUrl] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(`creative_history_${toolKey}`, JSON.stringify(sessionHistory));
@@ -224,6 +234,108 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
     reader.readAsDataURL(file);
   };
 
+  const handleAvatarFilePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const isHeic = /\.(heic|heif)$/i.test(file.name) || /image\/hei[cf]/i.test(file.type);
+    if (!file.type.startsWith("image/") && !isHeic) {
+      toast.error("Selecione uma imagem (JPG, PNG, WEBP ou HEIC)");
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error("Imagem muito grande (máx. 15 MB)");
+      return;
+    }
+    try {
+      let blob: Blob = file;
+      if (isHeic) {
+        const converted = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 });
+        blob = Array.isArray(converted) ? converted[0] : converted;
+      }
+      setAvatarCropSrc(URL.createObjectURL(blob));
+    } catch {
+      toast.error("Não foi possível abrir essa imagem");
+    }
+  };
+
+  const closeAvatarCrop = () => {
+    if (avatarCropSrc) URL.revokeObjectURL(avatarCropSrc);
+    setAvatarCropSrc(null);
+  };
+
+  const handleAvatarCropConfirm = async (blob: Blob) => {
+    setAvatarUploading(true);
+    try {
+      const { data: u } = await supabase.auth.getUser();
+      const uid = u.user?.id;
+      if (!uid) throw new Error("Faça login para enviar a foto");
+      const path = `${uid}/avatar/${Date.now()}.jpg`;
+      const { error } = await supabase.storage.from("uploads").upload(path, blob, {
+        cacheControl: "3600", upsert: false, contentType: blob.type || "image/jpeg",
+      });
+      if (error) throw error;
+      // The bucket is private: hand the backend a signed URL it can fetch.
+      const { data: signed, error: signErr } = await supabase.storage.from("uploads").createSignedUrl(path, 60 * 60 * 24 * 7);
+      if (signErr || !signed?.signedUrl) throw signErr ?? new Error("Falha ao gerar link da foto");
+      if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+      setAvatarPreview(URL.createObjectURL(blob));
+      setAvatarImageUrl(signed.signedUrl);
+      closeAvatarCrop();
+      toast.success("Foto do avatar pronta!");
+    } catch (err) {
+      toast.error("Falha no upload da foto", { description: err instanceof Error ? err.message : undefined });
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const removeAvatarPhoto = () => {
+    if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+    setAvatarPreview(null);
+    setAvatarImageUrl(null);
+  };
+
+  // Lip-sync videos render on a queue: poll until the asset is done, also after a page reload.
+  const pollingRef = useRef(new Set<string>());
+  const pollAvatar = useCallback(async (historyId: string, assetId: string) => {
+    if (pollingRef.current.has(assetId)) return;
+    pollingRef.current.add(assetId);
+    try {
+      for (let i = 0; i < 300; i++) {
+        await new Promise((r) => setTimeout(r, 5000));
+        if (!pollingRef.current.has(assetId)) return;
+        const { data, error } = await supabase.functions.invoke("creative-video", {
+          body: { mode: "avatar", action: "status", asset_id: assetId },
+        });
+        if (error || !data?.status || data.status === "processing") continue;
+        const ok = data.status === "completed";
+        setSessionHistory(prev => prev.map(item => item.id === historyId
+          ? { ...item, status: ok ? "success" : "error", videoUrl: data.video_url ?? undefined, audioUrl: data.audio_url ?? item.audioUrl }
+          : item));
+        if (ok) toast.success("Seu avatar falante está pronto!");
+        else toast.error("Não foi possível gerar o vídeo", { description: data.refunded ? "Os créditos do vídeo foram devolvidos." : undefined });
+        return;
+      }
+    } finally {
+      pollingRef.current.delete(assetId);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (toolKey !== "avatar") return;
+    sessionHistory.filter(item => item.status === "processing" && item.assetId).forEach(item => pollAvatar(item.id, item.assetId));
+    // Only resume on mount; new jobs start their own polling.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toolKey, pollAvatar]);
+
+  useEffect(() => {
+    const polling = pollingRef.current;
+    return () => polling.clear();
+  }, []);
+
+  const avatarQuote = toolKey === "avatar" ? quoteAvatar(prompt, !!avatarImageUrl) : null;
+
   const handleExecute = async () => {
     if (loading) return;
 
@@ -258,6 +370,33 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
         body.model = kimiModel;
         body.temperature = temperature;
         body.max_tokens = maxTokens;
+      }
+
+      if (toolKey === "avatar") {
+        const { data, error } = await supabase.functions.invoke("creative-video", {
+          body: { mode: "avatar", prompt, voice: metadata.voice, image_url: avatarImageUrl ?? undefined },
+        });
+
+        if (error) throw error;
+
+        const historyId = crypto.randomUUID();
+        const processing = data?.status === "processing";
+        setSessionHistory(prev => [{
+          id: historyId,
+          timestamp: new Date().toLocaleTimeString(),
+          prompt,
+          status: processing ? "processing" : "success",
+          assetId: data?.asset_id,
+          audioUrl: data?.audio_url ?? undefined,
+          videoUrl: data?.video_url ?? undefined,
+          metadata: { ...metadata, credits: data?.credits_charged, source: avatarImageUrl ? "photo" : "text" },
+        }, ...prev].slice(0, 50));
+        if (processing && data?.asset_id) pollAvatar(historyId, data.asset_id);
+        setExecutionPhase("done");
+        toast.success(processing ? "Voz pronta! O vídeo do avatar está sendo gerado (1–5 min)." : "Narração pronta!");
+        setPrompt("");
+        onSuccess?.();
+        return;
       }
 
       const { data, error } = await supabase.functions.invoke(fn, { body });
@@ -342,14 +481,86 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
                 />
               </div>
             ) : (
-              <Textarea
-                placeholder={config.placeholder}
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                className="min-h-[120px] bg-background/50 border-border/10 focus:border-primary/30 transition-all resize-none text-sm"
-              />
+              <>
+                <Textarea
+                  placeholder={config.placeholder}
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  maxLength={toolKey === "avatar" ? AVATAR_LIMITS.maxTextChars : undefined}
+                  className="min-h-[120px] bg-background/50 border-border/10 focus:border-primary/30 transition-all resize-none text-sm"
+                />
+                {toolKey === "avatar" && (
+                  <p className="text-[11px] text-muted-foreground text-right">
+                    {prompt.length}/{AVATAR_LIMITS.maxTextChars} · ~{avatarQuote?.seconds ?? 0}s de fala
+                  </p>
+                )}
+              </>
             )}
           </div>
+
+          {toolKey === "avatar" && (
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-wider opacity-60">
+                Foto do avatar <span className="normal-case font-normal opacity-80">(opcional)</span>
+              </Label>
+              {avatarPreview ? (
+                <div className="flex items-center gap-4 p-3 rounded-xl bg-background/50 border border-primary/20">
+                  <img src={avatarPreview} alt="Foto do avatar" className="h-20 w-20 rounded-xl object-cover border border-primary/30" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground">Foto pronta</p>
+                    <p className="text-xs text-muted-foreground">O avatar vai falar com este rosto.</p>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={removeAvatarPhoto} aria-label="Remover foto">
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-auto flex-col gap-1.5 py-3 bg-background/50 border-border/10 hover:border-primary/40"
+                      onClick={() => document.getElementById("avatar-gallery-input")?.click()}
+                      disabled={avatarUploading}
+                    >
+                      <Upload className="h-5 w-5 text-primary" />
+                      <span className="text-[11px] leading-tight">Galeria</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-auto flex-col gap-1.5 py-3 bg-background/50 border-border/10 hover:border-primary/40"
+                      onClick={() => document.getElementById("avatar-camera-input")?.click()}
+                      disabled={avatarUploading}
+                    >
+                      <Camera className="h-5 w-5 text-primary" />
+                      <span className="text-[11px] leading-tight">Tirar foto</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-auto flex-col gap-1.5 py-3 bg-background/50 border-border/10 hover:border-primary/40"
+                      onClick={() => {
+                        toast.info("Escolha \"Google Fotos\" no seletor que vai abrir");
+                        document.getElementById("avatar-photos-input")?.click();
+                      }}
+                      disabled={avatarUploading}
+                    >
+                      <Images className="h-5 w-5 text-primary" />
+                      <span className="text-[11px] leading-tight">Google Fotos</span>
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Sem foto, o avatar é gerado apenas a partir do texto.
+                  </p>
+                </>
+              )}
+              <input id="avatar-gallery-input" type="file" accept="image/*,.heic,.heif" className="hidden" onChange={handleAvatarFilePick} />
+              <input id="avatar-camera-input" type="file" accept="image/*" capture="user" className="hidden" onChange={handleAvatarFilePick} />
+              <input id="avatar-photos-input" type="file" accept="image/*" className="hidden" onChange={handleAvatarFilePick} />
+            </div>
+          )}
 
           {config.options && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -431,7 +642,9 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-background/60 border border-border/10">
               <Coins className="h-4 w-4 text-amber-500" />
               <span className="text-xs font-bold text-amber-500/90 tracking-tight">
-                Custo: {config.cost} {config.cost === 1 ? 'crédito' : 'créditos'}
+                {avatarQuote
+                  ? `Custo: ~${avatarQuote.credits} ${avatarQuote.credits === 1 ? "crédito" : "créditos"}`
+                  : `Custo: ${config.cost} ${config.cost === 1 ? "crédito" : "créditos"}`}
               </span>
             </div>
             
@@ -464,8 +677,8 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] opacity-40 font-mono">{item.timestamp}</span>
-                    <Badge variant={item.status === "success" ? "secondary" : "destructive"} className="text-[8px] h-4 uppercase">
-                      {item.status === "success" ? "Sucesso" : "Erro"}
+                    <Badge variant={item.status === "error" ? "destructive" : "secondary"} className="text-[8px] h-4 uppercase">
+                      {item.status === "success" ? "Sucesso" : item.status === "processing" ? "Gerando vídeo…" : "Erro"}
                     </Badge>
                   </div>
                   {item.metadata?.credits && (
@@ -474,6 +687,18 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
                 </div>
 
                 <p className="text-xs text-foreground/90 font-medium line-clamp-2 mb-3 leading-relaxed">{item.prompt}</p>
+
+                {item.videoUrl ? (
+                  <video src={item.videoUrl} controls playsInline className="w-full rounded-lg bg-black/40 border border-border/10 mb-3" />
+                ) : item.status === "processing" ? (
+                  <div className="flex items-center gap-2 rounded-lg bg-black/40 border border-border/10 p-3 mb-3 text-xs text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" /> Animando o rosto com a sua voz…
+                  </div>
+                ) : null}
+
+                {item.audioUrl && !item.videoUrl && (
+                  <audio src={item.audioUrl} controls className="w-full mb-3" />
+                )}
 
                 {item.assetUrl && (
                   <div className="relative aspect-video rounded-lg overflow-hidden bg-black/40 border border-border/10 mb-3 group-hover:border-primary/30 transition-all">
@@ -498,6 +723,16 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
             ))}
           </div>
         </div>
+      )}
+
+      {toolKey === "avatar" && (
+        <AvatarCropDialog
+          open={!!avatarCropSrc}
+          imageUrl={avatarCropSrc}
+          onCancel={closeAvatarCrop}
+          onConfirm={handleAvatarCropConfirm}
+          onSavePreset={() => {}}
+        />
       )}
 
       <ImageEditorDialog
