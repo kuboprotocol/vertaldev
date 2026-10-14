@@ -13,7 +13,9 @@ Deno.serve(withRefundOnFailure(async (req) => {
   const idempotencyKey = req.headers.get("X-Idempotency-Key") ?? undefined;
   try {
     const body = await req.json().catch(() => ({}));
-    const { mode = "shorts", prompt, duration = 30 } = body;
+    const { mode = "shorts", prompt, duration = 30, voice } = body;
+    // Optional face for the talking avatar (signed URL from the "uploads" bucket).
+    const imageUrl = typeof body.image_url === "string" && /^https:\/\//.test(body.image_url) ? body.image_url : null;
     if (!prompt) return j(400, { error: "prompt required" });
 
     let cost = 3;
@@ -95,10 +97,10 @@ Deno.serve(withRefundOnFailure(async (req) => {
       tool,
       status: "processing",
       prompt,
-      output_url: cover ?? undefined,
+      output_url: (mode === "avatar" ? imageUrl ?? cover : cover) ?? undefined,
       output_text: script,
       credits_spent: cost,
-      metadata: { mode, duration, cover, script },
+      metadata: { mode, duration, cover, script, voice: voice ?? null, image_url: imageUrl, source: imageUrl ? "photo" : "text" },
     });
 
     return j(200, {
