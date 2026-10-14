@@ -43,6 +43,11 @@ export interface EcosystemProduct {
   mcp: EcosystemMcp
 }
 
+// Link de afiliado do Vertal.app, usado no "Ir para vertal.app". A janela embutida continua na home:
+// o cookie de afiliado (SameSite=Lax) não é gravado dentro de um iframe de outro site, e cada abertura
+// contaria um clique falso.
+export const VERTAL_APP_REFERRAL_URL = 'https://vertal.app/api/public/affiliates/referral?code=6586e024cff8c775c2275e49'
+
 // Link de indicação do Vertal Dev usado em todos os links do ecossistema que levam ao vertal.dev.
 // O vertal.dev só lê o ?ref= na página /auth (não guarda para depois), então o link aponta para lá.
 export const VERTAL_DEV_REFERRAL_URL = 'https://vertal.dev/auth?ref=5fe61d6f'
@@ -127,7 +132,7 @@ export const ECOSYSTEM: EcosystemProduct[] = [
     name: 'Vertal.app',
     role: 'Publicar',
     domain: 'vertal.app',
-    url: 'https://vertal.app',
+    url: VERTAL_APP_REFERRAL_URL,
     embedUrl: 'https://vertal.app/',
     tagline: 'Do repositório ao ar, com a IA cuidando do deploy.',
     description:

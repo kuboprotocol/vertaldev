@@ -100,3 +100,16 @@ describe('programa de afiliados', () => {
     expect(source.default).not.toMatch(/AffiliateApiKeys|api-keys|API Keys \(MCP\)|mcp-api-keys/)
   })
 })
+
+describe('links de indicação', () => {
+  it('"Ir para vertal.app" usa o link de afiliado; a janela embutida abre a home', async () => {
+    const { ecosystemLink } = await import('@/components/ecosystem/EcosystemDialogs')
+    const app = ECOSYSTEM.find(p => p.id === 'vertal-app')!
+    const link = new URL(ecosystemLink(app))
+    expect(link.pathname).toBe('/api/public/affiliates/referral')
+    expect(link.searchParams.get('code')).toBe('6586e024cff8c775c2275e49')
+    const embed = new URL(ecosystemLink(app, 'embed'))
+    expect(embed.pathname).toBe('/')
+    expect(embed.searchParams.get('code')).toBeNull()
+  })
+})
