@@ -6,14 +6,14 @@ import { dirname } from 'node:path'
  * E2E adicional: /connectors/:slug/about
  *  - Sessão expirada → redirect para /auth (com ?redirect=...)
  *  - Após relogin, breadcrumb mantém sync com back/forward
- *  - Troca rápida entre múltiplos slugs (github → stripe → vercel)
+ *  - Troca rápida entre múltiplos slugs (github → stripe → cloudflare)
  *  - A11y: aria-current="page" e role correto
  *  - Gera relatório JSON em test-results/breadcrumb-report.json
  */
 
 const TEST_EMAIL = process.env.TEST_EMAIL
 const TEST_PASSWORD = process.env.TEST_PASSWORD
-const SLUGS = (process.env.BREADCRUMB_SLUGS ?? 'github,stripe,vercel').split(',').map((s) => s.trim()).filter(Boolean)
+const SLUGS = (process.env.BREADCRUMB_SLUGS ?? 'github,stripe,cloudflare').split(',').map((s) => s.trim()).filter(Boolean)
 
 type ReportEntry = {
   step: string

@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
     const target = targets?.[0];
     if (!target?.commit_sha) return jh({ error: "no healthy deployment with a commit to roll back to" }, 404);
 
-    const hookUrl = Deno.env.get("VERCEL_DEPLOY_HOOK_URL") || Deno.env.get("LOVABLE_DEPLOY_HOOK_URL");
+    const hookUrl = Deno.env.get("CLOUDFLARE_DEPLOY_HOOK_URL") || Deno.env.get("LOVABLE_DEPLOY_HOOK_URL");
     if (!hookUrl) return jh({ error: "deploy hook not configured" }, 500);
     const hookFinal = `${hookUrl}${hookUrl.includes("?") ? "&" : "?"}sha=${encodeURIComponent(target.commit_sha)}`;
 
@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
     const now = new Date().toISOString();
     const { data: inserted, error } = await supa.from("deployments").insert({
       source: automated ? "auto-rollback" : "rollback",
-      provider: hookUrl.includes("vercel") ? "vercel" : "lovable",
+      provider: hookUrl.includes("cloudflare") ? "cloudflare" : "lovable",
       status: "queued",
       triggered_by: user.id,
       trigger_reason: reason,

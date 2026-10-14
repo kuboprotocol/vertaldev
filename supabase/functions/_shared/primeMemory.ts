@@ -36,7 +36,7 @@ const RULES: Array<{ re: RegExp; kind: MemoryKind; scope?: MemoryScope }> = [
 ];
 
 const DESIGN_WORDS = /\b(layout|design|visual|cor(es)?|tema|dark|light|minimalista|fonte|tipografia|ui|ux)\b/i;
-const INTEGRATION_WORDS = /\b(supabase|stripe|polar|github|gitmoom|vercel|railway|cloudflare|firebase|mongodb|gmail|slack|whatsapp|api)\b/i;
+const INTEGRATION_WORDS = /\b(supabase|stripe|polar|github|gitmoom|cloudflare|firebase|mongodb|gmail|slack|whatsapp|api)\b/i;
 
 function normalize(s: string) {
   return s.replace(/\s+/g, " ").trim().replace(/^[-•*\d.)\s]+/, "");

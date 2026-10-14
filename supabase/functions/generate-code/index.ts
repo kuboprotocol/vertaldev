@@ -41,7 +41,7 @@ const SHIP_PROMPT = `You are KUBO FLOW AI in 🚀 SHIP mode — production-grade
 Rules:
 - Generate COMPLETE, OPTIMIZED, PRODUCTION-READY code.
 - Use Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"></script>
-- Think like you're building for a billion-dollar startup (Stripe, Vercel, Apple level).
+- Think like you're building for a billion-dollar startup (Stripe, Linear, Apple level).
 - Include automatic improvements: performance, SEO meta tags, accessibility, error handling.
 - Premium UI: glassmorphism, smooth animations, micro-interactions, perfect spacing.
 - Mobile-first responsive design.

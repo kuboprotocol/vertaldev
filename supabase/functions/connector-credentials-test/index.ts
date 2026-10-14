@@ -87,11 +87,6 @@ async function testConnector(slug: string, apiKey: string): Promise<TestResult> 
       headers['X-Figma-Token'] = apiKey
       parse = (j) => j?.email || j?.handle
       break
-    case 'vercel':
-      url = 'https://api.vercel.com/v2/user'
-      headers['Authorization'] = `Bearer ${apiKey}`
-      parse = (j) => j?.user?.username || j?.user?.email
-      break
     case 'resend':
       url = 'https://api.resend.com/domains'
       headers['Authorization'] = `Bearer ${apiKey}`

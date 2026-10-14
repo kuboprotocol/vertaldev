@@ -24,7 +24,8 @@ export function isAvatarVoice(v: unknown): v is AvatarVoice {
 // Same economics as the Video Studio: ~40 credits per USD of provider cost.
 const CREDITS_PER_USD = 40;
 const TTS_USD_PER_1000_CHARS = 0.1;
-const VIDEO_USD_PER_SECOND = 0.0562;
+/** Kling AI Avatar v2 cost at fal.ai, kept for margin checks. */
+export const AVATAR_VIDEO_USD_PER_SECOND = 0.0562;
 /** Brazilian Portuguese narration runs at roughly 15 characters per second. */
 const CHARS_PER_SECOND = 15;
 
@@ -33,9 +34,12 @@ export function avatarVoiceCredits(chars: number): number {
   return Math.max(1, Math.ceil((chars / 1000) * TTS_USD_PER_1000_CHARS * CREDITS_PER_USD));
 }
 
+/** Price of the lip-sync video: 4 credits per second of real audio (decided by the owner). */
+export const AVATAR_VIDEO_CREDITS_PER_SECOND = 4;
+
 /** Credits for the lip-sync video, from the real audio length (charged once the voice exists). */
 export function avatarVideoCredits(seconds: number): number {
-  return Math.max(5, Math.ceil(Math.max(0, seconds) * VIDEO_USD_PER_SECOND * CREDITS_PER_USD));
+  return Math.max(5, Math.ceil(Math.max(0, seconds) * AVATAR_VIDEO_CREDITS_PER_SECOND));
 }
 
 /** Estimate shown before generating; the video part is billed on the real duration. */

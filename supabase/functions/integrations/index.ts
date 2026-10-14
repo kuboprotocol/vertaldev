@@ -1,4 +1,4 @@
-// Edge function: Gerenciar integrações com GitHub, Vercel, Railway
+// Edge function: Gerenciar integrações OAuth (GitHub). Deploy é feito na Cloudflare e no Vertal Cloud.
 // POST /functions/v1/integrations?action=oauth-url|oauth-callback|list|disconnect
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -26,22 +26,6 @@ const OAUTH_CONFIGS = {
     tokenUrl: "https://github.com/login/oauth/access_token",
     userUrl: "https://api.github.com/user",
     scope: "repo,workflow,read:user",
-  },
-  vercel: {
-    clientId: Deno.env.get("VERCEL_CLIENT_ID") || "",
-    clientSecret: Deno.env.get("VERCEL_CLIENT_SECRET") || "",
-    authUrl: "https://vercel.com/oauth/authorize",
-    tokenUrl: "https://api.vercel.com/v2/oauth/access_token",
-    userUrl: "https://api.vercel.com/v2/user",
-    scope: "read write",
-  },
-  railway: {
-    clientId: Deno.env.get("RAILWAY_CLIENT_ID") || "",
-    clientSecret: Deno.env.get("RAILWAY_CLIENT_SECRET") || "",
-    authUrl: "https://railway.app/oauth/authorize",
-    tokenUrl: "https://railway.app/oauth/token",
-    userUrl: "https://api.railway.app/graphql",
-    scope: "read write",
   },
 };
 

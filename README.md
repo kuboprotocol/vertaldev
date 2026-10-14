@@ -1901,20 +1901,20 @@ cp .env.example .env
 cp supabase/functions/.env.example supabase/functions/.env
 ```
 
-### Variáveis em produção (Vercel / Render / Lovable Cloud)
+### Variáveis em produção (Cloudflare / Render / Lovable Cloud)
 
 `.env` e `supabase/functions/.env` **NUNCA** vão para produção — eles existem só para dev local e são ignorados pelo `.gitignore`. Em produção cada plataforma tem seu próprio cofre:
 
 | Camada | Onde configurar | Variáveis | Lido por |
 |--------|-----------------|-----------|----------|
-| **Frontend (build estático)** | Vercel → Project Settings → Environment Variables · Render → Environment Group · Lovable → Publish | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID` | `vite build` (embute no bundle) + `src/lib/envCheck.ts` (runtime) |
+| **Frontend (build estático)** | Cloudflare → Workers & Pages → Settings → Variables · Render → Environment Group · Lovable → Publish | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID` | `vite build` (embute no bundle) + `src/lib/envCheck.ts` (runtime) |
 | **Edge Functions** | Lovable Cloud → Settings → Functions → Secrets (não usa `.env`) | `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `OPENROUTER_API_KEY`, etc. | `Deno.env.get(...)` dentro de cada function |
 | **Banco (Postgres)** | Lovable Cloud → DB · Vault | Roles, RLS, extensões | Server-side, nunca exposto |
 
 **Regras:**
 
 - ⚠️ Só vars com prefixo `VITE_*` viram parte do bundle público — **nunca** coloque `SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, etc. em variável `VITE_*`.
-- O `vite build` no CI/Vercel roda o mesmo `vite-plugins/env-check.ts` e aborta com exit 1 se a env de produção tiver placeholder. Não há como publicar bundle quebrado.
+- O `vite build` no CI/Cloudflare roda o mesmo `vite-plugins/env-check.ts` e aborta com exit 1 se a env de produção tiver placeholder. Não há como publicar bundle quebrado.
 - Para emergências (ex.: smoke deploy sem backend), use `SKIP_ENV_CHECK=1` no build command da plataforma — mas o runtime check ainda vai logar `console.error` no browser.
 - Para rotacionar uma secret de edge function: Settings → Functions → Secrets → edit → re-deploy (o `.env` local NÃO precisa ser tocado).
 
@@ -1926,7 +1926,7 @@ cp supabase/functions/.env.example supabase/functions/.env
 | `Frontend template not found` | Executou de outro diretório que não a raiz do repo. | `cd` para a raiz; ou restore via `git checkout .env.example`. |
 | `Directory not writable` | Permissões wrong, ou rodando em sandbox read-only. | `ls -ld . supabase/functions` e ajuste com `chmod`/`chown`. |
 | `validation failed (exit 3)` mesmo após editar `.env` | Aspas extras, espaço antes do `=`, ou valor ainda contém `...`. | Confira `bun run setup:env:check`; o output mostra qual key falhou e por quê. |
-| `vite build` falha com `env-check failed` | Plataforma de hosting não tem `VITE_SUPABASE_*` definidas. | Adicione no painel da Vercel/Render (ver tabela acima) e re-deploy. |
+| `vite build` falha com `env-check failed` | Plataforma de hosting não tem `VITE_SUPABASE_*` definidas. | Adicione no painel da Cloudflare/Render (ver tabela acima) e re-deploy. |
 | Bundle de prod buildou mas app fica branco | Bypass com `SKIP_ENV_CHECK=1` foi usado e env de fato está vazia. | Configure as vars no painel, remova o bypass, re-deploy. |
 | `--load` exporta nada | Rodou com `bash` em vez de `source`. | `source scripts/setup-env.sh --load` (não `bash ...`). |
 | CI `env-check` vermelho mas local passa | Branch tem `.env.example` desatualizado (faltou var nova). | Pull main, rode `bun run setup:env:check`, commit `.env.example` atualizado. |
@@ -2418,7 +2418,7 @@ npm run dev
 
 ## Deploy
 
-O projeto é implantado automaticamente via **Vercel** quando publicado pelo Lovable:
+O projeto é implantado automaticamente na **Cloudflare** (Workers) a cada push na `main`; builds e renderizações rodam em containers do **Vertal Cloud**:
 
 1. Acesse o projeto no Lovable
 2. Clique em **Share → Publish**
@@ -2443,7 +2443,7 @@ Leia mais: [Setting up a custom domain](https://docs.lovable.dev/features/custom
 | Pagamentos | Stripe Checkout + Webhooks, Polar (fallback) |
 | Vídeo | Remotion + React + Tailwind |
 | Imagens | Lovable AI Gateway (Gemini) + mesh gradients |
-| Infra | Vercel (frontend), Lovable Cloud (backend) |
+| Infra | Cloudflare (frontend e borda), Vertal Cloud (containers), Railway (API), Supabase (backend) |
 
 ---
 

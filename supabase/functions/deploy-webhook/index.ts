@@ -1,10 +1,10 @@
-// Public webhook endpoint for build/deploy status updates (Vercel/Lovable/GitHub).
+// Public webhook endpoint for build/deploy status updates (Cloudflare/Lovable/GitHub).
 // HMAC-SHA256 signed using DEPLOY_WEBHOOK_SECRET in `x-deploy-signature` header.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-deploy-signature, x-vercel-signature",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-deploy-signature",
 };
 
 const SECRET = Deno.env.get("DEPLOY_WEBHOOK_SECRET")!;
@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("method not allowed", { status: 405, headers: corsHeaders });
 
   const body = await req.text();
-  const sig = req.headers.get("x-deploy-signature") ?? req.headers.get("x-vercel-signature");
+  const sig = req.headers.get("x-deploy-signature");
   if (!await verifyHmac(body, sig)) {
     return new Response(JSON.stringify({ error: "invalid signature" }), { status: 401, headers: { ...corsHeaders, "content-type": "application/json" } });
   }

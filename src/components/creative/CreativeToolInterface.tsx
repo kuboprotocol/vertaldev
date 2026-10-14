@@ -45,7 +45,7 @@ const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: strin
   { key: "image_editor", title: "Editor de Imagens", desc: "Edite, corte e redimensione suas imagens perfeitamente", icon: Sliders, cost: "Grátis" },
   { key: "downloader", title: "Downloader Universal", desc: "YouTube, Instagram, TikTok, Facebook", icon: Download, cost: "2 créditos" },
   { key: "clips", title: "Vertal Clips", desc: "Cortes virais automáticos", icon: Scissors, cost: "1 crédito" },
-  { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes realistas", icon: User2, cost: "A partir de 1 crédito" },
+  { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes realistas", icon: User2, cost: "4 créditos/s de vídeo" },
   { key: "shorts", title: "Vertal Shorts", desc: "Vídeos curtos a partir de texto", icon: Video, cost: "3 créditos" },
   { key: "music", title: "MusKAI Music", desc: "Redireciona para MusKAI", icon: Music, cost: "Externo" },
   { key: "ebook", title: "Vertal Ebook AI", desc: "eBooks completos com capítulos", icon: BookOpen, cost: `a partir de ${ebookCost(EBOOK_MIN_CHAPTERS).credits} créditos` },
