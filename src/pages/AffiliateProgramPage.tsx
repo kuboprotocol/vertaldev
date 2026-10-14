@@ -3,17 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Gift, Zap, BarChart3, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import AnimatedLogo from '@/components/branding/AnimatedLogo'
-import AffiliateApiKeys from '@/components/affiliate/AffiliateApiKeys'
 import AffiliateInstallsManager from '@/components/affiliate/AffiliateInstallsManager'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 import { AFFILIATE_RATE, formatCents } from '@/lib/referral'
-import { VERTAL_DEV_MCP_URL } from '@/lib/ecosystem'
 
 interface CommissionSummary {
   pending: number
@@ -199,80 +196,23 @@ export default function AffiliateProgramPage() {
             </div>
           </motion.div>
 
-          {/* Tabs com as features */}
+          {/* Embeds para sites */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.3 }}
           >
-            <Tabs defaultValue="embeds" className="space-y-4">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="embeds">Embeds para Sites</TabsTrigger>
-                <TabsTrigger value="api-keys">API Keys (MCP)</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="embeds" className="space-y-6">
-                <Card className="glass glass-border">
-                  <CardHeader>
-                    <CardTitle>Instale em seus sites</CardTitle>
-                    <CardDescription>
-                      Crie códigos únicos para rastrear conversões em cada site/blog que você gerencia
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <AffiliateInstallsManager />
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="api-keys" className="space-y-6">
-                <Card className="glass glass-border">
-                  <CardHeader>
-                    <CardTitle>Chaves API do MCP</CardTitle>
-                    <CardDescription>
-                      Crie e gerencie chaves para integrar o MCP em suas aplicações
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <AffiliateApiKeys />
-                  </CardContent>
-                </Card>
-
-                {/* Documentação */}
-                <Card className="glass glass-border border-primary/20 bg-primary/5">
-                  <CardHeader>
-                    <CardTitle className="text-base">Como usar a API MCP</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-3 text-sm">
-                      <div>
-                        <h4 className="font-semibold text-foreground mb-1">1. Gerar uma chave</h4>
-                        <p className="text-muted-foreground">
-                          Crie uma chave na aba acima. Você verá a chave apenas uma vez.
-                        </p>
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-foreground mb-1">2. Usar em requisições</h4>
-                        <code className="block bg-muted p-2 rounded text-xs font-mono mt-1">
-                          curl -X POST {VERTAL_DEV_MCP_URL} \<br />
-                          &nbsp;&nbsp;-H "Authorization: Bearer YOUR_KEY" \<br />
-                          &nbsp;&nbsp;-H "Content-Type: application/json" \<br />
-                          &nbsp;&nbsp;-d '{"{jsonrpc: \"2.0\", ...}"}'
-                        </code>
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-foreground mb-1">3. Documentação</h4>
-                        <Button variant="outline" size="sm" asChild>
-                          <a href="/docs/mcp" target="_blank" rel="noopener noreferrer">
-                            Ver documentação completa →
-                          </a>
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
+            <Card className="glass glass-border">
+              <CardHeader>
+                <CardTitle>Instale em seus sites</CardTitle>
+                <CardDescription>
+                  Crie códigos únicos para rastrear conversões em cada site/blog que você gerencia
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AffiliateInstallsManager />
+              </CardContent>
+            </Card>
           </motion.div>
         </motion.div>
       </main>

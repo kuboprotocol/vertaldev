@@ -224,7 +224,7 @@ print(data)`,
                       <Shield className="h-4 w-4" />
                       <AlertDescription>
                         Toda ferramenta roda como o usuário logado, com as mesmas permissões (RLS) que ele tem no app.
-                        As chaves <code>sk_live_…</code> do programa de afiliados não autenticam no servidor MCP.
+                        Não existem chaves de API para o MCP: o acesso é sempre pelo login.
                       </AlertDescription>
                     </Alert>
                   </CardContent>

@@ -93,3 +93,10 @@ describe('documentação do MCP', () => {
     expect(text).not.toContain('Obtenha uma API Key')
   })
 })
+
+describe('programa de afiliados', () => {
+  it('não oferece mais chaves de API do MCP', async () => {
+    const source = await import('@/pages/AffiliateProgramPage?raw')
+    expect(source.default).not.toMatch(/AffiliateApiKeys|api-keys|API Keys \(MCP\)|mcp-api-keys/)
+  })
+})
