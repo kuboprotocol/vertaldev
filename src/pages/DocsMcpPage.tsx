@@ -24,7 +24,7 @@ export default function DocsMcpPage() {
 
   const codeBlocks = {
     curl: `curl -X POST ${VERTAL_DEV_MCP_URL} \\
-  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Authorization: Bearer $VERTAL_ACCESS_TOKEN" \\
   -H "Content-Type: application/json" \\
   -d '{
     "jsonrpc": "2.0",
@@ -32,10 +32,13 @@ export default function DocsMcpPage() {
     "params": {},
     "id": 1
   }'`,
-    javascript: `const response = await fetch('${VERTAL_DEV_MCP_URL}', {
+    javascript: `// Token da sessão do usuário logado (supabase-js)
+const { data: { session } } = await supabase.auth.getSession();
+
+const response = await fetch('${VERTAL_DEV_MCP_URL}', {
   method: 'POST',
   headers: {
-    'Authorization': 'Bearer YOUR_API_KEY',
+    'Authorization': \`Bearer \${session.access_token}\`,
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
@@ -48,11 +51,12 @@ export default function DocsMcpPage() {
 
 const data = await response.json();
 console.log(data);`,
-    python: `import requests
-import json
+    python: `import os
+import requests
 
+# Access token da sua sessão Vertal Dev (expira; renove pelo login)
 headers = {
-    'Authorization': 'Bearer YOUR_API_KEY',
+    'Authorization': f"Bearer {os.environ['VERTAL_ACCESS_TOKEN']}",
     'Content-Type': 'application/json'
 }
 
@@ -121,17 +125,21 @@ print(data)`,
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <h4 className="font-semibold text-foreground">1. Obtenha uma API Key</h4>
+                  <h4 className="font-semibold text-foreground">1. Adicione o servidor no seu cliente MCP</h4>
                   <p className="text-sm text-muted-foreground">
-                    Vá para suas{' '}
-                    <Button variant="link" className="p-0 h-auto" asChild>
-                      <Link to="/affiliate-program">configurações de API</Link>
-                    </Button>
-                    {' '}e gere uma chave.
+                    No Claude, ChatGPT, Cursor ou outro cliente compatível, adicione a URL do servidor. No Claude Code:
+                  </p>
+                  <div className="rounded-lg bg-muted p-4">
+                    <code className="text-xs font-mono text-muted-foreground">
+                      claude mcp add --transport http vertal-dev {VERTAL_DEV_MCP_URL}
+                    </code>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    O cliente abre o login do Vertal Dev sozinho (OAuth). Não é preciso gerar chave.
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <h4 className="font-semibold text-foreground">2. Faça sua primeira requisição</h4>
+                  <h4 className="font-semibold text-foreground">2. Ou chame por HTTP com o token da sua sessão</h4>
                   <div className="rounded-lg bg-muted p-4">
                     <code className="text-xs font-mono text-muted-foreground">{codeBlocks.curl}</code>
                   </div>
@@ -174,12 +182,25 @@ print(data)`,
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div>
-                      <h4 className="font-semibold text-foreground mb-2">Bearer Token</h4>
+                      <h4 className="font-semibold text-foreground mb-2">OAuth 2.1 (clientes MCP)</h4>
                       <p className="text-sm text-muted-foreground mb-3">
-                        Use sua API Key no header Authorization:
+                        O servidor segue a autorização do MCP. Sem token, ele responde <code>401</code> com o cabeçalho{' '}
+                        <code>WWW-Authenticate</code> apontando para os metadados abaixo; o cliente descobre o servidor de
+                        autorização (o login do Vertal Dev), abre a tela de login e passa a enviar o token sozinho.
+                      </p>
+                      <div className="bg-muted p-3 rounded text-xs font-mono break-all">
+                        GET {VERTAL_DEV_MCP_URL}/.well-known/oauth-protected-resource
+                      </div>
+                    </div>
+
+                    <div className="border-t pt-4">
+                      <h4 className="font-semibold text-foreground mb-2">Bearer token (chamadas HTTP diretas)</h4>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Envie o <strong>access token da sua sessão</strong> do Vertal Dev (o mesmo JWT do login, obtido com{' '}
+                        <code>supabase.auth.getSession()</code>). Ele expira em pouco tempo: renove pela sessão.
                       </p>
                       <div className="bg-muted p-3 rounded text-xs font-mono">
-                        Authorization: Bearer sk_live_xxxxxxxxxxxxx
+                        Authorization: Bearer eyJhbGciOi...
                       </div>
                     </div>
 
@@ -189,7 +210,7 @@ print(data)`,
                         <tbody>
                           <tr className="border-b">
                             <td className="py-2 font-mono text-xs">Authorization</td>
-                            <td className="py-2 text-muted-foreground">Bearer YOUR_API_KEY</td>
+                            <td className="py-2 text-muted-foreground">Bearer &lt;access token da sessão&gt;</td>
                           </tr>
                           <tr className="border-b">
                             <td className="py-2 font-mono text-xs">Content-Type</td>
@@ -202,7 +223,8 @@ print(data)`,
                     <Alert>
                       <Shield className="h-4 w-4" />
                       <AlertDescription>
-                        Nunca compartilhe sua API Key em repositórios públicos. Use variáveis de ambiente.
+                        Toda ferramenta roda como o usuário logado, com as mesmas permissões (RLS) que ele tem no app.
+                        As chaves <code>sk_live_…</code> do programa de afiliados não autenticam no servidor MCP.
                       </AlertDescription>
                     </Alert>
                   </CardContent>
@@ -254,8 +276,8 @@ print(data)`,
                       <h4 className="font-semibold text-foreground mb-2">Erros Comuns</h4>
                       <div className="space-y-2 text-sm">
                         <div className="bg-destructive/10 p-2 rounded">
-                          <p className="font-mono text-xs mb-1">-32001: Token inválido ou expirado</p>
-                          <p className="text-muted-foreground">Verifique sua API Key</p>
+                          <p className="font-mono text-xs mb-1">401 · -32001: Login necessário / Token inválido ou expirado</p>
+                          <p className="text-muted-foreground">Faça login de novo ou renove o access token da sessão</p>
                         </div>
                         <div className="bg-destructive/10 p-2 rounded">
                           <p className="font-mono text-xs mb-1">-32600: Invalid Request</p>
@@ -341,26 +363,19 @@ print(data)`,
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div>
-                      <h4 className="font-semibold text-foreground mb-2">✓ Guarde sua API Key</h4>
+                      <h4 className="font-semibold text-foreground mb-2">✓ Proteja seu access token</h4>
                       <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-                        <li>Use variáveis de ambiente (.env)</li>
-                        <li>Nunca commite em repositórios públicos</li>
-                        <li>Use secrets managers (1Password, LastPass, etc)</li>
+                        <li>Ele dá acesso à sua conta: nunca cole em repositórios, prints ou chats</li>
+                        <li>Em scripts, leia de variável de ambiente (ex.: <code>VERTAL_ACCESS_TOKEN</code>)</li>
+                        <li>Prefira um cliente MCP com OAuth, que guarda e renova o token por você</li>
                       </ul>
                     </div>
 
                     <div className="border-t pt-4">
-                      <h4 className="font-semibold text-foreground mb-2">✓ Rotação de Chaves</h4>
+                      <h4 className="font-semibold text-foreground mb-2">✓ Tokens expiram</h4>
                       <p className="text-sm text-muted-foreground">
-                        Revogue chaves antigas regularmente no painel de controle.
-                        Gere uma nova chave, atualize sua aplicação, depois revogue a antiga.
-                      </p>
-                    </div>
-
-                    <div className="border-t pt-4">
-                      <h4 className="font-semibold text-foreground mb-2">✓ Rate Limiting</h4>
-                      <p className="text-sm text-muted-foreground">
-                        Máximo 1000 requisições por minuto por API Key. Implemente retry com backoff exponencial.
+                        O access token tem validade curta. Clientes MCP renovam pelo OAuth; em chamadas HTTP diretas,
+                        pegue um token novo da sessão quando receber <code>401</code>.
                       </p>
                     </div>
 
@@ -373,7 +388,7 @@ print(data)`,
 
                     <Alert>
                       <AlertDescription>
-                        Se sua chave foi comprometida, revogue imediatamente no painel e gere uma nova.
+                        Se seu token vazou, saia da conta para cortar a renovação e troque a senha; o token vazado deixa de valer quando expirar.
                       </AlertDescription>
                     </Alert>
                   </CardContent>

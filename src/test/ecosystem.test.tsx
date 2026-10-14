@@ -76,4 +76,20 @@ describe('documentação do MCP', () => {
     expect(container.textContent).not.toContain('vertal.app/functions')
     expect(container.textContent).not.toContain('your_method')
   })
+
+  it('descreve a autenticação real: OAuth e access token da sessão, não API key', async () => {
+    const { VERTAL_DEV_MCP_URL } = await import('@/lib/ecosystem')
+    const { default: DocsMcpPage } = await import('@/pages/DocsMcpPage')
+    const { container } = render(
+      <MemoryRouter>
+        <DocsMcpPage />
+      </MemoryRouter>,
+    )
+    const text = container.textContent ?? ''
+    expect(text).toContain('OAuth')
+    expect(text).toContain(`${VERTAL_DEV_MCP_URL}/.well-known/oauth-protected-resource`)
+    expect(text).toContain(`claude mcp add --transport http vertal-dev ${VERTAL_DEV_MCP_URL}`)
+    expect(text).not.toContain('YOUR_API_KEY')
+    expect(text).not.toContain('Obtenha uma API Key')
+  })
 })
