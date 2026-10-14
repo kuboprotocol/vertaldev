@@ -276,12 +276,12 @@ export default function BuilderToolbar({
         <DialogContent className="glass rounded-2xl max-w-md">
           <DialogHeader>
             <DialogTitle className="font-display">
-              {isPublished ? 'Atualizar projeto' : 'Publicar projeto'}
+              {isPublished ? 'Atualizar na Cloudflare' : 'Publicar na Cloudflare'}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Seu projeto <span className="font-semibold text-foreground">"{projectTitle}"</span> será salvo e {isPublished ? 'atualizado' : 'publicado'}.
+              Seu projeto <span className="font-semibold text-foreground">"{projectTitle}"</span> será salvo e {isPublished ? 'atualizado' : 'publicado'} na rede global da <span className="font-semibold text-foreground">Cloudflare</span>, com HTTPS e um link público.
             </p>
             {publishedUrl && (
               <div className="flex items-center gap-2 bg-secondary/50 rounded-xl px-3 py-2 border border-border/50">
@@ -300,7 +300,7 @@ export default function BuilderToolbar({
             <Button variant="ghost" onClick={() => setPublishOpen(false)} className="rounded-xl">Cancelar</Button>
             <Button variant="hero" onClick={handlePublish} disabled={publishing} className="rounded-xl">
               {publishing ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
-              {justPublished ? '✓ Publicado!' : publishing ? 'Publicando...' : isPublished ? 'Atualizar' : 'Publicar 🚀'}
+              {justPublished ? '✓ Publicado!' : publishing ? 'Publicando na Cloudflare...' : isPublished ? 'Atualizar' : 'Publicar na Cloudflare 🚀'}
             </Button>
           </DialogFooter>
         </DialogContent>

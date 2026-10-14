@@ -272,24 +272,27 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
     return text
   }, [])
 
-  const saveProject = async (code: string, msgs: Msg[]) => {
-    if (!user) return
+  const saveProject = async (code: string, msgs: Msg[]): Promise<string | null> => {
+    if (!user) return null
     setSaving(true)
     const firstUserMsg = msgs.find(m => m.role === 'user')
     const title = firstUserMsg ? firstUserMsg.content.slice(0, 60) : 'Untitled Project'
     try {
+      let id = currentProjectId
       if (currentProjectId) {
         const { error } = await supabase.from('projects').update({ title, generated_code: code, messages: msgs as any, updated_at: new Date().toISOString() }).eq('id', currentProjectId)
         if (error) throw error
       } else {
         const { data, error } = await supabase.from('projects').insert({ user_id: user.id, title, generated_code: code, messages: msgs as any }).select('id').single()
         if (error) throw error
+        id = data.id
         setCurrentProjectId(data.id)
         window.history.replaceState(null, '', `/builder/${data.id}`)
       }
       setProjectTitle(title)
       toast.success('Project saved!')
-    } catch (err: any) { toast.error('Error saving: ' + (err.message || 'unknown')) }
+      return id
+    } catch (err: any) { toast.error('Error saving: ' + (err.message || 'unknown')); return null }
     finally { setSaving(false) }
   }
 
@@ -425,21 +428,21 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
 
   const handlePublish = async (): Promise<string | null> => {
     if (!user || !generatedCode) return null
-    await saveProject(generatedCode, messages)
-    const slug = projectTitle.replace(/[^a-z0-9]/gi, '-').toLowerCase().slice(0, 40)
-    const pid = currentProjectId || 'draft'
-    const url = `https://kubovibe.dev/app/${pid}/${slug}`
-    const { error } = await supabase.from('projects').update({
-      is_published: true,
-      published_url: url,
-      published_at: new Date().toISOString(),
-    } as any).eq('id', pid)
-    if (!error) {
-      setIsPublished(true)
-      setPublishedUrl(url)
-      return url
+    const pid = await saveProject(generatedCode, messages)
+    if (!pid) { toast.error('Salve o projeto antes de publicar'); return null }
+    const { data, error } = await supabase.functions.invoke('cloudflare-publish', { body: { project_id: pid } })
+    if (error || !data?.url) {
+      const ctx = (error as { context?: Response } | null)?.context
+      const detail = await ctx?.json?.().catch(() => null)
+      const code = detail?.error ?? data?.error
+      toast.error('Não foi possível publicar na Cloudflare', {
+        description: code === 'cloudflare_not_configured' ? 'A publicação ainda não está ativa. Tente mais tarde.' : code,
+      })
+      return null
     }
-    return null
+    setIsPublished(true)
+    setPublishedUrl(data.url)
+    return data.url
   }
 
   const suggestions = [
