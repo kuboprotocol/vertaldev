@@ -113,3 +113,16 @@ describe('links de indicação', () => {
     expect(embed.searchParams.get('code')).toBeNull()
   })
 })
+
+describe('link de afiliado do Vertal Run', () => {
+  it('"Abrir aqui" e "Ir para" levam ao /entrar/ com o código de 10 caracteres', async () => {
+    const { ecosystemLink } = await import('@/components/ecosystem/EcosystemDialogs')
+    const run = ECOSYSTEM.find(p => p.id === 'vertal-run')!
+    for (const medium of ['link', 'embed'] as const) {
+      const url = new URL(ecosystemLink(run, medium))
+      expect(url.pathname).toBe('/entrar/')
+      expect(url.searchParams.get('ref')).toMatch(/^[0-9a-f]{10}$/)
+      expect(url.searchParams.get('ref')).toBe('c6104d73e1')
+    }
+  })
+})
