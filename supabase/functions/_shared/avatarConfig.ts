@@ -5,11 +5,11 @@ import { CREDIT_VALUE_BRL, USD_TO_BRL } from "./videoStudioConfig.ts";
 
 export const AVATAR_MODEL = "heygen/avatar-iv";
 
-/** OpenRouter list price for heygen/avatar-iv (USD per generated second). Override with AVATAR_COST_USD_PER_SECOND. */
+/** OpenRouter list price for heygen/avatar-iv (USD per generated second). Used only for margin math. */
 export const AVATAR_PROVIDER_COST_USD_PER_SECOND = 0.05;
 
-/** Profit on top of provider cost: 3.5 = 350%, so the user pays 4.5× what the video costs us. */
-export const AVATAR_MARKUP = 3.5;
+/** Price charged to the user: 4 credits per second of video (decided by the owner). */
+export const AVATAR_CREDITS_PER_SECOND = 4;
 
 export const AVATAR_DURATIONS = [15, 30, 60] as const;
 export type AvatarDuration = (typeof AVATAR_DURATIONS)[number];
@@ -49,17 +49,12 @@ export function maxWordsFor(duration: AvatarDuration): number {
   return Math.floor(duration * AVATAR_LIMITS.wordsPerSecond);
 }
 
-/**
- * Credits for one avatar video. Priced against the cheapest credit package (R$0,30/credit), so the
- * 350% profit holds even for users who bought credits at the bulk discount.
- */
+/** Credits for one avatar video, plus what it costs us at the provider. */
 export function quoteAvatar(duration: AvatarDuration, costUsdPerSecond: number = AVATAR_PROVIDER_COST_USD_PER_SECOND) {
-  const providerCostBrl = duration * costUsdPerSecond * USD_TO_BRL;
-  const targetRevenueBrl = providerCostBrl * (1 + AVATAR_MARKUP);
-  const credits = Math.ceil(targetRevenueBrl / CREDIT_VALUE_BRL.min - 1e-9);
+  const credits = duration * AVATAR_CREDITS_PER_SECOND;
   return {
     credits,
-    providerCostBrl,
+    providerCostBrl: duration * costUsdPerSecond * USD_TO_BRL,
     priceBrl: credits * CREDIT_VALUE_BRL.standard,
   };
 }

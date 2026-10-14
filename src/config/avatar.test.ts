@@ -1,23 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { AVATAR_DURATIONS, AVATAR_MARKUP, avatarProfit, maxWordsFor, quoteAvatar } from "./avatar";
+import { AVATAR_DURATIONS, avatarProfit, maxWordsFor, quoteAvatar } from "./avatar";
 import { CREDIT_VALUE_BRL } from "./videoStudio";
 
 describe("avatar pricing", () => {
-  it("charges 4.2 credits per second (US$0,05/s × 4,5 at R$0,30/credit)", () => {
-    expect(quoteAvatar(15).credits).toBe(63);
-    expect(quoteAvatar(30).credits).toBe(126);
-    expect(quoteAvatar(60).credits).toBe(252);
+  it("charges 4 credits per second", () => {
+    expect(quoteAvatar(15).credits).toBe(60);
+    expect(quoteAvatar(30).credits).toBe(120);
+    expect(quoteAvatar(60).credits).toBe(240);
   });
 
-  it("keeps at least 350% profit over provider cost even at the cheapest credit package", () => {
+  it("stays well above provider cost (US$0,05/s) at every credit package", () => {
     for (const d of AVATAR_DURATIONS) {
-      expect(avatarProfit(d, CREDIT_VALUE_BRL.min)).toBeGreaterThanOrEqual(AVATAR_MARKUP - 1e-9);
-      expect(avatarProfit(d, CREDIT_VALUE_BRL.standard)).toBeGreaterThan(AVATAR_MARKUP);
+      expect(avatarProfit(d, CREDIT_VALUE_BRL.min)).toBeGreaterThan(3.2);
+      expect(avatarProfit(d, CREDIT_VALUE_BRL.standard)).toBeGreaterThan(4.7);
     }
-  });
-
-  it("follows the provider price when it changes", () => {
-    expect(quoteAvatar(30, 0.1).credits).toBe(252);
   });
 
   it("caps the script so the video cannot outrun what was charged", () => {

@@ -115,12 +115,12 @@ Deno.test("returns 503 before charging when OpenRouter is not configured", async
   assertEquals(t.deductions.length, 0);
 });
 
-Deno.test("charges the 350% quote and submits heygen/avatar-iv with the photo", async () => {
+Deno.test("charges 4 credits per second and submits heygen/avatar-iv with the photo", async () => {
   const t = setup();
   const r = await t.call(submit());
   assertEquals(r.status, 200);
   assertEquals(r.body.status, "processing");
-  assertEquals(t.deductions, [126]);
+  assertEquals(t.deductions, [120]);
   const sent = t.orCalls[0].body;
   assertEquals(sent.model, "heygen/avatar-iv");
   assertEquals(sent.prompt, "Olá, bem-vindo à KUBO.");
@@ -147,7 +147,7 @@ Deno.test("a failed job is refunded exactly once", async () => {
   assertEquals(r.body.refunded, true);
   await t.call({ action: "status", asset_id: body.asset_id });
   assertEquals(t.refunds().length, 1);
-  assertEquals(t.refunds()[0].args._amount, 126);
+  assertEquals(t.refunds()[0].args._amount, 120);
 });
 
 Deno.test("a rejected submit is refunded immediately", async () => {

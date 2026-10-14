@@ -8,7 +8,6 @@ import * as creative from "../_shared/creative.ts";
 import {
   AVATAR_LIMITS,
   AVATAR_MODEL,
-  AVATAR_PROVIDER_COST_USD_PER_SECOND,
   countWords,
   isAvatarAspect,
   isAvatarDuration,
@@ -91,8 +90,7 @@ async function submit(
   const orKey = deps.env("OPENROUTER_API_KEY");
   if (!orKey) return j(503, { error: "avatar_ai_not_configured" });
 
-  const costPerSecond = Number(deps.env("AVATAR_COST_USD_PER_SECOND")) || AVATAR_PROVIDER_COST_USD_PER_SECOND;
-  const { credits } = quoteAvatar(duration, costPerSecond);
+  const { credits } = quoteAvatar(duration);
   const ded = await deps.deductCredits(
     user.id,
     credits,
