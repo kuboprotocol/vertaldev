@@ -4,7 +4,8 @@ import {
   MessageSquare, ImageIcon, Download, Scissors, User2, Video, Music, BookOpen, Sparkles,
   Loader2, Send, Coins, Settings2, Info, AlertCircle, Wallet, RotateCw, Upload, X,
   Download as DownloadIcon, Crop as CropIcon, Trash2, Sliders, History, FileText, FileCode,
-  Play, Search, Filter, PlayCircle, Package, Brain, Rocket, Zap, FileSpreadsheet
+  Play, Search, Filter, PlayCircle, Package, Brain, Rocket, Zap, FileSpreadsheet,
+  Camera, Images
 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -193,6 +194,11 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [imageEditorOpen, setImageEditorOpen] = useState(false);
   const [editorImageUrl, setEditorImageUrl] = useState<string | null>(null);
+  // Avatar photo: optional. Without it the avatar is generated from the text alone.
+  const [avatarCropSrc, setAvatarCropSrc] = useState<string | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarImageUrl, setAvatarImageUrl] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(`creative_history_${toolKey}`, JSON.stringify(sessionHistory));
@@ -220,6 +226,68 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
       setImageEditorOpen(true);
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleAvatarFilePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const isHeic = /\.(heic|heif)$/i.test(file.name) || /image\/hei[cf]/i.test(file.type);
+    if (!file.type.startsWith("image/") && !isHeic) {
+      toast.error("Selecione uma imagem (JPG, PNG, WEBP ou HEIC)");
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error("Imagem muito grande (máx. 15 MB)");
+      return;
+    }
+    try {
+      let blob: Blob = file;
+      if (isHeic) {
+        const converted = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 });
+        blob = Array.isArray(converted) ? converted[0] : converted;
+      }
+      setAvatarCropSrc(URL.createObjectURL(blob));
+    } catch {
+      toast.error("Não foi possível abrir essa imagem");
+    }
+  };
+
+  const closeAvatarCrop = () => {
+    if (avatarCropSrc) URL.revokeObjectURL(avatarCropSrc);
+    setAvatarCropSrc(null);
+  };
+
+  const handleAvatarCropConfirm = async (blob: Blob) => {
+    setAvatarUploading(true);
+    try {
+      const { data: u } = await supabase.auth.getUser();
+      const uid = u.user?.id;
+      if (!uid) throw new Error("Faça login para enviar a foto");
+      const path = `${uid}/avatar/${Date.now()}.jpg`;
+      const { error } = await supabase.storage.from("uploads").upload(path, blob, {
+        cacheControl: "3600", upsert: false, contentType: blob.type || "image/jpeg",
+      });
+      if (error) throw error;
+      // The bucket is private: hand the backend a signed URL it can fetch.
+      const { data: signed, error: signErr } = await supabase.storage.from("uploads").createSignedUrl(path, 60 * 60 * 24 * 7);
+      if (signErr || !signed?.signedUrl) throw signErr ?? new Error("Falha ao gerar link da foto");
+      if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+      setAvatarPreview(URL.createObjectURL(blob));
+      setAvatarImageUrl(signed.signedUrl);
+      closeAvatarCrop();
+      toast.success("Foto do avatar pronta!");
+    } catch (err) {
+      toast.error("Falha no upload da foto", { description: err instanceof Error ? err.message : undefined });
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const removeAvatarPhoto = () => {
+    if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+    setAvatarPreview(null);
+    setAvatarImageUrl(null);
   };
 
   const handleExecute = async () => {
@@ -262,7 +330,11 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
         body.max_tokens = maxTokens;
       }
 
-      const { data, error } = await supabase.functions.invoke("creative-router", {
+      if (toolKey === "avatar") {
+        body = { mode: "avatar", prompt, voice: metadata.voice, image_url: avatarImageUrl ?? undefined };
+      }
+
+      const { data, error } = await supabase.functions.invoke(toolKey === "avatar" ? "creative-video" : "creative-router", {
         body
       });
 
@@ -273,8 +345,8 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
         timestamp: new Date().toLocaleTimeString(),
         prompt,
         status: "success",
-        assetUrl: data?.image_url || data?.asset_url,
-        output_text: data?.output || (typeof data === 'string' ? data : null),
+        assetUrl: data?.image_url || data?.asset_url || (toolKey === "avatar" ? data?.cover || avatarPreview : undefined),
+        output_text: data?.output || data?.script || (typeof data === 'string' ? data : null),
         metadata: { ...metadata, model: kimiModel, engine: data?.engine }
       }, ...prev].slice(0, 50));
 
@@ -353,6 +425,70 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
               />
             )}
           </div>
+
+          {toolKey === "avatar" && (
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-wider opacity-60">
+                Foto do avatar <span className="normal-case font-normal opacity-80">(opcional)</span>
+              </Label>
+              {avatarPreview ? (
+                <div className="flex items-center gap-4 p-3 rounded-xl bg-background/50 border border-primary/20">
+                  <img src={avatarPreview} alt="Foto do avatar" className="h-20 w-20 rounded-xl object-cover border border-primary/30" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground">Foto pronta</p>
+                    <p className="text-xs text-muted-foreground">O avatar vai falar com este rosto.</p>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={removeAvatarPhoto} aria-label="Remover foto">
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-auto flex-col gap-1.5 py-3 bg-background/50 border-border/10 hover:border-primary/40"
+                      onClick={() => document.getElementById("avatar-gallery-input")?.click()}
+                      disabled={avatarUploading}
+                    >
+                      <Upload className="h-5 w-5 text-primary" />
+                      <span className="text-[11px] leading-tight">Galeria</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-auto flex-col gap-1.5 py-3 bg-background/50 border-border/10 hover:border-primary/40"
+                      onClick={() => document.getElementById("avatar-camera-input")?.click()}
+                      disabled={avatarUploading}
+                    >
+                      <Camera className="h-5 w-5 text-primary" />
+                      <span className="text-[11px] leading-tight">Tirar foto</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-auto flex-col gap-1.5 py-3 bg-background/50 border-border/10 hover:border-primary/40"
+                      onClick={() => {
+                        toast.info("Escolha \"Google Fotos\" no seletor que vai abrir");
+                        document.getElementById("avatar-photos-input")?.click();
+                      }}
+                      disabled={avatarUploading}
+                    >
+                      <Images className="h-5 w-5 text-primary" />
+                      <span className="text-[11px] leading-tight">Google Fotos</span>
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Sem foto, o avatar é gerado apenas a partir do texto.
+                  </p>
+                </>
+              )}
+              <input id="avatar-gallery-input" type="file" accept="image/*,.heic,.heif" className="hidden" onChange={handleAvatarFilePick} />
+              <input id="avatar-camera-input" type="file" accept="image/*" capture="user" className="hidden" onChange={handleAvatarFilePick} />
+              <input id="avatar-photos-input" type="file" accept="image/*" className="hidden" onChange={handleAvatarFilePick} />
+            </div>
+          )}
 
           {config.options && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -501,6 +637,16 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
             ))}
           </div>
         </div>
+      )}
+
+      {toolKey === "avatar" && (
+        <AvatarCropDialog
+          open={!!avatarCropSrc}
+          imageUrl={avatarCropSrc}
+          onCancel={closeAvatarCrop}
+          onConfirm={handleAvatarCropConfirm}
+          onSavePreset={() => {}}
+        />
       )}
 
       <ImageEditorDialog
