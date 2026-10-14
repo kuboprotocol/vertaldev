@@ -43,6 +43,10 @@ export interface EcosystemProduct {
   mcp: EcosystemMcp
 }
 
+// Link de indicação do Vertal Dev usado em todos os links do ecossistema que levam ao vertal.dev.
+// O vertal.dev só lê o ?ref= na página /auth (não guarda para depois), então o link aponta para lá.
+export const VERTAL_DEV_REFERRAL_URL = 'https://vertal.dev/auth?ref=5fe61d6f'
+
 /** Servidor MCP do Vertal Dev (Supabase Edge Function `mcp`). */
 export const VERTAL_DEV_MCP_URL = `${
   (import.meta.env.VITE_SUPABASE_URL as string | undefined) || 'https://sccizjlpwezsgaxkclot.supabase.co'
@@ -57,8 +61,8 @@ export const ECOSYSTEM: EcosystemProduct[] = [
     name: 'Vertal Dev',
     role: 'Criar',
     domain: 'vertal.dev',
-    url: 'https://vertal.dev',
-    embedUrl: 'https://vertal.dev/',
+    url: VERTAL_DEV_REFERRAL_URL,
+    embedUrl: VERTAL_DEV_REFERRAL_URL,
     tagline: 'Descreva a ideia. A IA entrega o produto.',
     description:
       'Plataforma de criação com IA: SaaS, sites, jogos, apps Web3 e conteúdo criativo a partir de um prompt, com conectores, créditos e publicação em 1 clique.',
