@@ -8,6 +8,8 @@ import { connectors, categories, type ConnectorConfig } from '@/lib/connectorsCo
 import { ArrowLeft, Search, Zap, ExternalLink, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { GlobalActivityPanel } from '@/components/connectors/GlobalActivityPanel'
+import { EcosystemActions, PRODUCT_ICONS, useEcosystemDialogs } from '@/components/ecosystem/EcosystemShowcase'
+import { siblingsOf } from '@/lib/ecosystem'
 
 type Availability = 'all' | 'available' | 'coming_soon'
 
@@ -25,6 +27,7 @@ const STATUS_RANK: Record<ConnectorConfig['status'], number> = {
 export default function ConnectorsHubPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const { openEmbed, openMcp, dialogs } = useEcosystemDialogs()
 
   const search = searchParams.get('q') ?? ''
   const activeCategory = searchParams.get('cat') ?? 'all'
@@ -60,6 +63,8 @@ export default function ConnectorsHubPage() {
         return matchesSearch && matchesCategory && matchesAvailability
       })
       .sort((a, b) => {
+        const byFeatured = Number(Boolean(b.featured)) - Number(Boolean(a.featured))
+        if (byFeatured !== 0) return byFeatured
         const byStatus = STATUS_RANK[a.status] - STATUS_RANK[b.status]
         if (byStatus !== 0) return byStatus
         return a.name.localeCompare(b.name)
@@ -95,6 +100,52 @@ export default function ConnectorsHubPage() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+        {/* Ecossistema Vertal: integrações nativas com iframe + MCP */}
+        <section
+          data-testid="ecosystem-connectors-banner"
+          className="relative overflow-hidden rounded-3xl border border-primary/30 bg-card p-6 md:p-8 shadow-gold"
+        >
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent" />
+          <div className="relative flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-primary">Ecossistema Vertal</span>
+              <h2 className="mt-1 font-display text-2xl font-bold md:text-3xl">Crie aqui. Execute no Vertal Run. Publique no Vertal.app.</h2>
+              <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+                Integrações nativas da KUBO Protocol: abra as outras plataformas dentro do Vertal Dev ou conecte-as ao seu agente via MCP.
+                Um fluxo só, sem juntar Lovable + E2B + Vercel.
+              </p>
+            </div>
+            <Button variant="ghost" size="sm" className="w-fit gap-1.5" onClick={() => navigate('/ecossistema')}>
+              Por que Vertal? <ExternalLink className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+          <div className="relative mt-6 grid gap-4 md:grid-cols-2">
+            {siblingsOf('vertal-dev').map(product => {
+              const Icon = PRODUCT_ICONS[product.id]
+              return (
+                <div key={product.id} className="rounded-2xl border border-border bg-background/60 p-5 backdrop-blur">
+                  <div className="mb-3 flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ backgroundColor: `${product.color}1f` }}>
+                      <Icon className="h-5 w-5" style={{ color: product.color }} />
+                    </div>
+                    <div className="min-w-0">
+                      <button
+                        className="font-semibold hover:text-primary transition-colors"
+                        onClick={() => navigate(`/connectors/ecosystem/${product.id}`)}
+                      >
+                        {product.name}
+                      </button>
+                      <p className="text-xs text-muted-foreground">{product.role} · {product.domain}</p>
+                    </div>
+                  </div>
+                  <p className="mb-4 text-sm text-muted-foreground">{product.tagline}</p>
+                  <EcosystemActions product={product} onEmbed={openEmbed} onMcp={openMcp} />
+                </div>
+              )
+            })}
+          </div>
+        </section>
+
         <GlobalActivityPanel />
 
         {/* Search + Filters */}
@@ -205,6 +256,9 @@ export default function ConnectorsHubPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className="font-semibold text-foreground">{connector.name}</h3>
+                    {connector.featured && (
+                      <Badge className="text-[10px] px-1.5 py-0">Ecossistema</Badge>
+                    )}
                     {connector.status === 'coming_soon' && (
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
                         Em breve
@@ -219,7 +273,7 @@ export default function ConnectorsHubPage() {
 
               <div className="mt-3 flex items-center justify-between">
                 <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
-                  {connector.category}
+                  {categories.find(c => c.id === connector.category)?.label ?? connector.category}
                 </span>
                 <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-primary transition-colors" />
               </div>
@@ -240,6 +294,7 @@ export default function ConnectorsHubPage() {
           </div>
         )}
       </div>
+      {dialogs}
     </div>
   )
 }

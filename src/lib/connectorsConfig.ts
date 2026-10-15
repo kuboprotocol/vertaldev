@@ -1,4 +1,4 @@
-import { Github, CreditCard, Globe, Figma, Server, Smartphone, Cloud, Database, Mail, MessageSquare, Shield, Container, Wallet, Zap, Leaf } from 'lucide-react'
+import { Github, CreditCard, Globe, Figma, Server, Smartphone, Cloud, Database, Mail, MessageSquare, Shield, Container, Wallet, Zap, Leaf, Rocket, Terminal } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 export interface ConnectorSetupStep {
@@ -12,12 +12,14 @@ export interface ConnectorConfig {
   icon: LucideIcon
   color: string
   authType: 'oauth' | 'api_key' | 'webhook' | 'manual'
-  category: 'development' | 'payments' | 'design' | 'infrastructure' | 'communication' | 'analytics'
+  category: 'ecosystem' | 'development' | 'payments' | 'design' | 'infrastructure' | 'communication' | 'analytics'
   description: string
   longDescription: string
   features: string[]
   docsUrl?: string
   status: 'available' | 'coming_soon'
+  /** Produto do Ecossistema Vertal: aparece em destaque no topo do hub. */
+  featured?: boolean
   internalRoute?: string
   apiKeyLabel: string
   apiKeyPlaceholder: string
@@ -27,6 +29,53 @@ export interface ConnectorConfig {
 }
 
 export const connectors: ConnectorConfig[] = [
+  {
+    name: 'Vertal.app',
+    slug: 'vertal-app',
+    icon: Rocket,
+    color: '#8B5CF6',
+    authType: 'oauth',
+    category: 'ecosystem',
+    description: 'Deploy orquestrado com IA: do repositório ao ar. Abra aqui ou conecte via MCP.',
+    longDescription: 'O Vertal.app é a plataforma de deploy do Ecossistema Vertal: a IA detecta stack, build e variáveis de ambiente e sobe a aplicação real, com status e logs ao vivo. Abra o painel dentro do Vertal Dev (iframe) ou dê ao seu agente as ferramentas de deploy via MCP.',
+    features: ['Abrir dentro do Vertal Dev (iframe)', 'Servidor MCP remoto com OAuth', 'Deploy com detecção de stack por IA', 'Env vars cifradas (AES-256-GCM)'],
+    docsUrl: 'https://vertal.app/connect',
+    status: 'available',
+    featured: true,
+    internalRoute: '/connectors/ecosystem/vertal-app',
+    apiKeyLabel: 'Conta Vertal.app',
+    apiKeyPlaceholder: '',
+    apiKeyHelp: 'A conexão MCP usa OAuth: o cliente abre o login do Vertal.app sozinho.',
+    setupSteps: [
+      { title: 'Abra o Vertal.app', description: 'Use o botão “Abrir aqui” para acessar o painel sem sair do Vertal Dev.' },
+      { title: 'Conecte via MCP', description: 'Copie a URL https://vertal.app/mcp no seu cliente MCP (Claude, ChatGPT, Cursor).' },
+      { title: 'Faça login', description: 'Autorize o acesso com a sua conta Vertal.app.' },
+    ],
+  },
+  {
+    name: 'Vertal Run',
+    slug: 'vertal-run',
+    icon: Terminal,
+    color: '#22D3EE',
+    authType: 'api_key',
+    category: 'ecosystem',
+    description: 'Sandboxes isoladas para agentes de IA executarem código. Abra aqui ou conecte via MCP.',
+    longDescription: 'O Vertal Run é a camada de execução do Ecossistema Vertal: cada execução roda numa sandbox limpa, sem rede e com limites de recursos, medida por execução. Abra o Vertal Run dentro do Vertal Dev (iframe) ou dê ao seu agente a ferramenta run_code via MCP.',
+    features: ['Abrir dentro do Vertal Dev (iframe)', 'Servidor MCP com run_code e get_usage', 'Python, JavaScript e Bash', 'Cota, rate limit e auditoria por chave'],
+    docsUrl: 'https://vertalrun.com/docs/',
+    status: 'available',
+    featured: true,
+    internalRoute: '/connectors/ecosystem/vertal-run',
+    apiKeyLabel: 'Chave de API do Vertal Run',
+    apiKeyPlaceholder: 'kubo_sk_...',
+    apiKeyHelp: 'Crie a chave no painel do Vertal Run. Ela é exibida uma única vez.',
+    apiKeyDocsUrl: 'https://vertalrun.com/painel/',
+    setupSteps: [
+      { title: 'Crie sua conta no Vertal Run', description: 'Use o botão “Abrir aqui” e entre ou cadastre-se.' },
+      { title: 'Gere uma chave de API', description: 'No painel, crie uma chave kubo_sk_… e guarde-a com segurança.' },
+      { title: 'Configure o MCP', description: 'Cole a configuração do servidor vertal-run no seu cliente MCP com a chave.' },
+    ],
+  },
   {
     name: 'GitHub',
     slug: 'github',
@@ -390,6 +439,7 @@ export function getConnectorsByCategory(category: string): ConnectorConfig[] {
 
 export const categories = [
   { id: 'all', label: 'Todos' },
+  { id: 'ecosystem', label: 'Ecossistema Vertal' },
   { id: 'development', label: 'Desenvolvimento' },
   { id: 'payments', label: 'Pagamentos' },
   { id: 'design', label: 'Design' },
