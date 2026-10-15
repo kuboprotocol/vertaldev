@@ -13,12 +13,14 @@ const InputSchema = z.object({
   temperature: z.number().optional(),
   max_tokens: z.number().optional(),
   metadata: z.record(z.any()).optional(),
+  mode: z.enum(["chat", "research"]).optional(),
 });
 
 // Credit costs based on prompt instructions
 const COSTS: Record<string, number> = {
   chat: 1,      // Message via OpenRouter
   chat_premium: 4, // Message premium frontier (Claude Sonnet)
+  research: 3,  // Wide Research: web search + Perplexity Sonar
   image: 1,     // Pollinations / Nano Banana
   video: 36,    // MusKAI / Sogni (est.)
   music: 1,     // MusKAI / Suno
@@ -50,16 +52,23 @@ Deno.serve(withRefundOnFailure(async (req) => {
       });
     }
 
-    const { tool, messages, prompt, model, temperature, max_tokens, metadata } = parsed.data;
+    const { tool, messages, prompt, model, temperature, max_tokens, metadata, mode = "chat" } = parsed.data;
     
     // Determine cost
     let cost = COSTS[tool] ?? 1;
-    if (tool === "chat" && model?.includes("sonnet")) {
+    if (tool === "chat" && mode === "research") {
+      cost = COSTS.research;
+    } else if (tool === "chat" && model?.includes("sonnet")) {
       cost = COSTS.chat_premium;
+    }
+    if (tool === "chat" && !messages?.length) {
+      return new Response(JSON.stringify({ error: "messages_required" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Deduct credits
-    const ded = await deductCredits(user.id, cost, `creative_${tool}`, metadata ?? {}, user.email, idempotencyKey);
+    const ded = await deductCredits(user.id, cost, tool === "chat" && mode === "research" ? "creative_research" : `creative_${tool}`, metadata ?? {}, user.email, idempotencyKey);
     if (!ded.ok) {
       return new Response(JSON.stringify({ error: ded.error }), {
         status: (ded as any).status ?? 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -68,7 +77,7 @@ Deno.serve(withRefundOnFailure(async (req) => {
 
     // Route based on tool
     if (tool === "chat") {
-      return await handleChat(user.id, messages ?? [], model, temperature, max_tokens, cost);
+      return await handleChat(user.id, messages ?? [], mode, model, temperature, max_tokens, cost);
     } else if (tool === "image") {
       return await handleImage(user.id, prompt ?? "", metadata, cost);
     }
@@ -85,7 +94,38 @@ Deno.serve(withRefundOnFailure(async (req) => {
   }
 }));
 
-async function handleChat(userId: string, messages: any[], requestedModel?: string, temperature?: number, max_tokens?: number, cost?: number) {
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+
+// Fallbacks used when the model the user picked is unavailable (retired, rate limited, provider down).
+const CHAT_FALLBACKS = ["openai/gpt-4o-mini", "deepseek/deepseek-chat", "meta-llama/llama-3.3-70b-instruct"];
+
+// Wide Research: a model that searches the web on its own, then models that get OpenRouter's search tool.
+type Attempt = { model: string; extra?: Record<string, unknown> };
+const RESEARCH_CHAIN: Attempt[] = [
+  { model: "perplexity/sonar-pro" },
+  { model: "perplexity/sonar" },
+  { model: "openai/gpt-4o-mini", extra: { tools: [{ type: "openrouter:web_search", parameters: { max_results: 8 } }] } },
+  { model: "openai/gpt-4o-mini:online" },
+];
+
+const CHAT_SYSTEM = "Você é o assistente KUBO Vibe. Seja direto, técnico e profissional. Idioma: Português Brasileiro. Use Markdown quando ajudar a leitura.";
+const RESEARCH_SYSTEM = [
+  "Você é o KUBO Wide Research, um pesquisador que consulta a internet em tempo real.",
+  `Data de hoje: ${new Date().toISOString().slice(0, 10)}.`,
+  "Pesquise em várias fontes, compare-as e entregue em Português Brasileiro, em Markdown:",
+  "um resumo direto, os pontos principais em tópicos e, quando houver, números, datas e divergências entre fontes.",
+  "Cite as fontes no texto como [1], [2]... na ordem em que aparecem. Nunca invente fontes ou dados.",
+].join(" ");
+
+async function handleChat(
+  userId: string,
+  messages: { role: string; content: string }[],
+  mode: "chat" | "research",
+  requestedModel?: string,
+  temperature?: number,
+  max_tokens?: number,
+  cost?: number,
+) {
   // Every chat model in the Creative panel goes through OpenRouter.
   const OPENROUTER_KEY = Deno.env.get("OPENROUTER_API_KEY");
   if (!OPENROUTER_KEY) {
@@ -94,44 +134,65 @@ async function handleChat(userId: string, messages: any[], requestedModel?: stri
     });
   }
 
-  const model = requestedModel ?? "meta-llama/llama-3.1-70b-instruct";
-  const sys = {
-    role: "system",
-    content: "Você é o assistente KUBO Vibe. Seja direto, técnico e profissional. Idioma: Português Brasileiro.",
-  };
+  const attempts: Attempt[] = mode === "research"
+    ? RESEARCH_CHAIN
+    : [...new Set([requestedModel, ...CHAT_FALLBACKS].filter(Boolean) as string[])].map((model) => ({ model }));
+  const sys = { role: "system", content: mode === "research" ? RESEARCH_SYSTEM : CHAT_SYSTEM };
+  // Keep the conversation within the model's context: the latest turns matter most.
+  const history = messages.slice(-20);
 
-  const resp = await fetchWithRetry("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${OPENROUTER_KEY}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://kubovibe.dev",
-      "X-Title": "KUBO Vibe",
-    },
-    body: JSON.stringify({
-      model,
-      messages: [sys, ...messages],
-      temperature: temperature ?? 0.7,
-      max_tokens: max_tokens ?? 1500, // Hard limit from prompt
-      stream: true,
-    }),
-  });
+  let lastStatus = 0;
+  for (const attempt of attempts) {
+    let resp: Response;
+    try {
+      resp = await fetchWithRetry(OPENROUTER_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENROUTER_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://kubovibe.dev",
+          "X-Title": "KUBO Vibe",
+        },
+        body: JSON.stringify({
+          model: attempt.model,
+          messages: [sys, ...history],
+          temperature: mode === "research" ? 0.3 : temperature ?? 0.7,
+          max_tokens: mode === "research" ? Math.max(max_tokens ?? 0, 2500) : max_tokens ?? 1500,
+          stream: true,
+          ...attempt.extra,
+        }),
+      });
+    } catch (e) {
+      console.warn(`[creative-router] ${attempt.model} threw:`, e);
+      continue;
+    }
 
-  if (resp.ok && resp.body) {
-    recordAsset(userId, {
-      tool: "chat",
-      prompt: messages[messages.length - 1]?.content?.slice(0, 1000),
-      credits_spent: cost ?? 1,
-      metadata: { engine: "openrouter", model },
-    }).catch(console.error);
+    if (resp.ok && resp.body) {
+      recordAsset(userId, {
+        tool: mode === "research" ? "research" : "chat",
+        prompt: history[history.length - 1]?.content?.slice(0, 1000),
+        credits_spent: cost ?? 1,
+        metadata: { engine: "openrouter", model: attempt.model, mode },
+      }).catch(console.error);
 
-    return new Response(resp.body, {
-      headers: { ...corsHeaders, "Content-Type": "text/event-stream", "X-Engine": "openrouter" },
-    });
+      return new Response(resp.body, {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "text/event-stream",
+          "X-Engine": "openrouter",
+          "X-Model": attempt.model,
+          "Access-Control-Expose-Headers": "X-Model, X-Engine",
+        },
+      });
+    }
+
+    lastStatus = resp.status;
+    console.warn(`[creative-router] ${attempt.model} failed:`, resp.status, (await resp.text().catch(() => "")).slice(0, 300));
+    // A bad key or no OpenRouter credits fails the same way for every model.
+    if (resp.status === 401 || resp.status === 402) break;
   }
 
-  console.error("[creative-router] OpenRouter failed:", resp.status, await resp.text().catch(() => ""));
-  return new Response(JSON.stringify({ error: `openrouter_http_${resp.status}` }), {
+  return new Response(JSON.stringify({ error: `openrouter_http_${lastStatus || 502}` }), {
     status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }

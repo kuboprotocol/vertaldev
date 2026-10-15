@@ -171,7 +171,7 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
     config.options?.reduce((acc, opt) => ({ ...acc, [opt.key]: opt.default }), {}) || {}
   );
   const [loading, setLoading] = useState(false);
-  const [kimiModel, setKimiModel] = useState<string>(() => localStorage.getItem("creative_kimi_model") || "meta-llama/llama-3.1-70b-instruct");
+  const [kimiModel, setKimiModel] = useState<string>(() => localStorage.getItem("creative_kimi_model") || PUTER_MODELS[0].id);
   const [temperature, setTemperature] = useState(() => Number(localStorage.getItem("creative_temperature")) || 0.7);
   const [maxTokens, setMaxTokens] = useState(() => Number(localStorage.getItem("creative_max_tokens")) || 1500);
   const [streamingContent, setStreamingContent] = useState("");
