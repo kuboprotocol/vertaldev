@@ -29,8 +29,9 @@ describe("time helpers", () => {
 
   it("plans chunks and quotes credits", () => {
     expect(chunkPlan(650, 300)).toEqual([{ start: 0, end: 300 }, { start: 300, end: 600 }, { start: 600, end: 650 }]);
-    expect(quoteClips(650)).toEqual({ transcribe: 3, analyze: 1, total: 4 });
-    expect(quoteClips(20).total).toBe(2);
+    expect(quoteClips(8)).toBe(8);
+    expect(quoteClips(1)).toBe(1);
+    expect(quoteClips(0)).toBe(1);
   });
 });
 
