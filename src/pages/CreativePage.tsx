@@ -21,18 +21,20 @@ import {
 import { useDebounce } from "@/hooks/use-debounce";
 import { ManusLauncher } from "@/components/creative/ManusLauncher";
 import { CreativeToolInterface } from "@/components/creative/CreativeToolInterface";
+import { CreativeConversation } from "@/components/creative/CreativeConversation";
 import { EBOOK_DEFAULT_CHAPTERS, EBOOK_MIN_CHAPTERS, ebookCost } from "@/config/ebookPricing";
 import { SkillExecutionsList } from "@/components/creative/SkillExecutionsList";
 import { ApiStatusPanel } from "@/components/creative/ApiStatusPanel";
 import { CreativeSlides } from "@/components/CreativeSlides";
 import { CreativeSheets } from "@/components/CreativeSheets";
 
-type ToolKey = "dashboard" | "chat" | "nano_banana" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "video_studio" | "image_editor" | "unified_history" | "slides" | "sheet";
+type ToolKey = "dashboard" | "chat" | "research" | "nano_banana" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "video_studio" | "image_editor" | "unified_history" | "slides" | "sheet";
 
 const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: string }[] = [
   { key: "video_studio", title: "Vertal Video Studio", desc: "1 a 10 fotos viram clipe musical, meme ou anúncio com IA realista", icon: Clapperboard, cost: "a partir de 2 créditos" },
   { key: "image_editor", title: "Editor de Imagens", desc: "Corte, redimensione e ajuste qualquer imagem", icon: SlidersHorizontal, cost: "Grátis" },
   { key: "chat", title: "Vertal Chat", desc: "Conversas, resumos, traduções, geração de textos", icon: MessageSquare, cost: "1 crédito/msg" },
+  { key: "research", title: "Wide Research", desc: "Pesquisa na internet em tempo real com fontes citadas", icon: Search, cost: "3 créditos/msg" },
   { key: "nano_banana", title: "Nano Banana", desc: "Criar e editar imagens com IA", icon: ImageIcon, cost: "1 crédito" },
   { key: "downloader", title: "Downloader Universal", desc: "YouTube, Instagram, TikTok, Facebook, Kwai", icon: Download, cost: "2 créditos" },
   { key: "clips", title: "Vertal Clips", desc: "Cortes virais automáticos de vídeos longos", icon: Scissors, cost: "1 crédito" },
@@ -60,6 +62,7 @@ async function authedFetch(name: string, body: unknown, idempotencyKey?: string)
 
 const RERUN_MAP: Record<string, { fn: string; build: (a: any) => any }> = {
   chat: { fn: "creative-chat", build: (a) => ({ messages: [{ role: "user", content: a.prompt }] }) },
+  research: { fn: "creative-router", build: (a) => ({ tool: "chat", mode: "research", messages: [{ role: "user", content: a.prompt }] }) },
   nano_banana: { fn: "creative-image", build: (a) => ({ prompt: a.prompt, size: a.metadata?.size }) },
   downloader: { fn: "creative-download", build: (a) => ({ url: a.metadata?.url ?? a.prompt, format: a.metadata?.format ?? "mp4" }) },
   clips: { fn: "creative-clips", build: (a) => ({ transcript: a.prompt, source_url: a.metadata?.source_url }) },
@@ -1288,6 +1291,17 @@ export default function CreativePage() {
             </div>
           </TabsContent>
 
+          {(["chat", "research"] as const).map((key) => (
+            <TabsContent key={key} value={key}>
+              <div className="space-y-4">
+                <Button variant="ghost" size="sm" onClick={() => { setActive("dashboard"); navigate("/creative"); }}>
+                  <ArrowLeft className="h-4 w-4 mr-2" /> Voltar ao Painel
+                </Button>
+                <CreativeConversation mode={key} onSpent={refetch} />
+              </div>
+            </TabsContent>
+          ))}
+
           {(["slides", "sheet"] as const).map((key) => (
             <TabsContent key={key} value={key}>
               <div className="space-y-6">
@@ -1301,7 +1315,7 @@ export default function CreativePage() {
             </TabsContent>
           ))}
 
-          {TOOLS.map((t) => (
+          {TOOLS.filter((t) => t.key !== "chat" && t.key !== "research").map((t) => (
             <TabsContent key={t.key} value={t.key}>
               <div className="space-y-6">
                 <Button variant="ghost" size="sm" onClick={() => { setActive("dashboard"); navigate("/creative"); }} className="mb-2">

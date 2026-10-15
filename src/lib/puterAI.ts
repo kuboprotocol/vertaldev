@@ -15,7 +15,8 @@ export async function creativeInvoke(tool: string, payload: any) {
 }
 
 export const PUTER_MODELS = [
-  { id: "meta-llama/llama-3.1-70b-instruct", label: "Llama 3.1 70B (Router)" },
-  { id: "openai/gpt-4o-mini", label: "GPT-4o Mini (Router)" },
-  { id: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet (Router)" },
+  { id: "openai/gpt-4o-mini", label: "GPT-4o Mini" },
+  { id: "deepseek/deepseek-chat", label: "DeepSeek V3" },
+  { id: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B" },
+  { id: "anthropic/claude-sonnet-4.5", label: "Claude Sonnet 4.5 (Premium)" },
 ];
