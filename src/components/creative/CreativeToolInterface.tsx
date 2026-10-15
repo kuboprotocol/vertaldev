@@ -25,6 +25,7 @@ import { AvatarCropDialog } from "./AvatarCropDialog";
 import { ImageEditorDialog } from "./ImageEditorDialog";
 import { VideoStudio } from "./VideoStudio";
 import { EbookStudio } from "./EbookStudio";
+import { ClipStudio } from "./ClipStudio";
 import { AvatarProgressSteps, type AvatarStepState, type AvatarStepKey } from "./AvatarProgressSteps";
 import { cn } from "@/lib/utils";
 import { PUTER_MODELS, creativeInvoke } from "@/lib/puterAI";
@@ -160,6 +161,7 @@ const TOOL_CONFIGS: Record<ToolKey, {
 export function CreativeToolInterface({ toolKey, onSuccess }: Props) {
   if (toolKey === "video_studio") return <VideoStudio />;
   if (toolKey === "ebook") return <EbookStudio />;
+  if (toolKey === "clips") return <ClipStudio />;
   return <StandardToolInterface toolKey={toolKey} onSuccess={onSuccess} />;
 }
 
