@@ -31,7 +31,8 @@ import { PUTER_MODELS, creativeInvoke } from "@/lib/puterAI";
 import { AVATAR_LIMITS, quoteAvatar } from "@/config/avatarPricing";
 import { EBOOK_DEFAULT_CHAPTERS, EBOOK_MAX_CHAPTERS, EBOOK_MIN_CHAPTERS, ebookCost } from "@/config/ebookPricing";
 
-type ToolKey = "chat" | "nano_banana" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "image_editor" | "video_studio";
+import type { ToolKey } from "./toolRequests";
+import { PENDING_IMAGE_KEY, TOOL_REQUESTS, summarizeResult } from "./toolRequests";
 
 interface Props {
   toolKey: ToolKey;
@@ -155,17 +156,6 @@ const TOOL_CONFIGS: Record<ToolKey, {
   }
 };
 
-const TOOL_TO_FN: Record<string, string> = {
-  chat: "creative-router",
-  nano_banana: "creative-router",
-  downloader: "creative-download",
-  clips: "creative-clips",
-  avatar: "creative-video",
-  shorts: "creative-video",
-  music: "creative-router",
-  ebook: "creative-ebook",
-  emo: "emo-animate",
-};
 
 export function CreativeToolInterface({ toolKey, onSuccess }: Props) {
   if (toolKey === "video_studio") return <VideoStudio />;
@@ -204,6 +194,21 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
   useEffect(() => {
     localStorage.setItem(`creative_history_${toolKey}`, JSON.stringify(sessionHistory));
   }, [sessionHistory, toolKey]);
+
+  // Imagem enviada no painel (Câmera/Imagem) chega aqui já aberta no editor
+  useEffect(() => {
+    if (toolKey !== "image_editor") return;
+    try {
+      const pending = sessionStorage.getItem(PENDING_IMAGE_KEY);
+      if (!pending) return;
+      sessionStorage.removeItem(PENDING_IMAGE_KEY);
+      setPrompt(pending);
+      setEditorImageUrl(pending);
+      setImageEditorOpen(true);
+    } catch {
+      // sessionStorage indisponível: o usuário ainda pode colar a URL manualmente
+    }
+  }, [toolKey]);
 
   // The editor shows the result with its own Baixar / Salvar buttons; here we only record it in the history.
   const handleImageEditorConfirm = (_blob: Blob, metadata: { width: number; height: number; format: string }) => {
@@ -360,28 +365,20 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
     setStreamingContent("");
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      let body: any = { tool: toolKey === "nano_banana" ? "image" : toolKey, prompt, metadata };
-      
+      const { fn, body } = TOOL_REQUESTS[toolKey](prompt, metadata);
       if (toolKey === "chat") {
-        body.messages = [{ role: "user", content: prompt }];
         body.model = kimiModel;
         body.temperature = temperature;
         body.max_tokens = maxTokens;
       }
 
       if (toolKey === "avatar") {
-        body = { mode: "avatar", prompt, voice: metadata.voice, image_url: avatarImageUrl ?? undefined };
-      }
+        const { data, error } = await supabase.functions.invoke("creative-video", {
+          body: { mode: "avatar", prompt, voice: metadata.voice, image_url: avatarImageUrl ?? undefined },
+        });
 
-      const { data, error } = await supabase.functions.invoke(toolKey === "avatar" ? "creative-video" : "creative-router", {
-        body
-      });
+        if (error) throw error;
 
-      if (error) throw error;
-
-      if (toolKey === "avatar") {
         const historyId = crypto.randomUUID();
         const processing = data?.status === "processing";
         setSessionHistory(prev => [{
@@ -402,13 +399,18 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
         return;
       }
 
+      const { data, error } = await supabase.functions.invoke(fn, { body });
+
+      if (error) throw error;
+
+      const result = summarizeResult(data);
       setSessionHistory(prev => [{
         id: crypto.randomUUID(),
         timestamp: new Date().toLocaleTimeString(),
         prompt,
         status: "success",
-        assetUrl: data?.image_url || data?.asset_url,
-        output_text: data?.output || (typeof data === 'string' ? data : null),
+        assetUrl: result.assetUrl,
+        output_text: result.output_text,
         metadata: { ...metadata, model: kimiModel, engine: data?.engine }
       }, ...prev].slice(0, 50));
 
