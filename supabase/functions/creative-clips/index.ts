@@ -1,13 +1,14 @@
 // Vertal Clips — motor próprio de cortes virais.
-//   multipart (file)          → transcreve um trecho de áudio com timestamps por palavra (Groq Whisper)
-//   { action: "analyze", … }  → IA escolhe os melhores cortes com timestamps reais + score viral
+//   multipart (file)          → transcreve um trecho de áudio com timestamps por palavra (grátis, com rate limit)
+//   { action: "analyze", … }  → IA escolhe os melhores cortes com timestamps reais + score viral (1 crédito por corte)
 //   { transcript | source_url } (legado) → sugere cortes a partir de texto livre
 // O corte, o reenquadramento 9:16 e as legendas são renderizados no navegador do usuário.
 import { corsHeaders } from "../_shared/cors.ts";
-import { getUser, deductCredits, recordAsset, sanitizeError, withRefundOnFailure } from "../_shared/creative.ts";
+import { getUser, deductCredits, enforceRateLimit, recordAsset, sanitizeError, withRefundOnFailure } from "../_shared/creative.ts";
 
-const COST_TRANSCRIBE_CHUNK = 1;
-const COST_ANALYZE = 1;
+/** Pricing: the user pays per clip delivered by the AI; transcribing is free (rate limited). */
+const COST_PER_CLIP = 1;
+const TRANSCRIBE_RATE_LIMIT = { max: 60, windowSeconds: 60 };
 const COST_LEGACY = 1;
 const MAX_AUDIO_BYTES = 24 * 1024 * 1024;
 const MAX_PROMPT_CHARS = 60_000;
@@ -47,8 +48,8 @@ async function transcribe(req: Request, user: User, idempotencyKey?: string) {
   if (OPENAI) providers.push({ url: "https://api.openai.com/v1/audio/transcriptions", key: OPENAI, model: "whisper-1" });
   if (!providers.length) return j(503, { error: "transcription_unavailable" });
 
-  const ded = await deductCredits(user.id, COST_TRANSCRIBE_CHUNK, "creative_clips_transcribe", { size: file.size }, user.email, idempotencyKey);
-  if (!ded.ok) return j((ded as any).status ?? 402, { error: ded.error });
+  const rl = await enforceRateLimit(user.id, "creative_clips_transcribe", { ...TRANSCRIBE_RATE_LIMIT, userEmail: user.email });
+  if (!rl.ok) return j(429, { error: rl.error });
 
   let lastError = "transcribe_failed";
   for (const p of providers) {
@@ -85,9 +86,6 @@ async function analyze(body: any, user: User, idempotencyKey?: string) {
   const language = String(body?.language ?? "pt-BR").slice(0, 10);
   const duration = Number(body?.duration) || 0;
 
-  const ded = await deductCredits(user.id, COST_ANALYZE, "creative_clips_analyze", { duration, count }, user.email, idempotencyKey);
-  if (!ded.ok) return j((ded as any).status ?? 402, { error: ded.error });
-
   const sys = `Você é o editor-chefe de cortes virais da Vertal. Recebe a transcrição de um vídeo longo com timestamps em segundos no formato [início-fim] texto.
 Escolha os ${count} melhores trechos para Reels/TikTok/Shorts. Regras:
 - Cada corte deve ter entre ${minSec} e ${maxSec} segundos, começar no início de uma frase e terminar no fim de uma frase.
@@ -103,16 +101,20 @@ title: título curto chamativo (até 60 caracteres) no idioma ${language}. hook:
   ];
 
   const raw = await chat(messages, true);
-  const clips = parseClips(raw);
-  if (!clips) return j(502, { error: "analysis_failed" });
+  const clips = parseClips(raw)?.slice(0, count);
+  if (!clips?.length) return j(502, { error: "analysis_failed" });
+
+  const cost = clips.length * COST_PER_CLIP;
+  const ded = await deductCredits(user.id, cost, "creative_clips_analyze", { duration, count, clips: clips.length }, user.email, idempotencyKey);
+  if (!ded.ok) return j((ded as any).status ?? 402, { error: ded.error });
 
   const assetId = await recordAsset(user.id, {
     tool: "clips",
     prompt: String(body?.title ?? "").slice(0, 200) || transcript.slice(0, 200),
-    credits_spent: COST_ANALYZE,
+    credits_spent: cost,
     metadata: { clips, duration, engine: "vertal-clips-v2" },
   });
-  return j(200, { ok: true, clips, asset_id: assetId });
+  return j(200, { ok: true, clips, credits_charged: cost, asset_id: assetId });
 }
 
 async function legacy(body: any, user: User, idempotencyKey?: string) {
