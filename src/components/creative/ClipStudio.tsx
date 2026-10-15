@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Captions, Check, Coins, Copy, Download, Flame, Loader2, Pause, Play, RotateCw, Scissors, Sparkles,
+  Captions, Check, Coins, Copy, Crosshair, Download, Flame, Link2, Loader2, Pause, Play, RotateCw, Scissors, Sparkles,
   Upload, Wand2, X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -9,8 +9,9 @@ import { useSubscription } from "@/hooks/useSubscription";
 import {
   CLIP_ASPECTS, CLIP_LENGTHS, TRANSCRIBE_CHUNK_SECONDS, captionPages, findClips, formatTime, mergeTranscripts,
   normalizeAiClips, pickNonOverlapping, quoteClips, transcriptForPrompt,
-  type Clip, type ClipAspectKey, type ClipLengthKey, type Transcript,
+  type Clip, type ClipAspectKey, type ClipLengthKey, type FocusKey, type Transcript,
 } from "@/lib/clipEngine";
+import { trackSubject } from "@/lib/clipTracker";
 import {
   CAPTION_STYLES, drawClipFrame, extractAudioChunks, renderClip,
   type CaptionStyleKey, type FrameLayout, type FrameOptions,
@@ -40,6 +41,7 @@ const ERRORS: Record<string, string> = {
   media_recorder_unsupported: "Seu navegador não suporta gravação de vídeo. Use Chrome, Edge ou Safari atualizados.",
   no_supported_video_format: "Seu navegador não suporta gravação de vídeo. Use Chrome, Edge ou Safari atualizados.",
   video_load_failed: "Não foi possível abrir o vídeo.",
+  import_blocked: "A plataforma bloqueou a importação direta. Baixe pelo link e envie o arquivo.",
 };
 const friendly = (code: string) => ERRORS[code] ?? (code.startsWith("rate_limit") ? "Muitas solicitações. Aguarde um minuto." : code);
 
@@ -158,6 +160,13 @@ export function ClipStudio() {
   const [hookTitle, setHookTitle] = useState(true);
   const [progressBar, setProgressBar] = useState(false);
   const [watermark, setWatermark] = useState(false);
+  const [emojis, setEmojis] = useState(true);
+  const [autoTrack, setAutoTrack] = useState(true);
+  /** Auto-reframe tracks keyed by clip bounds + aspect, so trims and format changes re-track. */
+  const [tracks, setTracks] = useState<Record<string, FocusKey[]>>({});
+  const [tracking, setTracking] = useState<string | null>(null);
+  const [importUrl, setImportUrl] = useState("");
+  const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState<{ id: string; progress: number } | null>(null);
   const [exported, setExported] = useState<Set<string>>(new Set());
   const abortRef = useRef<AbortController | null>(null);
@@ -167,9 +176,74 @@ export function ClipStudio() {
   const quote = duration ? quoteClips(duration) : null;
   const busy = phase === "extracting" || phase === "transcribing" || phase === "analyzing";
   const clip = clips.find((c) => c.id === selected) ?? null;
+  const useTrack = autoTrack && layout === "fill";
+  const trackKey = (c: Clip) => `${c.id}:${c.start.toFixed(1)}:${c.end.toFixed(1)}:${aspect}`;
   const frame: FrameOptions = {
-    aspect, layout, focusX, captionStyle, captions, progressBar, watermark,
+    aspect, layout, focusX, captionStyle, captions, progressBar, watermark, emojis,
+    focusTrack: useTrack && clip ? tracks[trackKey(clip)] : undefined,
     hookTitle: hookTitle ? clip?.title : undefined,
+  };
+
+  const ensureTrack = async (c: Clip, signal?: AbortSignal): Promise<FocusKey[] | undefined> => {
+    if (!useTrack || !src) return undefined;
+    const key = trackKey(c);
+    if (tracks[key]) return tracks[key];
+    setTracking(key);
+    try {
+      const t = await trackSubject({ src, start: c.start, end: c.end, aspect, signal });
+      setTracks((prev) => ({ ...prev, [key]: t }));
+      return t;
+    } finally {
+      setTracking((k) => (k === key ? null : k));
+    }
+  };
+
+  // Track the selected clip in the background (debounced so trim drags don't re-track every frame).
+  useEffect(() => {
+    if (!clip || !useTrack || !src || tracks[trackKey(clip)] || exporting) return;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => { void ensureTrack(clip, ctrl.signal).catch(() => {}); }, 600);
+    return () => { clearTimeout(timer); ctrl.abort(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clip?.id, clip?.start, clip?.end, aspect, useTrack, src, !!exporting]);
+
+  const importFromUrl = async () => {
+    const url = importUrl.trim();
+    if (!/^https?:\/\//i.test(url)) return toast.error("Cole um link válido (YouTube, Instagram, TikTok…).");
+    setImporting(true);
+    let downloadUrl: string | undefined;
+    try {
+      const { data, error } = await supabase.functions.invoke("creative-download", {
+        body: { url, format: "mp4" },
+        headers: { "X-Idempotency-Key": crypto.randomUUID() },
+      });
+      if (error) {
+        const detail = await (error as { context?: Response }).context?.json?.().catch(() => null);
+        throw new Error(detail?.error ?? error.message);
+      }
+      downloadUrl = (data as { download_url?: string })?.download_url;
+      if (!downloadUrl) throw new Error("Não foi possível obter o vídeo.");
+      let blob: Blob;
+      try {
+        const r = await fetch(downloadUrl);
+        if (!r.ok) throw new Error();
+        blob = await r.blob();
+      } catch {
+        throw new Error("import_blocked");
+      }
+      const name = `${url.replace(/^https?:\/\/(www\.)?/, "").split(/[/?#]/)[0]}-${Date.now()}.mp4`;
+      await pickFile(new File([blob], name, { type: blob.type.startsWith("video/") ? blob.type : "video/mp4" }));
+      setImportUrl("");
+    } catch (e) {
+      const msg = (e as Error).message;
+      toast.error("Não foi possível importar", {
+        description: friendly(msg),
+        action: msg === "import_blocked" && downloadUrl ? { label: "Baixar", onClick: () => window.open(downloadUrl, "_blank", "noopener") } : undefined,
+      });
+    } finally {
+      setImporting(false);
+      void refetch?.();
+    }
   };
 
   const pickFile = async (f: File | undefined | null) => {
@@ -191,6 +265,7 @@ export function ClipStudio() {
       setClips([]);
       setSelected(null);
       setExported(new Set());
+      setTracks({});
       setPhase("idle");
     } catch {
       URL.revokeObjectURL(url);
@@ -278,8 +353,9 @@ export function ClipStudio() {
     abortRef.current = ctrl;
     setExporting({ id: c.id, progress: 0 });
     try {
+      const focusTrack = await ensureTrack(c, ctrl.signal);
       const res = await renderClip({
-        ...frame, hookTitle: hookTitle ? c.title : undefined,
+        ...frame, focusTrack, hookTitle: hookTitle ? c.title : undefined,
         src, start: c.start, end: c.end, words: transcript.words, signal: ctrl.signal,
         onProgress: (p) => setExporting({ id: c.id, progress: p }),
       });
@@ -350,6 +426,17 @@ export function ClipStudio() {
               ))}
             </div>
           </button>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <div className="relative flex-1">
+              <Link2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input value={importUrl} disabled={importing} onChange={(e) => setImportUrl(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && void importFromUrl()}
+                placeholder="Ou cole um link do YouTube, Instagram, TikTok…" className="pl-9 bg-background/50" />
+            </div>
+            <Button variant="outline" disabled={importing || !importUrl.trim()} onClick={() => void importFromUrl()}>
+              {importing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Link2 className="h-4 w-4 mr-2" />} Importar (2 créditos)
+            </Button>
+          </div>
         </Card>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
@@ -476,12 +563,20 @@ export function ClipStudio() {
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label className="text-xs opacity-70">Enquadramento</Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Button size="sm" variant={layout === "fill" ? "default" : "outline"} onClick={() => setLayout("fill")}>Preencher</Button>
+                      <div className="grid grid-cols-3 gap-2">
+                        <Button size="sm" variant={useTrack ? "default" : "outline"} onClick={() => { setLayout("fill"); setAutoTrack(true); }}>
+                          <Crosshair className="h-3.5 w-3.5 mr-1" /> Auto
+                        </Button>
+                        <Button size="sm" variant={layout === "fill" && !autoTrack ? "default" : "outline"} onClick={() => { setLayout("fill"); setAutoTrack(false); }}>Manual</Button>
                         <Button size="sm" variant={layout === "fit" ? "default" : "outline"} onClick={() => setLayout("fit")}>Inteiro + blur</Button>
                       </div>
+                      {useTrack && (
+                        <p className="text-[11px] text-muted-foreground">
+                          {tracking ? <><Loader2 className="inline h-3 w-3 mr-1 animate-spin" />Vertal Track seguindo quem fala…</> : "Vertal Track: a câmera segue o rosto de quem fala automaticamente."}
+                        </p>
+                      )}
                     </div>
-                    {layout === "fill" && (
+                    {layout === "fill" && !autoTrack && (
                       <div className="space-y-2">
                         <Label className="text-xs opacity-70">Foco horizontal (mova até o rosto)</Label>
                         <Slider min={0} max={1} step={0.01} value={[focusX]} onValueChange={([v]) => setFocusX(v)} />
@@ -492,6 +587,7 @@ export function ClipStudio() {
                     {([
                       ["Legendas animadas", captions, setCaptions],
                       ["Título-gancho no início", hookTitle, setHookTitle],
+                      ["Emojis automáticos", emojis, setEmojis],
                       ["Barra de progresso", progressBar, setProgressBar],
                       ["Marca vertal.dev", watermark, setWatermark],
                     ] as const).map(([label, value, set]) => (

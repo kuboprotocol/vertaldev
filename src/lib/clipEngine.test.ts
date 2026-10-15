@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  captionPages, chunkPlan, combineScores, cropRect, encodeWav, findClips, formatTime, mergeTranscripts,
+  captionPages, centerToFocus, chunkPlan, columnFocus, combineScores, emojiFor, focusAt, isSkin, smoothFocusTrack, cropRect, encodeWav, findClips, formatTime, mergeTranscripts,
   normalizeAiClips, parseTimestamp, quoteClips, snapToSentences, transcriptForPrompt, type Transcript,
 } from "./clipEngine";
 
@@ -126,5 +126,54 @@ describe("framing and audio", () => {
     expect(v.getUint32(24, true)).toBe(16000);
     expect(v.getInt16(46, true)).toBe(32767);
     expect(v.getInt16(48, true)).toBe(-32768);
+  });
+});
+
+describe("auto-reframe (Vertal Track)", () => {
+  it("finds the subject's column window", () => {
+    const cols = new Array(100).fill(0);
+    for (let i = 70; i < 80; i++) cols[i] = 5;
+    expect(columnFocus(cols, 0.3)).toBeCloseTo(0.75, 1);
+    expect(columnFocus(new Array(10).fill(0), 0.3)).toBeNull();
+  });
+
+  it("maps a subject center to the crop pan range", () => {
+    expect(centerToFocus(0.5, 0.3)).toBeCloseTo(0.5);
+    expect(centerToFocus(0.1, 0.3)).toBe(0);
+    expect(centerToFocus(0.95, 0.3)).toBe(1);
+    expect(centerToFocus(0.2, 1)).toBe(0.5);
+  });
+
+  it("smooths jitter, snaps on cuts and holds through gaps", () => {
+    const track = smoothFocusTrack([
+      { t: 0, x: 0.5 }, { t: 0.5, x: 0.53 }, { t: 1, x: 0.6 }, { t: 1.5, x: null }, { t: 2, x: 0.95 },
+    ]);
+    expect(track.map((k) => k.x)).toEqual([0.5, 0.5, 0.535, 0.535, 0.95]);
+  });
+
+  it("interpolates focus, holding across cuts", () => {
+    const track = [{ t: 0, x: 0.2 }, { t: 1, x: 0.4 }, { t: 2, x: 0.95 }];
+    expect(focusAt(track, 0.5)).toBeCloseTo(0.3);
+    expect(focusAt(track, 1.2)).toBe(0.4);
+    expect(focusAt(track, 1.8)).toBe(0.95);
+    expect(focusAt([], 3, 0.42)).toBe(0.42);
+  });
+
+  it("detects skin tones", () => {
+    expect(isSkin(224, 172, 140)).toBe(true);
+    expect(isSkin(141, 85, 36)).toBe(true);
+    expect(isSkin(30, 90, 200)).toBe(false);
+  });
+});
+
+describe("auto emojis", () => {
+  it("maps keywords in pt/en, ignoring case, accents variants and punctuation", () => {
+    expect(emojiFor("Dinheiro,")).toBe("💰");
+    expect(emojiFor("IA")).toBe("🤖");
+    expect(emojiFor("milhões!")).toBe("💰");
+    expect(emojiFor("segredo")).toBe("🤫");
+    expect(emojiFor("bitcoin")).toBe("🪙");
+    expect(emojiFor("casa")).toBeNull();
+    expect(emojiFor("a")).toBeNull();
   });
 });

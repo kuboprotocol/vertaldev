@@ -2,8 +2,8 @@
 // frame drawing (reframe + animated captions + hook title) shared by the live preview and the export,
 // and the real-time MediaRecorder export. Runs on the client, so cutting costs Vertal nothing per clip.
 import {
-  CLIP_ASPECTS, TRANSCRIBE_SAMPLE_RATE, captionPages, chunkPlan, cropRect, encodeWav, pageAt,
-  type CaptionPage, type ClipAspectKey, type Word,
+  CLIP_ASPECTS, TRANSCRIBE_SAMPLE_RATE, captionPages, chunkPlan, cropRect, emojiFor, encodeWav, focusAt, pageAt,
+  type CaptionPage, type ClipAspectKey, type FocusKey, type Word,
 } from "./clipEngine";
 import { pickMimeType, wrapText } from "./videoComposer";
 
@@ -55,6 +55,10 @@ export interface FrameOptions {
   layout: FrameLayout;
   /** Horizontal framing (0 = left, 1 = right) used by the "fill" layout. */
   focusX: number;
+  /** Auto-reframe track (Vertal Track); when set it overrides focusX over time. */
+  focusTrack?: FocusKey[];
+  /** Pops a matching emoji above the caption for keywords (money → 💰, AI → 🤖…). */
+  emojis?: boolean;
   captionStyle: CaptionStyleKey;
   captions: boolean;
   /** Hook text shown at the top during the first seconds. */
@@ -83,11 +87,12 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-function drawVideo(ctx: CanvasRenderingContext2D, v: HTMLVideoElement, W: number, H: number, o: FrameOptions) {
+function drawVideo(ctx: CanvasRenderingContext2D, v: HTMLVideoElement, W: number, H: number, o: FrameOptions, t: number) {
   const vw = v.videoWidth || W;
   const vh = v.videoHeight || H;
   if (o.layout === "fill") {
-    const { sx, sy, sw, sh } = cropRect(vw, vh, W, H, o.focusX, 0.5);
+    const fx = o.focusTrack?.length ? focusAt(o.focusTrack, t, o.focusX) : o.focusX;
+    const { sx, sy, sw, sh } = cropRect(vw, vh, W, H, fx, 0.5);
     ctx.drawImage(v, sx, sy, sw, sh, 0, 0, W, H);
     return;
   }
@@ -194,16 +199,37 @@ function drawHook(ctx: CanvasRenderingContext2D, text: string, elapsed: number, 
   ctx.restore();
 }
 
+/** Pops the emoji of the latest spoken keyword on this caption page above the text. */
+function drawEmoji(ctx: CanvasRenderingContext2D, page: CaptionPage, t: number, W: number, H: number) {
+  const hit = [...page.words].reverse().find((w) => t >= w.start && emojiFor(w.word));
+  if (!hit) return;
+  const age = t - hit.start;
+  const size = Math.round(Math.min(W, H) * 0.12);
+  const pop = age < 0.18 ? 0.6 + (age / 0.18) * 0.55 : age < 0.3 ? 1.15 - ((age - 0.18) / 0.12) * 0.15 : 1;
+  ctx.save();
+  ctx.translate(W / 2, H * (H > W ? 0.7 : 0.78) - size * 1.25);
+  ctx.rotate(Math.sin(age * 6) * 0.08);
+  ctx.scale(pop, pop);
+  ctx.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(emojiFor(hit.word)!, 0, 0);
+  ctx.restore();
+}
+
 /** Draws one output frame. Used by the live preview and by the exporter, so preview == export. */
 export function drawClipFrame(ctx: CanvasRenderingContext2D, video: HTMLVideoElement, o: FrameOptions, s: FrameState) {
   const { width: W, height: H } = CLIP_ASPECTS[o.aspect];
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, W, H);
-  if (video.readyState >= 2) drawVideo(ctx, video, W, H, o);
+  if (video.readyState >= 2) drawVideo(ctx, video, W, H, o, s.t);
 
   if (o.captions) {
     const page = pageAt(s.pages, s.t);
-    if (page) drawCaption(ctx, page, s.t, W, H, o.captionStyle);
+    if (page) {
+      drawCaption(ctx, page, s.t, W, H, o.captionStyle);
+      if (o.emojis) drawEmoji(ctx, page, s.t, W, H);
+    }
   }
   if (o.hookTitle) drawHook(ctx, o.hookTitle, s.t - s.clipStart, W, H);
   if (o.progressBar) {

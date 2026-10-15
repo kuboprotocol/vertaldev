@@ -376,3 +376,126 @@ export function quoteClips(durationSec: number): { transcribe: number; analyze: 
   const transcribe = Math.max(1, Math.ceil(durationSec / TRANSCRIBE_CHUNK_SECONDS));
   return { transcribe, analyze: 1, total: transcribe + 1 };
 }
+
+// ---------------------------------------------------------------- auto-reframe (Vertal Track)
+
+/** One sample of where the subject is: time in the source and horizontal center (0–1). */
+export interface FocusKey {
+  t: number;
+  x: number;
+}
+
+/** Skin-tone likelihood (0/1) using the classic YCbCr range — cheap, works across skin tones. */
+export function isSkin(r: number, g: number, b: number): boolean {
+  const y = 0.299 * r + 0.587 * g + 0.114 * b;
+  const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
+  const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
+  return y > 40 && cb >= 77 && cb <= 127 && cr >= 133 && cr <= 173;
+}
+
+/**
+ * Where along the width the subject is, from per-column weights: the center of the
+ * best-scoring window (window = output crop width as a fraction of the source width).
+ * Returns null when there is no signal, so the caller keeps the previous framing.
+ */
+export function columnFocus(weights: ArrayLike<number>, windowFrac: number): number | null {
+  const n = weights.length;
+  const total = Array.prototype.reduce.call(weights, (a: number, b: number) => a + b, 0) as number;
+  if (!n || total <= 0) return null;
+  const w = Math.max(1, Math.min(n, Math.round(n * windowFrac)));
+  let sum = 0;
+  for (let i = 0; i < w; i++) sum += weights[i];
+  let best = sum;
+  let bestStart = 0;
+  for (let i = w; i < n; i++) {
+    sum += weights[i] - weights[i - w];
+    if (sum > best) {
+      best = sum;
+      bestStart = i - w + 1;
+    }
+  }
+  // Weighted centroid inside the winning window for sub-column precision.
+  let m = 0;
+  let mw = 0;
+  for (let i = bestStart; i < bestStart + w; i++) {
+    m += weights[i] * (i + 0.5);
+    mw += weights[i];
+  }
+  return Math.max(0, Math.min(1, (mw ? m / mw : bestStart + w / 2) / n));
+}
+
+/** Converts a subject center (0–1 of the source width) into the cropRect focus value (0–1 of the pan range). */
+export function centerToFocus(center: number, windowFrac: number): number {
+  if (windowFrac >= 1) return 0.5;
+  return Math.max(0, Math.min(1, (center - windowFrac / 2) / (1 - windowFrac)));
+}
+
+/**
+ * Smooths raw focus samples like a camera operator: ignores small moves (dead zone),
+ * eases toward big ones, and snaps on a real cut (a jump larger than `cutJump`).
+ */
+export function smoothFocusTrack(raw: Array<{ t: number; x: number | null }>, deadZone = 0.06, ease = 0.35, cutJump = 0.35): FocusKey[] {
+  const out: FocusKey[] = [];
+  let cur: number | null = null;
+  for (const s of raw) {
+    if (s.x == null) {
+      if (cur != null) out.push({ t: s.t, x: cur });
+      continue;
+    }
+    if (cur == null || Math.abs(s.x - cur) > cutJump) cur = s.x;
+    else if (Math.abs(s.x - cur) > deadZone) cur += (s.x - cur) * ease;
+    out.push({ t: s.t, x: Math.round(cur * 1000) / 1000 });
+  }
+  return out.length ? out : [{ t: raw[0]?.t ?? 0, x: 0.5 }];
+}
+
+/** Focus at time t, linearly interpolated between keys (clamped at the ends). */
+export function focusAt(track: FocusKey[], t: number, fallback = 0.5): number {
+  if (!track.length) return fallback;
+  if (t <= track[0].t) return track[0].x;
+  for (let i = 1; i < track.length; i++) {
+    const a = track[i - 1];
+    const b = track[i];
+    if (t <= b.t) {
+      // Hold through cuts instead of sliding across them.
+      if (Math.abs(b.x - a.x) > 0.35) return t - a.t < b.t - t ? a.x : b.x;
+      return a.x + ((b.x - a.x) * (t - a.t)) / Math.max(1e-6, b.t - a.t);
+    }
+  }
+  return track[track.length - 1].x;
+}
+
+// ---------------------------------------------------------------- auto emojis
+
+const EMOJI_RULES: Array<[RegExp, string]> = [
+  [/^(dinheiro|grana|money|cash|lucro|profit|rico|rich|milh(ão|ões|ao|oes)|million|bilh(ão|ões|ao|oes)|billion|reais|dólar(es)?|dollars?)$/, "💰"],
+  [/^(ia|ai|intelig[êe]ncia|rob[ôo]|robot|chatgpt|claude|gpt)$/, "🤖"],
+  [/^(foguete|rocket|crescer|crescimento|escala|escalar|growth|grow|decolar)$/, "🚀"],
+  [/^(fogo|fire|incr[íi]vel|insano|insane|bomba|viral)$/, "🔥"],
+  [/^(segredo|secret|segredos|secrets)$/, "🤫"],
+  [/^(erro|errado|mistake|wrong|fail|falha|fracasso)$/, "❌"],
+  [/^(certo|correto|right|sucesso|success|funciona|works)$/, "✅"],
+  [/^(ideia|idea|ideias|ideas|insight)$/, "💡"],
+  [/^(amor|love|cora[çc][ãa]o|heart|apaixonado)$/, "❤️"],
+  [/^(tempo|time|hora|horas|hours|minutos|minutes|r[áa]pido|fast)$/, "⏰"],
+  [/^(cérebro|cerebro|brain|mente|mind|pensar|think)$/, "🧠"],
+  [/^(meta|goal|objetivo|alvo|target|foco|focus)$/, "🎯"],
+  [/^(mundo|world|global|planeta|planet)$/, "🌍"],
+  [/^(celular|phone|app|aplicativo|smartphone)$/, "📱"],
+  [/^(cripto|crypto|bitcoin|btc|blockchain|web3|token|tokens)$/, "🪙"],
+  [/^(trabalho|work|trabalhar|empresa|company|neg[óo]cio|business)$/, "💼"],
+  [/^(feliz|happy|alegria|joy|rir|haha|kkk|engra[çc]ado|funny)$/, "😂"],
+  [/^(medo|fear|assustador|scary|perigo|danger|cuidado)$/, "😱"],
+  [/^(pare|stop|aten[çc][ãa]o|attention)$/, "🛑"],
+  [/^(gr[áa]tis|free|presente|gift|b[ôo]nus|bonus)$/, "🎁"],
+  [/^(vencer|ganhar|win|winner|campe[ãa]o|champion|vit[óo]ria)$/, "🏆"],
+  [/^(dados|data|gr[áa]fico|chart|n[úu]meros|numbers|resultado|resultados|results)$/, "📈"],
+];
+
+/** Emoji for a spoken word (accents and punctuation tolerated), or null. */
+export function emojiFor(word: string): string | null {
+  const w = word.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+  if (w.length < 2) return null;
+  for (const [re, emoji] of EMOJI_RULES) if (re.test(w)) return emoji;
+  return null;
+}
