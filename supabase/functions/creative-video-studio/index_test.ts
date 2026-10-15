@@ -42,8 +42,8 @@ function setup(opts: { falKey?: string | null; falStatus?: Record<string, string
         const q = {
           eq: (c: string, v: string) => ((f[c] = v), q),
           maybeSingle: async () => {
-            const a = assets.get(f.id);
-            return { data: a && a.user_id === f.user_id && a.tool === f.tool ? structuredClone(a) : null };
+            const a = [...assets.values()].find((x) => Object.entries(f).every(([k, v]) => x[k] === v));
+            return { data: a ? structuredClone(a) : null };
           },
         };
         return q;
@@ -88,10 +88,10 @@ function setup(opts: { falKey?: string | null; falStatus?: Record<string, string
     env: (k: string) => env[k],
   } as any);
 
-  const call = async (body: unknown, auth = "Bearer ok") => {
+  const call = async (body: unknown, auth = "Bearer ok", idem?: string) => {
     const res = await handleRequest(new Request("https://fn/creative-video-studio", {
       method: "POST",
-      headers: { Authorization: auth, "Content-Type": "application/json" },
+      headers: { Authorization: auth, "Content-Type": "application/json", ...(idem ? { "X-Idempotency-Key": idem } : {}) },
       body: JSON.stringify(body),
     }));
     return { status: res.status, body: await res.json() };
@@ -170,4 +170,28 @@ Deno.test("status is scoped to the asset owner", async () => {
   const t = setup();
   const sub = await t.call(ai([img(1)]));
   assertEquals((await t.call({ action: "status", asset_id: sub.body.asset_id }, "Bearer other")).status, 404);
+});
+
+Deno.test("same request twice: second returns the first asset without charging, submitting or refunding again", async () => {
+  const t = setup({ failSubmitFor: ["2"] });
+  const first = await t.call(ai([img(1), img(2)]), "Bearer ok", "k-1");
+  const again = await t.call(ai([img(1), img(2)]), "Bearer ok", "k-1");
+  assertEquals(again.status, 200);
+  assertEquals(again.body.asset_id, first.body.asset_id);
+  assertEquals(again.body.credits_charged, 0);
+  assertEquals(again.body.replayed, true);
+  assertEquals(again.body.clips, first.body.clips);
+  assertEquals(t.deductions, [24]);
+  assertEquals(t.falCalls.filter((c) => c.startsWith("POST")).length, 2);
+  assertEquals(t.refunds().length, 1);
+  assertEquals(t.assets.size, 1);
+});
+
+Deno.test("idempotency key is per user: another user's key does not return their asset", async () => {
+  const t = setup();
+  await t.call(ai([img(1)]), "Bearer ok", "k-shared");
+  const other = await t.call({ action: "submit", tier: "express", style: "meme", aspect: "1:1", image_count: 2 }, "Bearer other", "k-shared");
+  assertEquals(other.status, 200);
+  assertEquals(other.body.replayed, undefined);
+  assertEquals(t.assets.size, 2);
 });
