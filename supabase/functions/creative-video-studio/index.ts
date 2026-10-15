@@ -109,6 +109,23 @@ async function submit(
   const falKey = deps.env("FAL_KEY");
   if (t.engine === "fal" && !falKey) return j(503, { error: "video_ai_not_configured" });
 
+  // Same request arriving twice (network/proxy retry): answer with the asset already created instead of
+  // charging, submitting to fal.ai or refunding again. Concurrent duplicates that get here before the insert
+  // are caught by the idempotent deduction (409 duplicate_request).
+  if (idempotencyKey) {
+    const { data: existing } = await deps.admin()
+      .from("creative_assets")
+      .select("id, metadata")
+      .eq("user_id", user.id)
+      .eq("tool", TOOL)
+      .eq("idempotency_key", idempotencyKey)
+      .maybeSingle();
+    if (existing) {
+      const prev = existing.metadata as StudioMeta;
+      return j(200, { ok: true, asset_id: existing.id, tier: prev.tier, credits_charged: 0, replayed: true, ...publicView(prev) });
+    }
+  }
+
   const { credits } = quoteVideo(tier, imageCount);
   const ded = await deps.deductCredits(
     user.id,

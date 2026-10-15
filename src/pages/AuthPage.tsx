@@ -9,6 +9,7 @@ import { Loader2, Mail, Lock, User, ArrowRight, KeyRound, ShieldAlert, Github } 
 import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
 import { motion, AnimatePresence } from 'framer-motion'
+import { clearStoredReferral, getStoredReferral } from '@/lib/referral'
 
 // Temporary flag to hide Google sign-in while the OAuth 404 (redirect URI)
 // is being fixed. Set back to true once the provider callback is restored.
@@ -17,7 +18,8 @@ const SHOW_GOOGLE_LOGIN = false
 const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const refCode = searchParams.get('ref') || ''
+  // ?ref= da URL, ou o guardado quando a pessoa chegou por outra página.
+  const refCode = searchParams.get('ref') || getStoredReferral()
   const redirectParam = searchParams.get('redirect') || ''
   // Allowlist of safe internal route prefixes (mirrors the edge function callback).
   // Prevents open redirects AND ensures "Try again" after an OAuth failure always
@@ -212,6 +214,7 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
           },
         })
         if (error) throw error
+        clearStoredReferral()
         toast.success('Account created successfully!')
 
         // Send welcome email (fire-and-forget; recipient resolved server-side)
