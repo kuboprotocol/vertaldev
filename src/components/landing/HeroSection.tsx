@@ -146,7 +146,7 @@ export default function HeroSection() {
         >
           <LogoBoundary fallback={<LogoTextFallback />}>
             <Suspense fallback={<LogoTextFallback />}>
-              <AnimatedLogo size={48} fit className="drop-shadow-2xl" />
+              <AnimatedLogo size={48} fit variant="stacked" className="drop-shadow-2xl" />
             </Suspense>
           </LogoBoundary>
         </motion.div>
