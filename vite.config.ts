@@ -5,6 +5,7 @@ import { envCheckPlugin } from './vite-plugins/env-check';
 import { seoPlugin } from './vite-plugins/seo';
 import path from 'path';
 import { BRAND } from './src/config/brand';
+import { LOCALE_CODES } from './src/config/locales';
 
 export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -54,6 +55,15 @@ export default defineConfig(({ command, mode }) => {
             'placeholders/*.svg',
           ],
           globIgnores: ['**/*.map', '**/vendor-tldraw-*.js'],
+          // Navegações que NÃO devem cair no index.html do app: arquivos com
+          // extensão (verificação do Naver, sitemap.xml, robots.txt) e as
+          // páginas de SEO traduzidas (/es, /ja/alternativas/...), que são
+          // HTML estático servido pelo Worker. Sem isso, quem já tem o
+          // service worker instalado via o 404 do React nesses endereços.
+          navigateFallbackDenylist: [
+            /\/[^/]+\.[a-z0-9]+$/i,
+            new RegExp(`^/(${LOCALE_CODES.join('|')})(/|$)`),
+          ],
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/(api\.kubovibe\.dev|cdn\.jsdelivr\.net)\/.*/i,
