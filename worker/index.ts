@@ -4,6 +4,7 @@
 // Configuração no painel: docs/CLOUDFLARE_MONETIZATION.md.
 import { crawlPriceFor, formatCrawlerPrice, isInBandPricing } from './payPerCrawl';
 import { isPaidPath, parsePaidPrefixes, verifyPaymentContext } from './monetizationGateway';
+import { siteVerificationResponse } from './siteVerification';
 
 export interface Env {
   ASSETS: { fetch(request: Request): Promise<Response> };
@@ -31,6 +32,9 @@ function json(status: number, body: unknown): Response {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    const verification = siteVerificationResponse(url.pathname);
+    if (verification) return verification;
 
     const paid = isPaidPath(url.pathname, parsePaidPrefixes(env.MONETIZATION_GATEWAY_PATHS));
     if (paid) {
