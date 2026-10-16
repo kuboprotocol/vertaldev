@@ -1,0 +1,31 @@
+name: IndexNow (Bing, Yandex, Naver, Seznam)
+
+# Depois de cada push na main, espera o deploy da Cloudflare e avisa os
+# buscadores com as URLs do sitemap. Também pode ser disparado à mão.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: indexnow
+  cancel-in-progress: true
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Esperar o deploy e enviar ao IndexNow
+        run: |
+          # O Workers Builds leva ~5-8 min; tenta por até 20 min.
+          for i in $(seq 1 20); do
+            if node scripts/indexnow.mjs; then exit 0; fi
+            echo "Tentativa $i falhou; nova tentativa em 60 s"
+            sleep 60
+          done
+          exit 1
