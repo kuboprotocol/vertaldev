@@ -11,6 +11,8 @@ interface AnimatedLogoProps {
    * `stacked`: logo completo com o texto embaixo do emblema, para hero e telas de destaque.
    */
   variant?: 'horizontal' | 'stacked'
+  /** Ignora `size` e deixa a altura com as classes de `className` (ex.: `h-8 lg:h-10`), para variar por breakpoint. */
+  responsive?: boolean
 }
 
 /** Logo oficial Vertal Dev (V cristal azul/roxo/prata com anel dourado), recortado e com fundo transparente. */
@@ -26,7 +28,7 @@ const VARIANTS = {
  * AnimatedLogo — logo oficial da marca usado no navbar e nos cabeçalhos.
  * Mantém a mesma API (`size`, `fit`) do antigo wordmark com cubo dourado orbitando.
  */
-export default function AnimatedLogo({ size = 32, className = '', fit = false, variant = 'horizontal' }: AnimatedLogoProps) {
+export default function AnimatedLogo({ size = 32, className = '', fit = false, variant = 'horizontal', responsive = false }: AnimatedLogoProps) {
   const v = VARIANTS[variant]
   const height = Math.round(size * v.scale)
 
@@ -39,7 +41,7 @@ export default function AnimatedLogo({ size = 32, className = '', fit = false, v
       decoding="async"
       draggable={false}
       className={`inline-block w-auto object-contain select-none ${fit ? 'max-w-full' : ''} ${className}`}
-      style={{ height }}
+      style={responsive ? undefined : { height }}
     />
   )
 }
