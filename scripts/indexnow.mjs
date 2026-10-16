@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Envia as URLs do sitemap ao IndexNow (Bing/Microsoft, Yandex, Naver, Seznam).
 // Uso: node scripts/indexnow.mjs [--dry-run]
-// Lê a chave de src/config/indexnow.ts e o sitemap publicado em SITE_ORIGIN.
+// Lê a chave de src/config/indexnow.ts e o sitemap de SITEMAP_FILE (build
+// local) ou, sem ele, o publicado em SITE_ORIGIN.
 // Antes de enviar, confere que https://<site>/<chave>.txt já devolve a chave:
 // sem isso o IndexNow recusa (403) e o deploy ainda não chegou.
 import { readFileSync } from 'node:fs';
@@ -71,10 +72,18 @@ async function main() {
     throw new Error(`Chave ainda não publicada em ${keyLocation} (HTTP ${keyRes.status})`);
   }
 
-  const sitemap = await fetch(`${ORIGIN}/sitemap.xml`);
-  if (!sitemap.ok) throw new Error(`sitemap.xml respondeu HTTP ${sitemap.status}`);
+  // No CI o sitemap vem do build (SITEMAP_FILE): a proteção de bots da
+  // Cloudflare responde 403 ao runner do GitHub em /sitemap.xml.
+  let xml;
+  if (process.env.SITEMAP_FILE) {
+    xml = readFileSync(process.env.SITEMAP_FILE, 'utf8');
+  } else {
+    const sitemap = await fetch(`${ORIGIN}/sitemap.xml`);
+    if (!sitemap.ok) throw new Error(`sitemap.xml respondeu HTTP ${sitemap.status}`);
+    xml = await sitemap.text();
+  }
   const host = new URL(ORIGIN).host;
-  const urls = parseSitemap(await sitemap.text()).filter((u) => new URL(u).host === host);
+  const urls = parseSitemap(xml).filter((u) => new URL(u).host === host);
   console.log(`${urls.length} URLs no sitemap`);
   if (DRY_RUN) return;
 

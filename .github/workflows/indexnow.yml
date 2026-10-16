@@ -20,10 +20,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
+      # O sitemap sai do build: a Cloudflare bloqueia (403) o runner em
+      # https://vertal.dev/sitemap.xml.
+      - run: npm ci --no-audit --no-fund
+      - run: npx vite build
       - name: Esperar o deploy e enviar ao IndexNow (e à API do Bing)
         env:
           # Opcional: com o secret, também envia pela Bing URL Submission API.
           BING_WEBMASTER_API_KEY: ${{ secrets.BING_WEBMASTER_API_KEY }}
+          SITEMAP_FILE: dist/sitemap.xml
         run: |
           # O Workers Builds leva ~5-8 min; tenta por até 20 min.
           for i in $(seq 1 20); do
