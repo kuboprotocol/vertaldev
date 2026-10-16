@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { applyHead, prerenderPages, renderRobots, renderSitemap, sitemapUrls } from '../../vite-plugins/seo'
+import { applyHead, prerenderPages, renderRobots, renderRss, renderSitemap, sitemapUrls } from '../../vite-plugins/seo'
 import { ALTERNATIVES, findAlternative } from '@/config/alternatives'
 import { BRAND, SITE_ORIGIN } from '@/config/brand'
 
@@ -77,5 +77,16 @@ describe('SEO: sitemap, robots e páginas de comparação', () => {
     }
     expect(pages.get('pricing.html')).toContain('<link rel="canonical" href="https://vertal.dev/pricing" />')
     expect([...pages.keys()].some((k) => /admin|dashboard|builder/.test(k))).toBe(false)
+  })
+
+  it('RSS 2.0 lista home, índice e cada comparação com link absoluto', () => {
+    const xml = renderRss('https://vertal.dev', new Date('2026-10-16T00:00:00Z'))
+    expect(xml).toMatch(/^<\?xml version="1.0"/)
+    expect(xml).toContain('<rss version="2.0"')
+    expect(xml).toContain('<atom:link href="https://vertal.dev/rss.xml" rel="self"')
+    for (const a of ALTERNATIVES) expect(xml).toContain(`<link>https://vertal.dev/alternativas/${a.slug}</link>`)
+    expect(xml.match(/<item>/g)?.length).toBe(ALTERNATIVES.length + 2)
+    expect(xml).toContain('<pubDate>Fri, 16 Oct 2026 00:00:00 GMT</pubDate>')
+    expect(xml).not.toMatch(/&(?!amp;|lt;|gt;|quot;|apos;)/)
   })
 })
