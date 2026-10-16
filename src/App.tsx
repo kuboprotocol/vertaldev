@@ -71,6 +71,7 @@ const AuditTrailPage = lazy(() => import("./pages/creative/AuditTrailPage"));
 const PresetsPage = lazy(() => import("./pages/creative/PresetsPage"));
 const NotificationPreferencesPage = lazy(() => import("./pages/creative/NotificationPreferencesPage"));
 const ExportDetailsPage = lazy(() => import("./pages/creative/ExportDetailsPage"));
+const ScheduledTasksPage = lazy(() => import("./pages/creative/ScheduledTasksPage"));
 const AgentsHubPage = lazy(() => import("./pages/AgentsHubPage"));
 const VibeAgentsPage = lazy(() => import("./pages/VibeAgentsPage"));
 const AgentDetailPage = lazy(() => import("./pages/AgentDetailPage"));
@@ -271,6 +272,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/creative/audit" element={<ProtectedRoute><CreativeEconomyGate><ErrorBoundary resourceName="AuditTrailPage"><AuditTrailPage /></ErrorBoundary></CreativeEconomyGate></ProtectedRoute>} />
                 <Route path="/creative/presets" element={<ProtectedRoute><CreativeEconomyGate><ErrorBoundary resourceName="PresetsPage"><PresetsPage /></ErrorBoundary></CreativeEconomyGate></ProtectedRoute>} />
                 <Route path="/creative/notifications" element={<ProtectedRoute><CreativeEconomyGate><NotificationPreferencesPage /></CreativeEconomyGate></ProtectedRoute>} />
+                <Route path="/creative/schedules" element={<ProtectedRoute><CreativeEconomyGate><ErrorBoundary resourceName="ScheduledTasksPage"><ScheduledTasksPage /></ErrorBoundary></CreativeEconomyGate></ProtectedRoute>} />
                 <Route path="/creative/exports/:id" element={<ProtectedRoute><CreativeEconomyGate><ErrorBoundary resourceName="ExportDetailsPage"><ExportDetailsPage /></ErrorBoundary></CreativeEconomyGate></ProtectedRoute>} />
                 <Route path="/creative/:tool" element={<ProtectedRoute><CreativeEconomyGate><CreativePage /></CreativeEconomyGate></ProtectedRoute>} />
                 

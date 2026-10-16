@@ -673,11 +673,14 @@ export type Database = {
           created_at: string | null
           email: string
           export_interval_days: number | null
+          format: string
           id: string
           is_active: boolean | null
           last_error_notified_at: string | null
           last_run: string | null
+          next_run_at: string | null
           schedule_time: string
+          timezone: string
           updated_at: string | null
           user_id: string
         }
@@ -685,11 +688,14 @@ export type Database = {
           created_at?: string | null
           email: string
           export_interval_days?: number | null
+          format?: string
           id?: string
           is_active?: boolean | null
           last_error_notified_at?: string | null
           last_run?: string | null
+          next_run_at?: string | null
           schedule_time: string
+          timezone?: string
           updated_at?: string | null
           user_id: string
         }
@@ -697,11 +703,14 @@ export type Database = {
           created_at?: string | null
           email?: string
           export_interval_days?: number | null
+          format?: string
           id?: string
           is_active?: boolean | null
           last_error_notified_at?: string | null
           last_run?: string | null
+          next_run_at?: string | null
           schedule_time?: string
+          timezone?: string
           updated_at?: string | null
           user_id?: string
         }
@@ -3528,6 +3537,14 @@ export type Database = {
       }
     }
     Functions: {
+      cancel_creative_export: {
+        Args: { p_export_id: string }
+        Returns: Database["public"]["Tables"]["creative_export_history"]["Row"]
+      }
+      retry_creative_export: {
+        Args: { p_export_id: string }
+        Returns: Database["public"]["Tables"]["creative_export_history"]["Row"]
+      }
       admin_clear_connector_run: {
         Args: { _connector_slug: string; _run_id: string }
         Returns: number

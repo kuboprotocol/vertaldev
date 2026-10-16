@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RetryIndicator } from "@/components/creative/RetryIndicator";
+import { cancelCreativeExport, resolveExportUrl, retryCreativeExport } from "@/lib/creativeExports";
 
 
 type Export = {
@@ -91,38 +92,35 @@ export default function ExportDetailsPage() {
   }, [user, id, load]);
 
 
+  async function download() {
+    try {
+      const url = await resolveExportUrl(exportRow?.file_url);
+      // download=true no signed URL: baixa sem sair da página (e sem bloqueio de pop-up após o await).
+      if (url) window.location.assign(url);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
   async function cancel() {
     if (!exportRow || !user) return;
     if (!confirm("Cancel this export?")) return;
-    const { error } = await supabase
-      .from("creative_export_history")
-      .update({ status: "cancelled", cancelled_at: new Date().toISOString(), cancelled_by: user.id })
-      .eq("id", exportRow.id);
-    if (error) return toast.error(error.message);
-    await supabase.from("creative_export_audit_log").insert({
-      export_id: exportRow.id, user_id: user.id, action: "cancel",
-      details: { actor_email: user.email, at: new Date().toISOString() },
-    });
+    try {
+      await cancelCreativeExport(exportRow.id);
+    } catch (e) {
+      return toast.error((e as Error).message);
+    }
     toast.success("Export cancelled");
     load();
   }
 
   async function requeue() {
     if (!exportRow || !user) return;
-    const { error } = await supabase
-      .from("creative_export_history")
-      .update({
-        status: "processing",
-        retry_count: (exportRow.retry_count ?? 0) + 1,
-        last_retry_at: new Date().toISOString(),
-        error_message: null,
-      })
-      .eq("id", exportRow.id);
-    if (error) return toast.error(error.message);
-    await supabase.from("creative_export_audit_log").insert({
-      export_id: exportRow.id, user_id: user.id, action: "retry",
-      details: { actor_email: user.email, at: new Date().toISOString(), previous_status: exportRow.status },
-    });
+    try {
+      await retryCreativeExport(exportRow.id);
+    } catch (e) {
+      return toast.error((e as Error).message);
+    }
     toast.success("Re-queued");
     load();
   }
@@ -234,11 +232,9 @@ export default function ExportDetailsPage() {
 
           <div className="mt-4 flex gap-2 flex-wrap">
             {exportRow.file_url && (
-              <a href={exportRow.file_url} target="_blank" rel="noreferrer">
-                <Button data-testid="download-file"><Download className="h-4 w-4 mr-2"/>Download file</Button>
-              </a>
+              <Button data-testid="download-file" onClick={download}><Download className="h-4 w-4 mr-2"/>Download file</Button>
             )}
-            {exportRow.status === "processing" && (
+            {(exportRow.status === "processing" || exportRow.status === "queued") && (
               <Button data-testid="cancel-export" variant="destructive" onClick={cancel}><Ban className="h-4 w-4 mr-2"/>Cancel</Button>
             )}
             {(exportRow.status === "failed" || exportRow.status === "cancelled" || error) && (
