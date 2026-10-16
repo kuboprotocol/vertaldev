@@ -10,6 +10,12 @@ describe('verificação de propriedade dos buscadores', () => {
     expect(await res.text()).toBe('naver-site-verification: naver70c8557d47a2d0e3ce2e687898979c32.html');
   });
 
+  it('serve o arquivo do Yandex com o código de verificação', async () => {
+    const res = await worker.fetch(new Request('https://vertal.dev/yandex_cfa963b04405ac3c.html'), env);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('<body>Verification: cfa963b04405ac3c</body>');
+  });
+
   it('outros caminhos continuam indo para os assets', async () => {
     const res = await worker.fetch(new Request('https://vertal.dev/naver-outro.html'), env);
     expect(await res.text()).toBe('asset');
