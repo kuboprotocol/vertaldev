@@ -318,7 +318,7 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
             <div className="glass glass-border rounded-3xl p-8 shadow-gold">
               <div className="text-center mb-8">
                 <div className="flex justify-center mb-5">
-                  <AnimatedLogo size={28} />
+                  <AnimatedLogo size={28} variant="stacked" />
                 </div>
                 <h1 className="text-2xl font-display font-bold text-foreground">
                   {isLogin ? 'Welcome back' : 'Create your account'}
