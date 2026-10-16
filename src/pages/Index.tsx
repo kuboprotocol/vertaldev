@@ -90,7 +90,7 @@ const Index = () => {
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <img
-                  src="/vertal-dev-logo.jpg"
+                  src="/vertal-dev-logo.webp"
                   alt={APP_NAME}
                   className="h-8 w-auto object-contain"
                 />
