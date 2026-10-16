@@ -25,7 +25,15 @@ import {
   alternativeFaq,
   type Alternative,
 } from "../src/config/alternatives";
-import { HOME_SEO, ROUTE_SEO, alternativeSeo, type RouteSeo } from "../src/config/seo";
+import {
+  DESCRIPTION_MAX,
+  HOME_SEO,
+  ROUTE_SEO,
+  TITLE_MAX,
+  alternativeSeo,
+  clampText,
+  type RouteSeo,
+} from "../src/config/seo";
 import { hreflangLinks, localizedUrls, renderLocalizedPages } from "./seoLocales";
 
 /** Rotas públicas indexáveis (sem login). */
@@ -119,7 +127,8 @@ function setTag(html: string, re: RegExp, value: string): string {
 }
 
 /** Troca título, descrição, canonical e Open Graph/Twitter do `index.html`. */
-export function applyHead(html: string, seo: RouteSeo, url: string, extraHead = ""): string {
+export function applyHead(html: string, page: RouteSeo, url: string, extraHead = ""): string {
+  const seo = { title: clampText(page.title, TITLE_MAX), description: clampText(page.description, DESCRIPTION_MAX) };
   let out = html.replace(/<title>[\s\S]*?<\/title>/, `<title>${esc(seo.title)}</title>`);
   const metas: [string, string][] = [
     ['name="description"', seo.description],
