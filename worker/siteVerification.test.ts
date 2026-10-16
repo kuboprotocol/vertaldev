@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import worker from './index';
+import { INDEXNOW_KEY } from '../src/config/indexnow';
 
 const env = { ASSETS: { fetch: async () => new Response('asset') } };
 
@@ -14,6 +15,13 @@ describe('verificação de propriedade dos buscadores', () => {
     const res = await worker.fetch(new Request('https://vertal.dev/yandex_cfa963b04405ac3c.html'), env);
     expect(res.status).toBe(200);
     expect(await res.text()).toContain('<body>Verification: cfa963b04405ac3c</body>');
+  });
+
+  it('serve a chave do IndexNow em texto puro', async () => {
+    const res = await worker.fetch(new Request(`https://vertal.dev/${INDEXNOW_KEY}.txt`), env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toContain('text/plain');
+    expect(await res.text()).toBe(INDEXNOW_KEY);
   });
 
   it('outros caminhos continuam indo para os assets', async () => {
