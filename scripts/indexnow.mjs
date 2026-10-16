@@ -18,6 +18,46 @@ function readKey() {
   return key;
 }
 
+// Bing URL Submission API (opcional): roda só se BING_WEBMASTER_API_KEY
+// existir. A cota diária do Bing é pequena, então as páginas principais
+// (pt-BR na raiz, depois inglês e espanhol) vão primeiro.
+const BING_API = 'https://ssl.bing.com/webmaster/api.svc/json';
+
+export function prioritizeForBing(urls, origin = ORIGIN) {
+  const rank = (u) => {
+    const path = u.slice(origin.length) || '/';
+    if (!/^\/[a-z]{2,3}(-[A-Z]{2})?(\/|$)/.test(path) || /^\/(docs|terms|support|pricing|download|anywhere|privacy|alternativas)/.test(path)) return 0;
+    if (/^\/en(\/|$)/.test(path)) return 1;
+    if (/^\/es(\/|$)/.test(path)) return 2;
+    return 3;
+  };
+  return [...urls].sort((a, b) => rank(a) - rank(b));
+}
+
+async function submitBing(urls) {
+  const apiKey = process.env.BING_WEBMASTER_API_KEY;
+  if (!apiKey) {
+    console.log('Bing API: BING_WEBMASTER_API_KEY ausente, pulando');
+    return;
+  }
+  const siteUrl = ORIGIN;
+  const q = new URLSearchParams({ siteUrl, apikey: apiKey });
+  const quotaRes = await fetch(`${BING_API}/GetUrlSubmissionQuota?${q}`);
+  if (!quotaRes.ok) throw new Error(`Bing quota HTTP ${quotaRes.status}: ${await quotaRes.text()}`);
+  const daily = Number((await quotaRes.json())?.d?.DailyQuota ?? 0);
+  console.log(`Bing API: cota diária restante ${daily}`);
+  if (daily <= 0) return;
+
+  const urlList = prioritizeForBing(urls).slice(0, Math.min(daily, 500));
+  const res = await fetch(`${BING_API}/SubmitUrlBatch?${new URLSearchParams({ apikey: apiKey })}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ siteUrl, urlList }),
+  });
+  if (!res.ok) throw new Error(`Bing SubmitUrlBatch HTTP ${res.status}: ${await res.text()}`);
+  console.log(`Bing API: ${urlList.length} URLs enviadas`);
+}
+
 export function parseSitemap(xml) {
   return [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1].trim());
 }
@@ -50,6 +90,13 @@ async function main() {
       throw new Error(`IndexNow respondeu HTTP ${res.status}: ${await res.text()}`);
     }
     console.log(`Lote ${i / BATCH + 1}: ${urlList.length} URLs enviadas (HTTP ${res.status})`);
+  }
+
+  // Falha do Bing não refaz o IndexNow (que já foi aceito): só avisa.
+  try {
+    await submitBing(urls);
+  } catch (err) {
+    console.warn(`::warning::${err.message}`);
   }
 }
 
