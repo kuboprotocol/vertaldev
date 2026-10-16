@@ -180,15 +180,9 @@ export default function CreativePage() {
   const [simulationMode, setSimulationMode] = useState<"none" | "selection" | "config" | "execution">("none");
   const globalCooldown = useCooldown();
   const PAGE_SIZE = 20;
-  const [showAuditSchedule, setShowAuditSchedule] = useState(false);
-  const [auditEmail, setAuditEmail] = useState("");
-  const [auditTime, setAuditTime] = useState("09:00");
-  const [auditInterval, setAuditInterval] = useState(7);
   const [presets, setPresets] = useState<any[]>([]);
   const [showPresetDialog, setShowPresetDialog] = useState(false);
   const [newPresetName, setNewPresetName] = useState("");
-  const [exports, setExports] = useState<any[]>([]);
-  const [exportLogs, setExportLogs] = useState<any[]>([]);
   const [showExportHistory, setShowExportHistory] = useState(false);
   const [selectedExport, setSelectedExport] = useState<any | null>(null);
   const [auditDateStart, setAuditDateStart] = useState("");
@@ -346,13 +340,6 @@ export default function CreativePage() {
       const { data: p } = await supabase.from("creative_filter_presets").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
       setPresets(p || []);
 
-      const { data: sch } = await supabase.from("creative_audit_schedules").select("*").eq("user_id", user.id).single();
-      if (sch) {
-        setAuditEmail(sch.email);
-        setAuditTime(sch.schedule_time);
-        setAuditInterval(sch.export_interval_days || 7);
-      }
-
       const { data: nPrefs } = await supabase.from("creative_notification_preferences").select("*").eq("user_id", user.id).single();
       if (nPrefs) {
         setNotificationPrefs({
@@ -360,18 +347,6 @@ export default function CreativePage() {
           notify_retry: nPrefs.notify_retry,
           include_investigation_link: nPrefs.include_investigation_link
         });
-      }
-      loadExportHistory();
-      
-      const { data: logs } = await supabase.from("creative_export_logs")
-        .select("*, creative_export_history(status)")
-        .eq("user_id", user.id)
-        .eq("level", "error")
-        .order("created_at", { ascending: false })
-        .limit(5);
-      
-      if (logs && logs.length > 0) {
-        setExportLogs(logs);
       }
     };
     loadData();
@@ -731,62 +706,6 @@ export default function CreativePage() {
     a.click();
     URL.revokeObjectURL(url);
     toast.success("Trilha de auditoria exportada");
-  }
-
-  async function scheduleAuditExport() {
-    if (!user || !auditEmail || !auditTime) return;
-    try {
-      const { error } = await supabase.from("creative_audit_schedules").upsert({
-        user_id: user.id,
-        email: auditEmail,
-        schedule_time: auditTime,
-        export_interval_days: auditInterval,
-        is_active: true
-      });
-      if (error) throw error;
-      toast.success("Exportação de auditoria agendada!");
-      setShowAuditSchedule(false);
-    } catch (e: any) {
-      toast.error("Falha ao agendar: " + e.message);
-    }
-  }
-
-  async function cancelExport(id: string) {
-    if (!user) return;
-    const { error } = await supabase.from("creative_export_history").update({ status: "failed", error_message: "Cancelado pelo usuário", cancelled_at: new Date().toISOString(), cancelled_by: user.id }).eq("id", id);
-    if (!error) {
-      await supabase.from("creative_export_audit_log").insert({ export_id: id, user_id: user.id, action: 'cancel', details: { reason: "Cancelado via UI" } });
-      toast.info("Exportação cancelada");
-      loadExportHistory();
-    }
-  }
-
-  async function retryExport(id: string) {
-    if (!user) return;
-    const exportToRetry = exports.find(e => e.id === id);
-    const { error } = await supabase.from("creative_export_history").update({ 
-      status: "queued", 
-      error_message: null,
-      retry_count: (exportToRetry?.retry_count || 0) + 1,
-      last_retry_at: new Date().toISOString()
-    }).eq("id", id);
-    
-    if (!error) {
-      await supabase.from("creative_export_audit_log").insert({
-        export_id: id,
-        user_id: user.id,
-        action: 'retry',
-        details: { attempt: (exportToRetry?.retry_count || 0) + 1 }
-      });
-      toast.success("Exportação reenfileirada");
-      loadExportHistory();
-    }
-  }
-
-  async function loadExportHistory() {
-    if (!user) return;
-    const { data } = await supabase.from("creative_export_history").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
-    setExports(data || []);
   }
 
   async function loadInvestigationLogs(exportId: string) {
