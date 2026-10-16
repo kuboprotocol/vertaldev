@@ -5,6 +5,8 @@
 // lugar do padrão da zona.
 // https://developers.cloudflare.com/ai-crawl-control/features/pay-per-crawl/use-pay-per-crawl-as-site-owner/advanced-configuration/
 
+import { splitLocalePath } from '../src/config/locales';
+
 /** Preço mínimo aceito pela Cloudflare, em USD por página. */
 export const MIN_CRAWL_PRICE_USD = 0.001;
 
@@ -30,9 +32,13 @@ const RULES: PriceRule[] = [
   { match: prefix('/connectors'), priceUSD: 0.005 },
 ];
 
-/** Preço em USD para o caminho, ou null para usar o padrão da zona. */
+/**
+ * Preço em USD para o caminho, ou null para usar o padrão da zona. Páginas
+ * traduzidas (`/es/alternativas/...`) seguem a regra da página em português.
+ */
 export function crawlPriceFor(pathname: string): number | null {
-  const rule = RULES.find((r) => r.match(pathname));
+  const [, path] = splitLocalePath(pathname);
+  const rule = RULES.find((r) => r.match(path));
   if (!rule) return null;
   if (rule.priceUSD === 0) return 0;
   return Math.max(rule.priceUSD, MIN_CRAWL_PRICE_USD);

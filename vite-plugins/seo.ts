@@ -26,6 +26,7 @@ import {
   type Alternative,
 } from "../src/config/alternatives";
 import { HOME_SEO, ROUTE_SEO, alternativeSeo, type RouteSeo } from "../src/config/seo";
+import { hreflangLinks, localizedUrls, renderLocalizedPages } from "./seoLocales";
 
 /** Rotas públicas indexáveis (sem login). */
 const PUBLIC_ROUTES = [
@@ -45,7 +46,7 @@ export function sitemapUrls(origin: string = SITE_ORIGIN): string[] {
     ...PUBLIC_ROUTES,
     ...ALTERNATIVES.map((a) => `/alternativas/${a.slug}`),
   ];
-  return paths.map((p) => `${origin}${p === "/" ? "/" : p}`);
+  return [...paths.map((p) => `${origin}${p === "/" ? "/" : p}`), ...localizedUrls(origin)];
 }
 
 export function renderSitemap(
@@ -161,14 +162,18 @@ function withBody(html: string, body: string): string {
   return html.replace(/<div id="root">[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/, `<div id="root">${body}</div>`);
 }
 
-/** HTML de cada página pública, indexado pelo arquivo de saída. */
-export function prerenderPages(indexHtml: string, origin: string = SITE_ORIGIN): Map<string, string> {
+/** HTML de cada página pública em pt-BR (raiz), indexado pelo arquivo de saída. */
+export function prerenderPages(html: string, origin: string = SITE_ORIGIN): Map<string, string> {
+  // O index.html traz o hreflang da home; cada página põe o seu.
+  const indexHtml = html.replace(/\s*<link rel="alternate" hreflang="[^"]*" href="[^"]*" \/>/g, "");
   const pages = new Map<string, string>();
   const home = [APP_NAME, "/"] as [string, string];
 
   for (const [path, seo] of Object.entries(ROUTE_SEO)) {
     if (path === "/") continue;
-    let html = applyHead(indexHtml, seo, `${origin}${path}`, jsonLd(breadcrumb(origin, [home, [seo.title, path]])));
+    const extra = [jsonLd(breadcrumb(origin, [home, [seo.title, path]]))];
+    if (path === "/alternativas") extra.push(hreflangLinks(origin, path));
+    let html = applyHead(indexHtml, seo, `${origin}${path}`, extra.join("\n    "));
     if (path === "/alternativas") html = withBody(html, renderAlternativesIndexBody());
     pages.set(`${path.slice(1)}.html`, html);
   }
@@ -178,6 +183,7 @@ export function prerenderPages(indexHtml: string, origin: string = SITE_ORIGIN):
     const seo = alternativeSeo(alt);
     const faq = alternativeFaq(alt, APP_NAME);
     const head = [
+      hreflangLinks(origin, path),
       jsonLd(breadcrumb(origin, [home, ["Alternativas", "/alternativas"], [seo.heading, path]])),
       jsonLd({
         "@context": "https://schema.org",
@@ -202,7 +208,12 @@ export function seoPlugin(): Plugin {
     transformIndexHtml: {
       order: "pre",
       handler: (html) =>
-        applyHead(html.split("%SITE_ORIGIN%").join(SITE_ORIGIN), HOME_SEO, `${SITE_ORIGIN}/`),
+        applyHead(
+          html.split("%SITE_ORIGIN%").join(SITE_ORIGIN),
+          HOME_SEO,
+          `${SITE_ORIGIN}/`,
+          hreflangLinks(SITE_ORIGIN, "/"),
+        ),
     },
     generateBundle() {
       this.emitFile({ type: "asset", fileName: "sitemap.xml", source: renderSitemap() });
@@ -218,7 +229,8 @@ export function seoPlugin(): Plugin {
       } catch {
         return; // build sem index.html (ex.: bibliotecas, testes)
       }
-      for (const [file, html] of prerenderPages(indexHtml)) {
+      const pages = new Map([...prerenderPages(indexHtml), ...renderLocalizedPages()]);
+      for (const [file, html] of pages) {
         const out = join(dir, file);
         mkdirSync(dirname(out), { recursive: true });
         writeFileSync(out, html);
