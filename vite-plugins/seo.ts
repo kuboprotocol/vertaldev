@@ -59,6 +59,50 @@ export function renderSitemap(
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
 }
 
+const xmlEsc = (v: string) =>
+  v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+
+/**
+ * Feed RSS 2.0 (`/rss.xml`) com a home, o índice e cada página de
+ * comparação em pt-BR. O Naver Search Advisor e leitores de feed usam
+ * para descobrir páginas novas.
+ */
+export function renderRss(origin: string = SITE_ORIGIN, date: Date = new Date()): string {
+  const pubDate = date.toUTCString();
+  const items: { title: string; link: string; description: string }[] = [
+    { title: HOME_SEO.title, link: `${origin}/`, description: HOME_SEO.description },
+    { title: ROUTE_SEO["/alternativas"].title, link: `${origin}/alternativas`, description: ROUTE_SEO["/alternativas"].description },
+    ...ALTERNATIVES.map((a) => {
+      const seo = alternativeSeo(a);
+      return { title: seo.title, link: `${origin}/alternativas/${a.slug}`, description: seo.description };
+    }),
+  ];
+  const body = items
+    .map(
+      (i) => `    <item>
+      <title>${xmlEsc(i.title)}</title>
+      <link>${i.link}</link>
+      <guid isPermaLink="true">${i.link}</guid>
+      <description>${xmlEsc(i.description)}</description>
+      <pubDate>${pubDate}</pubDate>
+    </item>`,
+    )
+    .join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>${xmlEsc(APP_NAME)}</title>
+    <link>${origin}/</link>
+    <description>${xmlEsc(HOME_SEO.description)}</description>
+    <language>pt-BR</language>
+    <lastBuildDate>${pubDate}</lastBuildDate>
+    <atom:link href="${origin}/rss.xml" rel="self" type="application/rss+xml" />
+${body}
+  </channel>
+</rss>
+`;
+}
+
 export function renderRobots(origin: string = SITE_ORIGIN): string {
   return `User-agent: *\nAllow: /\nDisallow: /admin/\n\nSitemap: ${origin}/sitemap.xml\n`;
 }
@@ -218,6 +262,7 @@ export function seoPlugin(): Plugin {
     generateBundle() {
       this.emitFile({ type: "asset", fileName: "sitemap.xml", source: renderSitemap() });
       this.emitFile({ type: "asset", fileName: "robots.txt", source: renderRobots() });
+      this.emitFile({ type: "asset", fileName: "rss.xml", source: renderRss() });
     },
     // Depois que o Vite gravou o index.html final (com os scripts com hash).
     writeBundle(options) {
