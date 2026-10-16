@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -10,6 +10,8 @@
     <link rel="canonical" href="%SITE_ORIGIN%/" />
 
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Vertal Vibe Dev" />
+    <meta property="og:locale" content="pt_BR" />
     <meta property="og:url" content="%SITE_ORIGIN%/" />
     <meta property="og:title" content="Vertal Vibe Dev — Crie apps com inteligência artificial">
     <meta property="og:description" content="A plataforma definitiva para criar, gerenciar e escalar seus aplicativos usando IA.">
@@ -24,15 +26,36 @@
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        "name": "Vertal Vibe Dev",
-        "alternateName": ["Vertal", "Kubo Vibe"],
-        "url": "%SITE_ORIGIN%/",
-        "applicationCategory": "DeveloperApplication",
-        "operatingSystem": "Web, Windows, macOS, Linux",
-        "description": "Crie apps com inteligência artificial: backend, Web3, conectores e domínio em um só lugar.",
-        "publisher": { "@type": "Organization", "name": "KUBO Protocol" },
-        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "%SITE_ORIGIN%/#organization",
+            "name": "KUBO Protocol",
+            "url": "%SITE_ORIGIN%/",
+            "logo": "%SITE_ORIGIN%/pwa-512x512.png",
+            "sameAs": ["https://x.com/KUBOPROTOCOL", "https://github.com/kuboprotocol"]
+          },
+          {
+            "@type": "WebSite",
+            "@id": "%SITE_ORIGIN%/#website",
+            "name": "Vertal Vibe Dev",
+            "alternateName": ["Vertal", "vertal.dev"],
+            "url": "%SITE_ORIGIN%/",
+            "inLanguage": "pt-BR",
+            "publisher": { "@id": "%SITE_ORIGIN%/#organization" }
+          },
+          {
+            "@type": "SoftwareApplication",
+            "name": "Vertal Vibe Dev",
+            "alternateName": ["Vertal", "vertal.dev", "Kubo Vibe"],
+            "url": "%SITE_ORIGIN%/",
+            "applicationCategory": "DeveloperApplication",
+            "operatingSystem": "Web, Windows, macOS, Linux, Android, iOS",
+            "description": "Plataforma de vibe coding: descreva sua ideia e a IA cria o app com backend, Web3, conectores e domínio em um só lugar.",
+            "publisher": { "@id": "%SITE_ORIGIN%/#organization" },
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+          }
+        ]
       }
     </script>
     <link rel="icon" type="image/jpeg" href="/vertal-dev-logo.jpg" />
@@ -42,7 +65,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
     <meta name="robots" content="index, follow" />
-    <meta name="keywords" content="vertal, vertal vibe dev, vibe coding, criar aplicativo com ia, construtor de apps com ia, no-code, web3, kubo vibe" />
+    <meta name="keywords" content="vertal, vertal.dev, vertal vibe dev, vibe coding, criar app com ia, criar aplicativo com ia, construtor de apps com ia, ai app builder, no-code, web3, kubo vibe" />
 
     <style>
       html, body, #root { min-height: 100%; margin: 0; }

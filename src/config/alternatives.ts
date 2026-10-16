@@ -9,7 +9,7 @@
  * - manter o aviso de que as marcas pertencem aos respectivos donos.
  */
 
-export type AlternativeCategory = 'builder' | 'editor' | 'hosting' | 'concept'
+export type AlternativeCategory = 'builder' | 'agent' | 'editor' | 'hosting' | 'concept'
 
 export interface Alternative {
   slug: string
@@ -22,10 +22,13 @@ export interface Alternative {
   whyVertal: string[]
   /** Quando faz sentido usar os dois juntos (ex.: hospedagem). */
   together?: string
+  /** Outras formas como as pessoas pesquisam o produto (ex.: "lovable.dev"). */
+  aliases?: string[]
 }
 
 export const CATEGORY_LABEL: Record<AlternativeCategory, string> = {
   builder: 'Construtores de apps com IA',
+  agent: 'Assistentes e agentes de programação',
   editor: 'Editores de código com IA',
   hosting: 'Hospedagem e deploy',
   concept: 'Conceitos',
@@ -45,6 +48,7 @@ export const VERTAL_FEATURES = [
 export const ALTERNATIVES: Alternative[] = [
   {
     slug: 'lovable',
+    aliases: ['lovable.dev', 'lovable ai'],
     name: 'Lovable',
     category: 'builder',
     summary: 'Lovable é um construtor de aplicações web com IA: você descreve o app em linguagem natural e ele gera o projeto.',
@@ -56,6 +60,7 @@ export const ALTERNATIVES: Alternative[] = [
   },
   {
     slug: 'bolt',
+    aliases: ['bolt', 'bolt ai', 'stackblitz bolt'],
     name: 'Bolt.new',
     category: 'builder',
     summary: 'Bolt.new, da StackBlitz, gera e executa aplicações full-stack direto no navegador a partir de um prompt.',
@@ -67,6 +72,7 @@ export const ALTERNATIVES: Alternative[] = [
   },
   {
     slug: 'replit',
+    aliases: ['replit agent', 'replit ai'],
     name: 'Replit',
     category: 'builder',
     summary: 'Replit é um ambiente de desenvolvimento online com agente de IA, execução de código e hospedagem.',
@@ -88,7 +94,32 @@ export const ALTERNATIVES: Alternative[] = [
     ],
   },
   {
+    slug: 'emergent',
+    name: 'Emergent',
+    category: 'builder',
+    aliases: ['emergent.sh', 'emergent ai'],
+    summary: 'Emergent é uma plataforma de criação de aplicativos com agentes de IA: você descreve o app e os agentes constroem o projeto.',
+    whyVertal: [
+      'Você quer Web3 (carteiras, tokens, contratos) integrado desde o início',
+      'Você quer conectores (GitHub, Gmail, Slack), domínio e deploy no mesmo painel',
+      'Você quer um agente local no seu computador e extensão para VS Code',
+    ],
+  },
+  {
+    slug: 'v0',
+    name: 'v0',
+    category: 'builder',
+    aliases: ['v0.dev', 'v0 vercel', 'v0.app'],
+    summary: 'v0, da Vercel, gera interfaces e aplicações web a partir de prompts em linguagem natural.',
+    whyVertal: [
+      'Você quer o app completo, com backend, banco e autenticação, não só a interface',
+      'Você quer recursos Web3 prontos para usar',
+      'Você quer registrar o domínio e publicar a partir do mesmo painel',
+    ],
+  },
+  {
     slug: 'cursor',
+    aliases: ['cursor ai', 'cursor editor'],
     name: 'Cursor',
     category: 'editor',
     summary: 'Cursor é um editor de código com IA, baseado no VS Code, voltado para desenvolvedores.',
@@ -100,6 +131,7 @@ export const ALTERNATIVES: Alternative[] = [
   },
   {
     slug: 'trae',
+    aliases: ['trae ai', 'trae ide'],
     name: 'Trae',
     category: 'editor',
     summary: 'Trae é um editor de código com IA voltado para desenvolvedores.',
@@ -110,7 +142,32 @@ export const ALTERNATIVES: Alternative[] = [
     ],
   },
   {
+    slug: 'claude',
+    name: 'Claude',
+    category: 'agent',
+    aliases: ['claude code', 'claude ai', 'anthropic claude'],
+    summary: 'Claude é o assistente de IA da Anthropic; com o Claude Code ele também atua como agente de programação no terminal e no editor.',
+    whyVertal: [
+      'Você quer um produto pronto para criar e publicar apps, sem montar o ambiente',
+      'Você quer backend, Web3, domínio e deploy integrados num só painel',
+      'Você quer acompanhar o custo por créditos, com plano gratuito para começar',
+    ],
+  },
+  {
+    slug: 'codex',
+    name: 'Codex',
+    category: 'agent',
+    aliases: ['openai codex', 'chatgpt codex'],
+    summary: 'Codex é o agente de programação da OpenAI, que escreve, revisa e executa código a partir de instruções.',
+    whyVertal: [
+      'Você não programa e quer o app publicado só descrevendo o que precisa',
+      'Você quer backend, banco e autenticação já configurados',
+      'Você quer Web3 e conectores de negócio sem configurar nada',
+    ],
+  },
+  {
     slug: 'vercel',
+    aliases: ['vercel.com', 'vercel deploy'],
     name: 'Vercel',
     category: 'hosting',
     summary: 'Vercel é uma plataforma de deploy e hospedagem para aplicações web, conhecida pelo Next.js.',
@@ -164,6 +221,43 @@ export const ALTERNATIVES: Alternative[] = [
     ],
   },
 ]
+
+export interface FaqItem {
+  q: string
+  a: string
+}
+
+/**
+ * Perguntas frequentes de cada comparação. A mesma lista aparece na página e
+ * no JSON-LD `FAQPage` do HTML pré-renderizado (`vite-plugins/seo.ts`).
+ */
+export function alternativeFaq(alt: Alternative, appName: string): FaqItem[] {
+  if (alt.category === 'concept') {
+    return [
+      { q: `O que é ${alt.name}?`, a: alt.summary },
+      {
+        q: `Qual a melhor plataforma de ${alt.name.toLowerCase()}?`,
+        a: `O ${appName} é uma plataforma de ${alt.name.toLowerCase()} completa: você descreve o app, a IA gera o código e você publica com backend, Web3 e domínio no mesmo lugar.`,
+      },
+      { q: `Preciso saber programar para usar o ${appName}?`, a: `Não. Basta descrever o que você quer em linguagem natural. Quem programa pode levar o código para o GitHub ou editar pela extensão do VS Code.` },
+    ]
+  }
+  return [
+    {
+      q: `O ${appName} é uma alternativa ao ${alt.name}?`,
+      a: `Sim. ${alt.summary} O ${appName} é uma boa escolha quando: ${alt.whyVertal.map((w) => w.charAt(0).toLowerCase() + w.slice(1)).join('; ')}.`,
+    },
+    {
+      q: `Qual a diferença entre o ${appName} e o ${alt.name}?`,
+      a: `O ${appName} junta em um só lugar a criação do app por IA, backend com banco e autenticação, recursos Web3, conectores e registro de domínio com deploy.`,
+    },
+    {
+      q: `O ${appName} é gratuito?`,
+      a: `Há um plano gratuito para começar. Depois você usa créditos transparentes ou assina um plano conforme o uso.`,
+    },
+    ...(alt.together ? [{ q: `Posso usar o ${appName} junto com o ${alt.name}?`, a: alt.together }] : []),
+  ]
+}
 
 export function findAlternative(slug: string | undefined): Alternative | undefined {
   return ALTERNATIVES.find((a) => a.slug === slug)

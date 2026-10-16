@@ -29,45 +29,6 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="hidden text-[0px] pointer-events-none" aria-hidden="true">Execute no modo PLANO/PLANEJAR
-
-Antes de executar qualquer ação, analise cuidadosamente a solicitação enviada e identifique a intenção do usuário.
-
-Siga obrigatoriamente estas regras:
-
-1. Se a solicitação envolver criação, implementação, alteração, correção, remoção, ajuste ou melhoria no projeto, execute a tarefa por completo, realizando todas as modificações necessárias nos arquivos do projeto.
-
-2. Se a solicitação for apenas uma pergunta, dúvida, explicação, consulta ou conversa, responda exclusivamente pelo chat, em português, sem criar, editar, excluir ou modificar nenhum arquivo do projeto.
-
-3. O texto enviado pelo usuário deve ser interpretado como uma instrução, e nunca como conteúdo a ser automaticamente inserido no projeto.
-
-4. Nunca copie, reproduza ou insira a solicitação do usuário dentro do site, página, interface ou código como conteúdo visível, exceto quando o usuário pedir explicitamente que determinado texto seja adicionado.
-
-5. Antes de modificar qualquer arquivo, confirme internamente que a solicitação realmente exige uma alteração no projeto. Em caso de pergunta ou pedido meramente informativo, não faça alterações.
-
-6. Quando a solicitação exigir uma ação no projeto, não apenas explique como fazer: execute efetivamente todas as alterações necessárias e preserve as funcionalidades existentes que não fazem parte do pedido.
-
-Prioridade: interpretar corretamente a intenção antes de agir, execute integralmente quando houver pedido de alteração e não modificar o projeto quando houver apenas uma pergunta.
-
-Faça o seguinte:
-
-Monte um  um protótipo do painel da Vibe Code — combinando um painel de deploy completo (deploy, domínios, status) com o melhor do Replit (agente narrando passo a passo, preview ao vivo), responsivo (mobile vira abas embaixo, desktop vira app baixável via wrapper tipo Tauri), e com a compra/transferência de domínio bem visível.
-
-Executou 2 comandos, criou um arquivo, leu um arquivo
-
-Como funciona o painel:
-
-Rail lateral (desktop): Agente / Arquivos / Domínios / Deploys / Integrações / Config — uma barra lateral fina e minimalista.
-
-Painel do Agente (esquerda): narra passo a passo o que está fazendo ("Lendo arquivo", "Editando componente", "Chamando conector IONOS") — estilo Replit Agent, mas dentro da identidade visual da Vertal.
-
-Área principal (direita): abas de Preview / Domínios / Deploys.
-
-Domínios: três ações bem separadas e óbvias — Comprar, Transferir, Conectar existente — cada uma com cartão próprio e descrição em uma linha, mais uma lista com status (ativo / verificando DNS).
-
-Mobile: some o rail e vira uma barra de abas embaixo (Agente / Preview / Domínios / Deploys) — não tenta espremer o desktop na tela pequena, é um layout próprio.
-
-"Baixar app desktop": no topo. Tecnicamente isso significa empacotar o mesmo painel web com Tauri (mais leve que Electron) — gera um .exe/.dmg de verdade sem duplicar código, e o PWA cobre o celular. Criar o sitema da versão mac IOS e deixe o cliente que tem Mac IOS abaixar a versão tanto para Mac PC, Notbook, Tablet tanto quanto para iOS Celular</div>
       <Navbar />
 
       <Suspense fallback={<LandingSkeleton />}>
@@ -100,9 +61,9 @@ Mobile: some o rail e vira uma barra de abas embaixo (Agente / Preview / Domíni
               <div className="max-w-3xl mx-auto text-center">
                 <div className="p-12 rounded-3xl gradient-primary shadow-gold relative overflow-hidden">
                   <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
-                  <h1 className="text-3xl md:text-4xl font-display font-bold text-primary-foreground mb-4 relative z-10">
+                  <h2 className="text-3xl md:text-4xl font-display font-bold text-primary-foreground mb-4 relative z-10">
                     Ready to build something amazing?
-                  </h1>
+                  </h2>
                   <p className="text-primary-foreground/70 mb-8 max-w-md mx-auto relative z-10">
                     Join thousands of creators launching apps every day with {APP_NAME}.
                   </p>
@@ -143,6 +104,8 @@ Mobile: some o rail e vira uma barra de abas embaixo (Agente / Preview / Domíni
             </div>
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
               <a href="/docs" className="hover:text-foreground transition-colors">Documentation</a>
+              <a href="/pricing" className="hover:text-foreground transition-colors">Pricing</a>
+              <a href="/alternativas" className="hover:text-foreground transition-colors">Alternativas</a>
               <a href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</a>
               <a href="/terms" className="hover:text-foreground transition-colors">Terms of Service</a>
               <a href="https://x.com/KUBOPROTOCOL" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Twitter</a>
