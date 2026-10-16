@@ -40,8 +40,8 @@ export default defineConfig(({ command, mode }) => {
         registerType: 'autoUpdate',
         includeAssets: [
           'favicon.ico',
+          'favicon-96x96.png',
           'apple-touch-icon.png',
-          'mask-icon.svg',
           'placeholders/*',
           'fonts/**/*.woff2',
           'game/**/*.webp',
@@ -83,6 +83,16 @@ export default defineConfig(({ command, mode }) => {
               },
             },
             {
+              // Logo e ícones da marca: a URL não muda quando a arte muda, então
+              // CacheFirst de 1 ano prenderia o logo antigo no celular de quem já
+              // instalou o PWA. Fica antes da regra genérica de imagens.
+              urlPattern: ({ url }) =>
+                url.origin === self.location.origin &&
+                /^\/(vertal-dev-logo[^/]*|favicon[^/]*|apple-touch-icon\.png|pwa-\d+x\d+\.png)$/.test(url.pathname),
+              handler: 'StaleWhileRevalidate',
+              options: { cacheName: 'brand-assets', expiration: { maxEntries: 20 } },
+            },
+            {
               urlPattern: /\.(?:glb|gltf|webp|png|jpg|webm)$/,
               handler: 'CacheFirst',
               options: {
@@ -122,18 +132,6 @@ export default defineConfig(({ command, mode }) => {
           categories: ['productivity', 'games'],
           icons: [
             {
-              src: 'vertal-dev-logo.jpg',
-              sizes: '192x192',
-              type: 'image/jpeg',
-              purpose: 'any',
-            },
-            {
-              src: 'vertal-dev-logo.jpg',
-              sizes: '512x512',
-              type: 'image/jpeg',
-              purpose: 'any maskable',
-            },
-            {
               src: 'pwa-192x192.png',
               sizes: '192x192',
               type: 'image/png',
@@ -143,7 +141,13 @@ export default defineConfig(({ command, mode }) => {
               src: 'pwa-512x512.png',
               sizes: '512x512',
               type: 'image/png',
-              purpose: 'any maskable',
+              purpose: 'any',
+            },
+            {
+              src: 'pwa-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'maskable',
             },
           ],
         },
