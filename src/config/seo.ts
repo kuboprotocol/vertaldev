@@ -6,6 +6,19 @@
 import { APP_NAME, BRAND } from './brand'
 import { ALTERNATIVES, type Alternative } from './alternatives'
 
+/** Limites que Bing e Google mostram sem cortar (o Bing aponta como problema acima disso). */
+export const TITLE_MAX = 65
+export const DESCRIPTION_MAX = 155
+
+/** Corta no último espaço antes do limite e fecha com "…". */
+export function clampText(text: string, max: number): string {
+  const t = text.trim()
+  if (t.length <= max) return t
+  const cut = t.slice(0, max - 1)
+  const space = cut.lastIndexOf(' ')
+  return `${(space > max * 0.6 ? cut.slice(0, space) : cut).replace(/[\s,;:—–-]+$/, '')}…`
+}
+
 export interface RouteSeo {
   title: string
   description: string
@@ -16,12 +29,12 @@ const searchedNames = ALTERNATIVES.filter((a) => a.category !== 'concept')
   .join(', ')
 
 export const HOME_SEO: RouteSeo = {
-  title: `${APP_NAME} — Crie apps com IA | Vibe coding, backend e Web3`,
-  description: `Descreva sua ideia e a IA do ${APP_NAME} cria o app com backend, banco, autenticação, Web3, conectores e domínio próprio. Plataforma de vibe coding com plano gratuito.`,
+  title: `${APP_NAME} — Crie apps com IA | Vibe coding e Web3`,
+  description: `Descreva sua ideia e a IA do ${APP_NAME} cria o app com backend, Web3, conectores e domínio próprio. Vibe coding com plano gratuito.`,
 }
 
 export const ALTERNATIVES_INDEX_SEO: RouteSeo = {
-  title: `Alternativas a Lovable, Replit, Cursor, Vercel e mais — ${APP_NAME}`,
+  title: `Alternativas a Lovable, Replit e Cursor — ${APP_NAME}`,
   description: `Compare o ${APP_NAME} com ${searchedNames}. Crie apps com IA, backend, Web3 e domínio em um só lugar.`,
 }
 

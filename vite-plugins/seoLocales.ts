@@ -14,6 +14,7 @@ import { APP_NAME, BRAND, SITE_ORIGIN } from "../src/config/brand";
 import { ALTERNATIVES, type Alternative } from "../src/config/alternatives";
 import { ROOT_LOCALE } from "../src/config/locales";
 import { SEO_LOCALES, type LocaleSeo } from "../src/config/seoLocales";
+import { DESCRIPTION_MAX, TITLE_MAX, clampText } from "../src/config/seo";
 
 /** Ferramentas citadas nos títulos dos índices ({names}). */
 const TOP_NAMES = "Lovable, Replit, Cursor, Vercel";
@@ -118,6 +119,8 @@ function langSwitcher(origin: string, key: string, current: string): string {
 }
 
 function renderPage({ l, key, title, description, body, ld }: PageParts, origin: string): string {
+  title = clampText(title, TITLE_MAX);
+  description = clampText(description, DESCRIPTION_MAX);
   const url = `${origin}${localizedPath(l.code, key)}`;
   const home = `${origin}${localizedPath(l.code, "/")}`;
   return `<!doctype html>

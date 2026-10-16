@@ -76,6 +76,7 @@
       .boot-fallback { min-height: 100vh; display: grid; place-items: center; font: 500 14px Inter, system-ui, sans-serif; }
       .boot-fallback__content { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border: 1px solid #3a3528; border-radius: 8px; background: #202126; }
       .boot-fallback__spinner { width: 18px; height: 18px; border: 2px solid #4b4c52; border-top-color: #d5a329; border-radius: 50%; animation: boot-spin .8s linear infinite; }
+      .boot-fallback__title { margin: 0; font: inherit; }
       @keyframes boot-spin { to { transform: rotate(360deg); } }
     </style>
 </head>
@@ -83,7 +84,7 @@
   <body>
     <div id="root">
       <div class="boot-fallback" role="status" aria-live="polite">
-        <div class="boot-fallback__content"><span class="boot-fallback__spinner" aria-hidden="true"></span>Loading Vertal Vibe Dev…</div>
+        <div class="boot-fallback__content"><span class="boot-fallback__spinner" aria-hidden="true"></span><h1 class="boot-fallback__title">Vertal Vibe Dev — crie apps com IA</h1></div>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>

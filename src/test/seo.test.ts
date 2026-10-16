@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { applyHead, prerenderPages, renderRobots, renderRss, renderSitemap, sitemapUrls } from '../../vite-plugins/seo'
 import { ALTERNATIVES, findAlternative } from '@/config/alternatives'
 import { BRAND, SITE_ORIGIN } from '@/config/brand'
+import { clampText, DESCRIPTION_MAX, HOME_SEO, TITLE_MAX } from '@/config/seo'
 
 describe('SEO: sitemap, robots e páginas de comparação', () => {
   it('SITE_ORIGIN segue a chave de troca de domínio', () => {
@@ -88,5 +89,15 @@ describe('SEO: sitemap, robots e páginas de comparação', () => {
     expect(xml.match(/<item>/g)?.length).toBe(ALTERNATIVES.length + 2)
     expect(xml).toContain('<pubDate>Fri, 16 Oct 2026 00:00:00 GMT</pubDate>')
     expect(xml).not.toMatch(/&(?!amp;|lt;|gt;|quot;|apos;)/)
+  })
+
+  it('clampText corta no espaço e respeita o limite', () => {
+    expect(clampText('curto', 10)).toBe('curto')
+    const out = clampText('uma frase bem comprida que passa do limite', 20)
+    expect(out.length).toBeLessThanOrEqual(20)
+    expect(out.endsWith('…')).toBe(true)
+    expect(out).not.toMatch(/\s…$/)
+    expect(HOME_SEO.title.length).toBeLessThanOrEqual(TITLE_MAX)
+    expect(HOME_SEO.description.length).toBeLessThanOrEqual(DESCRIPTION_MAX)
   })
 })

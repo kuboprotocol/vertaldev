@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { SITE_ORIGIN } from '@/config/brand'
+import { DESCRIPTION_MAX, TITLE_MAX, clampText } from '@/config/seo'
 
 interface PageSeo {
   title: string
@@ -22,7 +23,10 @@ function setMeta(attr: 'name' | 'property', key: string, content: string) {
  * Título, descrição e canonical por página (SPA). O domínio vem de
  * `SITE_ORIGIN`, então segue a troca de domínio de `src/config/brand.ts`.
  */
-export function usePageSeo({ title, description, path }: PageSeo) {
+export function usePageSeo(page: PageSeo) {
+  const title = clampText(page.title, TITLE_MAX)
+  const description = clampText(page.description, DESCRIPTION_MAX)
+  const { path } = page
   useEffect(() => {
     const url = `${SITE_ORIGIN}${path}`
     const prevTitle = document.title
