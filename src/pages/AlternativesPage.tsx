@@ -2,11 +2,13 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { ArrowRight, Check } from 'lucide-react'
 import Navbar from '@/components/landing/Navbar'
 import { Button } from '@/components/ui/button'
-import { APP_NAME, BRAND } from '@/config/brand'
+import { APP_NAME } from '@/config/brand'
+import { ALTERNATIVES_INDEX_SEO, alternativeSeo } from '@/config/seo'
 import {
   ALTERNATIVES,
   CATEGORY_LABEL,
   VERTAL_FEATURES,
+  alternativeFaq,
   findAlternative,
   type Alternative,
   type AlternativeCategory,
@@ -33,8 +35,8 @@ function StartCta() {
 
 function AlternativesIndex() {
   usePageSeo({
-    title: `Alternativas: ${APP_NAME} vs Lovable, Bolt, Replit, Cursor e mais`,
-    description: `Compare o ${APP_NAME} com Lovable, Bolt.new, Replit, Bubble, Cursor, Trae, Vercel, Railway, Cloudflare e Render. Crie apps com IA, backend e Web3 em um só lugar.`,
+    title: ALTERNATIVES_INDEX_SEO.title,
+    description: ALTERNATIVES_INDEX_SEO.description,
     path: '/alternativas',
   })
 
@@ -46,7 +48,7 @@ function AlternativesIndex() {
           {APP_NAME} e as outras ferramentas
         </h1>
         <p className="mt-4 text-lg text-muted-foreground max-w-2xl">
-          Procurando Lovable, Bolt, Replit, Cursor ou uma hospedagem como Vercel e Railway?
+          Procurando Lovable, Replit, Emergent, v0, Cursor, Trae, Claude, Codex ou uma hospedagem como Vercel?
           Veja onde o {APP_NAME} se encaixa e quando ele é a melhor escolha.
         </p>
       </header>
@@ -85,14 +87,10 @@ function AlternativesIndex() {
 
 function AlternativeDetail({ alt }: { alt: Alternative }) {
   const isConcept = alt.category === 'concept'
-  const title = isConcept
-    ? `${alt.name}: crie apps com IA no ${APP_NAME}`
-    : `Alternativa ao ${alt.name}: ${APP_NAME} vs ${alt.name}`
-  usePageSeo({
-    title,
-    description: `${alt.summary} Veja quando o ${APP_NAME} (${BRAND.domain}) é a melhor escolha: IA, backend, Web3 e domínio em um só lugar.`,
-    path: `/alternativas/${alt.slug}`,
-  })
+  const seo = alternativeSeo(alt)
+  const title = seo.heading
+  usePageSeo({ title: seo.title, description: seo.description, path: `/alternativas/${alt.slug}` })
+  const faq = alternativeFaq(alt, APP_NAME)
 
   return (
     <>
@@ -100,6 +98,11 @@ function AlternativeDetail({ alt }: { alt: Alternative }) {
         ← Todas as comparações
       </Link>
       <h1 className="mt-4 text-3xl md:text-5xl font-display font-bold tracking-tight">{title}</h1>
+      {alt.aliases?.length ? (
+        <p className="mt-3 text-sm text-muted-foreground">
+          Também pesquisado como: {alt.aliases.join(', ')}
+        </p>
+      ) : null}
 
       <section className="mt-8">
         <h2 className="text-xl font-semibold">{isConcept ? `O que é ${alt.name}` : `O que é o ${alt.name}`}</h2>
@@ -138,6 +141,18 @@ function AlternativeDetail({ alt }: { alt: Alternative }) {
         <div className="mt-6">
           <StartCta />
         </div>
+      </section>
+
+      <section className="mt-10">
+        <h2 className="text-xl font-semibold">Perguntas frequentes</h2>
+        <dl className="mt-4 space-y-5">
+          {faq.map((item) => (
+            <div key={item.q}>
+              <dt className="font-medium">{item.q}</dt>
+              <dd className="mt-1 text-sm text-muted-foreground">{item.a}</dd>
+            </div>
+          ))}
+        </dl>
       </section>
 
       <TrademarkNotice />

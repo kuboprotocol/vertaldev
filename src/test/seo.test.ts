@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { renderRobots, renderSitemap, sitemapUrls } from '../../vite-plugins/seo'
+import { applyHead, prerenderPages, renderRobots, renderSitemap, sitemapUrls } from '../../vite-plugins/seo'
 import { ALTERNATIVES, findAlternative } from '@/config/alternatives'
 import { BRAND, SITE_ORIGIN } from '@/config/brand'
 
@@ -38,5 +38,44 @@ describe('SEO: sitemap, robots e páginas de comparação', () => {
     for (const s of slugs) expect(s).toMatch(/^[a-z0-9-]+$/)
     expect(findAlternative('lovable')?.name).toBe('Lovable')
     expect(findAlternative('nao-existe')).toBeUndefined()
+  })
+
+  it('cobre as ferramentas mais pesquisadas', () => {
+    for (const slug of ['vercel', 'lovable', 'replit', 'cursor', 'trae', 'emergent', 'v0', 'claude', 'codex']) {
+      expect(findAlternative(slug), slug).toBeDefined()
+    }
+  })
+
+  const INDEX = `<html><head><title>x</title>
+<meta name="description" content="x">
+<link rel="canonical" href="https://vertal.dev/" />
+<meta property="og:url" content="https://vertal.dev/" />
+<meta property="og:title" content="x">
+</head><body><div id="root">
+<div class="boot-fallback"><div class="boot-fallback__content"><span></span>Loading…</div>
+</div>
+</div><script type="module" src="/assets/app.js"></script></body></html>`
+
+  it('applyHead troca título, descrição e canonical escapando HTML', () => {
+    const html = applyHead(INDEX, { title: 'A & B', description: 'Diz "oi"' }, 'https://vertal.dev/x')
+    expect(html).toContain('<title>A &amp; B</title>')
+    expect(html).toContain('<meta name="description" content="Diz &quot;oi&quot;">')
+    expect(html).toContain('<link rel="canonical" href="https://vertal.dev/x" />')
+    expect(html).toContain('<meta property="og:url" content="https://vertal.dev/x" />')
+  })
+
+  it('pré-renderiza cada comparação com conteúdo, canonical e FAQ em JSON-LD', () => {
+    const pages = prerenderPages(INDEX, 'https://vertal.dev')
+    for (const a of ALTERNATIVES) {
+      const html = pages.get(`alternativas/${a.slug}.html`)
+      expect(html, a.slug).toBeDefined()
+      expect(html).toContain(`href="https://vertal.dev/alternativas/${a.slug}"`)
+      expect(html).toContain('<h1>')
+      expect(html).toContain('"@type":"FAQPage"')
+      expect(html).toContain('src="/assets/app.js"')
+      expect(html).not.toContain('Loading…')
+    }
+    expect(pages.get('pricing.html')).toContain('<link rel="canonical" href="https://vertal.dev/pricing" />')
+    expect([...pages.keys()].some((k) => /admin|dashboard|builder/.test(k))).toBe(false)
   })
 })
