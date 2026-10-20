@@ -3,14 +3,15 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import { lazy, Suspense, forwardRef } from "react";
+import { lazy, Suspense, forwardRef, useEffect } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import AdGate from "@/components/AdGate";
 import { CreativeEconomyGate } from "@/components/creative/CreativeEconomyComingSoon";
 import { shouldRedirect, buildTarget } from "@/lib/canonicalRedirect";
+import { captureReferral } from "@/lib/referral";
 
 // Lazy loading all pages
 const Index = lazy(() => import("./pages/Index"));
@@ -90,6 +91,13 @@ const GameScenePage = lazy(() => import("./pages/GameScenePage"));
 const CreativeChatPage = lazy(() => import("./pages/CreativeChatPage"));
 
 // Loading fallback component
+/** Guarda o ?ref= de qualquer rota para o cadastro (ver src/lib/referral.ts). */
+function ReferralCapture() {
+  const { search } = useLocation();
+  useEffect(() => captureReferral(search), [search]);
+  return null;
+}
+
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-screen bg-background">
     <div className="flex flex-col items-center gap-4">
@@ -192,6 +200,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <ReferralCapture />
             <AdGate />
             <ErrorBoundary global resourceName="App">
               <Suspense fallback={<PageLoader />}>
