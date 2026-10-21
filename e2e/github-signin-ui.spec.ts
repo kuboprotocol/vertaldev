@@ -232,6 +232,78 @@ test.describe('GitHub login UI', () => {
     await expect(btn).toHaveAttribute('aria-busy', 'true')
     await expect(page.locator('[aria-live]').first()).toBeAttached()
   })
+
+  test('referral via GitHub OAuth: capturedReferralCode is passed to github-signin-initiate', async ({ page }) => {
+    let capturedBody = ''
+    const referralCode = 'testref1'
+
+    await page.route(INITIATE_URL_RE, async (route: Route) => {
+      capturedBody = route.request().postData() || ''
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ url: 'about:blank' }),
+      })
+    })
+    await page.route('about:blank', (route) => route.fulfill({ status: 200, body: '' }))
+
+    // Visitar com ?ref= and click GitHub button
+    await page.goto(`/auth?ref=${referralCode}`)
+    await page.getByTestId('auth-github').click()
+
+    // Validar que referralCode foi passado no body
+    await expect.poll(() => capturedBody).toContain(`"referralCode":"${referralCode}"`)
+  })
+
+  test('referral via GitHub OAuth: invalid ref code is rejected by initiate', async ({ page }) => {
+    let capturedBody = ''
+    const invalidRef = 'x' // Muito curto, precisa ter 4+ chars
+
+    await page.route(INITIATE_URL_RE, async (route: Route) => {
+      capturedBody = route.request().postData() || ''
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ url: 'about:blank' }),
+      })
+    })
+    await page.route('about:blank', (route) => route.fulfill({ status: 200, body: '' }))
+
+    await page.goto(`/auth?ref=${invalidRef}`)
+    await page.getByTestId('auth-github').click()
+
+    // Validar que referralCode NÃO foi passado (código inválido rejeitado)
+    await expect.poll(() => capturedBody).not.toContain('referralCode')
+  })
+
+  test('referral via GitHub OAuth: stored ref code is preserved and sent even without URL', async ({ page }) => {
+    let capturedBody = ''
+    const referralCode = 'stored01'
+
+    await page.route(INITIATE_URL_RE, async (route: Route) => {
+      capturedBody = route.request().postData() || ''
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ url: 'about:blank' }),
+      })
+    })
+    await page.route('about:blank', (route) => route.fulfill({ status: 200, body: '' }))
+
+    // Primeiro visit com ref, depois voltar sem ref
+    await page.goto(`/auth?ref=${referralCode}`)
+    // Validar que localStorage tem o código
+    const storedRef = await page.evaluate(() => {
+      const item = localStorage.getItem('vertal.referral')
+      return item ? JSON.parse(item).code : null
+    })
+    expect(storedRef).toBe(referralCode)
+
+    // Segunda visita sem ?ref= deve usar o armazenado
+    await page.goto('/auth')
+    await page.getByTestId('auth-github').click()
+    await expect.poll(() => capturedBody).toContain(`"referralCode":"${referralCode}"`)
+  })
 })
 
 
