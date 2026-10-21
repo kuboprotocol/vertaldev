@@ -18,7 +18,7 @@ const InputSchema = z.object({
 // Credit costs based on prompt instructions
 const COSTS: Record<string, number> = {
   chat: 1,      // Message via OpenRouter
-  chat_premium: 4, // Message premium frontier (Claude Sonnet)
+  chat_premium: 4, // Message premium frontier (see PREMIUM_MODELS)
   image: 1,     // Pollinations / Nano Banana
   video: 36,    // MusKAI / Sogni (est.)
   music: 1,     // MusKAI / Suno
@@ -28,6 +28,9 @@ const COSTS: Record<string, number> = {
   edit_image: 0, // Local Utility
   edit_video: 0, // Local Utility
 };
+
+// Frontier models that cost more on OpenRouter are billed as chat_premium.
+const PREMIUM_MODELS = /sonnet|gpt-4o(?!-mini)|gemini-2\.5-pro|deepseek-r1/;
 
 Deno.serve(withRefundOnFailure(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -54,7 +57,7 @@ Deno.serve(withRefundOnFailure(async (req) => {
     
     // Determine cost
     let cost = COSTS[tool] ?? 1;
-    if (tool === "chat" && model?.includes("sonnet")) {
+    if (tool === "chat" && model && PREMIUM_MODELS.test(model)) {
       cost = COSTS.chat_premium;
     }
 
