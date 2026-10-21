@@ -14,9 +14,15 @@ export interface Env {
 
 // Com o Worker rodando antes dos assets, o public/_headers não vale para as
 // respostas dele — repetimos aqui os headers de segurança.
+// Em vez de X-Frame-Options (que só aceita SAMEORIGIN), o CSP frame-ancestors
+// libera o iframe apenas para os apps do Ecossistema Vertal (vertal.app e
+// vertalrun.com), que abrem o Vertal Dev pelo botão "Abrir aqui".
+export const FRAME_ANCESTORS =
+  "frame-ancestors 'self' https://vertal.app https://*.vertal.app https://vertalrun.com https://www.vertalrun.com";
+
 const SECURITY_HEADERS: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'SAMEORIGIN',
+  'Content-Security-Policy': FRAME_ANCESTORS,
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(self), payment=()',
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',

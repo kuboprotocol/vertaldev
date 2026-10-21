@@ -38,6 +38,8 @@ const ConnectorWeb3HubPage = lazy(() => import("./pages/ConnectorWeb3HubPage"));
 const ConnectorGmailPage = lazy(() => import("./pages/ConnectorGmailPage"));
 const ConnectorSlackPage = lazy(() => import("./pages/ConnectorSlackPage"));
 const ConnectorRenderPage = lazy(() => import("./pages/ConnectorRenderPage"));
+const ConnectorEcosystemPage = lazy(() => import("./pages/ConnectorEcosystemPage"));
+const EcosystemPage = lazy(() => import("./pages/EcosystemPage"));
 const ShortlinksPage = lazy(() => import("./pages/ShortlinksPage"));
 const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
 const PublicAppPage = lazy(() => import("./pages/PublicAppPage"));
@@ -203,6 +205,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/privacy" element={<PrivacyPage />} />
                 <Route path="/auth" element={<AuthPage />} />
                 <Route path="/pricing" element={<PricingPage />} />
+                <Route path="/ecossistema" element={<EcosystemPage />} />
                 <Route path="/alternativas" element={<AlternativesPage />} />
                 <Route path="/alternativas/:slug" element={<AlternativesPage />} />
                 <Route path="/download" element={<DownloadPage />} />
@@ -228,6 +231,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/connectors/gmail" element={<ProtectedRoute><ConnectorGmailPage /></ProtectedRoute>} />
                 <Route path="/connectors/slack" element={<ProtectedRoute><ConnectorSlackPage /></ProtectedRoute>} />
                 <Route path="/connectors/render" element={<ProtectedRoute><ConnectorRenderPage /></ProtectedRoute>} />
+                <Route path="/connectors/ecosystem/:product" element={<ProtectedRoute><ConnectorEcosystemPage /></ProtectedRoute>} />
                 <Route path="/connectors/:slug/setup" element={<ProtectedRoute><ConnectorSetupPage /></ProtectedRoute>} />
                 <Route path="/connectors/:slug/about" element={<ProtectedRoute><ConnectorAboutPage /></ProtectedRoute>} />
                 <Route path="/connectors/:slug" element={<ProtectedRoute><ConnectorDetailPage /></ProtectedRoute>} />

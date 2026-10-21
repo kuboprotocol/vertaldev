@@ -15,6 +15,7 @@ const HowItWorksSection = lazy(() => import("@/components/landing/HowItWorksSect
 const FAQSection = lazy(() => import("@/components/landing/FAQSection"));
 const DomainSection = lazy(() => import("@/components/landing/DomainSection"));
 const ConnectorSection = lazy(() => import("@/components/landing/ConnectorSection"));
+const EcosystemShowcase = lazy(() => import("@/components/ecosystem/EcosystemShowcase"));
 
 const SectionFallback = () => <div className="py-12 px-6"><div className="max-w-3xl mx-auto h-24 rounded-xl bg-muted/30 animate-pulse" /></div>;
 
@@ -48,6 +49,10 @@ const Index = () => {
           <div className="max-w-xl mx-auto gold-line" aria-hidden="true" />
 
           <SafeSection name="ConnectorSection"><ConnectorSection /></SafeSection>
+
+          <div className="max-w-xl mx-auto gold-line" aria-hidden="true" />
+
+          <SafeSection name="EcosystemShowcase"><EcosystemShowcase /></SafeSection>
 
           <div className="max-w-xl mx-auto gold-line" aria-hidden="true" />
 

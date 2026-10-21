@@ -1,0 +1,128 @@
+import { beforeAll, describe, expect, it } from 'vitest'
+import { render, screen, fireEvent } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
+import { ECOSYSTEM, combinedMcpConfig, siblingsOf } from '@/lib/ecosystem'
+import { connectors } from '@/lib/connectorsConfig'
+import EcosystemShowcase from '@/components/ecosystem/EcosystemShowcase'
+
+beforeAll(() => {
+  // framer-motion (whileInView) precisa do IntersectionObserver, que o jsdom não tem.
+  globalThis.IntersectionObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() { return [] }
+  } as unknown as typeof IntersectionObserver
+})
+
+describe('Ecossistema Vertal', () => {
+  it('tem os três produtos e o Vertal Dev só aponta para os irmãos', () => {
+    expect(ECOSYSTEM.map(p => p.id)).toEqual(['vertal-dev', 'vertal-run', 'vertal-app'])
+    expect(siblingsOf('vertal-dev').map(p => p.id)).toEqual(['vertal-run', 'vertal-app'])
+  })
+
+  it('gera um único bloco MCP com os três servidores', () => {
+    const { mcpServers } = JSON.parse(combinedMcpConfig())
+    expect(Object.keys(mcpServers)).toEqual(['vertal-dev', 'vertal-run', 'vertal-app'])
+    expect(mcpServers['vertal-app']).toEqual({ type: 'http', url: 'https://vertal.app/mcp' })
+    expect(mcpServers['vertal-run'].args).toEqual(['-m', 'vertal2kubo.mcp'])
+  })
+
+  it('lista Vertal.app e Vertal Run nos conectores, com rota própria', () => {
+    for (const slug of ['vertal-app', 'vertal-run']) {
+      const c = connectors.find(x => x.slug === slug)
+      expect(c?.featured).toBe(true)
+      expect(c?.internalRoute).toBe(`/connectors/ecosystem/${slug}`)
+    }
+  })
+
+  it('abre o produto no iframe', () => {
+    render(
+      <MemoryRouter>
+        <EcosystemShowcase />
+      </MemoryRouter>,
+    )
+    const runCard = screen.getByTestId('ecosystem-card-vertal-run')
+    fireEvent.click(runCard.querySelector('button')!)
+    const iframe = screen.getByTitle('Vertal Run') as HTMLIFrameElement
+    expect(iframe.src).toContain('https://vertalrun.com/')
+    expect(iframe.src).toContain('utm_source=vertal-dev')
+  })
+
+  it('mostra a configuração MCP do produto', () => {
+    render(
+      <MemoryRouter>
+        <EcosystemShowcase />
+      </MemoryRouter>,
+    )
+    fireEvent.click(screen.getAllByRole('button', { name: /Conectar MCP/ })[1])
+    const dialog = screen.getByTestId('ecosystem-mcp-dialog')
+    expect(dialog.textContent).toContain('https://vertal.app/mcp')
+    expect(dialog.textContent).toContain('create_deployment')
+  })
+})
+
+describe('documentação do MCP', () => {
+  it('aponta para a Edge Function do Vertal Dev, não para vertal.app', async () => {
+    const { VERTAL_DEV_MCP_URL } = await import('@/lib/ecosystem')
+    expect(VERTAL_DEV_MCP_URL).toMatch(/^https:\/\/[a-z0-9]+\.supabase\.co\/functions\/v1\/mcp$/)
+    const { default: DocsMcpPage } = await import('@/pages/DocsMcpPage')
+    const { container } = render(
+      <MemoryRouter>
+        <DocsMcpPage />
+      </MemoryRouter>,
+    )
+    expect(container.textContent).toContain(VERTAL_DEV_MCP_URL)
+    expect(container.textContent).not.toContain('vertal.app/functions')
+    expect(container.textContent).not.toContain('your_method')
+  })
+
+  it('descreve a autenticação real: OAuth e access token da sessão, não API key', async () => {
+    const { VERTAL_DEV_MCP_URL } = await import('@/lib/ecosystem')
+    const { default: DocsMcpPage } = await import('@/pages/DocsMcpPage')
+    const { container } = render(
+      <MemoryRouter>
+        <DocsMcpPage />
+      </MemoryRouter>,
+    )
+    const text = container.textContent ?? ''
+    expect(text).toContain('OAuth')
+    expect(text).toContain(`${VERTAL_DEV_MCP_URL}/.well-known/oauth-protected-resource`)
+    expect(text).toContain(`claude mcp add --transport http vertal-dev ${VERTAL_DEV_MCP_URL}`)
+    expect(text).not.toContain('YOUR_API_KEY')
+    expect(text).not.toContain('Obtenha uma API Key')
+  })
+})
+
+describe('programa de afiliados', () => {
+  it('não oferece mais chaves de API do MCP', async () => {
+    const source = await import('@/pages/AffiliateProgramPage?raw')
+    expect(source.default).not.toMatch(/AffiliateApiKeys|api-keys|API Keys \(MCP\)|mcp-api-keys/)
+  })
+})
+
+describe('links de indicação', () => {
+  it('"Ir para vertal.app" usa o link de afiliado; a janela embutida abre a home', async () => {
+    const { ecosystemLink } = await import('@/components/ecosystem/EcosystemDialogs')
+    const app = ECOSYSTEM.find(p => p.id === 'vertal-app')!
+    const link = new URL(ecosystemLink(app))
+    expect(link.pathname).toBe('/api/public/affiliates/referral')
+    expect(link.searchParams.get('code')).toBe('6586e024cff8c775c2275e49')
+    const embed = new URL(ecosystemLink(app, 'embed'))
+    expect(embed.pathname).toBe('/')
+    expect(embed.searchParams.get('code')).toBeNull()
+  })
+})
+
+describe('link de afiliado do Vertal Run', () => {
+  it('"Abrir aqui" e "Ir para" levam ao /entrar/ com o código de 10 caracteres', async () => {
+    const { ecosystemLink } = await import('@/components/ecosystem/EcosystemDialogs')
+    const run = ECOSYSTEM.find(p => p.id === 'vertal-run')!
+    for (const medium of ['link', 'embed'] as const) {
+      const url = new URL(ecosystemLink(run, medium))
+      expect(url.pathname).toBe('/entrar/')
+      expect(url.searchParams.get('ref')).toMatch(/^[0-9a-f]{10}$/)
+      expect(url.searchParams.get('ref')).toBe('c6104d73e1')
+    }
+  })
+})

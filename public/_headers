@@ -2,7 +2,7 @@
 
 /*
   X-Content-Type-Options: nosniff
-  X-Frame-Options: SAMEORIGIN
+  Content-Security-Policy: frame-ancestors 'self' https://vertal.app https://*.vertal.app https://vertalrun.com https://www.vertalrun.com
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(self), payment=()
   Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
