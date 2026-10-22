@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Captions, Check, Coins, Copy, Crosshair, Download, Flame, Link2, Loader2, Pause, Play, RotateCw, Scissors, Sparkles,
+  Captions, Check, Coins, Copy, Crosshair, Download, Flame, Loader2, Pause, Play, RotateCw, Scissors, Sparkles,
   Upload, Wand2, X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -165,8 +165,6 @@ export function ClipStudio() {
   /** Auto-reframe tracks keyed by clip bounds + aspect, so trims and format changes re-track. */
   const [tracks, setTracks] = useState<Record<string, FocusKey[]>>({});
   const [tracking, setTracking] = useState<string | null>(null);
-  const [importUrl, setImportUrl] = useState("");
-  const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState<{ id: string; progress: number } | null>(null);
   const [exported, setExported] = useState<Set<string>>(new Set());
   const abortRef = useRef<AbortController | null>(null);
@@ -206,45 +204,6 @@ export function ClipStudio() {
     return () => { clearTimeout(timer); ctrl.abort(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clip?.id, clip?.start, clip?.end, aspect, useTrack, src, !!exporting]);
-
-  const importFromUrl = async () => {
-    const url = importUrl.trim();
-    if (!/^https?:\/\//i.test(url)) return toast.error("Cole um link válido (YouTube, Instagram, TikTok…).");
-    setImporting(true);
-    let downloadUrl: string | undefined;
-    try {
-      const { data, error } = await supabase.functions.invoke("creative-download", {
-        body: { url, format: "mp4" },
-        headers: { "X-Idempotency-Key": crypto.randomUUID() },
-      });
-      if (error) {
-        const detail = await (error as { context?: Response }).context?.json?.().catch(() => null);
-        throw new Error(detail?.error ?? error.message);
-      }
-      downloadUrl = (data as { download_url?: string })?.download_url;
-      if (!downloadUrl) throw new Error("Não foi possível obter o vídeo.");
-      let blob: Blob;
-      try {
-        const r = await fetch(downloadUrl);
-        if (!r.ok) throw new Error();
-        blob = await r.blob();
-      } catch {
-        throw new Error("import_blocked");
-      }
-      const name = `${url.replace(/^https?:\/\/(www\.)?/, "").split(/[/?#]/)[0]}-${Date.now()}.mp4`;
-      await pickFile(new File([blob], name, { type: blob.type.startsWith("video/") ? blob.type : "video/mp4" }));
-      setImportUrl("");
-    } catch (e) {
-      const msg = (e as Error).message;
-      toast.error("Não foi possível importar", {
-        description: friendly(msg),
-        action: msg === "import_blocked" && downloadUrl ? { label: "Baixar", onClick: () => window.open(downloadUrl, "_blank", "noopener") } : undefined,
-      });
-    } finally {
-      setImporting(false);
-      void refetch?.();
-    }
-  };
 
   const pickFile = async (f: File | undefined | null) => {
     if (!f) return;
@@ -426,17 +385,6 @@ export function ClipStudio() {
               ))}
             </div>
           </button>
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-            <div className="relative flex-1">
-              <Link2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={importUrl} disabled={importing} onChange={(e) => setImportUrl(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && void importFromUrl()}
-                placeholder="Ou cole um link do YouTube, Instagram, TikTok…" className="pl-9 bg-background/50" />
-            </div>
-            <Button variant="outline" disabled={importing || !importUrl.trim()} onClick={() => void importFromUrl()}>
-              {importing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Link2 className="h-4 w-4 mr-2" />} Importar (2 créditos)
-            </Button>
-          </div>
         </Card>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
