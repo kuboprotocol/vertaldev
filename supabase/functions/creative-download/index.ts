@@ -25,9 +25,12 @@ Deno.serve(withRefundOnFailure(async (req) => {
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({
         url,
-        isAudioOnly: format === "mp3",
-        aFormat: "mp3",
-        vQuality: "720",
+        downloadMode: format === "mp3" ? "audio" : "auto",
+        audioFormat: "mp3",
+        videoQuality: "720",
+        youtubeVideoCodec: "h264",
+        youtubeVideoContainer: "mp4",
+        convertGif: false,
       }),
     });
     const data = await r.json().catch(() => ({}));
