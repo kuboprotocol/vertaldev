@@ -52,8 +52,10 @@ Deno.serve(withRefundOnFailure(async (req) => {
     const vidBlob = await vidRes.blob();
     formData.append("driving_video", vidBlob, "driving.mp4");
 
+    const EMO_BACKEND_SECRET = Deno.env.get("EMO_BACKEND_SECRET");
     const response = await fetch(`${EMO_BACKEND_URL}/animate`, {
       method: "POST",
+      headers: EMO_BACKEND_SECRET ? { "X-API-Key": EMO_BACKEND_SECRET } : undefined,
       body: formData,
     });
 
@@ -63,17 +65,18 @@ Deno.serve(withRefundOnFailure(async (req) => {
     }
 
     const result = await response.json();
+    const output_url = result.video.startsWith("http") ? result.video : `${EMO_BACKEND_URL}/${result.video}`;
 
     const asset_id = await recordAsset(user.id, {
       tool: "emo",
       prompt: "EMO Animation",
       status: "completed",
       credits_spent: COST,
-      output_url: result.video.startsWith("http") ? result.video : `${EMO_BACKEND_URL}/${result.video}`,
+      output_url,
       metadata: { source_image: rawImg, driving_video: rawVid }
     });
 
-    return new Response(JSON.stringify({ ...result, asset_id }), {
+    return new Response(JSON.stringify({ ...result, output_url, asset_id }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 

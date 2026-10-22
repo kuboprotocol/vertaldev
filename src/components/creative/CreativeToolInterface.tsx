@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { PUTER_MODELS, creativeInvoke } from "@/lib/puterAI";
 import { AVATAR_LIMITS, quoteAvatar } from "@/config/avatarPricing";
 import { EBOOK_DEFAULT_CHAPTERS, EBOOK_MAX_CHAPTERS, EBOOK_MIN_CHAPTERS, ebookCost } from "@/config/ebookPricing";
+import { uploadFile } from "@/lib/fileUpload";
 
 import type { ToolKey } from "./toolRequests";
 import { PENDING_IMAGE_KEY, TOOL_REQUESTS, summarizeResult } from "./toolRequests";
@@ -158,6 +159,11 @@ const TOOL_CONFIGS: Record<ToolKey, {
 };
 
 
+// EMO: foto e vídeo vão para o bucket privado; o backend lê links assinados.
+const EMO_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const EMO_VIDEO_TYPES = ["video/mp4", "video/webm"];
+const EMO_MAX_MB = 20;
+
 export function CreativeToolInterface({ toolKey, onSuccess }: Props) {
   if (toolKey === "video_studio") return <VideoStudio />;
   if (toolKey === "ebook") return <EbookStudio />;
@@ -192,6 +198,9 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarImageUrl, setAvatarImageUrl] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [emoImage, setEmoImage] = useState<{ name: string; url: string } | null>(null);
+  const [emoVideo, setEmoVideo] = useState<{ name: string; url: string } | null>(null);
+  const [emoUploading, setEmoUploading] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(`creative_history_${toolKey}`, JSON.stringify(sessionHistory));
@@ -298,6 +307,33 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
     setAvatarImageUrl(null);
   };
 
+  const uploadEmoFile = async (file: File, kind: "image" | "video") => {
+    const allowed = kind === "image" ? EMO_IMAGE_TYPES : EMO_VIDEO_TYPES;
+    if (!allowed.includes(file.type)) {
+      toast.error(kind === "image" ? "Use uma foto JPG, PNG ou WEBP" : "Use um vídeo MP4 ou WEBM");
+      return;
+    }
+    if (file.size > EMO_MAX_MB * 1024 * 1024) {
+      toast.error(`${file.name}: máximo ${EMO_MAX_MB}MB`);
+      return;
+    }
+    setEmoUploading(true);
+    try {
+      const { data: u } = await supabase.auth.getUser();
+      const uid = u.user?.id;
+      if (!uid) throw new Error("Faça login para enviar o arquivo");
+      const { path } = await uploadFile(file, uid);
+      const { data: signed, error: signErr } = await supabase.storage.from("uploads").createSignedUrl(path, 60 * 60 * 24 * 7);
+      if (signErr || !signed?.signedUrl) throw signErr ?? new Error("Falha ao gerar link do arquivo");
+      if (kind === "image") setEmoImage({ name: file.name, url: signed.signedUrl });
+      else setEmoVideo({ name: file.name, url: signed.signedUrl });
+    } catch (err) {
+      toast.error("Falha no upload", { description: err instanceof Error ? err.message : undefined });
+    } finally {
+      setEmoUploading(false);
+    }
+  };
+
   // Lip-sync videos render on a queue: poll until the asset is done, also after a page reload.
   const pollingRef = useRef(new Set<string>());
   const pollAvatar = useCallback(async (historyId: string, assetId: string) => {
@@ -357,7 +393,12 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
       return;
     }
 
-    if (!prompt.trim()) {
+    if (toolKey === "emo") {
+      if (!emoImage || !emoVideo) {
+        toast.error("Envie a foto de origem e o vídeo de referência");
+        return;
+      }
+    } else if (!prompt.trim()) {
       toast.error("O campo de prompt/URL é obrigatório");
       return;
     }
@@ -367,7 +408,10 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
     setStreamingContent("");
 
     try {
-      const { fn, body } = TOOL_REQUESTS[toolKey](prompt, metadata);
+      const requestMeta = toolKey === "emo"
+        ? { ...metadata, source_image: emoImage?.url, driving_video: emoVideo?.url }
+        : metadata;
+      const { fn, body } = TOOL_REQUESTS[toolKey](prompt, requestMeta);
       if (toolKey === "chat") {
         body.model = kimiModel;
         body.temperature = temperature;
@@ -413,6 +457,7 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
         status: "success",
         assetUrl: result.assetUrl,
         output_text: result.output_text,
+        videoUrl: toolKey === "emo" ? data?.output_url : undefined,
         metadata: { ...metadata, model: kimiModel, engine: data?.engine }
       }, ...prev].slice(0, 50));
 
@@ -564,6 +609,59 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
             </div>
           )}
 
+          {toolKey === "emo" && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {([
+                { kind: "image" as const, label: "1. Foto de origem", hint: "JPG, PNG ou WEBP", value: emoImage, accept: EMO_IMAGE_TYPES.join(",") },
+                { kind: "video" as const, label: "2. Vídeo de referência", hint: "MP4 ou WEBM", value: emoVideo, accept: EMO_VIDEO_TYPES.join(",") },
+              ]).map((slot) => (
+                <div key={slot.kind} className="space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-wider opacity-60">{slot.label}</Label>
+                  {slot.value ? (
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-background/50 border border-primary/20">
+                      {slot.kind === "image" ? (
+                        <img src={slot.value.url} alt="Foto de origem" className="h-16 w-16 rounded-xl object-cover border border-primary/30" />
+                      ) : (
+                        <video src={slot.value.url} muted className="h-16 w-16 rounded-xl object-cover border border-primary/30 bg-black/40" />
+                      )}
+                      <p className="flex-1 min-w-0 truncate text-xs text-muted-foreground">{slot.value.name}</p>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Remover ${slot.label}`}
+                        onClick={() => (slot.kind === "image" ? setEmoImage(null) : setEmoVideo(null))}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={emoUploading}
+                      onClick={() => document.getElementById(`emo-${slot.kind}-input`)?.click()}
+                      className="w-full rounded-xl border-2 border-dashed border-primary/25 hover:border-primary/60 bg-primary/5 py-6 flex flex-col items-center gap-1 transition-colors disabled:opacity-50"
+                    >
+                      {emoUploading ? <Loader2 className="h-6 w-6 text-primary animate-spin" /> : <Upload className="h-6 w-6 text-primary" />}
+                      <span className="text-xs font-semibold">{emoUploading ? "Enviando..." : "Escolher arquivo"}</span>
+                      <span className="text-[11px] text-muted-foreground">{slot.hint} · até {EMO_MAX_MB}MB</span>
+                    </button>
+                  )}
+                  <input
+                    id={`emo-${slot.kind}-input`}
+                    type="file"
+                    accept={slot.accept}
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (file) void uploadEmoFile(file, slot.kind);
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
           {config.options && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {config.options.map((opt) => (
@@ -652,7 +750,7 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
             
             <Button
               onClick={handleExecute}
-              disabled={loading}
+              disabled={loading || emoUploading || (toolKey === "emo" && (!emoImage || !emoVideo))}
               className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold font-orbitron px-8 h-12 shadow-[0_0_20px_rgba(201,148,26,0.3)] hover:shadow-[0_0_30px_rgba(201,148,26,0.5)] transition-all group"
             >
               {loading ? (
