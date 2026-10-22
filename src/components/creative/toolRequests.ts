@@ -1,6 +1,6 @@
 /** Requisições das ferramentas criativas (sem componentes, para o Fast Refresh do Vite). */
 
-export type ToolKey = "chat" | "nano_banana" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "image_editor" | "video_studio";
+export type ToolKey = "chat" | "browser_ai" | "nano_banana" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "image_editor" | "video_studio";
 
 /** Chave do sessionStorage com a object URL da imagem enviada pelo painel */
 export const PENDING_IMAGE_KEY = "creative_pending_image";
@@ -9,6 +9,7 @@ export const PENDING_IMAGE_KEY = "creative_pending_image";
 type ToolMetadata = Record<string, unknown>;
 export const TOOL_REQUESTS: Record<ToolKey, (prompt: string, metadata: ToolMetadata) => { fn: string; body: ToolMetadata }> = {
   chat: (prompt) => ({ fn: "creative-router", body: { tool: "chat", messages: [{ role: "user", content: prompt }] } }),
+  browser_ai: (prompt) => ({ fn: "creative-browser-ai", body: { task: prompt } }),
   nano_banana: (prompt, m) => ({ fn: "creative-router", body: { tool: "image", prompt, metadata: m } }),
   downloader: (prompt, m) => ({ fn: "creative-download", body: { url: prompt.trim(), format: m.format ?? "mp4" } }),
   clips: (prompt) => ({ fn: "creative-clips", body: { transcript: prompt } }),

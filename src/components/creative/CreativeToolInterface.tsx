@@ -5,7 +5,7 @@ import {
   Loader2, Send, Coins, Settings2, Info, AlertCircle, Wallet, RotateCw, Upload, X,
   Download as DownloadIcon, Crop as CropIcon, Trash2, Sliders, History, FileText, FileCode,
   Play, Search, Filter, PlayCircle, Package, Brain, Rocket, Zap, FileSpreadsheet,
-  Camera, Images
+  Camera, Images, Globe
 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -42,6 +42,7 @@ interface Props {
 
 const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: string }[] = [
   { key: "chat", title: "Vertal Chat", desc: "Conversas, resumos, traduções, geração de textos", icon: MessageSquare, cost: "1 crédito" },
+  { key: "browser_ai", title: "Browser AI", desc: "Agente que navega na internet e responde com fontes", icon: Globe, cost: "2 créditos" },
   { key: "nano_banana", title: "Imagens Premium", desc: "Criação de imagens de alta qualidade", icon: ImageIcon, cost: "1 crédito" },
   { key: "video_studio", title: "Vertal Video Studio", desc: "1 a 10 fotos viram clipe, meme ou anúncio com IA", icon: Video, cost: "A partir de 2 créditos" },
   { key: "image_editor", title: "Editor de Imagens", desc: "Edite, corte e redimensione suas imagens perfeitamente", icon: Sliders, cost: "Grátis" },
@@ -68,6 +69,13 @@ const TOOL_CONFIGS: Record<ToolKey, {
     cost: 1,
     promptLabel: "O que você deseja criar ou perguntar?",
     placeholder: "Escreva um artigo sobre economia criativa...",
+  },
+  browser_ai: {
+    title: "Browser AI",
+    description: "Agente que pesquisa, abre páginas e responde com fontes verificadas.",
+    cost: 2,
+    promptLabel: "O que o agente deve pesquisar?",
+    placeholder: "Compare o preço do iPhone 16 em três lojas do Brasil e diga qual é o mais barato...",
   },
   nano_banana: {
     title: "Imagens Premium",
