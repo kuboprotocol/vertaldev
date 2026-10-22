@@ -320,7 +320,7 @@ export default function InvestigationPage() {
                 <SelectTrigger className="w-48"><SelectValue placeholder="Ferramenta" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas as ferramentas</SelectItem>
-                  {["chat","nano_banana","downloader","clips","avatar","shorts","music","ebook","emo", ...distinctTools]
+                  {["chat","browser_ai","nano_banana","downloader","clips","avatar","shorts","music","ebook","emo", ...distinctTools]
                     .filter((v, i, a) => a.indexOf(v) === i)
                     .map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                 </SelectContent>

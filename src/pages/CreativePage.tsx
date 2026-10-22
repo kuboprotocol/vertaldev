@@ -16,7 +16,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
   MessageSquare, Image as ImageIcon, Download, Scissors, User2,
   Video, Music, BookOpen, Sparkles, Loader2, Coins, ArrowLeft, RotateCw, AlertTriangle, Upload,
-  FileDown, History, Check, Search, ArrowRight, Settings2, X, AlertCircle, ListTodo, Clapperboard, SlidersHorizontal
+  FileDown, History, Check, Search, ArrowRight, Settings2, X, AlertCircle, ListTodo, Clapperboard, SlidersHorizontal, Globe
 } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { ManusLauncher } from "@/components/creative/ManusLauncher";
@@ -27,12 +27,13 @@ import { ApiStatusPanel } from "@/components/creative/ApiStatusPanel";
 import { CreativeSlides } from "@/components/CreativeSlides";
 import { CreativeSheets } from "@/components/CreativeSheets";
 
-type ToolKey = "dashboard" | "chat" | "nano_banana" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "video_studio" | "image_editor" | "unified_history" | "slides" | "sheet";
+type ToolKey = "dashboard" | "chat" | "browser_ai" | "nano_banana" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "video_studio" | "image_editor" | "unified_history" | "slides" | "sheet";
 
 const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: string }[] = [
   { key: "video_studio", title: "Vertal Video Studio", desc: "1 a 10 fotos viram clipe musical, meme ou anúncio com IA realista", icon: Clapperboard, cost: "a partir de 2 créditos" },
   { key: "image_editor", title: "Editor de Imagens", desc: "Corte, redimensione e ajuste qualquer imagem", icon: SlidersHorizontal, cost: "Grátis" },
   { key: "chat", title: "Vertal Chat", desc: "Conversas, resumos, traduções, geração de textos", icon: MessageSquare, cost: "1 crédito/msg" },
+  { key: "browser_ai", title: "Browser AI", desc: "Agente que navega na internet e responde com fontes", icon: Globe, cost: "2 créditos" },
   { key: "nano_banana", title: "Nano Banana", desc: "Criar e editar imagens com IA", icon: ImageIcon, cost: "1 crédito" },
   { key: "downloader", title: "Downloader Universal", desc: "YouTube, Instagram, TikTok, Facebook, Kwai", icon: Download, cost: "2 créditos" },
   { key: "clips", title: "Vertal Clips", desc: "IA acha os momentos virais, reenquadra em 9:16 e legenda palavra por palavra", icon: Scissors, cost: "1 crédito a cada 5 min" },
@@ -60,6 +61,7 @@ async function authedFetch(name: string, body: unknown, idempotencyKey?: string)
 
 const RERUN_MAP: Record<string, { fn: string; build: (a: any) => any }> = {
   chat: { fn: "creative-chat", build: (a) => ({ messages: [{ role: "user", content: a.prompt }] }) },
+  browser_ai: { fn: "creative-browser-ai", build: (a) => ({ task: a.prompt }) },
   nano_banana: { fn: "creative-image", build: (a) => ({ prompt: a.prompt, size: a.metadata?.size }) },
   downloader: { fn: "creative-download", build: (a) => ({ url: a.metadata?.url ?? a.prompt, format: a.metadata?.format ?? "mp4" }) },
   clips: { fn: "creative-clips", build: (a) => ({ transcript: a.prompt, source_url: a.metadata?.source_url }) },
