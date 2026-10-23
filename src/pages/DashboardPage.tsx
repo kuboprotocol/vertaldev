@@ -242,6 +242,37 @@ const DashboardPage = forwardRef<HTMLDivElement, any>((props, ref) => {
           {user && <CreditLedger userId={user.id} />}
         </motion.div>
 
+        {/* Banner de publicidade: Design Premium (Painel Criativo) */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.045 }} className="mb-8">
+          <div
+            onClick={() => navigate('/creative/design')}
+            role="link"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter') navigate('/creative/design') }}
+            className="glass-premium hover-glow rounded-2xl p-6 md:p-8 cursor-pointer relative overflow-hidden group bg-gradient-to-r from-amber-400/15 via-background to-rose-500/15"
+          >
+            <div className="absolute inset-0 dot-pattern opacity-20 pointer-events-none" />
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-3">
+                  <Palette className="w-5 h-5 text-amber-300" />
+                  <span className="text-xs tracking-[0.3em] text-muted-foreground">DESIGN PREMIUM</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-400/15 text-amber-300 border border-amber-300/30 font-mono">NOVO</span>
+                </div>
+                <h3 className="text-2xl md:text-3xl font-display font-bold mb-2">
+                  Artes <span className="neon-text">profissionais</span> em segundos
+                </h3>
+                <p className="text-sm text-muted-foreground max-w-xl">
+                  Posts, stories, banners e cartazes com direção de arte de agência. Simples por 1 crédito, Premium por 2 créditos.
+                </p>
+              </div>
+              <Button className="rounded-xl gap-2 bg-gradient-to-r from-amber-400 to-rose-500 text-slate-900 hover:opacity-90 font-semibold">
+                <Sparkles className="w-4 h-4" /> Criar design
+              </Button>
+            </div>
+          </div>
+        </motion.div>
+
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="mb-6">
           <div className="flex items-center justify-between">
             <div>

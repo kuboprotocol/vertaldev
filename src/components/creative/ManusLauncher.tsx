@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Camera, Image as ImageIcon, Paperclip, Monitor, Puzzle, Code2, Smartphone,
-  Presentation, Wand2, Search, MessageSquare, Calendar, Table2, Music, Video, Scissors, BookOpen, Sparkles, User2, Download, Clapperboard
+  Presentation, Wand2, Search, MessageSquare, Calendar, Table2, Music, Video, Scissors, BookOpen, Sparkles, User2, Download, Clapperboard, Palette
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -27,6 +27,7 @@ const ITEMS: Item[] = [
   { key: "site", label: "Criar website", icon: Code2, onSelect: ({ navigate }) => navigate("/builder") },
   { key: "apps", label: "Desenvolver aplicativos", icon: Smartphone, onSelect: ({ navigate }) => navigate("/builder?mode=app") },
   { key: "slides", label: "Criar slides", icon: Presentation, badge: "AI", onSelect: ({ setActive }) => setActive("slides") },  { key: "image", label: "Criar imagem", icon: ImageIcon, badge: "AI", onSelect: ({ setActive }) => setActive("nano_banana") },
+  { key: "design", label: "Design Premium", icon: Palette, badge: "AI", onSelect: ({ setActive }) => setActive("design") },
   { key: "edit_image", label: "Editar imagem", icon: Wand2, onSelect: ({ setActive }) => setActive("image_editor") },
   { key: "research", label: "Wide Research", icon: Search, onSelect: ({ setActive }) => setActive("chat") },
   { key: "chat_mode", label: "Modo de conversa", icon: MessageSquare, onSelect: ({ setActive }) => setActive("chat") },
