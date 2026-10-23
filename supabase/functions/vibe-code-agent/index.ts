@@ -9,6 +9,12 @@ import { classifyComplexity } from "../_shared/deepseekRouter.ts";
 import { runGateway } from "../_shared/aiGateway.ts";
 import { recordGatewayFailure, recordGatewayRun, supabaseGatewayCache } from "../_shared/aiGatewayStore.ts";
 import { extractMemories, formatMemoriesForPrompt, loadMemories, saveMemories } from "../_shared/primeMemory.ts";
+import {
+  auditGeneratedCode,
+  buildDesignPrompt,
+  formatAuditSummary,
+  resolveDesignConfig,
+} from "../_shared/designIntelligence.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -179,6 +185,10 @@ Deno.serve(async (req) => {
     apply?: Array<{ path: string; content: string }>;
     revertSha?: string;
     revertCheckpointId?: string;
+    /** false desliga a camada de design só neste pedido. */
+    designIntelligence?: boolean;
+    /** Força o perfil de design (web_app | saas_dashboard | mobile_app | landing_page). */
+    designSurface?: string;
   };
   try {
     body = await req.json();
@@ -322,7 +332,27 @@ Deno.serve(async (req) => {
         if (memories.length) {
           send({ kind: "memory", status: "success", title: `Usando ${memories.length} memória(s) do Prime` });
         }
-        const system = SYSTEM + formatMemoriesForPrompt(memories);
+        // Vertal Design Intelligence: regras de UI/UX + tokens + checklist.
+        // Desligável por pedido (designIntelligence:false) ou globalmente
+        // (secret DESIGN_INTELLIGENCE=off) — rollback sem deploy de código.
+        const design = resolveDesignConfig({
+          prompt,
+          envFlag: Deno.env.get("DESIGN_INTELLIGENCE"),
+          requestEnabled: body.designIntelligence,
+          requestSurface: body.designSurface,
+        });
+        if (design.enabled) {
+          send({
+            kind: "design",
+            status: "success",
+            title: `Design Intelligence: perfil ${design.surface}`,
+            detail: design.surfaceSource === "explicit" ? "perfil escolhido pelo usuário" : "perfil detectado pelo pedido",
+          });
+        }
+        const system =
+          SYSTEM +
+          formatMemoriesForPrompt(memories) +
+          (design.enabled ? buildDesignPrompt(design.surface, { target: "react" }) : "");
 
         const tier = classifyComplexity(prompt);
         const estimatedCost = CREDIT_COST[tier];
@@ -381,6 +411,21 @@ Deno.serve(async (req) => {
           title: plan.summary || "Plano pronto",
           detail: `${plan.actions?.length ?? 0} ação(ões)`,
         });
+
+        if (design.enabled) {
+          const generated = (plan.actions ?? [])
+            .filter((a) => a.type === "edit_file" && a.path && typeof a.content === "string")
+            .map((a) => ({ path: a.path as string, content: a.content as string }));
+          const audit = auditGeneratedCode(generated);
+          if (audit.checkedFiles) {
+            send({
+              kind: "design",
+              status: audit.blockers ? "failed" : "success",
+              title: `Auditoria de design: ${audit.score}/100`,
+              detail: formatAuditSummary(audit),
+            });
+          }
+        }
 
         if (mode === "apply") {
           await chargeCredits(estimatedCost, "vibe_code_agent:direct_apply", { tier, prompt: prompt.slice(0, 200) });

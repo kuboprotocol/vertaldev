@@ -13,6 +13,7 @@ export type VibeStepKind =
   | "connector"
   | "message"
   | "memory"
+  | "design"
   | "error"
   | "done";
 
@@ -69,6 +70,10 @@ export interface VibeAgentRequest {
   revertSha?: string;
   /** Revert to a persisted checkpoint (preferred — powers the timeline UI). */
   revertCheckpointId?: string;
+  /** false desliga o Vertal Design Intelligence só neste pedido. */
+  designIntelligence?: boolean;
+  /** Força o perfil de design em vez de detectar pelo pedido. */
+  designSurface?: "web_app" | "saas_dashboard" | "mobile_app" | "landing_page";
 }
 
 export interface VibeConnectorState {
