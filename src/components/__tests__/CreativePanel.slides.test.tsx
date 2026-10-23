@@ -91,3 +91,19 @@ describe('Creative Panel: slides generator', () => {
     expect(screen.queryByText('Gerador de Apresentações IA')).not.toBeInTheDocument();
   });
 });
+
+describe('Creative Panel: design studio', () => {
+  it('lists the Design Premium card with its credit range', () => {
+    render(<CreativePanel />);
+    expect(screen.getByText('Design Premium')).toBeInTheDocument();
+    expect(screen.getByText(/1 a 10 créditos/)).toBeInTheDocument();
+  });
+
+  it('opens the design studio and goes back to the panel', () => {
+    render(<CreativePanel />);
+    fireEvent.click(screen.getByText('Design Premium'));
+    expect(screen.getByText('Design Premium com IA')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Voltar/ }));
+    expect(screen.getByText('Painel Criativo')).toBeInTheDocument();
+  });
+});
