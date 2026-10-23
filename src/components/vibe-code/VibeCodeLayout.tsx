@@ -49,7 +49,7 @@ export default function VibeCodeLayout() {
       {/* Rail Sidebar (Desktop) */}
       {!isMobile && <VibeSidebar activeTab={activeTab} onTabChange={setActiveTab} />}
 
-      <div className={cn("flex flex-1 flex-col transition-all duration-300", !isMobile && "ml-16")}>
+      <div className={cn("flex min-w-0 flex-1 flex-col transition-all duration-300", !isMobile && "ml-16")}>
         <VibeTopBar />
         
         <main className="flex-1 overflow-auto p-4 pb-20 md:p-6 md:pb-6">

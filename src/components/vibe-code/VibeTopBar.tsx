@@ -17,19 +17,19 @@ export function VibeTopBar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border/40 bg-background/60 px-4 backdrop-blur-xl md:px-6">
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <span className="text-muted-foreground">Projects</span>
-          <span className="text-muted-foreground">/</span>
-          <span className="text-foreground">kubovibe</span>
-          <Badge variant="outline" className="ml-2 border-primary/20 bg-primary/5 text-primary">
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b border-border/40 bg-background/60 px-4 backdrop-blur-xl md:px-6">
+      <div className="flex min-w-0 items-center gap-4">
+        <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
+          <span className="hidden text-muted-foreground sm:inline">Projects</span>
+          <span className="hidden text-muted-foreground sm:inline">/</span>
+          <span className="truncate text-foreground">kubovibe</span>
+          <Badge variant="outline" className="ml-2 hidden border-primary/20 bg-primary/5 text-primary sm:inline-flex">
             v0.1.0-alpha
           </Badge>
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         <VibeCreditMeter />
 
         <div className="hidden items-center gap-1 rounded-full border border-border/60 bg-background/40 p-1 md:flex">
@@ -60,7 +60,7 @@ export function VibeTopBar() {
 
         <Button size="sm" className="h-8 gap-2 bg-primary text-primary-foreground shadow-[0_0_15px_rgba(201,148,26,0.2)]">
           <ExternalLink className="h-3.5 w-3.5" />
-          Visit Live
+          <span className="hidden sm:inline">Visit Live</span>
         </Button>
       </div>
     </header>
