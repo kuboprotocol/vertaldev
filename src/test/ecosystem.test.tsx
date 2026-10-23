@@ -36,7 +36,7 @@ describe('Ecossistema Vertal', () => {
     }
   })
 
-  it('abre o produto no iframe', () => {
+  it('abre o produto em nova aba, sem iframe', () => {
     render(
       <MemoryRouter>
         <EcosystemShowcase />
@@ -44,9 +44,11 @@ describe('Ecossistema Vertal', () => {
     )
     const runCard = screen.getByTestId('ecosystem-card-vertal-run')
     fireEvent.click(runCard.querySelector('button')!)
-    const iframe = screen.getByTitle('Vertal Run') as HTMLIFrameElement
-    expect(iframe.src).toContain('https://vertalrun.com/')
-    expect(iframe.src).toContain('utm_source=vertal-dev')
+    expect(document.querySelector('iframe')).toBeNull()
+    const link = screen.getByRole('link', { name: /Abrir Vertal Run em nova aba/ }) as HTMLAnchorElement
+    expect(link.href).toContain('https://vertalrun.com/')
+    expect(link.href).toContain('utm_source=vertal-dev')
+    expect(link.target).toBe('_blank')
   })
 
   it('mostra a configuração MCP do produto', () => {
