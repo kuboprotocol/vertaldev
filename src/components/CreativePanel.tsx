@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
-import { Sparkles, Zap, Image, Music, Code, Video, Pen, Layout, BarChart3 } from 'lucide-react';
+import { Sparkles, Zap, Image, Music, Code, Video, Pen, Layout, BarChart3, Palette } from 'lucide-react';
 import ChatWidget from './ChatWidget';
 import { CreativeSlides } from './CreativeSlides';
 import { CreativeImages } from './CreativeImages';
 import { CreativeSheets } from './CreativeSheets';
 import { CreativeMusic } from './CreativeMusic';
+import { CreativeDesign } from './CreativeDesign';
 import { useAuth } from '@/hooks/useAuth';
 
 interface CreativeItem {
   id: string;
-  type: 'text' | 'image' | 'audio' | 'code' | 'video' | 'slides' | 'spreadsheet' | 'music';
+  type: 'text' | 'image' | 'audio' | 'code' | 'video' | 'slides' | 'spreadsheet' | 'music' | 'design';
   title: string;
   description: string;
   icon: React.ReactNode;
@@ -62,6 +63,14 @@ export default function CreativePanel() {
       description: 'Crie músicas profissionais com IA',
       icon: <Music className="w-6 h-6" />,
       color: 'from-yellow-500 to-orange-500',
+    },
+    {
+      id: 'design',
+      type: 'design',
+      title: 'Design Premium',
+      description: 'Artes profissionais com direção de arte IA · 1 a 2 créditos',
+      icon: <Palette className="w-6 h-6" />,
+      color: 'from-amber-400 to-rose-500',
     },
     {
       id: 'code',
@@ -138,6 +147,25 @@ export default function CreativePanel() {
     );
   }
 
+  // Design view
+  if (selectedType === 'design') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+        <div className="border-b border-slate-700/50 backdrop-blur-xl bg-slate-900/50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <button
+              onClick={() => setSelectedType(null)}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 border border-slate-700 text-white rounded-lg hover:bg-slate-700 transition-all"
+            >
+              ← Voltar
+            </button>
+          </div>
+        </div>
+        <CreativeDesign creditsAvailable={creditsAvailable} />
+      </div>
+    );
+  }
+
   // Music view
   if (selectedType === 'music') {
     return (
@@ -193,7 +221,7 @@ export default function CreativePanel() {
         )}
 
         {/* Creative Tools Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {creativeItems.map((item) => (
             <button
               key={item.id}
