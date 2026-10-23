@@ -40,8 +40,9 @@ export function useCloudSession() {
   const refresh = useCallback(async () => {
     try {
       const res = await invoke<{ sessions: CloudSession[] }>({ action: "list" });
-      setSessions(res.sessions);
-      const live = res.sessions.find((s) => s.status !== "terminated") ?? null;
+      const list = res.sessions ?? [];
+      setSessions(list);
+      const live = list.find((s) => s.status !== "terminated") ?? null;
       setSession(live);
     } catch {
       /* silent — panel shows empty state */
