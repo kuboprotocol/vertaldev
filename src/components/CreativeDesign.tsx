@@ -76,7 +76,7 @@ export function CreativeDesign({ creditsAvailable }: CreativeDesignProps) {
         <p className="mt-2 text-slate-400">Escolha o nível de acabamento. Você paga só pelo que gerar.</p>
       </header>
 
-      <section aria-label="Nível de acabamento" className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <section aria-label="Nível de acabamento" className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {DESIGN_TIERS.map((t) => {
           const info = DESIGN_TIERS_INFO[t];
           const selected = tier === t;

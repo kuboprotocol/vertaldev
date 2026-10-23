@@ -16,11 +16,10 @@ describe('CreativeDesign', () => {
     invoke.mockReset();
   });
 
-  it('offers the three tiers with their credit cost', () => {
+  it('offers the two tiers with their credit cost', () => {
     render(<CreativeDesign creditsAvailable={100} />);
     expect(tierButton('Simples')).toHaveTextContent('1 crédito');
-    expect(tierButton('Profissional')).toHaveTextContent('5 créditos');
-    expect(tierButton('Premium')).toHaveTextContent('10 créditos');
+    expect(tierButton('Premium')).toHaveTextContent('2 créditos');
   });
 
   it('starts on the simple tier and shows its cost', () => {
@@ -33,7 +32,7 @@ describe('CreativeDesign', () => {
     render(<CreativeDesign creditsAvailable={100} />);
     fireEvent.click(tierButton('Premium'));
     expect(tierButton('Premium')).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText(/💳 10 créditos · 4 variações/)).toBeInTheDocument();
+    expect(screen.getByText(/💳 2 créditos · 2 variações/)).toBeInTheDocument();
   });
 
   it('keeps generate disabled until the prompt has enough characters', () => {
@@ -45,11 +44,11 @@ describe('CreativeDesign', () => {
     expect(generateBtn()).toBeEnabled();
   });
 
-  it('blocks premium when the user has fewer than 10 credits', () => {
-    render(<CreativeDesign creditsAvailable={9} />);
+  it('blocks premium when the user has fewer than 2 credits', () => {
+    render(<CreativeDesign creditsAvailable={1} />);
     fireEvent.click(tierButton('Premium'));
     fireEvent.change(promptInput(), { target: { value: 'Cartaz de lançamento' } });
-    expect(screen.getByText(/Créditos insuficientes: este nível custa 10, você tem 9/)).toBeInTheDocument();
+    expect(screen.getByText(/Créditos insuficientes: este nível custa 2, você tem 1/)).toBeInTheDocument();
     expect(generateBtn()).toBeDisabled();
   });
 
@@ -66,7 +65,7 @@ describe('CreativeDesign', () => {
       error: null,
     });
     render(<CreativeDesign creditsAvailable={100} />);
-    fireEvent.click(tierButton('Profissional'));
+    fireEvent.click(tierButton('Premium'));
     fireEvent.click(screen.getByRole('button', { name: 'Story 9:16' }));
     fireEvent.change(promptInput(), { target: { value: '  Festival de jazz  ' } });
     fireEvent.click(generateBtn());
@@ -75,7 +74,7 @@ describe('CreativeDesign', () => {
     expect(invoke).toHaveBeenCalledTimes(1);
     const [fn, options] = invoke.mock.calls[0];
     expect(fn).toBe('creative-design');
-    expect(options.body).toEqual({ prompt: 'Festival de jazz', format: 'story', tier: 'professional' });
+    expect(options.body).toEqual({ prompt: 'Festival de jazz', format: 'story', tier: 'premium' });
     expect(options.headers['X-Idempotency-Key']).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Variação 1 do design' })).toBeInTheDocument();
   });
@@ -105,7 +104,7 @@ describe('CreativeDesign', () => {
       error: null,
     });
     render(<CreativeDesign creditsAvailable={100} />);
-    fireEvent.click(tierButton('Profissional'));
+    fireEvent.click(tierButton('Premium'));
     fireEvent.change(promptInput(), { target: { value: 'Capa de livro' } });
     fireEvent.click(generateBtn());
     expect(await screen.findByText(/1 de 2 variações ficaram prontas/)).toBeInTheDocument();

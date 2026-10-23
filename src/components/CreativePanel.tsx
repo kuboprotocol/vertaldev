@@ -68,7 +68,7 @@ export default function CreativePanel() {
       id: 'design',
       type: 'design',
       title: 'Design Premium',
-      description: 'Artes profissionais com direção de arte IA · 1 a 10 créditos',
+      description: 'Artes profissionais com direção de arte IA · 1 a 2 créditos',
       icon: <Palette className="w-6 h-6" />,
       color: 'from-amber-400 to-rose-500',
     },

@@ -96,7 +96,7 @@ describe('Creative Panel: design studio', () => {
   it('lists the Design Premium card with its credit range', () => {
     render(<CreativePanel />);
     expect(screen.getByText('Design Premium')).toBeInTheDocument();
-    expect(screen.getByText(/1 a 10 créditos/)).toBeInTheDocument();
+    expect(screen.getByText(/1 a 2 créditos/)).toBeInTheDocument();
   });
 
   it('opens the design studio and goes back to the panel', () => {

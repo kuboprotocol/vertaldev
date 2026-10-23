@@ -6,8 +6,7 @@ import { z } from "npm:zod@3";
 
 const TIERS = {
   simple: { credits: 1, variants: 1 },
-  professional: { credits: 5, variants: 2 },
-  premium: { credits: 10, variants: 4 },
+  premium: { credits: 2, variants: 2 },
 } as const;
 
 const FORMATS = {
@@ -19,10 +18,8 @@ const FORMATS = {
 
 const TIER_DIRECTIVES: Record<keyof typeof TIERS, string> = {
   simple: "Layout limpo e legível, uma ideia central.",
-  professional:
-    "Composição equilibrada, hierarquia tipográfica clara, paleta de no máximo três cores, espaço negativo generoso.",
   premium:
-    "Direção de arte de agência: iluminação e profundidade cinematográficas, tipografia editorial, grid rigoroso, acabamento de marca premium. Sem clip-art, sem elementos genéricos, sem marca d'água.",
+    "Direção de arte de agência: composição equilibrada, hierarquia tipográfica clara, paleta de no máximo três cores, iluminação e profundidade cinematográficas, grid rigoroso, acabamento de marca premium. Sem clip-art, sem elementos genéricos, sem marca d'água.",
 };
 
 const VARIATION_ANGLES = [
@@ -37,7 +34,7 @@ const IMAGE_MODEL = "google/gemini-2.0-flash-exp";
 const InputSchema = z.object({
   prompt: z.string().trim().min(3).max(1000),
   format: z.enum(["post", "story", "banner", "poster"]),
-  tier: z.enum(["simple", "professional", "premium"]),
+  tier: z.enum(["simple", "premium"]),
 });
 
 Deno.serve(withRefundOnFailure(async (req) => {

@@ -13,13 +13,9 @@ import {
 const SERVER_FILE = path.resolve(process.cwd(), 'supabase/functions/creative-design/index.ts');
 
 describe('design pricing', () => {
-  it('starts at 1 credit for a simple design and tops out at 10 for premium', () => {
+  it('charges 1 credit for a simple design and 2 for premium', () => {
     expect(getDesignCost('simple')).toBe(1);
-    expect(getDesignCost('premium')).toBe(10);
-    for (const tier of DESIGN_TIERS) {
-      expect(getDesignCost(tier)).toBeGreaterThanOrEqual(1);
-      expect(getDesignCost(tier)).toBeLessThanOrEqual(10);
-    }
+    expect(getDesignCost('premium')).toBe(2);
   });
 
   it('charges more for higher tiers', () => {
@@ -27,20 +23,20 @@ describe('design pricing', () => {
     expect([...costs].sort((a, b) => a - b)).toEqual(costs);
   });
 
-  it('gives more variations to more expensive tiers', () => {
+  it('gives more variations to the more expensive tier', () => {
     expect(DESIGN_TIERS_INFO.simple.variants).toBe(1);
-    expect(DESIGN_TIERS_INFO.premium.variants).toBe(4);
+    expect(DESIGN_TIERS_INFO.premium.variants).toBe(2);
   });
 
   it('checks affordability against the tier cost', () => {
-    expect(canAffordDesign('premium', 10)).toBe(true);
-    expect(canAffordDesign('premium', 9)).toBe(false);
+    expect(canAffordDesign('premium', 2)).toBe(true);
+    expect(canAffordDesign('premium', 1)).toBe(false);
     expect(canAffordDesign('simple', 0)).toBe(false);
   });
 
   it('pluralizes credit labels', () => {
     expect(formatDesignCredits(1)).toBe('1 crédito');
-    expect(formatDesignCredits(10)).toBe('10 créditos');
+    expect(formatDesignCredits(2)).toBe('2 créditos');
   });
 
   it('matches the costs and variant counts the server charges', () => {
