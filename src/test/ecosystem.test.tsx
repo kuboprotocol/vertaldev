@@ -49,6 +49,7 @@ describe('Ecossistema Vertal', () => {
     expect(link.href).toContain('https://vertalrun.com/')
     expect(link.href).toContain('utm_source=vertal-dev')
     expect(link.target).toBe('_blank')
+    expect(new URL(link.href).searchParams.get('return_to')).toMatch(/\/connectors$/)
   })
 
   it('mostra a configuração MCP do produto', () => {

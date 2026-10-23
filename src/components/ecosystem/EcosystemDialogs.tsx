@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { type EcosystemProduct } from '@/lib/ecosystem'
+import { SITE_ORIGIN } from '@/config/brand'
 
 /** App atual, usado nos parâmetros de origem dos links (marketing/atribuição). */
 const SOURCE = 'vertal-dev'
@@ -13,6 +14,9 @@ export function ecosystemLink(product: EcosystemProduct, medium: 'link' | 'embed
   const url = new URL(medium === 'embed' ? product.embedUrl : product.url)
   url.searchParams.set('utm_source', SOURCE)
   url.searchParams.set('utm_medium', `ecosystem-${medium}`)
+  // Depois de conectar, o produto volta para o hub de conectores do Vertal Dev
+  // com ?connected=<produto>, que mostra a confirmação.
+  url.searchParams.set('return_to', `${SITE_ORIGIN}/connectors`)
   return url.toString()
 }
 
