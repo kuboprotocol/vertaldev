@@ -29,7 +29,7 @@ const VARIATION_ANGLES = [
   "composição tipográfica dominante",
 ];
 
-const IMAGE_MODEL = "google/gemini-2.0-flash-exp";
+const IMAGE_MODEL = "google/gemini-2.5-flash-image";
 
 const InputSchema = z.object({
   prompt: z.string().trim().min(3).max(1000),
@@ -48,8 +48,8 @@ Deno.serve(withRefundOnFailure(async (req) => {
   const { prompt, format, tier } = parsed.data;
   const { credits, variants } = TIERS[tier];
 
-  const LK = Deno.env.get("LOVABLE_API_KEY");
-  if (!LK) return j(503, { error: "image_provider_unavailable" });
+  const OR = Deno.env.get("OPENROUTER_API_KEY");
+  if (!OR) return j(503, { error: "image_provider_unavailable" });
 
   const idempotencyKey = req.headers.get("X-Idempotency-Key") ?? undefined;
   try {
@@ -59,7 +59,7 @@ Deno.serve(withRefundOnFailure(async (req) => {
 
     const angles = VARIATION_ANGLES.slice(0, variants);
     const outputs = await Promise.all(
-      angles.map((angle, i) => generateVariant(LK, buildPrompt(prompt, format, tier, angle, i, variants))),
+      angles.map((angle, i) => generateVariant(OR, buildPrompt(prompt, format, tier, angle, i, variants))),
     );
     const urls = outputs.filter((url): url is string => url !== null);
     if (urls.length === 0) {
@@ -75,7 +75,7 @@ Deno.serve(withRefundOnFailure(async (req) => {
         output_url: url,
         // O lote inteiro é cobrado uma vez: o custo fica no primeiro asset.
         credits_spent: i === 0 ? credits : 0,
-        metadata: { tier, format, variant: i + 1, variants, provider: "lovable_gemini" },
+        metadata: { tier, format, variant: i + 1, variants, provider: "openrouter_gemini" },
       });
       images.push({ url, asset_id: assetId ?? null });
     }
@@ -110,12 +110,17 @@ function buildPrompt(
   ].filter(Boolean).join(" ");
 }
 
-/** Uma variação. Devolve a URL (ou data URL) da imagem, ou null se o gateway falhar. */
+/** Uma variação. Devolve a URL (ou data URL) da imagem, ou null se o OpenRouter falhar. */
 async function generateVariant(apiKey: string, text: string): Promise<string | null> {
   try {
-    const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://kubovibe.dev",
+        "X-Title": "KUBO Vibe",
+      },
       body: JSON.stringify({
         model: IMAGE_MODEL,
         messages: [{ role: "user", content: text }],
@@ -124,7 +129,7 @@ async function generateVariant(apiKey: string, text: string): Promise<string | n
     });
     const data = await r.json();
     if (!r.ok) {
-      console.warn("[creative-design] gateway failed:", r.status, data?.error?.message);
+      console.warn("[creative-design] openrouter failed:", r.status, data?.error?.message);
       return null;
     }
     return data?.choices?.[0]?.message?.images?.[0]?.image_url?.url ?? null;

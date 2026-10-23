@@ -35,7 +35,7 @@ A cobrança é feita no servidor (`supabase/functions/creative-design/index.ts`)
 
 1. A UI envia `{ prompt, format, tier }` e um `X-Idempotency-Key` por clique.
 2. A função valida a entrada, cobra `credits` (`deductCredits`) e gera as variações em paralelo
-   pelo gateway de imagem (o mesmo do `creative-image`).
+   pelo OpenRouter, modelo `google/gemini-2.5-flash-image` (com `modalities: ["image", "text"]`).
 3. Cada imagem vai para `creative_assets` (ferramenta `design`). O custo do lote fica no primeiro asset.
 4. Se todas as variações falharem, a resposta é 502 e os créditos são devolvidos
    automaticamente (`withRefundOnFailure`).
@@ -55,4 +55,6 @@ A cobrança é feita no servidor (`supabase/functions/creative-design/index.ts`)
   tipografia exata, o caminho é um editor de layout, não o gerador.
 - **Saldo exibido**: o painel ainda passa `creditsAvailable = 100` fixo (TODO em `CreativePanel.tsx`).
   A checagem real é feita no servidor; a UI só antecipa o bloqueio.
-- **Deploy**: a função precisa de `LOVABLE_API_KEY` configurada no Supabase. Sem ela, responde 503.
+- **Deploy**: a função precisa do secret `OPENROUTER_API_KEY` no projeto Supabase. Sem ele, responde 503.
+  O modelo e o formato da resposta foram conferidos pela documentação pública do OpenRouter, mas
+  ainda não foram testados contra a API real (o proxy do ambiente de desenvolvimento bloqueia o `openrouter.ai`).
