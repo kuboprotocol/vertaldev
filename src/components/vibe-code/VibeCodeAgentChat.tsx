@@ -253,7 +253,9 @@ export function VibeCodeAgentChat({ projectId }: { projectId?: string }) {
         </div>
       </div>
 
-      <ScrollArea className="flex-1 px-4 py-6">
+      {/* Radix sets the viewport content to display:table, which lets long lines widen the
+          whole transcript past the card; force block so the content keeps the viewport width. */}
+      <ScrollArea className="min-h-0 flex-1 px-4 py-6 [&_[data-radix-scroll-area-viewport]>div]:!block">
         <div className="relative ml-4 space-y-6 border-l border-border/10 pl-6">
           {messages.length === 0 && (
             <p className="text-sm text-muted-foreground">
