@@ -101,11 +101,14 @@ export default function MobileAgentPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      <header className="sticky top-0 z-20 border-b border-border/50 bg-background/85 px-4 py-3 backdrop-blur-xl">
+    <div className="min-h-[100dvh] bg-background pb-32">
+      <div className="pointer-events-none fixed inset-x-0 top-0 h-72 bg-gradient-to-b from-primary/15 via-primary/5 to-transparent" />
+      <header className="sticky top-0 z-20 border-b border-border/50 bg-background/80 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+12px)] backdrop-blur-2xl">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h1 className="font-orbitron text-base font-bold tracking-wide">Vertal Mobile Agent</h1>
+            <h1 className="bg-gradient-to-r from-primary via-primary to-fuchsia-400 bg-clip-text font-orbitron text-base font-bold tracking-wide text-transparent">
+              Vertal Mobile Agent
+            </h1>
             <p className="text-[11px] text-muted-foreground">
               {device.native ? `${device.platform} · push ${device.state}` : "Web preview of the iOS client"}
             </p>
@@ -129,7 +132,7 @@ export default function MobileAgentPage() {
       <main className="px-4 py-4">
         {tab === "session" && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-            <Card className="space-y-3 border-border/50 bg-card/60 p-4 backdrop-blur">
+            <Card className="relative space-y-4 overflow-hidden border-primary/20 bg-gradient-to-br from-primary/10 via-card/70 to-card/40 p-5 backdrop-blur-xl shadow-xl shadow-primary/5">
               <div className="flex items-center gap-2 text-sm font-semibold">
                 <Cloud className="h-4 w-4 text-primary" /> Remote container
               </div>
@@ -429,14 +432,15 @@ export default function MobileAgentPage() {
         )}
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-border/50 bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
+      <nav className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+12px)] z-30 mx-auto grid max-w-md grid-cols-5 gap-1 rounded-2xl border border-border/60 bg-background/80 p-1.5 shadow-2xl shadow-primary/10 backdrop-blur-2xl">
         {TABS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setTab(id)}
+            aria-current={tab === id ? "page" : undefined}
             className={cn(
-              "flex flex-col items-center gap-1 py-3 text-[10px] font-medium transition-colors",
-              tab === id ? "text-primary" : "text-muted-foreground",
+              "flex flex-col items-center gap-1 rounded-xl py-2 text-[10px] font-medium transition-all active:scale-95",
+              tab === id ? "bg-primary/15 text-primary shadow-inner" : "text-muted-foreground hover:text-foreground",
             )}
           >
             <Icon className="h-4 w-4" />
