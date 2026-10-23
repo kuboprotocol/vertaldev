@@ -2,6 +2,56 @@
 done_when: O Vertal Agentic OS passa nos testes de aceitação das fases 0 a 3 (linha de base verde, Plan/Build com aprovação, rollback verificado e isolamento entre usuários), com resultados registrados como passou, falhou ou pulado.
 ---
 
+## 2026-10-23 14:05 — Plano decidido: testes Deno numa nova sessão; registro só local
+
+### What was asked
+Usuário confirmou que a liberação de rede não chega a esta sessão. Caminho escolhido: abrir uma NOVA sessão a partir da branch `ccr-5df6c470-ty9k7o`, com `deno.land` e `esm.sh` salvos em Allowed domains. Na nova sessão, pedir para ler `docs/agentic-os/LOGBOOK.md` e o usuário dispara os testes.
+
+### Done
+| Action | Detail |
+|--------|--------|
+| Decisão registrada | Testes Deno ficam com o usuário, a partir de nova sessão. Nenhum teste foi executado nesta sessão. |
+| Notificação recebida | Comentário do bot da Cloudflare na PR #62: build do preview com sucesso, sem URL de preview. Sem ação necessária. |
+| Arquivos alterados | Só este LOGBOOK. Nada no repo, nenhum commit ou push nesta sessão. |
+
+### Result
+Sem avanço técnico. Testes Deno pendentes. Fase 1 não iniciada.
+
+### Open / notes
+- ATENÇÃO: a cópia `docs/agentic-os/LOGBOOK.md` no repo NÃO tem esta entrada. A nova sessão lê o repo, então verá o registro até `bd4ca14` e não verá este plano. Sincronizar (commit + push na mesma branch) só com autorização explícita do usuário.
+- Ao iniciar a nova sessão: confirmar que `deno.land` e `esm.sh` estão em Allowed domains (ou que o HTTP não dá 000) antes de rodar `bunx --bun deno test --no-check -A` nas pastas `_shared/`, `vibe-agents/`, `orchestrator-route/`, `cloudflare-publish/`, `creative-video-studio/`, `github-signin-callback/`, `mcp/`, `wgsl-sanitizer/`.
+- Decisões ainda abertas: alvo Supabase/Railway (sccizjlpwezsgaxkclot vs msefvjabjlqodbmzdlgj); `.env` versionado (`git rm --cached`, não aprovado); lint de 885 erros (corrigir só arquivos tocados ou limpeza dedicada).
+
+## 2026-10-23 — Testes Deno bloqueados pela rede; LOGBOOK copiado ao repo; PR #62 em draft
+
+### What was asked
+1. Liberar deno.land e esm.sh e rodar os testes Deno das Edge Functions (núcleo de agentes).
+2. Copiar o LOGBOOK para o repo e fazer commit, para a próxima sessão ter o registro.
+
+### Done
+| Action | Detail |
+|--------|--------|
+| Tentativa de liberar rede | Sessão não consegue alterar política de rede; orientado o usuário a editar Network access (Limited + Allowed domains + Allow package managers). |
+| Re-verificação ×3 | `deno.land` e `esm.sh` continuaram HTTP 000 após o usuário dizer que liberou. Proxy (`/__agentproxy/status`) registrou 403 do gateway para esses hosts. Hipótese: mudança só vale em container novo. Não há resultado de teste Deno nesta sessão. |
+| Recomendação | Iniciar NOVA sessão a partir do repo/branch `ccr-5df6c470-ty9k7o`, confirmar Allowed domains salvo, avisar; depois rodar `bunx --bun deno test --no-check -A` nas pastas `_shared/`, `vibe-agents/`, `orchestrator-route/`, `cloudflare-publish/`, `creative-video-studio/`, `github-signin-callback/`, `mcp/`, `wgsl-sanitizer/`. |
+| Commit | `bd4ca14` em `docs/agentic-os/LOGBOOK.md` (cópia deste registro). Mensagem com `Claude-Session`; linha `Co-Authored-By` com nome de modelo omitida (regra do system prompt: sem identificador de modelo em commit/PR). Usuário ciente. |
+| Push | `origin/ccr-5df6c470-ty9k7o` com upstream configurado. |
+| PR | #62 https://github.com/kuboprotocol/vertaldev/pull/62 — DRAFT, base `main`, criada após duas buscas (list + search por head) confirmarem que não havia PR para a branch. Sem template de PR no repo. Inscrição em eventos da PR feita. |
+| Eventos da PR (até 13:47 UTC) | Sem comentário de revisão. Bots: Preflight Fuzz request-method/origin/request-headers (todos PASS); Markdown Bullets CI (7/7 PASS, cobertura 100%); WGSL Sanitizer (sem falhas). `mergeable_state` = `unstable` (checks ainda em andamento na última leitura). |
+
+### Result
+- Testes Deno: NÃO EXECUTADOS. Continua pendente.
+- Commit e PR #62: feitos e verificados.
+- Fase 1 (núcleo do orquestrador): NÃO INICIADA. Aguarda decisões do usuário (alvo Supabase/Railway; remover `.env` versionado; lint de 885 erros: corrigir só arquivos tocados ou limpeza dedicada).
+
+### Corrections
+- Afirmei inicialmente que o usuário "aprovou" via texto do próprio assistente; a aprovação válida veio de mensagem explícita do usuário ("aprovo a fase 0 e pode usar a sugestão" e "sim, copia o logbook pro repo e faz commit").
+
+### Open / notes
+- A cópia em `docs/agentic-os/LOGBOOK.md` (repo) fica DESATUALIZADA a partir desta entrada. Oferecer sincronizar (novo commit) se o usuário quiser o registro completo no repo.
+- Próxima sessão: ler este LOGBOOK primeiro; rodar testes Deno ao confirmar rede liberada.
+- Lint 885 erros e `.env` versionado seguem em aberto (decisões do usuário).
+
 ## 2026-10-23 — Avaliação inicial do Vertal Agentic OS (somente análise, sem alterações)
 
 ### What was asked
