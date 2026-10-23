@@ -43,9 +43,10 @@ export function useGitRepo() {
     setLoading(true);
     try {
       const res = await callGit<{ repos: GitRepo[] }>({ action: "repos" });
-      setRepos(res.repos);
+      const list = res.repos ?? [];
+      setRepos(list);
       setConnected(true);
-      return res.repos;
+      return list;
     } catch (err) {
       const msg = err instanceof Error ? err.message : "failed";
       setConnected(msg !== "github_not_connected" ? null : false);
@@ -60,7 +61,7 @@ export function useGitRepo() {
     setLoading(true);
     try {
       const res = await callGit<{ files: GitFile[] }>({ action: "tree", repo, branch });
-      setFiles(res.files);
+      setFiles(res.files ?? []);
     } catch {
       toast.error("Could not load file tree");
     } finally {
@@ -71,7 +72,7 @@ export function useGitRepo() {
   const loadCommits = useCallback(async (repo: string, branch: string) => {
     try {
       const res = await callGit<{ commits: GitCommit[] }>({ action: "commits", repo, branch });
-      setCommits(res.commits);
+      setCommits(res.commits ?? []);
     } catch {
       /* history is optional */
     }

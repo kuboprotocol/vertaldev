@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Github, Database, CreditCard, Globe, Plug, CheckCircle2, Circle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +14,15 @@ const ICONS = {
   ionos: Globe,
   mcp: Plug,
 } as const;
+
+// Cada botão leva à página real do serviço (não a uma rota de conector inexistente).
+const TARGETS: Record<VibeConnectorState["slug"], { to: string; action: string }> = {
+  github: { to: "/connectors/github", action: "Connect" },
+  supabase: { to: "/connectors/supabase", action: "Open" },
+  stripe: { to: "/connect", action: "Connect" },
+  ionos: { to: "/domains", action: "Open" },
+  mcp: { to: "/docs/mcp", action: "Docs" },
+};
 
 const BASE: VibeConnectorState[] = [
   { slug: "github", label: "GitHub", description: "Commits every agent edit into your repository.", connected: false },
@@ -78,7 +88,7 @@ export function VibeConnectorPanel() {
               </div>
               {!c.connected && (
                 <Button asChild size="sm" variant="ghost" className="h-7 text-xs">
-                  <a href={`/connectors/${c.slug}`}>Connect</a>
+                  <Link to={TARGETS[c.slug].to}>{TARGETS[c.slug].action}</Link>
                 </Button>
               )}
             </div>

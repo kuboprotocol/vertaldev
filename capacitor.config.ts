@@ -3,11 +3,10 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'dev.kubovibe.app',
   appName: 'kubovibe',
+  // The native shell must bundle the local build (`npm run build && npx cap sync`).
+  // A `server.url` here makes Capacitor load a remote preview instead of `dist`,
+  // which is why the mobile app showed stale or raw code.
   webDir: 'dist',
-  server: {
-    url: 'https://5ce8b966-167f-4e5a-be1c-165ac92bd64e.lovableproject.com?forceHideBadge=true',
-    cleartext: true,
-  },
   android: {
     allowMixedContent: true,
   },
