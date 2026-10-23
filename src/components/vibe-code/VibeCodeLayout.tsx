@@ -166,7 +166,14 @@ function DesktopView({ activeTab, projectId }: { activeTab: string; setActiveTab
 function MobileView({ activeTab, projectId }: { activeTab: string; projectId: string }) {
   switch (activeTab) {
     case 'agent':
-      return <VibeCodeAgentChat projectId={projectId} />;
+      // The chat's message list scrolls inside its own box, so it needs a bounded height
+      // (viewport minus top bar, bottom tab bar and padding). Without it the card grows to
+      // the full transcript and the page is too heavy to scroll.
+      return (
+        <div className="flex h-[calc(100dvh-10rem)] min-h-[420px] min-w-0 flex-col">
+          <VibeCodeAgentChat projectId={projectId} />
+        </div>
+      );
     case 'domains':
       return <VibeDomainsPanel />;
     case 'deploys':
