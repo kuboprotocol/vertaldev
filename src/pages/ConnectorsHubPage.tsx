@@ -5,11 +5,11 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { connectors, categories, type ConnectorConfig } from '@/lib/connectorsConfig'
-import { ArrowLeft, Search, Zap, ExternalLink, X } from 'lucide-react'
+import { ArrowLeft, Check, Search, Zap, ExternalLink, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { GlobalActivityPanel } from '@/components/connectors/GlobalActivityPanel'
 import { EcosystemActions, PRODUCT_ICONS, useEcosystemDialogs } from '@/components/ecosystem/EcosystemShowcase'
-import { siblingsOf } from '@/lib/ecosystem'
+import { getEcosystemProduct, siblingsOf } from '@/lib/ecosystem'
 
 type Availability = 'all' | 'available' | 'coming_soon'
 
@@ -32,6 +32,16 @@ export default function ConnectorsHubPage() {
   const search = searchParams.get('q') ?? ''
   const activeCategory = searchParams.get('cat') ?? 'all'
   const availability = (searchParams.get('avail') as Availability | null) ?? 'all'
+  // Produto que acabou de conectar (volta de vertal.app ou vertalrun.com com ?connected=).
+  const connectedProduct = getEcosystemProduct(searchParams.get('connected') ?? '')
+
+  const dismissConnected = () => {
+    setSearchParams(prev => {
+      const sp = new URLSearchParams(prev)
+      sp.delete('connected')
+      return sp
+    }, { replace: true })
+  }
 
   const updateParam = (key: string, value: string, defaultValue: string) => {
     setSearchParams(prev => {
@@ -81,6 +91,19 @@ export default function ConnectorsHubPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {connectedProduct && (
+        <div role="status" className="border-b border-border bg-primary/10">
+          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3 text-sm">
+            <Check className="h-4 w-4 text-primary shrink-0" />
+            <span className="flex-1">
+              <strong>{connectedProduct.name} conectado ao Vertal Dev.</strong>
+            </span>
+            <Button size="sm" variant="ghost" onClick={dismissConnected} aria-label="Fechar aviso">
+              Fechar
+            </Button>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur-xl sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center gap-4">
