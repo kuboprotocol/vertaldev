@@ -110,8 +110,23 @@ function buildPrompt(
   ].filter(Boolean).join(" ");
 }
 
-/** Uma variação. Devolve a URL (ou data URL) da imagem, ou null se o OpenRouter falhar. */
+/**
+ * Uma variação. Devolve a URL (ou data URL) da imagem, ou null se não sair imagem.
+ * Tenta de novo uma vez quando o OpenRouter responde com sucesso mas sem imagem (falha intermitente).
+ * Erros HTTP e exceções não são repetidos.
+ */
 async function generateVariant(apiKey: string, text: string): Promise<string | null> {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const result = await requestImage(apiKey, text, attempt);
+    if (result.kind === "image") return result.url;
+    if (result.kind === "error") return null;
+  }
+  return null;
+}
+
+type ImageResult = { kind: "image"; url: string } | { kind: "empty" } | { kind: "error" };
+
+async function requestImage(apiKey: string, text: string, attempt: number): Promise<ImageResult> {
   try {
     const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -129,13 +144,23 @@ async function generateVariant(apiKey: string, text: string): Promise<string | n
     });
     const data = await r.json();
     if (!r.ok) {
-      console.warn("[creative-design] openrouter failed:", r.status, data?.error?.message);
-      return null;
+      console.warn("[creative-design] openrouter failed:", { attempt, status: r.status, message: data?.error?.message });
+      return { kind: "error" };
     }
-    return data?.choices?.[0]?.message?.images?.[0]?.image_url?.url ?? null;
+    const choice = data?.choices?.[0];
+    const url: string | undefined = choice?.message?.images?.[0]?.image_url?.url;
+    if (url) return { kind: "image", url };
+    // Sem imagem: registra o motivo (sem dados do usuário além de um trecho curto da resposta).
+    console.warn("[creative-design] openrouter returned no image:", {
+      attempt,
+      finish_reason: choice?.finish_reason ?? null,
+      has_images_field: Array.isArray(choice?.message?.images),
+      content: typeof choice?.message?.content === "string" ? choice.message.content.slice(0, 200) : null,
+    });
+    return { kind: "empty" };
   } catch (e) {
-    console.warn("[creative-design] variant error:", e);
-    return null;
+    console.warn("[creative-design] variant error:", { attempt, error: String(e).slice(0, 200) });
+    return { kind: "error" };
   }
 }
 
