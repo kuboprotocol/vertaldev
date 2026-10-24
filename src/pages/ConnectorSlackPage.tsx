@@ -117,7 +117,7 @@ export default function ConnectorSlackPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="border-b border-border bg-card/50 backdrop-blur-xl sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => navigate('/connectors')}>
               <ArrowLeft className="w-4 h-4 mr-1" /> Back

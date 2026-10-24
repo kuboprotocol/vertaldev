@@ -87,9 +87,9 @@ print(data)`,
               <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <AnimatedLogo size={15} />
-            <h1 className="text-lg sm:text-xl font-bold text-foreground font-display">MCP API Documentation</h1>
+            <h1 className="min-w-0 text-lg sm:text-xl font-bold text-foreground font-display">MCP API Documentation</h1>
           </div>
         </div>
       </header>
