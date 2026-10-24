@@ -896,12 +896,12 @@ export default function CreativePage() {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border/40 bg-card p-4">
-        <div className="container max-w-7xl mx-auto flex items-center justify-between">
+        <div className="container max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <h1 className="font-bold text-lg flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
             Economia Criativa Vertal
           </h1>
-          <div className="nav-carousel flex-1">
+          <div className="nav-carousel flex-1 max-md:basis-full">
             <Button variant="ghost" size="sm" onClick={() => navigate("/creative/investigation")}>
               <AlertTriangle className="h-4 w-4 mr-1" /> Investigação
             </Button>
@@ -1129,7 +1129,7 @@ export default function CreativePage() {
                        />
                      </div>
                    </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <div className="space-y-1">
                         <label className="text-[10px] font-medium text-muted-foreground uppercase">Fuso Horário</label>
                         <select 
@@ -1143,7 +1143,7 @@ export default function CreativePage() {
                           <option value="America/New_York">NY (EST)</option>
                         </select>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         <Button 
                           variant="outline" 
                           onClick={() => { setFilter("all"); setSearchQuery(""); setSortOrder("desc"); setSelectedTimezone("UTC"); }}

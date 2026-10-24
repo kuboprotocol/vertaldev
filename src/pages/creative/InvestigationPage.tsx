@@ -252,22 +252,24 @@ export default function InvestigationPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-border p-4 flex items-center gap-3">
+      <header className="border-b border-border p-4 flex flex-wrap items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate("/creative")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <h1 className="text-xl font-bold flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-amber-500" /> Investigação de Falhas
           </h1>
           <p className="text-xs text-muted-foreground">Atualização em tempo real • {count} resultados</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => navigate("/creative/notifications")}>
-          Preferências de e-mail
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => navigate("/creative/presets")}>
-          Presets
-        </Button>
+        <div className="nav-carousel max-md:basis-full">
+          <Button variant="outline" size="sm" onClick={() => navigate("/creative/notifications")}>
+            Preferências de e-mail
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate("/creative/presets")}>
+            Presets
+          </Button>
+        </div>
       </header>
 
       <div className="px-4 pt-4">
@@ -279,7 +281,7 @@ export default function InvestigationPage() {
         />
       </div>
 
-      <div className="p-4 grid lg:grid-cols-[1fr_400px] gap-4">
+      <div className="p-4 grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-4">
         <div className="space-y-3">
           <Card className="p-3">
             <div className="grid md:grid-cols-5 gap-2">
@@ -317,7 +319,7 @@ export default function InvestigationPage() {
             </div>
             <div className="mt-2 flex gap-2 flex-wrap items-center">
               <Select value={tool} onValueChange={(v) => { setTool(v); setPage(1); }}>
-                <SelectTrigger className="w-48"><SelectValue placeholder="Ferramenta" /></SelectTrigger>
+                <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="Ferramenta" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas as ferramentas</SelectItem>
                   {["chat","nano_banana","downloader","clips","avatar","shorts","music","ebook","emo", ...distinctTools]
