@@ -68,6 +68,15 @@ describe('CreativeDesign modes', () => {
     expect(screen.getByLabelText('Texto da camada')).toHaveValue('Seu título');
   });
 
+  it('embeds the PhotoCraft editor in its own mode', () => {
+    render(<CreativeDesign creditsAvailable={100} />);
+    fireEvent.click(modeButton('PhotoCraft'));
+
+    const frame = screen.getByTitle('PhotoCraft editor de imagens');
+    expect(frame.tagName).toBe('IFRAME');
+    expect(frame).toHaveAttribute('src', '/photocraft/');
+  });
+
   it('lists the Adobe apps with links that open in a new tab', () => {
     render(<CreativeDesign creditsAvailable={100} />);
     fireEvent.click(modeButton('Ecossistema Adobe'));

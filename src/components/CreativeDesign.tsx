@@ -3,6 +3,7 @@ import { Check, Download, Loader2, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ManualDesignEditor } from './creative/ManualDesignEditor';
 import { AdobeEcosystem } from './creative/AdobeEcosystem';
+import { PhotocraftEditor } from './creative/PhotocraftEditor';
 import {
   DESIGN_FORMATS,
   DESIGN_FORMATS_INFO,
@@ -33,11 +34,12 @@ interface DesignResponse {
 
 const MIN_PROMPT_LENGTH = 3;
 
-type DesignMode = 'ai' | 'manual' | 'adobe';
+type DesignMode = 'ai' | 'manual' | 'photocraft' | 'adobe';
 
 const DESIGN_MODES: Array<{ key: DesignMode; label: string }> = [
   { key: 'ai', label: 'Com IA' },
   { key: 'manual', label: 'Editor manual' },
+  { key: 'photocraft', label: 'PhotoCraft' },
   { key: 'adobe', label: 'Ecossistema Adobe' },
 ];
 
@@ -73,6 +75,9 @@ export function CreativeDesign({ creditsAvailable }: CreativeDesignProps) {
       </div>
       <div hidden={mode !== 'manual'} className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <ManualDesignEditor />
+      </div>
+      <div hidden={mode !== 'photocraft'} className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <PhotocraftEditor />
       </div>
       <div hidden={mode !== 'adobe'} className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <AdobeEcosystem />
