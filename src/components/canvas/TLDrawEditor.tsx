@@ -5,6 +5,7 @@ import 'tldraw/tldraw.css'
 interface TLDrawEditorProps {
   onSave?: (snapshot: any) => void
   onChange?: (snapshot: any) => void
+  onEditorReady?: (editor: Editor) => void
   initialSnapshot?: any
   autoSaveDelay?: number
 }
@@ -12,6 +13,7 @@ interface TLDrawEditorProps {
 export default function TLDrawEditor({
   onSave,
   onChange,
+  onEditorReady,
   initialSnapshot,
   autoSaveDelay = 800,
 }: TLDrawEditorProps) {
@@ -22,6 +24,7 @@ export default function TLDrawEditor({
   const handleMount = useCallback((editor: Editor) => {
     editorRef.current = editor
     ;(window as any).tldrawEditor = editor
+    onEditorReady?.(editor)
 
     if (initialSnapshot) {
       try {
@@ -68,7 +71,7 @@ export default function TLDrawEditor({
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [onSave, onChange, initialSnapshot, autoSaveDelay])
+  }, [onSave, onChange, onEditorReady, initialSnapshot, autoSaveDelay])
 
   // Cleanup subscription + timer on unmount
   useEffect(() => {

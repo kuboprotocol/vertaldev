@@ -127,9 +127,23 @@ function fitImage(image: HTMLImageElement, size: Size) {
   return { w, h, x: (size.width - w) / 2, y: (size.height - h) / 2 };
 }
 
+/** Leva uma camada de um formato para outro. Posição e tamanho acompanham o canvas; imagens e texto mantêm a proporção. */
+function fitLayerToSize(layer: Layer, from: Size, to: Size): Layer {
+  const sx = to.width / from.width;
+  const sy = to.height / from.height;
+  const uniform = Math.min(sx, sy);
+  const x = Math.min(Math.max(layer.x * sx, 0), to.width);
+  const y = Math.min(Math.max(layer.y * sy, 0), to.height);
+  if (layer.kind === 'text') return { ...layer, x, y, fontSize: (layer.fontSize ?? 64) * uniform };
+  if (layer.kind === 'image') return { ...layer, x, y, w: layer.w * uniform, h: layer.h * uniform };
+  return { ...layer, x, y, w: layer.w * sx, h: layer.h * sy };
+}
+
 export function ManualDesignEditor() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textFieldRef = useRef<HTMLTextAreaElement>(null);
+  const focusTextOnAddRef = useRef(false);
   const dragRef = useRef<{ id: string; dx: number; dy: number } | null>(null);
 
   const [format, setFormat] = useState<DesignFormat>('post');
@@ -147,12 +161,31 @@ export function ManualDesignEditor() {
     drawScene(ctx, size, background, layers, selectedId, true);
   }, [size, background, layers, selectedId]);
 
+  // No celular o campo de texto fica abaixo do canvas: focar e selecionar o texto faz o teclado abrir já editável.
+  useEffect(() => {
+    const field = textFieldRef.current;
+    if (!focusTextOnAddRef.current || !field) return;
+    focusTextOnAddRef.current = false;
+    field.focus();
+    field.select();
+    field.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [selectedId]);
+
   const addLayer = (layer: Layer) => {
     setLayers((current) => [...current, layer]);
     setSelectedId(layer.id);
   };
 
+  const handleFormatChange = (next: DesignFormat) => {
+    if (next === format) return;
+    const from = CANVAS_SIZE[format];
+    const to = CANVAS_SIZE[next];
+    setLayers((current) => current.map((layer) => fitLayerToSize(layer, from, to)));
+    setFormat(next);
+  };
+
   const addText = () => {
+    focusTextOnAddRef.current = true;
     addLayer({
       id: crypto.randomUUID(),
       kind: 'text',
@@ -299,7 +332,7 @@ export function ManualDesignEditor() {
                   key={f}
                   type="button"
                   aria-pressed={chosen}
-                  onClick={() => setFormat(f)}
+                  onClick={() => handleFormatChange(f)}
                   className={`px-3 py-2 rounded-lg border text-sm transition-all ${
                     chosen
                       ? 'border-slate-200 bg-white text-slate-900'
@@ -361,6 +394,7 @@ export function ManualDesignEditor() {
             {selected?.kind === 'text' && (
               <>
                 <textarea
+                  ref={textFieldRef}
                   aria-label="Texto da camada"
                   value={selected.text ?? ''}
                   onChange={(e) => updateSelected({ text: e.target.value })}

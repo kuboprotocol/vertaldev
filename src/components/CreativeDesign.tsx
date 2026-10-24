@@ -1,9 +1,13 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Check, Download, Loader2, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ManualDesignEditor } from './creative/ManualDesignEditor';
 import { FreeCreativeTools } from './creative/FreeCreativeTools';
 import { PhotocraftEditor } from './creative/PhotocraftEditor';
+// O canvas (tldraw) é pesado: carrega só quando a aba é aberta pela primeira vez.
+const CanvasDesignStudio = lazy(() =>
+  import('./creative/CanvasDesignStudio').then((module) => ({ default: module.CanvasDesignStudio })),
+);
 import {
   DESIGN_FORMATS,
   DESIGN_FORMATS_INFO,
@@ -34,18 +38,26 @@ interface DesignResponse {
 
 const MIN_PROMPT_LENGTH = 3;
 
-type DesignMode = 'ai' | 'manual' | 'photocraft' | 'free';
+type DesignMode = 'ai' | 'manual' | 'canvas' | 'photocraft' | 'free';
 
 const DESIGN_MODES: Array<{ key: DesignMode; label: string }> = [
   { key: 'ai', label: 'Com IA' },
   { key: 'manual', label: 'Editor manual' },
+  { key: 'canvas', label: 'Canvas' },
   { key: 'photocraft', label: 'PhotoCraft' },
   { key: 'free', label: 'Ferramentas grátis' },
 ];
 
-/** Painel Design Premium: IA, editor manual, PhotoCraft e ferramentas gratuitas. Os três ficam montados para não perder o trabalho ao trocar de aba. */
+/** Painel Design Premium: IA, editor manual, canvas, PhotoCraft e ferramentas gratuitas. As abas ficam montadas para não perder o trabalho ao trocar de aba. */
 export function CreativeDesign({ creditsAvailable }: CreativeDesignProps) {
   const [mode, setMode] = useState<DesignMode>('ai');
+  // O canvas só monta na primeira abertura; depois fica montado (escondido) como as outras abas.
+  const [canvasOpened, setCanvasOpened] = useState(false);
+
+  const selectMode = (next: DesignMode) => {
+    if (next === 'canvas') setCanvasOpened(true);
+    setMode(next);
+  };
 
   return (
     <div>
@@ -57,7 +69,7 @@ export function CreativeDesign({ creditsAvailable }: CreativeDesignProps) {
               key={item.key}
               type="button"
               aria-pressed={selected}
-              onClick={() => setMode(item.key)}
+              onClick={() => selectMode(item.key)}
               className={`px-4 py-2 rounded-lg border text-sm transition-all ${
                 selected
                   ? 'border-amber-300/70 bg-gradient-to-r from-amber-400/15 to-rose-500/10 text-white'
@@ -76,11 +88,18 @@ export function CreativeDesign({ creditsAvailable }: CreativeDesignProps) {
       <div hidden={mode !== 'manual'} className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <ManualDesignEditor />
       </div>
+      {canvasOpened && (
+        <div hidden={mode !== 'canvas'} className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+          <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-amber-300" /></div>}>
+            <CanvasDesignStudio />
+          </Suspense>
+        </div>
+      )}
       <div hidden={mode !== 'photocraft'} className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <PhotocraftEditor />
       </div>
       <div hidden={mode !== 'free'} className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <FreeCreativeTools onOpenMode={setMode} />
+        <FreeCreativeTools onOpenMode={selectMode} />
       </div>
     </div>
   );
