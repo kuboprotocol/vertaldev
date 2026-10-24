@@ -13,6 +13,7 @@ SET search_path = public
 AS $$
 DECLARE
   _referred RECORD;
+  _result jsonb;
   _granted integer := 0;
 BEGIN
   FOR _referred IN
@@ -21,7 +22,7 @@ BEGIN
     WHERE credits_awarded > 0
   LOOP
     BEGIN
-      PERFORM public.execute_atomic_credit_topup(
+      _result := public.execute_atomic_credit_topup(
         _referred.referred_id,
         5,
         'Crédito diário por indicação',
@@ -29,7 +30,10 @@ BEGIN
         jsonb_build_object('source', 'referral_daily'),
         'referral_daily:' || _referred.referred_id || ':' || current_date
       );
-      _granted := _granted + 1;
+      -- Replay (já concedido hoje) não conta como concessão nova.
+      IF NOT COALESCE((_result ->> 'replayed')::boolean, false) THEN
+        _granted := _granted + 1;
+      END IF;
     EXCEPTION WHEN OTHERS THEN
       RAISE WARNING 'referral daily credits failed for %: %', _referred.referred_id, SQLERRM;
     END;
