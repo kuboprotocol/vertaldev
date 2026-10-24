@@ -29,6 +29,7 @@ interface LibraryItem {
 interface GalleryItem {
   id: string;
   name: string;
+  preview_data: string | null;
   reuse_count: number;
 }
 
@@ -66,7 +67,7 @@ export function CanvasDesignStudio() {
         .order('updated_at', { ascending: false }),
       supabase
         .from('design_library')
-        .select('id,name,reuse_count')
+        .select('id,name,preview_data,reuse_count')
         .eq('is_published', true)
         .neq('user_id', uid)
         .order('reuse_count', { ascending: false })
@@ -85,6 +86,23 @@ export function CanvasDesignStudio() {
   // O atalho Ctrl+S do editor captura o callback da montagem; a ref garante que salve o estado atual.
   const saveRef = useRef<() => void>(() => {});
 
+  // Prévia pequena do desenho atual; a galeria mostra esta imagem.
+  const makePreview = async (editor: Editor): Promise<string | null> => {
+    const ids = [...editor.getCurrentPageShapeIds()];
+    if (ids.length === 0) return null;
+    try {
+      const { blob } = await editor.toImage(ids, { format: 'png', background: true, scale: 0.4 });
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return null;
+    }
+  };
+
   const handleSave = async () => {
     const editor = editorRef.current;
     if (!editor || saving) return;
@@ -99,9 +117,11 @@ export function CanvasDesignStudio() {
       return;
     }
 
+    const previewData = await makePreview(editor);
     const payload = {
       name: name.trim() || 'Sem título',
       snapshot,
+      preview_data: previewData && previewData.length <= 400_000 ? previewData : null,
       updated_at: new Date().toISOString(),
     };
 
@@ -360,13 +380,18 @@ export function CanvasDesignStudio() {
             ) : (
               <ul className="mt-3 space-y-2">
                 {gallery.map((item) => (
-                  <li key={item.id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-700/60 bg-slate-900/60 p-3">
-                    <div className="min-w-0">
+                  <li key={item.id} className="flex items-center gap-3 rounded-lg border border-slate-700/60 bg-slate-900/60 p-3">
+                    {item.preview_data ? (
+                      <img src={item.preview_data} alt="" className="h-12 w-12 shrink-0 rounded object-cover bg-white" />
+                    ) : (
+                      <div className="h-12 w-12 shrink-0 rounded bg-slate-800" aria-hidden="true" />
+                    )}
+                    <div className="min-w-0 flex-1">
                       <p className="truncate text-sm text-white">{item.name}</p>
                       <p className="text-[11px] text-slate-400">{item.reuse_count} reuso(s)</p>
                     </div>
                     <button type="button" className={itemButton} disabled={busyId === item.id} onClick={() => useGalleryDesign(item.id)}>
-                      Usar
+                      Usar como modelo
                     </button>
                   </li>
                 ))}

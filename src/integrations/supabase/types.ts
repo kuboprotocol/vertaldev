@@ -3272,6 +3272,7 @@ export type Database = {
           id: string
           is_published: boolean
           name: string
+          preview_data: string | null
           reuse_count: number
           snapshot: Json
           updated_at: string
@@ -3282,6 +3283,7 @@ export type Database = {
           id?: string
           is_published?: boolean
           name?: string
+          preview_data?: string | null
           reuse_count?: number
           snapshot: Json
           updated_at?: string
@@ -3292,6 +3294,7 @@ export type Database = {
           id?: string
           is_published?: boolean
           name?: string
+          preview_data?: string | null
           reuse_count?: number
           snapshot?: Json
           updated_at?: string

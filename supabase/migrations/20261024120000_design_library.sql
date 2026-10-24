@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS public.design_library (
   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name text NOT NULL DEFAULT 'Sem título' CHECK (char_length(name) BETWEEN 1 AND 120),
   snapshot jsonb NOT NULL,
+  -- Prévia pequena (PNG em data URL) para a galeria; opcional.
+  preview_data text CHECK (preview_data IS NULL OR char_length(preview_data) <= 400000),
   is_published boolean NOT NULL DEFAULT false,
   reuse_count integer NOT NULL DEFAULT 0 CHECK (reuse_count >= 0),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -44,7 +46,7 @@ CREATE POLICY "design_reuses_own_read" ON public.design_reuses
 
 -- reuse_count só muda pela função de reuso, nunca direto pelo cliente.
 REVOKE UPDATE ON public.design_library FROM anon, authenticated;
-GRANT UPDATE (name, snapshot, is_published, updated_at) ON public.design_library TO authenticated;
+GRANT UPDATE (name, snapshot, preview_data, is_published, updated_at) ON public.design_library TO authenticated;
 REVOKE ALL ON public.design_reuses FROM anon;
 
 -- Quantos créditos por dia guardar N designs custam.

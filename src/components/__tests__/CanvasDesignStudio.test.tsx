@@ -62,7 +62,7 @@ describe('CanvasDesignStudio', () => {
     });
     render(<CanvasDesignStudio />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Usar' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Usar como modelo' }));
 
     await waitFor(() => expect(rpc).toHaveBeenCalledWith('reuse_published_design', { _design_id: 'g1' }));
   });
