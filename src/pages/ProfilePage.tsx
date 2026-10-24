@@ -286,7 +286,7 @@ export default function ProfilePage() {
                 <Gift className="h-4 w-4 text-primary" />
                 <h3 className="font-semibold text-foreground font-display">Programa de indicações e afiliados</h3>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"
                   size="sm"
@@ -334,7 +334,7 @@ export default function ProfilePage() {
             {referralCode && (
               <div className="space-y-2">
                 <Label className="text-muted-foreground text-sm">Seu link de indicação</Label>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Input
                     value={referralLink(referralCode)}
                     readOnly

@@ -201,14 +201,14 @@ export default function GameMetaversePage() {
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border/40 backdrop-blur-md bg-background/60 sticky top-0 z-20">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <Link to="/game"><Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" /> Game Hub</Button></Link>
             <div className="flex items-center gap-2">
               <Globe className="w-5 h-5 text-primary" />
-              <h1 className="text-xl font-bold font-display tracking-wider">VERTAL <span className="neon-text">METAVERSE</span></h1>
+              <h1 className="text-base sm:text-xl font-bold font-display tracking-wider">VERTAL <span className="neon-text">METAVERSE</span></h1>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="nav-carousel flex-1">
             <Badge variant={connected ? 'default' : 'outline'} className="gap-1">
               <Wifi className="w-3 h-3" /> {connected ? 'LIVE' : 'CONNECTING'}
             </Badge>

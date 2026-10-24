@@ -132,7 +132,7 @@ export default function ConnectorSlackPage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" className="border-[#C9941A]/40 text-[#C9941A]">Bot OAuth</Badge>
             <Button size="sm" variant="outline" onClick={() => { loadChannels(); loadUsers(); if (selected) loadMessages(selected) }}>
               <RefreshCw className="w-4 h-4 mr-1" /> Sync

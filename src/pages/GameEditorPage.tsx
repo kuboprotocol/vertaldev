@@ -237,19 +237,19 @@ export default function GameEditorPage() {
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border/40 backdrop-blur-md bg-background/60 sticky top-0 z-20">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <Link to="/game">
               <Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" /> Game</Button>
             </Link>
             <div className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-primary" />
-              <h1 className="text-xl font-bold font-display tracking-wider">
+              <h1 className="text-base sm:text-xl font-bold font-display tracking-wider">
                 VERTAL <span className="neon-text">VISUAL EDITOR</span>
               </h1>
             </div>
             <Badge variant="outline" className="neon-ring">BETA</Badge>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="nav-carousel flex-1">
             <Input
               value={sceneName}
               onChange={e => setSceneName(e.target.value)}

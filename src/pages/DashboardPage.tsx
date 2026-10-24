@@ -107,38 +107,36 @@ const DashboardPage = forwardRef<HTMLDivElement, any>((props, ref) => {
           <div className="flex items-center gap-3 shrink-0">
             <AnimatedLogo size={17} />
           </div>
-          {/* Mobile: horizontal swipe carousel (scrolls both ways). Desktop: right-aligned row. */}
-          <div className="flex-1 min-w-0 overflow-x-auto overscroll-x-contain snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div className="flex w-max items-center gap-2 ml-auto [&>*]:shrink-0 [&>*]:snap-start">
-              <Button variant="ghost" size="sm" onClick={() => navigate('/docs')} className="rounded-xl gap-2 text-muted-foreground hover:text-foreground">
-                <BookOpen className="h-4 w-4" /> Docs
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => navigate('/pwa/telemetry')} className="rounded-xl gap-2 text-muted-foreground hover:text-foreground">
-                <BarChart3 className="h-4 w-4" /> PWA Audit
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => navigate('/emails')} className="rounded-xl gap-2 text-muted-foreground hover:text-foreground">
-                <Mail className="h-4 w-4" /> Emails
-              </Button>
+          {/* Horizontal swipe carousel: scrolls both ways when the row does not fit. */}
+          <div className="nav-carousel flex-1">
+            <Button variant="ghost" size="sm" onClick={() => navigate('/docs')} className="rounded-xl gap-2 text-muted-foreground hover:text-foreground">
+              <BookOpen className="h-4 w-4" /> Docs
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/pwa/telemetry')} className="rounded-xl gap-2 text-muted-foreground hover:text-foreground">
+              <BarChart3 className="h-4 w-4" /> PWA Audit
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/emails')} className="rounded-xl gap-2 text-muted-foreground hover:text-foreground">
+              <Mail className="h-4 w-4" /> Emails
+            </Button>
 
-              <Button variant="outline" size="sm" onClick={openCreativeEconomy} className="rounded-xl gap-2 border-primary/30 text-primary hover:bg-primary/10">
-                <Palette className="h-4 w-4" /> Creative Economy
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => navigate('/vibe-agents')} className="rounded-xl gap-2 border-primary/30 text-primary hover:bg-primary/10">
-                <Bot className="h-4 w-4" /> Vibe Agents
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => navigate('/shortlinks')} className="rounded-xl gap-2 border-primary/20 text-primary hover:bg-primary/10">
-                <Gift className="h-4 w-4" /> Earn Credits
-              </Button>
-              <Button variant="hero" size="sm" onClick={() => navigate('/builder')} className="rounded-xl gap-2">
-                <Plus className="h-4 w-4" /> New Project
-              </Button>
-              <Button variant="ghost" size="icon" onClick={() => navigate('/profile')} title="Perfil" className="rounded-xl text-muted-foreground hover:text-foreground">
-                <UserCircle className="h-5 w-5" />
-              </Button>
-              <Button variant="ghost" size="icon" onClick={handleSignOut} title="Sign Out" className="rounded-xl text-muted-foreground hover:text-foreground">
-                <LogOut className="h-5 w-5" />
-              </Button>
-            </div>
+            <Button variant="outline" size="sm" onClick={openCreativeEconomy} className="rounded-xl gap-2 border-primary/30 text-primary hover:bg-primary/10">
+              <Palette className="h-4 w-4" /> Creative Economy
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate('/vibe-agents')} className="rounded-xl gap-2 border-primary/30 text-primary hover:bg-primary/10">
+              <Bot className="h-4 w-4" /> Vibe Agents
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate('/shortlinks')} className="rounded-xl gap-2 border-primary/20 text-primary hover:bg-primary/10">
+              <Gift className="h-4 w-4" /> Earn Credits
+            </Button>
+            <Button variant="hero" size="sm" onClick={() => navigate('/builder')} className="rounded-xl gap-2">
+              <Plus className="h-4 w-4" /> New Project
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => navigate('/profile')} title="Perfil" className="rounded-xl text-muted-foreground hover:text-foreground">
+              <UserCircle className="h-5 w-5" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={handleSignOut} title="Sign Out" className="rounded-xl text-muted-foreground hover:text-foreground">
+              <LogOut className="h-5 w-5" />
+            </Button>
           </div>
         </div>
       </header>

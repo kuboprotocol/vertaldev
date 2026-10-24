@@ -3,6 +3,11 @@
 @tailwind utilities;
 
 @layer base {
+  /* Never let a page scroll sideways on phones; wide content is contained, not the whole page. */
+  body {
+    overflow-x: clip;
+  }
+
   :root {
     --background: 225 8% 10%;
     --foreground: 0 0% 95%;
@@ -191,5 +196,39 @@
       hsl(var(--neon-blue) / 0.55),
       hsl(43 80% 55% / 0.45),
       transparent);
+  }
+}
+
+@layer utilities {
+  /*
+   * Header action row as a swipe carousel. Keeps the row on one line that
+   * scrolls sideways (both directions) instead of overflowing the viewport.
+   * The first child takes the free space, so the row stays right-aligned
+   * when everything fits and starts at the left edge when it scrolls.
+   */
+  .nav-carousel {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 0.5rem;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .nav-carousel::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-carousel > * {
+    flex-shrink: 0;
+    scroll-snap-align: start;
+  }
+
+  .nav-carousel > :first-child {
+    margin-left: auto;
   }
 }
