@@ -28,7 +28,7 @@ export default function CreditsPromoSection() {
           <h2 className="text-4xl md:text-5xl font-display font-bold mb-6">
             Comece com
             <span className="block bg-gradient-to-r from-primary via-primary/80 to-primary/60 bg-clip-text text-transparent">
-              5 Créditos por Dia
+              5 Créditos Grátis
             </span>
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
@@ -50,7 +50,7 @@ export default function CreditsPromoSection() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h3 className="text-2xl font-bold font-display">5 Créditos</h3>
-                  <p className="text-sm text-muted-foreground">Por dia, a cada 24 horas</p>
+                  <p className="text-sm text-muted-foreground">Ao se cadastrar</p>
                 </div>
                 <div className="p-4 bg-primary/10 rounded-xl">
                   <Gift className="h-6 w-6 text-primary" />
