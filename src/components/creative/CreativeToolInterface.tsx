@@ -30,6 +30,20 @@ import { AvatarProgressSteps, type AvatarStepState, type AvatarStepKey } from ".
 import { cn } from "@/lib/utils";
 import { PUTER_MODELS, creativeInvoke } from "@/lib/puterAI";
 import { AVATAR_LIMITS, quoteAvatar } from "@/config/avatarPricing";
+import { functionErrorCode } from "@/lib/functionError";
+
+// supabase.functions.invoke hides the body of non-2xx responses; these map the codes creative-video returns.
+function avatarErrorMessage(code: string | null): string {
+  if (code?.startsWith("text_max_")) return `O texto passou de ${AVATAR_LIMITS.maxTextChars} caracteres.`;
+  const messages: Record<string, string> = {
+    avatar_ai_not_configured: "O serviço de avatar ainda não está configurado no servidor.",
+    voice_generation_failed: "Não foi possível gerar a voz. Tente de novo.",
+    avatar_submit_failed: "Não foi possível enviar o vídeo para a geração.",
+    invalid_image_url: "A foto não pôde ser usada. Envie a imagem de novo.",
+    unauthorized: "Sua sessão expirou. Entre novamente.",
+  };
+  return code && messages[code] ? messages[code] : `Não foi possível gerar o avatar${code ? ` (${code})` : ""}.`;
+}
 import { EBOOK_DEFAULT_CHAPTERS, EBOOK_MAX_CHAPTERS, EBOOK_MIN_CHAPTERS, ebookCost } from "@/config/ebookPricing";
 
 import type { ToolKey } from "./toolRequests";
@@ -379,7 +393,7 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
           body: { mode: "avatar", prompt, voice: metadata.voice, image_url: avatarImageUrl ?? undefined },
         });
 
-        if (error) throw error;
+        if (error) throw new Error(avatarErrorMessage(await functionErrorCode(error)));
 
         const historyId = crypto.randomUUID();
         const processing = data?.status === "processing";
