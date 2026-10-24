@@ -60,9 +60,12 @@ export default defineConfig(({ command, mode }) => {
           // páginas de SEO traduzidas (/es, /ja/alternativas/...), que são
           // HTML estático servido pelo Worker. Sem isso, quem já tem o
           // service worker instalado via o 404 do React nesses endereços.
+          // /photocraft/ é o editor WebAssembly (public/photocraft), não uma rota do app:
+          // sem isso, o iframe do Design Premium recebe o index.html do React e o app carrega dentro dele.
           navigateFallbackDenylist: [
             /\/[^/]+\.[a-z0-9]+$/i,
             new RegExp(`^/(${LOCALE_CODES.join('|')})(/|$)`),
+            /^\/photocraft(\/|$)/,
           ],
           runtimeCaching: [
             {
