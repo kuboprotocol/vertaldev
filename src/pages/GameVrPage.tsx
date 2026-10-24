@@ -75,13 +75,13 @@ export default function GameVrPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-border bg-card/60 backdrop-blur">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <Link to="/game">
             <Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" /> Game Hub</Button>
           </Link>
           <h1 className="text-lg sm:text-xl font-bold tracking-tight">Vertal VR · Ultra Realistic</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="nav-carousel flex-1">
           <div className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground mr-2">
             <Gauge className="w-3 h-3" /> {stats.fps} fps · {stats.drawCalls} dc · {stats.triangles.toLocaleString()} tris
             {stats.xrActive && <span className="ml-2 text-primary font-semibold">XR LIVE</span>}

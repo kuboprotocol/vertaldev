@@ -274,14 +274,14 @@ export default function GameRpgPage() {
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border/40 backdrop-blur-md bg-background/60 sticky top-0 z-20">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <Link to="/game"><Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" /> Game Hub</Button></Link>
             <div className="flex items-center gap-2">
               <Swords className="w-5 h-5 text-primary" />
-              <h1 className="text-xl font-bold font-display tracking-wider">VERTAL <span className="neon-text">RPG</span></h1>
+              <h1 className="text-base sm:text-xl font-bold font-display tracking-wider">VERTAL <span className="neon-text">RPG</span></h1>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="nav-carousel flex-1">
             <Badge className="neon-ring">LV {hero.stats.level}</Badge>
             <Badge variant="outline">GOLD {player.gold}</Badge>
             <Button size="sm" variant="outline" onClick={() => setShowInv(true)}><Package className="w-4 h-4" /></Button>
@@ -294,7 +294,7 @@ export default function GameRpgPage() {
         <Card className="glass-premium p-4 flex flex-col items-center justify-center gap-3">
           <canvas
             ref={canvasRef}
-            className="rounded-lg shadow-2xl"
+            className="max-w-full h-auto rounded-lg shadow-2xl"
             style={{ imageRendering: 'pixelated', background: '#000' }}
             tabIndex={0}
           />

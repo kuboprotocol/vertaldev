@@ -103,11 +103,12 @@ const DashboardPage = forwardRef<HTMLDivElement, any>((props, ref) => {
       <div className="absolute inset-0 dot-pattern opacity-20 pointer-events-none" />
 
       <header className="sticky top-0 z-50 glass glass-border">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="max-w-6xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 shrink-0">
             <AnimatedLogo size={17} />
           </div>
-          <div className="flex items-center gap-2">
+          {/* Horizontal swipe carousel: scrolls both ways when the row does not fit. */}
+          <div className="nav-carousel flex-1">
             <Button variant="ghost" size="sm" onClick={() => navigate('/docs')} className="rounded-xl gap-2 text-muted-foreground hover:text-foreground">
               <BookOpen className="h-4 w-4" /> Docs
             </Button>
@@ -140,7 +141,7 @@ const DashboardPage = forwardRef<HTMLDivElement, any>((props, ref) => {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-10 relative z-10">
+      <main className="max-w-6xl mx-auto px-4 md:px-6 py-10 relative z-10">
         {/* Stats Cards */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
           <div className="glass glass-border rounded-2xl p-4">

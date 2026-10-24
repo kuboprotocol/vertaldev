@@ -185,7 +185,7 @@ export default function ConnectorRenderPage() {
               <p className="text-sm text-muted-foreground">Multi-tenant • Auto-healing • Logs • Rollback • E2E hooks</p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={loadAll}><RefreshCw className="w-4 h-4 mr-1" />Atualizar</Button>
             <Button variant="outline" size="sm" onClick={runHealNow}><Heart className="w-4 h-4 mr-1" />Rodar auto-heal</Button>
             <Button size="sm" onClick={() => setShowAdd(true)}><Plus className="w-4 h-4 mr-1" />Nova conexão</Button>

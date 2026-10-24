@@ -106,9 +106,9 @@ export default function BuilderToolbar({
   ]
 
   return (
-    <header className="flex items-center justify-between px-3 py-1.5 glass glass-border z-20 h-12">
+    <header className="flex items-center justify-between px-3 py-1.5 glass glass-border z-20 h-12 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {/* Left: Navigation + Logo */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')} className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-lg">
           <ArrowLeft className="h-4 w-4" />
         </Button>
@@ -207,7 +207,7 @@ export default function BuilderToolbar({
       </div>
 
       {/* Right: Status + Edits + Share + Publish */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         {/* Status indicator */}
         <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-medium border ${
           isPublished

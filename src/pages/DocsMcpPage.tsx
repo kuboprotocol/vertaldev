@@ -89,7 +89,7 @@ print(data)`,
           </Button>
           <div className="flex items-center gap-2">
             <AnimatedLogo size={15} />
-            <h1 className="text-xl font-bold text-foreground font-display">MCP API Documentation</h1>
+            <h1 className="text-lg sm:text-xl font-bold text-foreground font-display">MCP API Documentation</h1>
           </div>
         </div>
       </header>
@@ -130,7 +130,7 @@ print(data)`,
                     No Claude, ChatGPT, Cursor ou outro cliente compatível, adicione a URL do servidor. No Claude Code:
                   </p>
                   <div className="rounded-lg bg-muted p-4">
-                    <code className="text-xs font-mono text-muted-foreground">
+                    <code className="text-xs font-mono text-muted-foreground break-all">
                       claude mcp add --transport http vertal-dev {VERTAL_DEV_MCP_URL}
                     </code>
                   </div>
@@ -141,7 +141,7 @@ print(data)`,
                 <div className="space-y-2">
                   <h4 className="font-semibold text-foreground">2. Ou chame por HTTP com o token da sua sessão</h4>
                   <div className="rounded-lg bg-muted p-4">
-                    <code className="text-xs font-mono text-muted-foreground">{codeBlocks.curl}</code>
+                    <code className="text-xs font-mono text-muted-foreground break-all">{codeBlocks.curl}</code>
                   </div>
                 </div>
                 <div className="space-y-2">

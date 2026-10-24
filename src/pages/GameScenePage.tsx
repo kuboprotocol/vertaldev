@@ -242,7 +242,7 @@ export const GameScenePage: React.FC = () => {
             <label className="text-gray-300 text-sm font-medium block mb-2">
               Load Scene from URL
             </label>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <input
                 type="text"
                 value={sceneUrl}

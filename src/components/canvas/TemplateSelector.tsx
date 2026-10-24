@@ -70,13 +70,13 @@ export default function TemplateSelector({ onSelect, onClose }: TemplateSelector
         transition={{ delay: 0.1, type: 'spring', stiffness: 300, damping: 25 }}
         className="w-full max-w-3xl p-6"
       >
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <h2 className="text-2xl font-bold text-foreground">Escolha um template</h2>
             <p className="text-muted-foreground mt-1">Comece com um template ou crie do zero</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="relative w-48">
+            <div className="relative w-32 sm:w-48">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar..."
@@ -92,7 +92,7 @@ export default function TemplateSelector({ onSelect, onClose }: TemplateSelector
         </div>
 
         {/* Category tabs */}
-        <div className="flex gap-1 mb-4 bg-secondary/30 p-1 rounded-xl w-fit">
+        <div className="flex gap-1 mb-4 bg-secondary/30 p-1 rounded-xl w-fit max-w-full overflow-x-auto">
           {categories.map(cat => (
             <button
               key={cat.id}

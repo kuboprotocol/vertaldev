@@ -901,7 +901,7 @@ export default function CreativePage() {
             <Sparkles className="h-5 w-5 text-primary" />
             Economia Criativa Vertal
           </h1>
-          <div className="flex items-center gap-2">
+          <div className="nav-carousel flex-1">
             <Button variant="ghost" size="sm" onClick={() => navigate("/creative/investigation")}>
               <AlertTriangle className="h-4 w-4 mr-1" /> Investigação
             </Button>

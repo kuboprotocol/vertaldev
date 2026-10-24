@@ -27,7 +27,7 @@ function TrademarkNotice() {
 function StartCta() {
   const navigate = useNavigate()
   return (
-    <Button size="lg" className="rounded-xl" onClick={() => navigate('/auth')}>
+    <Button size="lg" className="rounded-xl h-auto whitespace-normal py-3 text-center" onClick={() => navigate('/auth')}>
       Começar grátis no {APP_NAME} <ArrowRight className="ml-2 h-4 w-4" />
     </Button>
   )
