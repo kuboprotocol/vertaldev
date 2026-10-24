@@ -348,6 +348,7 @@ export function CanvasDesignStudio() {
               Até 10 designs: 1 crédito/dia. Acima de 10: 2. Acima de 100: 3. Acima de 1000: 4, e assim por diante.
               Cada reuso de um design publicado dá {DESIGN_REUSE_REWARD_CREDITS} crédito ao autor.
               Indicados com primeiro pagamento ganham {DESIGN_REFERRAL_DAILY_CREDITS} créditos por dia.
+              O armazenamento é descontado do seu saldo; sem saldo, o valor fica como saldo devedor.
             </p>
           </section>
 

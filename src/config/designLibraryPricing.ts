@@ -11,7 +11,8 @@ export const DESIGN_LIBRARY_FREE_SLOTS = 10;
 
 export const DESIGN_REUSE_REWARD_CREDITS = 1;
 
-// Indicados que já fizeram o primeiro pagamento ganham este crédito por dia (para cobrir o armazenamento).
+// Indicados que já fizeram o primeiro pagamento ganham este crédito por dia. O armazenamento é descontado
+// desse saldo; o que faltar fica como saldo devedor (supabase/migrations/20261024140000_design_storage_debt.sql).
 export const DESIGN_REFERRAL_DAILY_CREDITS = 5;
 
 export function designStorageCreditsPerDay(savedCount: number): number {
