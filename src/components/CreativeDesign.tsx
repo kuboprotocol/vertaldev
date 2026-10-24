@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Check, Download, Loader2, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ManualDesignEditor } from './creative/ManualDesignEditor';
-import { AdobeEcosystem } from './creative/AdobeEcosystem';
+import { FreeCreativeTools } from './creative/FreeCreativeTools';
 import { PhotocraftEditor } from './creative/PhotocraftEditor';
 import {
   DESIGN_FORMATS,
@@ -34,16 +34,16 @@ interface DesignResponse {
 
 const MIN_PROMPT_LENGTH = 3;
 
-type DesignMode = 'ai' | 'manual' | 'photocraft' | 'adobe';
+type DesignMode = 'ai' | 'manual' | 'photocraft' | 'free';
 
 const DESIGN_MODES: Array<{ key: DesignMode; label: string }> = [
   { key: 'ai', label: 'Com IA' },
   { key: 'manual', label: 'Editor manual' },
   { key: 'photocraft', label: 'PhotoCraft' },
-  { key: 'adobe', label: 'Ecossistema Adobe' },
+  { key: 'free', label: 'Ferramentas grátis' },
 ];
 
-/** Painel Design Premium: IA, editor manual e ecossistema Adobe. Os três ficam montados para não perder o trabalho ao trocar de aba. */
+/** Painel Design Premium: IA, editor manual, PhotoCraft e ferramentas gratuitas. Os três ficam montados para não perder o trabalho ao trocar de aba. */
 export function CreativeDesign({ creditsAvailable }: CreativeDesignProps) {
   const [mode, setMode] = useState<DesignMode>('ai');
 
@@ -79,8 +79,8 @@ export function CreativeDesign({ creditsAvailable }: CreativeDesignProps) {
       <div hidden={mode !== 'photocraft'} className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <PhotocraftEditor />
       </div>
-      <div hidden={mode !== 'adobe'} className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <AdobeEcosystem />
+      <div hidden={mode !== 'free'} className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <FreeCreativeTools onOpenMode={setMode} />
       </div>
     </div>
   );
