@@ -28,7 +28,7 @@ export default function CreditsPromoSection() {
           <h2 className="text-4xl md:text-5xl font-display font-bold mb-6">
             Comece com
             <span className="block bg-gradient-to-r from-primary via-primary/80 to-primary/60 bg-clip-text text-transparent">
-              50 Créditos Grátis
+              5 Créditos por Dia
             </span>
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
@@ -49,8 +49,8 @@ export default function CreditsPromoSection() {
             <div className="relative bg-card/50 backdrop-blur border border-primary/20 rounded-2xl p-8 hover:border-primary/40 transition-all">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-2xl font-bold font-display">50 Créditos</h3>
-                  <p className="text-sm text-muted-foreground">Ao se cadastrar</p>
+                  <h3 className="text-2xl font-bold font-display">5 Créditos</h3>
+                  <p className="text-sm text-muted-foreground">Por dia, a cada 24 horas</p>
                 </div>
                 <div className="p-4 bg-primary/10 rounded-xl">
                   <Gift className="h-6 w-6 text-primary" />
@@ -110,7 +110,7 @@ export default function CreditsPromoSection() {
             <div className="relative bg-card/50 backdrop-blur border border-primary/20 rounded-2xl p-8 hover:border-primary/40 transition-all">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-2xl font-bold font-display">5% de Bônus</h3>
+                  <h3 className="text-2xl font-bold font-display">50 Créditos</h3>
                   <p className="text-sm text-muted-foreground">Ao indicar amigos</p>
                 </div>
                 <div className="p-4 bg-primary/10 rounded-xl">
@@ -124,28 +124,28 @@ export default function CreditsPromoSection() {
                     <div className="h-2 w-2 rounded-full bg-primary" />
                   </div>
                   <div>
+                    <p className="font-semibold text-sm">Ganhe 50 créditos</p>
+                    <p className="text-xs text-muted-foreground">Por cada amigo que se cadastrar pelo seu link</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
+                    <div className="h-2 w-2 rounded-full bg-primary" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm">Seu amigo ganha 5 créditos por dia</p>
+                    <p className="text-xs text-muted-foreground">Por login, a cada 24 horas</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
+                    <div className="h-2 w-2 rounded-full bg-primary" />
+                  </div>
+                  <div>
                     <p className="font-semibold text-sm">Ganhe 5% vitalício</p>
-                    <p className="text-xs text-muted-foreground">De cada amigo que indicar e pagar</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
-                    <div className="h-2 w-2 rounded-full bg-primary" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-sm">Sem limite de ganhos</p>
-                    <p className="text-xs text-muted-foreground">Quanto mais indica, mais ganha</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
-                    <div className="h-2 w-2 rounded-full bg-primary" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-sm">Pague em conta ou créditos</p>
-                    <p className="text-xs text-muted-foreground">Use seus ganhos ou saque via PIX</p>
+                    <p className="text-xs text-muted-foreground">De cada amigo que pagar. Use em conta ou créditos, ou saque via PIX</p>
                   </div>
                 </div>
               </div>

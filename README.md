@@ -288,7 +288,7 @@ erDiagram
 flowchart LR
     A[Ad Reward<br/>0.5 cred · max 10/dia] --> LED
     S[Shortlink Click<br/>+wait_seconds]     --> LED
-    R[Referral<br/>+100 cred]                --> LED
+    R[Referral<br/>+50 cred]                 --> LED
     ST[Streak Bonus diário]                  --> LED
     SUB[Subscription / Stripe<br/>edits_limit] --> LED
     BUILD[Build / AI Gen<br/>consumo -] --> LED
@@ -2457,7 +2457,7 @@ Leia mais: [Setting up a custom domain](https://docs.lovable.dev/features/custom
 - **Reward System** — 0.5 créditos/vídeo (max 10/dia), timer de 15s
 - **Gamification** — Daily streak bonuses e badges permanentes
 - **Leaderboard** — Top 50 global por longest_streak
-- **Referral System** — 100 créditos/referral, código de 8 caracteres
+- **Referral System** — 50 créditos/referral, código de 8 caracteres
 - **Connectors Hub** — GitHub OAuth real, IPFS deploy
 - **Email Infra** — notify.kubovibe.dev, React Email, pg_net em DB triggers
 - **Native Mobile** — Capacitor hybrid (dev.kubovibe.app)

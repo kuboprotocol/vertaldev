@@ -171,7 +171,7 @@ export async function handleRequest(req: Request): Promise<Response> {
         avatar_url: ghUser?.avatar_url || null,
         provider: 'github',
         github_username: ghUser?.login || null,
-        // Lido pelo trigger handle_new_user: cria a indicação (+100 créditos
+        // Lido pelo trigger handle_new_user: cria a indicação (+50 créditos
         // e 5% de afiliado). Só vale para contas novas.
         ...(typeof state.f === 'string' && /^[a-z0-9]{4,32}$/i.test(state.f) ? { referral_code: state.f } : {}),
       },

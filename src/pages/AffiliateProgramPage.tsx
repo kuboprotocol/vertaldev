@@ -187,7 +187,7 @@ export default function AffiliateProgramPage() {
             <div className="space-y-2 text-sm text-muted-foreground">
               <div className="flex items-start gap-3">
                 <Badge className="mt-1">Referral</Badge>
-                <p>Indique amigos com seu link pessoal: +50 créditos para você + 5% de tudo que eles pagarem</p>
+                <p>Indique amigos com seu link pessoal: +50 créditos para você por cada cadastro + 5% de tudo que eles pagarem. Quem entra pelo seu link ganha 5 créditos por dia, a cada 24 horas.</p>
               </div>
               <div className="flex items-start gap-3">
                 <Badge className="mt-1">Embed</Badge>
