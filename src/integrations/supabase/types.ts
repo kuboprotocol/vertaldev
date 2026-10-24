@@ -3266,6 +3266,73 @@ export type Database = {
         }
         Relationships: []
       }
+      design_library: {
+        Row: {
+          created_at: string
+          id: string
+          is_published: boolean
+          name: string
+          reuse_count: number
+          snapshot: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          name?: string
+          reuse_count?: number
+          snapshot: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          name?: string
+          reuse_count?: number
+          snapshot?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_library_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      design_reuses: {
+        Row: {
+          created_at: string
+          design_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          design_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          design_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_reuses_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "design_library"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       api_credentials_safe: {
@@ -3591,6 +3658,18 @@ export type Database = {
         Returns: Json
       }
       get_my_referral_code: { Args: never; Returns: string }
+      charge_design_storage_daily: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      design_storage_credits_per_day: {
+        Args: { _count: number }
+        Returns: number
+      }
+      reuse_published_design: {
+        Args: { _design_id: string }
+        Returns: Json
+      }
       grant_credits: {
         Args: { p_amount: number; p_user_id: string }
         Returns: undefined
