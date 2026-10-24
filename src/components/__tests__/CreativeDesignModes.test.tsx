@@ -1,4 +1,4 @@
-// Painel Design Premium: troca entre IA, editor manual e ecossistema Adobe.
+// Painel Design Premium: troca entre IA, editor manual, PhotoCraft e ferramentas gratuitas.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
@@ -6,8 +6,6 @@ const invoke = vi.hoisted(() => vi.fn());
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { functions: { invoke } } }));
 
 import { CreativeDesign } from '../CreativeDesign';
-
-const ADOBE_APP_NAMES = ['Adobe Express', 'Photoshop', 'Illustrator', 'Firefly', 'Premiere Pro', 'Acrobat'];
 
 const modeButton = (label: string) => screen.getByRole('button', { name: label });
 
@@ -41,7 +39,7 @@ describe('CreativeDesign modes', () => {
     render(<CreativeDesign creditsAvailable={100} />);
     expect(modeButton('Com IA')).toHaveAttribute('aria-pressed', 'true');
     expect(modeButton('Editor manual')).toHaveAttribute('aria-pressed', 'false');
-    expect(modeButton('Ecossistema Adobe')).toHaveAttribute('aria-pressed', 'false');
+    expect(modeButton('Ferramentas grátis')).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByRole('button', { name: /Criar design/ })).toBeInTheDocument();
   });
 
@@ -77,24 +75,28 @@ describe('CreativeDesign modes', () => {
     expect(frame).toHaveAttribute('src', '/photocraft/');
   });
 
-  it('lists the Adobe apps with links that open in a new tab', () => {
+  it('lists the free tools and opens the in-app editors from the hub', () => {
     render(<CreativeDesign creditsAvailable={100} />);
-    fireEvent.click(modeButton('Ecossistema Adobe'));
+    fireEvent.click(modeButton('Ferramentas grátis'));
 
-    for (const name of ADOBE_APP_NAMES) {
-      const link = screen.getByRole('link', { name: `Abrir ${name}` });
-      expect(link).toHaveAttribute('href', expect.stringMatching(/^https:\/\//));
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir PhotoCraft' }));
+    expect(modeButton('PhotoCraft')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTitle('PhotoCraft editor de imagens')).toBeInTheDocument();
+  });
+
+  it('links the open-source tools to GitHub in a new tab', () => {
+    render(<CreativeDesign creditsAvailable={100} />);
+    fireEvent.click(modeButton('Ferramentas grátis'));
+
+    for (const name of ['VectorCraft', 'FilmCraft', 'WordCraft', 'GridCraft', 'DeckCraft']) {
+      expect(screen.getByText(name)).toBeInTheDocument();
+    }
+    const links = screen.getAllByRole('link', { name: 'Ver no GitHub' });
+    expect(links).toHaveLength(5);
+    for (const link of links) {
+      expect(link).toHaveAttribute('href', expect.stringMatching(/^https:\/\/github\.com\/storytold\//));
       expect(link).toHaveAttribute('target', '_blank');
       expect(link).toHaveAttribute('rel', 'noopener noreferrer');
     }
-  });
-
-  it('filters the Adobe apps by category', () => {
-    render(<CreativeDesign creditsAvailable={100} />);
-    fireEvent.click(modeButton('Ecossistema Adobe'));
-    fireEvent.click(screen.getByRole('button', { name: 'Vídeo e motion' }));
-
-    expect(screen.getByRole('link', { name: 'Abrir Premiere Pro' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Abrir Photoshop' })).not.toBeInTheDocument();
   });
 });
