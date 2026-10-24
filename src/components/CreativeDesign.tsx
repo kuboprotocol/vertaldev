@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Check, Download, Loader2, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { ManualDesignEditor } from './creative/ManualDesignEditor';
+import { AdobeEcosystem } from './creative/AdobeEcosystem';
 import {
   DESIGN_FORMATS,
   DESIGN_FORMATS_INFO,
@@ -31,7 +33,55 @@ interface DesignResponse {
 
 const MIN_PROMPT_LENGTH = 3;
 
+type DesignMode = 'ai' | 'manual' | 'adobe';
+
+const DESIGN_MODES: Array<{ key: DesignMode; label: string }> = [
+  { key: 'ai', label: 'Com IA' },
+  { key: 'manual', label: 'Editor manual' },
+  { key: 'adobe', label: 'Ecossistema Adobe' },
+];
+
+/** Painel Design Premium: IA, editor manual e ecossistema Adobe. Os três ficam montados para não perder o trabalho ao trocar de aba. */
 export function CreativeDesign({ creditsAvailable }: CreativeDesignProps) {
+  const [mode, setMode] = useState<DesignMode>('ai');
+
+  return (
+    <div>
+      <nav aria-label="Modo de criação" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 flex flex-wrap gap-2">
+        {DESIGN_MODES.map((item) => {
+          const selected = mode === item.key;
+          return (
+            <button
+              key={item.key}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => setMode(item.key)}
+              className={`px-4 py-2 rounded-lg border text-sm transition-all ${
+                selected
+                  ? 'border-amber-300/70 bg-gradient-to-r from-amber-400/15 to-rose-500/10 text-white'
+                  : 'border-slate-700 bg-slate-800/50 text-slate-300 hover:border-slate-500'
+              }`}
+            >
+              {item.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      <div hidden={mode !== 'ai'}>
+        <AiDesignStudio creditsAvailable={creditsAvailable} />
+      </div>
+      <div hidden={mode !== 'manual'} className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <ManualDesignEditor />
+      </div>
+      <div hidden={mode !== 'adobe'} className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <AdobeEcosystem />
+      </div>
+    </div>
+  );
+}
+
+function AiDesignStudio({ creditsAvailable }: CreativeDesignProps) {
   const [prompt, setPrompt] = useState('');
   const [tier, setTier] = useState<DesignTier>('simple');
   const [format, setFormat] = useState<DesignFormat>('post');
