@@ -5,6 +5,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Quem entrou por um link de indicação (plano free) recebe este valor por dia.
+const REFERRED_DAILY_CREDITS = 5;
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
@@ -46,16 +49,9 @@ Deno.serve(async (req: Request) => {
       .select("daily_credits, signup_credits")
       .eq("plan", plan)
       .maybeSingle();
-    const dailyCredits = Number(planConfig?.daily_credits ?? 0);
     const signupCredits = Number(planConfig?.signup_credits ?? 0);
 
-    if (plan === "free") {
-      if (sub?.signup_credits_granted) {
-        return new Response(
-          JSON.stringify({ success: true, credited: false, plan, message: "Signup credits already granted" }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
+    if (plan === "free" && !sub?.signup_credits_granted) {
       if (sub) {
         await supabase
           .from("subscriptions")
@@ -86,6 +82,22 @@ Deno.serve(async (req: Request) => {
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
+    }
+
+    let dailyCredits = Number(planConfig?.daily_credits ?? 0);
+    if (plan === "free") {
+      const { data: referral } = await supabase
+        .from("referrals")
+        .select("id")
+        .eq("referred_id", user.id)
+        .maybeSingle();
+      if (!referral) {
+        return new Response(
+          JSON.stringify({ success: true, credited: false, plan, message: "Signup credits already granted" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      dailyCredits = REFERRED_DAILY_CREDITS;
     }
 
     if (lastCreditDate === today) {
