@@ -580,7 +580,7 @@ testimonials and a waitlist form.`}</Pre>
         <UL>
           <li>Daily streak bonuses and gamification badges.</li>
           <li>Shortlinks — up to 10 per day, +0.5 credits each and +5 on the 10th (opt-in, every plan).</li>
-          <li>Referrals — 100 credits per successful invite.</li>
+          <li>Referrals — 50 credits per invite. The invited user earns 5 credits per day, every 24 hours on login.</li>
           <li>Public leaderboard rewards for top creators.</li>
         </UL>
         <H3>Anti-fraud</H3>

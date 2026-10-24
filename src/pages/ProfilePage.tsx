@@ -349,7 +349,7 @@ export default function ProfilePage() {
                     {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                   </Button>
                 </div>
-                <p className="text-[11px] text-muted-foreground">Quem se cadastrar pelo seu link: +50 créditos para você no primeiro pagamento dela e 5% de tudo que ela pagar (planos, renovações e créditos).</p>
+                <p className="text-[11px] text-muted-foreground">Quem se cadastrar pelo seu link: +50 créditos para você e 5% de tudo que a pessoa indicada pagar (planos, renovações e créditos). A pessoa indicada ganha 5 créditos por dia, a cada 24 horas.</p>
               </div>
             )}
           </motion.div>

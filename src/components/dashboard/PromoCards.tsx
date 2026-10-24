@@ -51,7 +51,7 @@ export function PromoCards() {
         <div className="flex-1 min-w-0">
           <h3 className="font-display font-bold text-foreground text-sm">Convide amigos</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            +100 créditos por indicação paga
+            +50 créditos por indicação
             {referralCount > 0 && (
               <span className="inline-flex items-center gap-1 ml-2 text-primary">
                 <Users className="h-3 w-3" /> {referralCount}
