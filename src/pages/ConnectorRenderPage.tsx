@@ -177,7 +177,7 @@ export default function ConnectorRenderPage() {
     <div className="min-h-screen bg-background text-foreground">
       <title>{`Render Connector — ${APP_NAME}`}</title>
       <div className="container max-w-7xl mx-auto px-4 py-6">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div className="flex items-center gap-3">
             <Link to="/connectors"><Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" />Connectors</Button></Link>
             <div>
