@@ -11,6 +11,9 @@ export const DESIGN_LIBRARY_FREE_SLOTS = 10;
 
 export const DESIGN_REUSE_REWARD_CREDITS = 1;
 
+// Indicados que já fizeram o primeiro pagamento ganham este crédito por dia (para cobrir o armazenamento).
+export const DESIGN_REFERRAL_DAILY_CREDITS = 5;
+
 export function designStorageCreditsPerDay(savedCount: number): number {
   if (savedCount <= 0) return 0;
   if (savedCount <= DESIGN_LIBRARY_FREE_SLOTS) return 1;

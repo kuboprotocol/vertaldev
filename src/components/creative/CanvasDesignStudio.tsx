@@ -7,7 +7,11 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
 import TLDrawEditor from '@/components/canvas/TLDrawEditor';
 import CanvasInfoPanel from '@/components/canvas/CanvasInfoPanel';
-import { designStorageCreditsPerDay, DESIGN_REUSE_REWARD_CREDITS } from '@/config/designLibraryPricing';
+import {
+  DESIGN_REFERRAL_DAILY_CREDITS,
+  DESIGN_REUSE_REWARD_CREDITS,
+  designStorageCreditsPerDay,
+} from '@/config/designLibraryPricing';
 
 // Canvas do Design Premium: mesmo layout da página /canvas (cabeçalho, canvas infinito, painel de atalhos),
 // com biblioteca do usuário e galeria de designs publicados. O canvas é carregado sob demanda pelo painel pai.
@@ -343,6 +347,7 @@ export function CanvasDesignStudio() {
             <p className="mt-4 text-[11px] leading-relaxed text-slate-500">
               Até 10 designs: 1 crédito/dia. Acima de 10: 2. Acima de 100: 3. Acima de 1000: 4, e assim por diante.
               Cada reuso de um design publicado dá {DESIGN_REUSE_REWARD_CREDITS} crédito ao autor.
+              Indicados com primeiro pagamento ganham {DESIGN_REFERRAL_DAILY_CREDITS} créditos por dia.
             </p>
           </section>
 
