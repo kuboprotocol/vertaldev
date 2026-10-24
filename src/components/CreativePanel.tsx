@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Sparkles, Zap, Image, Music, Code, Video, Pen, Layout, BarChart3, Palette } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { Sparkles, Zap, Image, Music, Code, Video, Pen, Layout, BarChart3, Palette, ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react';
 import ChatWidget from './ChatWidget';
 import { CreativeChat } from './CreativeChat';
 import { CreativeSlides } from './CreativeSlides';
@@ -29,6 +29,130 @@ const CATEGORIES: Array<{ id: CategoryId; title: string; description: string }> 
   { id: 'media', title: 'Mídia e audiovisual', description: 'Músicas e vídeos' },
   { id: 'digital', title: 'Criação digital e negócios', description: 'Código para páginas e produtos digitais' },
 ];
+
+const ARROW_BUTTON =
+  'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800/60 text-slate-200 transition-colors hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-40';
+
+// Altura de um slide do carrossel vertical (h-40 = 10rem).
+const SLIDE_REM = 10;
+
+/** Faixa horizontal de categorias, com setas para os lados. Cada chip leva à categoria. */
+function CategoryStrip({ onSelect }: { onSelect: (id: CategoryId) => void }) {
+  const stripRef = useRef<HTMLDivElement>(null);
+  const scrollStrip = (direction: number) => stripRef.current?.scrollBy({ left: direction * 240, behavior: 'smooth' });
+
+  return (
+    <nav aria-label="Categorias" className="flex items-center gap-2">
+      <button type="button" aria-label="Categorias anteriores" onClick={() => scrollStrip(-1)} className={ARROW_BUTTON}>
+        <ChevronLeft className="h-5 w-5" />
+      </button>
+      <div ref={stripRef} className="flex min-w-0 flex-1 gap-2 overflow-x-auto scroll-smooth [scrollbar-width:none]">
+        {CATEGORIES.map((category) => (
+          <button
+            key={category.id}
+            type="button"
+            onClick={() => onSelect(category.id)}
+            className="shrink-0 rounded-full border border-slate-700 bg-slate-800/60 px-4 py-2 text-sm text-slate-200 transition-colors hover:border-slate-500"
+          >
+            {category.title}
+          </button>
+        ))}
+      </div>
+      <button type="button" aria-label="Próximas categorias" onClick={() => scrollStrip(1)} className={ARROW_BUTTON}>
+        <ChevronRight className="h-5 w-5" />
+      </button>
+    </nav>
+  );
+}
+
+/** Um card de ferramenta. Ferramenta sem fluxo fica desativada, com a etiqueta "Em desenvolvimento". */
+function ToolCard({ item, onOpen }: { item: CreativeItem; onOpen: (id: string) => void }) {
+  const inDevelopment = item.status === 'development';
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(item.id)}
+      disabled={inDevelopment}
+      aria-disabled={inDevelopment}
+      className={`group relative h-full w-full overflow-hidden rounded-xl text-left transition-all duration-300 ${
+        inDevelopment ? 'cursor-not-allowed opacity-60' : 'hover:scale-[1.01]'
+      }`}
+    >
+      {!inDevelopment && (
+        <div className={`absolute inset-0 bg-gradient-to-br ${item.color} opacity-0 transition-opacity group-hover:opacity-100`} />
+      )}
+      <div className="relative flex h-full items-center gap-5 rounded-xl border border-slate-700/50 bg-slate-800/50 p-6 backdrop-blur-sm group-hover:border-slate-600">
+        <div className={`shrink-0 rounded-lg bg-gradient-to-br ${item.color} p-3`}>
+          <div className="text-white">{item.icon}</div>
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-lg font-semibold text-white">{item.title}</h3>
+          <p className="text-sm text-slate-400 group-hover:text-slate-300">{item.description}</p>
+        </div>
+        {inDevelopment ? (
+          <span className="shrink-0 rounded-full border border-slate-600 px-2 py-0.5 text-[11px] text-slate-300">Em desenvolvimento</span>
+        ) : (
+          <ChevronRight className="h-5 w-5 shrink-0 text-white opacity-0 transition-opacity group-hover:opacity-100" />
+        )}
+      </div>
+    </button>
+  );
+}
+
+/** Uma categoria como carrossel vertical: um card por vez, com setas para cima e para baixo. */
+function CategoryCarousel({
+  category,
+  cards,
+  onOpen,
+}: {
+  category: (typeof CATEGORIES)[number];
+  cards: CreativeItem[];
+  onOpen: (id: string) => void;
+}) {
+  const [index, setIndex] = useState(0);
+  const last = cards.length - 1;
+  const go = (next: number) => setIndex(Math.min(Math.max(next, 0), last));
+
+  return (
+    <section aria-labelledby={`creative-category-${category.id}`} id={`creative-category-section-${category.id}`} className="scroll-mt-6">
+      <div className="mb-4">
+        <h2 id={`creative-category-${category.id}`} className="text-xl font-semibold text-white">
+          {category.title}
+        </h2>
+        <p className="text-sm text-slate-400">{category.description}</p>
+      </div>
+
+      <div className="flex items-center gap-3">
+        {cards.length > 1 && (
+          <div className="flex flex-col gap-2">
+            <button type="button" aria-label={`Anterior em ${category.title}`} onClick={() => go(index - 1)} disabled={index === 0} className={ARROW_BUTTON}>
+              <ChevronUp className="h-5 w-5" />
+            </button>
+            <button type="button" aria-label={`Próximo em ${category.title}`} onClick={() => go(index + 1)} disabled={index === last} className={ARROW_BUTTON}>
+              <ChevronDown className="h-5 w-5" />
+            </button>
+          </div>
+        )}
+
+        <div className="relative min-w-0 flex-1 overflow-hidden" style={{ height: `${SLIDE_REM}rem` }}>
+          <div className="transition-transform duration-500 ease-out" style={{ transform: `translateY(-${index * SLIDE_REM}rem)` }}>
+            {cards.map((item) => (
+              <div key={item.id} style={{ height: `${SLIDE_REM}rem` }}>
+                <ToolCard item={item} onOpen={onOpen} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {cards.length > 1 && (
+          <span className="w-12 shrink-0 text-center text-xs text-slate-500">
+            {index + 1}/{cards.length}
+          </span>
+        )}
+      </div>
+    </section>
+  );
+}
 
 export default function CreativePanel() {
   const { user } = useAuth();
@@ -268,76 +392,20 @@ export default function CreativePanel() {
           </div>
         )}
 
-        {/* Categorias de ferramentas */}
-        {CATEGORIES.map((category) => {
-          const cards = creativeItems.filter((item) => item.category === category.id);
-          return (
-            <section key={category.id} aria-labelledby={`creative-category-${category.id}`}>
-              <div className="mb-4">
-                <h2 id={`creative-category-${category.id}`} className="text-xl font-semibold text-white">
-                  {category.title}
-                </h2>
-                <p className="text-sm text-slate-400">{category.description}</p>
-              </div>
+        {/* Faixa de categorias no topo: rolagem horizontal com setas */}
+        <CategoryStrip
+          onSelect={(id) => document.getElementById(`creative-category-section-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+        />
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {cards.map((item) => {
-                  const inDevelopment = item.status === 'development';
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setSelectedType(item.id)}
-                      disabled={inDevelopment}
-                      aria-disabled={inDevelopment}
-                      className={`group relative overflow-hidden rounded-xl transition-all duration-300 ${
-                        inDevelopment ? 'opacity-60 cursor-not-allowed' : 'hover:scale-105'
-                      }`}
-                    >
-                      {/* Background Gradient */}
-                      {!inDevelopment && (
-                        <div className={`absolute inset-0 bg-gradient-to-br ${item.color} opacity-0 group-hover:opacity-100 transition-opacity`} />
-                      )}
-
-                      {/* Card Content */}
-                      <div className="relative p-6 bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 group-hover:border-slate-600 rounded-xl h-full flex flex-col items-center justify-center text-center">
-                        {inDevelopment && (
-                          <span className="absolute top-3 right-3 rounded-full border border-slate-600 px-2 py-0.5 text-[11px] text-slate-300">
-                            Em desenvolvimento
-                          </span>
-                        )}
-
-                        {/* Icon */}
-                        <div className={`p-3 rounded-lg bg-gradient-to-br ${item.color} mb-4 ${inDevelopment ? '' : 'group-hover:scale-110 transition-transform'}`}>
-                          <div className="text-white">{item.icon}</div>
-                        </div>
-
-                        {/* Title */}
-                        <h3 className="text-lg font-semibold text-white mb-2 group-hover:text-white transition-colors">
-                          {item.title}
-                        </h3>
-
-                        {/* Description */}
-                        <p className="text-sm text-slate-400 group-hover:text-slate-300 transition-colors">
-                          {item.description}
-                        </p>
-
-                        {/* Arrow */}
-                        {!inDevelopment && (
-                          <div className="mt-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <svg className="w-4 h-4 text-white group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                          </div>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          );
-        })}
+        {/* Cada categoria é um carrossel vertical de cards */}
+        {CATEGORIES.map((category) => (
+          <CategoryCarousel
+            key={category.id}
+            category={category}
+            cards={creativeItems.filter((item) => item.category === category.id)}
+            onOpen={setSelectedType}
+          />
+        ))}
 
         {/* Featured Section */}
         <div className="relative rounded-2xl overflow-hidden">

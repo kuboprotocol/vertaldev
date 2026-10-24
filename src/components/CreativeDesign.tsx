@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from 'react';
-import { Check, Download, Loader2, Sparkles } from 'lucide-react';
+import { Check, Download, Loader2, Search, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ManualDesignEditor } from './creative/ManualDesignEditor';
 import { FreeCreativeTools } from './creative/FreeCreativeTools';
@@ -38,9 +38,10 @@ interface DesignResponse {
 
 const MIN_PROMPT_LENGTH = 3;
 
-type DesignMode = 'ai' | 'manual' | 'canvas' | 'photocraft' | 'free';
+type DesignMode = 'home' | 'ai' | 'manual' | 'canvas' | 'photocraft' | 'free';
 
 const DESIGN_MODES: Array<{ key: DesignMode; label: string }> = [
+  { key: 'home', label: 'Início' },
   { key: 'ai', label: 'Com IA' },
   { key: 'manual', label: 'Editor manual' },
   { key: 'canvas', label: 'Canvas' },
@@ -82,6 +83,9 @@ export function CreativeDesign({ creditsAvailable }: CreativeDesignProps) {
         })}
       </nav>
 
+      <div hidden={mode !== 'home'}>
+        <DesignHome onOpenMode={selectMode} />
+      </div>
       <div hidden={mode !== 'ai'}>
         <AiDesignStudio creditsAvailable={creditsAvailable} />
       </div>
@@ -288,6 +292,91 @@ function AiDesignStudio({ creditsAvailable }: CreativeDesignProps) {
 }
 
 /** Mensagem curta para o usuário. Não expõe detalhes de infraestrutura. */
+interface DesignStart {
+  key: Exclude<DesignMode, 'home'>;
+  title: string;
+  description: string;
+}
+
+// Ferramentas que já abrem um fluxo real. Cada uma leva ao modo correspondente.
+const DESIGN_STARTS: DesignStart[] = [
+  { key: 'ai', title: 'Com IA', description: 'Gere uma arte a partir de um texto · 1 a 2 créditos' },
+  { key: 'manual', title: 'Editor manual', description: 'Monte a arte à mão: textos, formas e imagens' },
+  { key: 'canvas', title: 'Canvas', description: 'Desenho livre, com exportação em PNG e SVG' },
+  { key: 'photocraft', title: 'PhotoCraft', description: 'Edição de fotos no navegador' },
+  { key: 'free', title: 'Ferramentas grátis', description: 'Hub com ferramentas abertas' },
+];
+
+// Seções que dependem da biblioteca universal de produções. Aparecem como indisponíveis, sem dados simulados.
+const DESIGN_PENDING = [
+  { title: 'Continuar criando', description: 'Os designs em andamento vão aparecer aqui.' },
+  { title: 'Seus projetos recentes', description: 'Os últimos designs salvos vão aparecer aqui.' },
+  { title: 'Favoritos', description: 'Os designs marcados como favoritos vão aparecer aqui.' },
+  { title: 'Modelos', description: 'A galeria de modelos publicados vai aparecer aqui.' },
+];
+
+/** Tela inicial do Design Premium: busca, atalhos para as ferramentas e seções ainda em desenvolvimento. */
+function DesignHome({ onOpenMode }: { onOpenMode: (mode: DesignMode) => void }) {
+  const [query, setQuery] = useState('');
+  const term = query.trim().toLowerCase();
+  const starts = DESIGN_STARTS.filter(
+    (item) => term === '' || item.title.toLowerCase().includes(term) || item.description.toLowerCase().includes(term),
+  );
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
+      <header className="space-y-4">
+        <p className="text-xs uppercase tracking-[0.2em] text-amber-300/80">Design Premium</p>
+        <h2 className="text-3xl font-bold text-white">O que você gostaria de criar?</h2>
+        <label className="relative block max-w-xl">
+          <span className="sr-only">Buscar ferramenta</span>
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Buscar ferramenta"
+            className="w-full rounded-xl border border-slate-700 bg-slate-900/60 py-3 pl-10 pr-4 text-white placeholder:text-slate-500 focus:border-amber-300/60 focus:outline-none"
+          />
+        </label>
+      </header>
+
+      <section aria-labelledby="design-home-start">
+        <h3 id="design-home-start" className="mb-4 text-lg font-semibold text-white">Começar uma nova criação</h3>
+        {starts.length === 0 ? (
+          <p className="text-sm text-slate-400">Nenhuma ferramenta encontrada para essa busca.</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {starts.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => onOpenMode(item.key)}
+                className="rounded-xl border border-slate-700 bg-slate-800/50 p-5 text-left transition-colors hover:border-amber-300/60"
+              >
+                <span className="block text-base font-semibold text-white">{item.title}</span>
+                <span className="mt-1 block text-sm text-slate-400">{item.description}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section aria-label="Em desenvolvimento" className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {DESIGN_PENDING.map((item) => (
+          <div key={item.title} className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-5 opacity-80">
+            <div className="flex items-center justify-between gap-3">
+              <h4 className="text-base font-semibold text-slate-200">{item.title}</h4>
+              <span className="shrink-0 rounded-full border border-slate-600 px-2 py-0.5 text-[11px] text-slate-300">Em desenvolvimento</span>
+            </div>
+            <p className="mt-1 text-sm text-slate-400">{item.description}</p>
+          </div>
+        ))}
+      </section>
+    </div>
+  );
+}
+
 function describeError(err: unknown): string {
   const status = (err as { context?: { status?: number } } | null)?.context?.status;
   if (status === 402) return 'Créditos insuficientes para este nível.';

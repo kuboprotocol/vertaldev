@@ -1,6 +1,6 @@
 // Organização do Painel Criativo em categorias e estados de disponibilidade.
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import CreativePanel from '../CreativePanel';
 
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: 'u1', email: 'u@vertal.dev' } }) }));
@@ -35,5 +35,15 @@ describe('Creative Panel categories', () => {
     expect(screen.getByText('Chat do Escritor')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Voltar/ }));
     expect(screen.getByRole('region', { name: 'Conteúdo e documentos' })).toBeInTheDocument();
+  });
+
+  it('moves a category carousel with its up and down arrows', () => {
+    render(<CreativePanel />);
+    const design = screen.getByRole('region', { name: 'Design e comunicação' });
+    expect(design).toHaveTextContent('1/3');
+    fireEvent.click(within(design).getByRole('button', { name: 'Próximo em Design e comunicação' }));
+    expect(design).toHaveTextContent('2/3');
+    fireEvent.click(within(design).getByRole('button', { name: 'Anterior em Design e comunicação' }));
+    expect(design).toHaveTextContent('1/3');
   });
 });
