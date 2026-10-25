@@ -14,11 +14,22 @@ interface DesignWorldProps {
   description: string;
   pages: WorldPage[];
   onExit: () => void;
+  /** Texto do botão que sai do mundo. */
+  backLabel?: string;
 }
 
-/** Um mundo próprio dentro do Design Premium: cabeçalho, navegação de páginas e páginas que ficam montadas ao trocar. */
-export function DesignWorld({ eyebrow, title, description, pages, onExit }: DesignWorldProps) {
+/**
+ * Um mundo próprio: cabeçalho, navegação de páginas e subpáginas.
+ * Uma página só monta na primeira visita; depois fica montada (escondida) para não perder o trabalho.
+ */
+export function DesignWorld({ eyebrow, title, description, pages, onExit, backLabel = 'Design Premium' }: DesignWorldProps) {
   const [activeKey, setActiveKey] = useState(pages[0].key);
+  const [visited, setVisited] = useState<string[]>([pages[0].key]);
+
+  const openPage = (key: string) => {
+    setVisited((list) => (list.includes(key) ? list : [...list, key]));
+    setActiveKey(key);
+  };
 
   return (
     <div className="flex min-h-[70vh] flex-col border-t border-slate-800/80 md:flex-row">
@@ -29,7 +40,7 @@ export function DesignWorld({ eyebrow, title, description, pages, onExit }: Desi
           className="inline-flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-white"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          Design Premium
+          {backLabel}
         </button>
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-amber-300/80">{eyebrow}</p>
@@ -44,7 +55,7 @@ export function DesignWorld({ eyebrow, title, description, pages, onExit }: Desi
                 key={page.key}
                 type="button"
                 aria-current={selected ? 'page' : undefined}
-                onClick={() => setActiveKey(page.key)}
+                onClick={() => openPage(page.key)}
                 className={`shrink-0 rounded-lg border px-3 py-2 text-left text-sm transition-all ${
                   selected
                     ? 'border-amber-300/70 bg-gradient-to-r from-amber-400/15 to-rose-500/10 text-white'
@@ -61,7 +72,7 @@ export function DesignWorld({ eyebrow, title, description, pages, onExit }: Desi
       <div className="min-w-0 flex-1">
         {pages.map((page) => (
           <div key={page.key} hidden={page.key !== activeKey} className="px-4 py-10 sm:px-6 lg:px-8">
-            {page.render(setActiveKey)}
+            {visited.includes(page.key) && page.render(openPage)}
           </div>
         ))}
       </div>
