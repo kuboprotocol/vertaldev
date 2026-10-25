@@ -1,13 +1,8 @@
-import { lazy, Suspense, useState } from 'react';
+import { useState } from 'react';
 import { Check, Download, Loader2, Search, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { ManualDesignEditor } from './creative/ManualDesignEditor';
-import { FreeCreativeTools } from './creative/FreeCreativeTools';
-import { PhotocraftEditor } from './creative/PhotocraftEditor';
-// O canvas (tldraw) é pesado: carrega só quando a aba é aberta pela primeira vez.
-const CanvasDesignStudio = lazy(() =>
-  import('./creative/CanvasDesignStudio').then((module) => ({ default: module.CanvasDesignStudio })),
-);
+import { AvatarsWorld, CanvasWorld, GalleryWorld, StudioWorld } from './creative/DesignWorlds';
+import { StartCard } from './creative/DesignWorld';
 import {
   DESIGN_FORMATS,
   DESIGN_FORMATS_INFO,
@@ -38,27 +33,32 @@ interface DesignResponse {
 
 const MIN_PROMPT_LENGTH = 3;
 
-type DesignMode = 'home' | 'ai' | 'manual' | 'canvas' | 'photocraft' | 'free';
+type DesignMode = 'home' | 'ai' | 'canvas' | 'studio' | 'avatars' | 'gallery';
 
 const DESIGN_MODES: Array<{ key: DesignMode; label: string }> = [
   { key: 'home', label: 'Início' },
   { key: 'ai', label: 'Com IA' },
-  { key: 'manual', label: 'Editor manual' },
   { key: 'canvas', label: 'Canvas' },
-  { key: 'photocraft', label: 'PhotoCraft' },
-  { key: 'free', label: 'Ferramentas grátis' },
+  { key: 'studio', label: 'Estúdio Pro' },
+  { key: 'avatars', label: 'Avatares' },
+  { key: 'gallery', label: 'Galeria' },
 ];
 
-/** Painel Design Premium: IA, editor manual, canvas, PhotoCraft e ferramentas gratuitas. As abas ficam montadas para não perder o trabalho ao trocar de aba. */
+// Mundos próprios, com páginas e subpáginas. Cada um monta na primeira abertura e fica montado ao sair, para não perder o trabalho.
+const WORLD_MODES: DesignMode[] = ['canvas', 'studio', 'avatars', 'gallery'];
+
+/** Painel Design Premium: início, criação com IA e os mundos Canvas, Estúdio Pro, Avatares e Galeria. */
 export function CreativeDesign({ creditsAvailable }: CreativeDesignProps) {
   const [mode, setMode] = useState<DesignMode>('ai');
-  // O canvas só monta na primeira abertura; depois fica montado (escondido) como as outras abas.
-  const [canvasOpened, setCanvasOpened] = useState(false);
+  const [openedWorlds, setOpenedWorlds] = useState<DesignMode[]>([]);
 
   const selectMode = (next: DesignMode) => {
-    if (next === 'canvas') setCanvasOpened(true);
+    if (WORLD_MODES.includes(next) && !openedWorlds.includes(next)) {
+      setOpenedWorlds([...openedWorlds, next]);
+    }
     setMode(next);
   };
+  const exitWorld = () => selectMode('home');
 
   return (
     <div>
@@ -89,22 +89,26 @@ export function CreativeDesign({ creditsAvailable }: CreativeDesignProps) {
       <div hidden={mode !== 'ai'}>
         <AiDesignStudio creditsAvailable={creditsAvailable} />
       </div>
-      <div hidden={mode !== 'manual'} className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <ManualDesignEditor />
-      </div>
-      {canvasOpened && (
-        <div hidden={mode !== 'canvas'} className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-          <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-amber-300" /></div>}>
-            <CanvasDesignStudio />
-          </Suspense>
+      {openedWorlds.includes('canvas') && (
+        <div hidden={mode !== 'canvas'}>
+          <CanvasWorld onExit={exitWorld} />
         </div>
       )}
-      <div hidden={mode !== 'photocraft'} className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <PhotocraftEditor />
-      </div>
-      <div hidden={mode !== 'free'} className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <FreeCreativeTools onOpenMode={selectMode} />
-      </div>
+      {openedWorlds.includes('studio') && (
+        <div hidden={mode !== 'studio'}>
+          <StudioWorld onExit={exitWorld} />
+        </div>
+      )}
+      {openedWorlds.includes('avatars') && (
+        <div hidden={mode !== 'avatars'}>
+          <AvatarsWorld onExit={exitWorld} />
+        </div>
+      )}
+      {openedWorlds.includes('gallery') && (
+        <div hidden={mode !== 'gallery'}>
+          <GalleryWorld onExit={exitWorld} />
+        </div>
+      )}
     </div>
   );
 }
@@ -301,10 +305,10 @@ interface DesignStart {
 // Ferramentas que já abrem um fluxo real. Cada uma leva ao modo correspondente.
 const DESIGN_STARTS: DesignStart[] = [
   { key: 'ai', title: 'Com IA', description: 'Gere uma arte a partir de um texto · 1 a 2 créditos' },
-  { key: 'manual', title: 'Editor manual', description: 'Monte a arte à mão: textos, formas e imagens' },
-  { key: 'canvas', title: 'Canvas', description: 'Desenho livre, com exportação em PNG e SVG' },
-  { key: 'photocraft', title: 'PhotoCraft', description: 'Edição de fotos no navegador' },
-  { key: 'free', title: 'Ferramentas grátis', description: 'Hub com ferramentas abertas' },
+  { key: 'canvas', title: 'Canvas', description: 'Canvas infinito, com modelos e exportação em PNG e SVG' },
+  { key: 'studio', title: 'Estúdio Pro', description: 'Editor manual, PhotoCraft e ferramentas grátis' },
+  { key: 'avatars', title: 'Avatares', description: 'Avatares falantes, com narração por IA' },
+  { key: 'gallery', title: 'Galeria', description: 'Designs publicados por outras pessoas' },
 ];
 
 // Seções que dependem da biblioteca universal de produções. Aparecem como indisponíveis, sem dados simulados.
@@ -348,15 +352,7 @@ function DesignHome({ onOpenMode }: { onOpenMode: (mode: DesignMode) => void }) 
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {starts.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => onOpenMode(item.key)}
-                className="rounded-xl border border-slate-700 bg-slate-800/50 p-5 text-left transition-colors hover:border-amber-300/60"
-              >
-                <span className="block text-base font-semibold text-white">{item.title}</span>
-                <span className="mt-1 block text-sm text-slate-400">{item.description}</span>
-              </button>
+              <StartCard key={item.key} title={item.title} description={item.description} onClick={() => onOpenMode(item.key)} />
             ))}
           </div>
         )}
