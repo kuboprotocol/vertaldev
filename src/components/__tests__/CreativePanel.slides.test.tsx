@@ -1,5 +1,6 @@
-// Slides generator flow inside CreativePanel. These checks used to live in e2e/slides-generator.spec.ts,
-// which pointed at a hardcoded localhost:8084 and a route (/creative/panel) that does not render this panel.
+// Slides generator flow inside CreativePanel: categoria "Design e comunicação" → página "Gerador de Slides".
+// These checks used to live in e2e/slides-generator.spec.ts, which pointed at a hardcoded localhost:8084
+// and a route (/creative/panel) that does not render this panel.
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import CreativePanel from '../CreativePanel';
@@ -9,7 +10,8 @@ vi.mock('../ChatWidget', () => ({ default: () => null }));
 
 function openSlides() {
   const utils = render(<CreativePanel />);
-  fireEvent.click(screen.getByText('Gerador de Slides'));
+  fireEvent.click(screen.getByRole('button', { name: /Design e comunicação/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Gerador de Slides' }));
   return utils;
 }
 const topicInput = () => screen.getByPlaceholderText(/Ex: Inteligência/) as HTMLInputElement;
@@ -17,13 +19,13 @@ const numInput = (c: HTMLElement) => c.querySelector('input[type="number"]') as 
 const generateBtn = () => screen.getByRole('button', { name: /Gerar Apresentação/ });
 
 describe('Creative Panel: slides generator', () => {
-  it('shows the Creative Panel with the Slides option', () => {
+  it('shows the Creative Panel with the design category that has the Slides tool', () => {
     render(<CreativePanel />);
-    expect(screen.getByText('Painel Criativo')).toBeInTheDocument();
-    expect(screen.getByText('Gerador de Slides')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Painel Criativo' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Design e comunicação/ })).toHaveTextContent('Gerador de Slides');
   });
 
-  it('navigates to the slides generator when clicked', () => {
+  it('navigates to the slides generator when its page is clicked', () => {
     openSlides();
     expect(screen.getByText('Gerador de Apresentações IA')).toBeInTheDocument();
   });
@@ -84,26 +86,26 @@ describe('Creative Panel: slides generator', () => {
     expect(input.value).toBe('20');
   });
 
-  it('goes back to the Creative Panel', () => {
+  it('goes back to the Creative Panel from the world', () => {
     openSlides();
-    fireEvent.click(screen.getByRole('button', { name: /Voltar/ }));
-    expect(screen.getByText('Painel Criativo')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Painel Criativo/ }));
+    expect(screen.getByRole('heading', { name: 'Painel Criativo' })).toBeInTheDocument();
     expect(screen.queryByText('Gerador de Apresentações IA')).not.toBeInTheDocument();
   });
 });
 
 describe('Creative Panel: design studio', () => {
-  it('lists the Design Premium card with its credit range', () => {
+  it('lists the Design Premium highlight with its credit range', () => {
     render(<CreativePanel />);
-    expect(screen.getByText('Design Premium')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Design Premium' })).toBeInTheDocument();
     expect(screen.getByText(/1 a 2 créditos/)).toBeInTheDocument();
   });
 
   it('opens the design studio and goes back to the panel', () => {
     render(<CreativePanel />);
-    fireEvent.click(screen.getByText('Design Premium'));
+    fireEvent.click(screen.getByRole('heading', { name: 'Design Premium' }));
     expect(screen.getByText('Design Premium com IA')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Voltar/ }));
-    expect(screen.getByText('Painel Criativo')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Painel Criativo' })).toBeInTheDocument();
   });
 });
