@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Check, Download, Loader2, Search, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { AvatarsWorld, CanvasWorld, GalleryWorld, StudioWorld } from './creative/DesignWorlds';
 import { StartCard } from './creative/DesignWorld';
+import type { DesignCopy } from './creative/DesignGallery';
 import {
   DESIGN_FORMATS,
   DESIGN_FORMATS_INFO,
@@ -60,6 +61,14 @@ export function CreativeDesign({ creditsAvailable }: CreativeDesignProps) {
   };
   const exitWorld = () => selectMode('home');
 
+  // Cópia de um design da galeria: abre no Canvas, como design novo.
+  const [pendingCopy, setPendingCopy] = useState<DesignCopy | null>(null);
+  const openCopy = (copy: DesignCopy) => {
+    setPendingCopy(copy);
+    selectMode('canvas');
+  };
+  const consumeCopy = useCallback(() => setPendingCopy(null), []);
+
   return (
     <div>
       <nav aria-label="Modo de criação" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 flex flex-wrap gap-2">
@@ -91,7 +100,7 @@ export function CreativeDesign({ creditsAvailable }: CreativeDesignProps) {
       </div>
       {openedWorlds.includes('canvas') && (
         <div hidden={mode !== 'canvas'}>
-          <CanvasWorld onExit={exitWorld} />
+          <CanvasWorld onExit={exitWorld} initialCopy={pendingCopy} onCopyConsumed={consumeCopy} />
         </div>
       )}
       {openedWorlds.includes('studio') && (
@@ -106,7 +115,7 @@ export function CreativeDesign({ creditsAvailable }: CreativeDesignProps) {
       )}
       {openedWorlds.includes('gallery') && (
         <div hidden={mode !== 'gallery'}>
-          <GalleryWorld onExit={exitWorld} />
+          <GalleryWorld onExit={exitWorld} onOpenCopy={openCopy} />
         </div>
       )}
     </div>

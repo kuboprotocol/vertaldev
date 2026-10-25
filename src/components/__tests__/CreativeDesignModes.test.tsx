@@ -4,7 +4,9 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 const invoke = vi.hoisted(() => vi.fn());
-vi.mock('@/integrations/supabase/client', () => ({ supabase: { functions: { invoke } } }));
+vi.mock('@/integrations/supabase/client', () => ({
+  supabase: { functions: { invoke }, auth: { getUser: vi.fn(async () => ({ data: { user: null } })) } },
+}));
 // O tldraw é pesado para o jsdom; o mundo Canvas não é aberto nestes testes.
 vi.mock('tldraw', () => ({ getSnapshot: vi.fn(() => ({})) }));
 vi.mock('@/components/canvas/TLDrawEditor', () => ({ default: () => null }));
@@ -165,12 +167,10 @@ describe('CreativeDesign worlds', () => {
     }
   });
 
-  it('shows the Galeria world with its feed as in development, without fake designs', () => {
+  it('shows the Galeria feed and asks for an account when nobody is signed in', async () => {
     renderPanel();
     fireEvent.click(modeButton('Galeria'));
-    expect(screen.getByRole('heading', { name: 'Feed de designs' })).toBeVisible();
-    expect(screen.getAllByText('Em desenvolvimento').length).toBeGreaterThan(0);
-    expect(screen.queryByRole('img', { name: /design publicado/i })).toBeNull();
+    expect(await screen.findByText('Entre na sua conta para ver a galeria.')).toBeInTheDocument();
   });
 
   it('exits a world back to the Design Premium home', () => {

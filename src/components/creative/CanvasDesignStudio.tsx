@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
 import TLDrawEditor from '@/components/canvas/TLDrawEditor';
+import type { DesignCopy } from './DesignGallery';
 import CanvasInfoPanel from '@/components/canvas/CanvasInfoPanel';
 import {
   DESIGN_REFERRAL_DAILY_CREDITS,
@@ -40,7 +41,13 @@ interface ReuseResult {
   snapshot: unknown;
 }
 
-export function CanvasDesignStudio() {
+interface CanvasDesignStudioProps {
+  /** Cópia vinda da galeria: entra no editor como um design novo. */
+  initialCopy?: DesignCopy | null;
+  onCopyConsumed?: () => void;
+}
+
+export function CanvasDesignStudio({ initialCopy, onCopyConsumed }: CanvasDesignStudioProps = {}) {
   const editorRef = useRef<Editor | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [name, setName] = useState('Canvas sem título');
@@ -82,6 +89,16 @@ export function CanvasDesignStudio() {
   useEffect(() => {
     void loadLibrary();
   }, [loadLibrary]);
+
+  // Cópia aberta pela Galeria: vira um design novo (sem id), e o original não muda.
+  useEffect(() => {
+    if (!initialCopy) return;
+    setName(initialCopy.name);
+    setCurrentId(null);
+    setInitialSnapshot(initialCopy.snapshot);
+    setEditorKey((key) => key + 1);
+    onCopyConsumed?.();
+  }, [initialCopy, onCopyConsumed]);
 
   // O atalho Ctrl+S do editor captura o callback da montagem; a ref garante que salve o estado atual.
   const saveRef = useRef<() => void>(() => {});
@@ -163,7 +180,7 @@ export function CanvasDesignStudio() {
     setEditorKey((key) => key + 1);
   };
 
-  const useGalleryDesign = async (id: string) => {
+  const reuseGalleryDesign = async (id: string) => {
     if (!userId) {
       toast.error('Entre na sua conta para usar um design da galeria.');
       return;
@@ -390,7 +407,7 @@ export function CanvasDesignStudio() {
                       <p className="truncate text-sm text-white">{item.name}</p>
                       <p className="text-[11px] text-slate-400">{item.reuse_count} reuso(s)</p>
                     </div>
-                    <button type="button" className={itemButton} disabled={busyId === item.id} onClick={() => useGalleryDesign(item.id)}>
+                    <button type="button" className={itemButton} disabled={busyId === item.id} onClick={() => reuseGalleryDesign(item.id)}>
                       Usar como modelo
                     </button>
                   </li>
