@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowLeft } from 'lucide-react';
 
 export interface WorldPage {
@@ -16,13 +16,15 @@ interface DesignWorldProps {
   onExit: () => void;
   /** Texto do botão que sai do mundo. */
   backLabel?: string;
+  /** Pede para abrir uma página. Um objeto novo a cada pedido; `undefined` não faz nada. */
+  jumpTo?: { key: string };
 }
 
 /**
  * Um mundo próprio: cabeçalho, navegação de páginas e subpáginas.
  * Uma página só monta na primeira visita; depois fica montada (escondida) para não perder o trabalho.
  */
-export function DesignWorld({ eyebrow, title, description, pages, onExit, backLabel = 'Design Premium' }: DesignWorldProps) {
+export function DesignWorld({ eyebrow, title, description, pages, onExit, backLabel = 'Design Premium', jumpTo }: DesignWorldProps) {
   const [activeKey, setActiveKey] = useState(pages[0].key);
   const [visited, setVisited] = useState<string[]>([pages[0].key]);
 
@@ -30,6 +32,12 @@ export function DesignWorld({ eyebrow, title, description, pages, onExit, backLa
     setVisited((list) => (list.includes(key) ? list : [...list, key]));
     setActiveKey(key);
   };
+
+  useEffect(() => {
+    if (!jumpTo) return;
+    setVisited((list) => (list.includes(jumpTo.key) ? list : [...list, jumpTo.key]));
+    setActiveKey(jumpTo.key);
+  }, [jumpTo]);
 
   return (
     <div className="flex min-h-[70vh] flex-col border-t border-slate-800/80 md:flex-row">

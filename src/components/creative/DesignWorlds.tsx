@@ -1,7 +1,8 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { DesignWorld, PendingPage, StartCard } from './DesignWorld';
+import { DesignGalleryFeed, MyPublishedDesigns, type DesignCopy } from './DesignGallery';
 import { FreeCreativeTools } from './FreeCreativeTools';
 import { ManualDesignEditor } from './ManualDesignEditor';
 import { PhotocraftEditor } from './PhotocraftEditor';
@@ -42,14 +43,20 @@ function Spinner() {
   );
 }
 
-/** Mundo Canvas: início, editor e modelos. */
-export function CanvasWorld({ onExit }: WorldProps) {
+/** Mundo Canvas: início, editor e modelos. Uma cópia vinda da galeria abre direto no editor. */
+export function CanvasWorld({
+  onExit,
+  initialCopy,
+  onCopyConsumed,
+}: WorldProps & { initialCopy?: DesignCopy | null; onCopyConsumed?: () => void }) {
+  const jumpTo = useMemo(() => (initialCopy ? { key: 'editor' } : undefined), [initialCopy]);
   return (
     <DesignWorld
       eyebrow="Canvas"
       title="Canvas infinito"
       description="Monte sua arte livremente, com texto, formas e imagens."
       onExit={onExit}
+      jumpTo={jumpTo}
       pages={[
         {
           key: 'home',
@@ -69,7 +76,7 @@ export function CanvasWorld({ onExit }: WorldProps) {
           label: 'Editor',
           render: () => (
             <Suspense fallback={<Spinner />}>
-              <CanvasDesignStudio />
+              <CanvasDesignStudio initialCopy={initialCopy} onCopyConsumed={onCopyConsumed} />
             </Suspense>
           ),
         },
@@ -170,8 +177,8 @@ export function AvatarsWorld({ onExit }: WorldProps) {
   );
 }
 
-/** Mundo Galeria: feed de designs publicados e os publicados por você. A publicação depende da biblioteca ativa. */
-export function GalleryWorld({ onExit }: WorldProps) {
+/** Mundo Galeria: feed de designs publicados e os publicados por você. Usar um design abre uma cópia no Canvas. */
+export function GalleryWorld({ onExit, onOpenCopy }: WorldProps & { onOpenCopy: (copy: DesignCopy) => void }) {
   return (
     <DesignWorld
       eyebrow="Galeria premium"
@@ -182,19 +189,12 @@ export function GalleryWorld({ onExit }: WorldProps) {
         {
           key: 'feed',
           label: 'Feed',
-          render: () => (
-            <PendingPage
-              title="Feed de designs"
-              description="Os designs publicados vão aparecer aqui. Usar um design abre uma cópia, e o autor ganha crédito."
-            />
-          ),
+          render: () => <DesignGalleryFeed onOpenCopy={onOpenCopy} />,
         },
         {
           key: 'mine',
           label: 'Meus publicados',
-          render: () => (
-            <PendingPage title="Meus publicados" description="Os designs que você publicar na galeria aparecem aqui." />
-          ),
+          render: () => <MyPublishedDesigns />,
         },
       ]}
     />
