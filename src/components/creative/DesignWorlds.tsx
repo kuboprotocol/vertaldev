@@ -1,5 +1,5 @@
-import { lazy, Suspense, useMemo } from 'react';
-import { Loader2 } from 'lucide-react';
+import { lazy, Suspense, useMemo, type ReactNode } from 'react';
+import { Layers, LayoutGrid, Loader2, Plus, Sparkles, User, Wrench } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { DesignWorld, PendingPage, StartCard } from './DesignWorld';
 import { DesignGalleryFeed, MyPublishedDesigns, type DesignCopy } from './DesignGallery';
@@ -20,15 +20,24 @@ interface WorldStart {
   title: string;
   description: string;
   onSelect: () => void;
+  icon?: ReactNode;
+  gradient?: string;
 }
 
 function WorldHome({ heading, items }: { heading: string; items: WorldStart[] }) {
   return (
     <section aria-label={heading} className="space-y-4">
-      <h3 className="text-lg font-semibold text-white">{heading}</h3>
+      <h3 className="font-['Unbounded'] text-lg font-bold text-white">{heading}</h3>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {items.map((item) => (
-          <StartCard key={item.title} title={item.title} description={item.description} onClick={item.onSelect} />
+          <StartCard
+            key={item.title}
+            title={item.title}
+            description={item.description}
+            onClick={item.onSelect}
+            icon={item.icon}
+            gradient={item.gradient}
+          />
         ))}
       </div>
     </section>
@@ -65,8 +74,20 @@ export function CanvasWorld({
             <WorldHome
               heading="Comece um canvas"
               items={[
-                { title: 'Novo canvas', description: 'Abra o editor em branco e comece do zero', onSelect: () => goTo('editor') },
-                { title: 'Modelos', description: 'Comece de um modelo publicado', onSelect: () => goTo('models') },
+                {
+                  title: 'Novo canvas',
+                  description: 'Abra o editor em branco e comece do zero',
+                  onSelect: () => goTo('editor'),
+                  icon: <Plus className="h-5 w-5" />,
+                  gradient: 'from-rose-500 to-orange-400',
+                },
+                {
+                  title: 'Modelos',
+                  description: 'Comece de um modelo publicado',
+                  onSelect: () => goTo('models'),
+                  icon: <LayoutGrid className="h-5 w-5" />,
+                  gradient: 'from-amber-400 to-yellow-300',
+                },
               ]}
             />
           ),
@@ -108,9 +129,27 @@ export function StudioWorld({ onExit }: WorldProps) {
             <WorldHome
               heading="Ferramentas"
               items={[
-                { title: 'Editor manual', description: 'Monte a arte à mão: textos, formas e imagens', onSelect: () => goTo('manual') },
-                { title: 'PhotoCraft', description: 'Edição de fotos no navegador', onSelect: () => goTo('photocraft') },
-                { title: 'Ferramentas grátis', description: 'Hub com ferramentas abertas', onSelect: () => goTo('free') },
+                {
+                  title: 'Editor manual',
+                  description: 'Monte a arte à mão: textos, formas e imagens',
+                  onSelect: () => goTo('manual'),
+                  icon: <Layers className="h-5 w-5" />,
+                  gradient: 'from-orange-400 to-rose-500',
+                },
+                {
+                  title: 'PhotoCraft',
+                  description: 'Edição de fotos no navegador',
+                  onSelect: () => goTo('photocraft'),
+                  icon: <Sparkles className="h-5 w-5" />,
+                  gradient: 'from-violet-500 to-blue-500',
+                },
+                {
+                  title: 'Ferramentas grátis',
+                  description: 'Hub com ferramentas abertas',
+                  onSelect: () => goTo('free'),
+                  icon: <Wrench className="h-5 w-5" />,
+                  gradient: 'from-emerald-400 to-teal-600',
+                },
               ]}
             />
           ),
@@ -160,7 +199,13 @@ export function AvatarsWorld({ onExit }: WorldProps) {
             <WorldHome
               heading="Crie seu avatar"
               items={[
-                { title: 'Criar avatar', description: 'Avatar falante com narração por IA', onSelect: () => navigate('/creative/avatar') },
+                {
+                  title: 'Criar avatar',
+                  description: 'Avatar falante com narração por IA',
+                  onSelect: () => navigate('/creative/avatar'),
+                  icon: <User className="h-5 w-5" />,
+                  gradient: 'from-emerald-400 to-cyan-600',
+                },
               ]}
             />
           ),
