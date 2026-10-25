@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react';
-import { Check, Download, Loader2, Search, Sparkles } from 'lucide-react';
+import { useCallback, useState, type ReactNode } from 'react';
+import { Check, Download, Home, LayoutGrid, LayoutTemplate, Layers, Loader2, Search, Sparkles, User, Wand2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { AvatarsWorld, CanvasWorld, GalleryWorld, StudioWorld } from './creative/DesignWorlds';
 import { StartCard } from './creative/DesignWorld';
@@ -36,13 +36,13 @@ const MIN_PROMPT_LENGTH = 3;
 
 type DesignMode = 'home' | 'ai' | 'canvas' | 'studio' | 'avatars' | 'gallery';
 
-const DESIGN_MODES: Array<{ key: DesignMode; label: string }> = [
-  { key: 'home', label: 'Início' },
-  { key: 'ai', label: 'Com IA' },
-  { key: 'canvas', label: 'Canvas' },
-  { key: 'studio', label: 'Estúdio Pro' },
-  { key: 'avatars', label: 'Avatares' },
-  { key: 'gallery', label: 'Galeria' },
+const DESIGN_MODES: Array<{ key: DesignMode; label: string; icon: ReactNode }> = [
+  { key: 'home', label: 'Início', icon: <Home className="h-4 w-4" /> },
+  { key: 'ai', label: 'Com IA', icon: <Wand2 className="h-4 w-4" /> },
+  { key: 'canvas', label: 'Canvas', icon: <LayoutTemplate className="h-4 w-4" /> },
+  { key: 'studio', label: 'Estúdio Pro', icon: <Layers className="h-4 w-4" /> },
+  { key: 'avatars', label: 'Avatares', icon: <User className="h-4 w-4" /> },
+  { key: 'gallery', label: 'Galeria', icon: <LayoutGrid className="h-4 w-4" /> },
 ];
 
 // Mundos próprios, com páginas e subpáginas. Cada um monta na primeira abertura e fica montado ao sair, para não perder o trabalho.
@@ -70,8 +70,12 @@ export function CreativeDesign({ creditsAvailable }: CreativeDesignProps) {
   const consumeCopy = useCallback(() => setPendingCopy(null), []);
 
   return (
-    <div>
-      <nav aria-label="Modo de criação" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 flex flex-wrap gap-2">
+    <div className="md:flex md:items-start">
+      {/* Celular: barra inferior com os mundos. Computador: trilho lateral fixo, como no protótipo. */}
+      <nav
+        aria-label="Modo de criação"
+        className="fixed inset-x-0 bottom-0 z-30 flex justify-around gap-1 border-t border-white/10 bg-[#0c0b14]/90 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl md:sticky md:top-0 md:h-screen md:w-28 md:shrink-0 md:flex-col md:justify-start md:gap-2 md:border-r md:border-t-0 md:px-3 md:pb-6 md:pt-8"
+      >
         {DESIGN_MODES.map((item) => {
           const selected = mode === item.key;
           return (
@@ -80,44 +84,52 @@ export function CreativeDesign({ creditsAvailable }: CreativeDesignProps) {
               type="button"
               aria-pressed={selected}
               onClick={() => selectMode(item.key)}
-              className={`px-4 py-2 rounded-lg border text-sm transition-all ${
-                selected
-                  ? 'border-amber-300/70 bg-gradient-to-r from-amber-400/15 to-rose-500/10 text-white'
-                  : 'border-slate-700 bg-slate-800/50 text-slate-300 hover:border-slate-500'
+              className={`flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-1 py-1 text-[11px] font-semibold transition-all active:scale-95 md:w-full md:flex-none ${
+                selected ? 'text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
-              {item.label}
+              <span
+                aria-hidden="true"
+                className={`flex h-8 w-12 items-center justify-center rounded-full transition-all ${
+                  selected ? 'bg-gradient-to-r from-amber-400 to-rose-500 text-slate-900 shadow-lg shadow-rose-500/20' : ''
+                }`}
+              >
+                {item.icon}
+              </span>
+              <span className="max-w-full truncate">{item.label}</span>
             </button>
           );
         })}
       </nav>
 
-      <div hidden={mode !== 'home'}>
-        <DesignHome onOpenMode={selectMode} />
+      <div className="min-w-0 flex-1 pb-24 md:pb-0">
+        <div hidden={mode !== 'home'}>
+          <DesignHome onOpenMode={selectMode} />
+        </div>
+        <div hidden={mode !== 'ai'}>
+          <AiDesignStudio creditsAvailable={creditsAvailable} />
+        </div>
+        {openedWorlds.includes('canvas') && (
+          <div hidden={mode !== 'canvas'}>
+            <CanvasWorld onExit={exitWorld} initialCopy={pendingCopy} onCopyConsumed={consumeCopy} />
+          </div>
+        )}
+        {openedWorlds.includes('studio') && (
+          <div hidden={mode !== 'studio'}>
+            <StudioWorld onExit={exitWorld} />
+          </div>
+        )}
+        {openedWorlds.includes('avatars') && (
+          <div hidden={mode !== 'avatars'}>
+            <AvatarsWorld onExit={exitWorld} />
+          </div>
+        )}
+        {openedWorlds.includes('gallery') && (
+          <div hidden={mode !== 'gallery'}>
+            <GalleryWorld onExit={exitWorld} onOpenCopy={openCopy} />
+          </div>
+        )}
       </div>
-      <div hidden={mode !== 'ai'}>
-        <AiDesignStudio creditsAvailable={creditsAvailable} />
-      </div>
-      {openedWorlds.includes('canvas') && (
-        <div hidden={mode !== 'canvas'}>
-          <CanvasWorld onExit={exitWorld} initialCopy={pendingCopy} onCopyConsumed={consumeCopy} />
-        </div>
-      )}
-      {openedWorlds.includes('studio') && (
-        <div hidden={mode !== 'studio'}>
-          <StudioWorld onExit={exitWorld} />
-        </div>
-      )}
-      {openedWorlds.includes('avatars') && (
-        <div hidden={mode !== 'avatars'}>
-          <AvatarsWorld onExit={exitWorld} />
-        </div>
-      )}
-      {openedWorlds.includes('gallery') && (
-        <div hidden={mode !== 'gallery'}>
-          <GalleryWorld onExit={exitWorld} onOpenCopy={openCopy} />
-        </div>
-      )}
     </div>
   );
 }
@@ -309,15 +321,47 @@ interface DesignStart {
   key: Exclude<DesignMode, 'home'>;
   title: string;
   description: string;
+  icon: ReactNode;
+  gradient: string;
 }
 
 // Ferramentas que já abrem um fluxo real. Cada uma leva ao modo correspondente.
 const DESIGN_STARTS: DesignStart[] = [
-  { key: 'ai', title: 'Com IA', description: 'Gere uma arte a partir de um texto · 1 a 2 créditos' },
-  { key: 'canvas', title: 'Canvas', description: 'Canvas infinito, com modelos e exportação em PNG e SVG' },
-  { key: 'studio', title: 'Estúdio Pro', description: 'Editor manual, PhotoCraft e ferramentas grátis' },
-  { key: 'avatars', title: 'Avatares', description: 'Avatares falantes, com narração por IA' },
-  { key: 'gallery', title: 'Galeria', description: 'Designs publicados por outras pessoas' },
+  {
+    key: 'ai',
+    title: 'Com IA',
+    description: 'Gere uma arte a partir de um texto · 1 a 2 créditos',
+    icon: <Wand2 className="h-5 w-5" />,
+    gradient: 'from-amber-400 to-rose-500',
+  },
+  {
+    key: 'canvas',
+    title: 'Canvas',
+    description: 'Canvas infinito, com modelos e exportação em PNG e SVG',
+    icon: <LayoutTemplate className="h-5 w-5" />,
+    gradient: 'from-rose-500 to-orange-400',
+  },
+  {
+    key: 'studio',
+    title: 'Estúdio Pro',
+    description: 'Editor manual, PhotoCraft e ferramentas grátis',
+    icon: <Layers className="h-5 w-5" />,
+    gradient: 'from-violet-500 to-blue-500',
+  },
+  {
+    key: 'avatars',
+    title: 'Avatares',
+    description: 'Avatares falantes, com narração por IA',
+    icon: <User className="h-5 w-5" />,
+    gradient: 'from-emerald-400 to-cyan-600',
+  },
+  {
+    key: 'gallery',
+    title: 'Galeria',
+    description: 'Designs publicados por outras pessoas',
+    icon: <LayoutGrid className="h-5 w-5" />,
+    gradient: 'from-blue-500 to-pink-500',
+  },
 ];
 
 // Seções que dependem da biblioteca universal de produções. Aparecem como indisponíveis, sem dados simulados.
@@ -338,30 +382,41 @@ function DesignHome({ onOpenMode }: { onOpenMode: (mode: DesignMode) => void }) 
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
-      <header className="space-y-4">
-        <p className="text-xs uppercase tracking-[0.2em] text-amber-300/80">Design Premium</p>
-        <h2 className="text-3xl font-bold text-white">O que você gostaria de criar?</h2>
-        <label className="relative block max-w-xl">
-          <span className="sr-only">Buscar ferramenta</span>
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Buscar ferramenta"
-            className="w-full rounded-xl border border-slate-700 bg-slate-900/60 py-3 pl-10 pr-4 text-white placeholder:text-slate-500 focus:border-amber-300/60 focus:outline-none"
-          />
-        </label>
+      <header className="space-y-5">
+        <div className="relative overflow-hidden rounded-3xl border border-amber-300/25 bg-gradient-to-br from-amber-400/15 via-rose-500/10 to-violet-600/15 p-6 md:p-8">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-300">Design Premium</p>
+          <h2 className="mt-2 font-['Unbounded'] text-3xl font-extrabold tracking-tight text-transparent bg-gradient-to-r from-white via-amber-300 to-rose-400 bg-clip-text md:text-4xl">
+            O que você gostaria de criar?
+          </h2>
+          <label className="relative mt-6 block max-w-xl">
+            <span className="sr-only">Buscar ferramenta</span>
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Buscar ferramenta"
+              className="w-full rounded-2xl border border-slate-700 bg-[#161426] py-3.5 pl-11 pr-4 text-white shadow-2xl shadow-rose-500/10 placeholder:text-slate-500 focus:border-amber-300/60 focus:outline-none"
+            />
+          </label>
+        </div>
       </header>
 
       <section aria-labelledby="design-home-start">
-        <h3 id="design-home-start" className="mb-4 text-lg font-semibold text-white">Começar uma nova criação</h3>
+        <h3 id="design-home-start" className="mb-4 font-['Unbounded'] text-lg font-bold text-white">Começar uma nova criação</h3>
         {starts.length === 0 ? (
           <p className="text-sm text-slate-400">Nenhuma ferramenta encontrada para essa busca.</p>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {starts.map((item) => (
-              <StartCard key={item.key} title={item.title} description={item.description} onClick={() => onOpenMode(item.key)} />
+              <StartCard
+                key={item.key}
+                title={item.title}
+                description={item.description}
+                icon={item.icon}
+                gradient={item.gradient}
+                onClick={() => onOpenMode(item.key)}
+              />
             ))}
           </div>
         )}

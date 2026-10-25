@@ -7,7 +7,7 @@ import { CreativeImages } from './CreativeImages';
 import { CreativeSheets } from './CreativeSheets';
 import { CreativeMusic } from './CreativeMusic';
 import { CreativeDesign } from './CreativeDesign';
-import { DesignWorld, PendingPage } from './creative/DesignWorld';
+import { DesignWorld, PREMIUM_BACKGROUND, PendingPage } from './creative/DesignWorld';
 import { useAuth } from '@/hooks/useAuth';
 
 type CategoryId = 'design' | 'content' | 'media' | 'digital';
@@ -137,7 +137,8 @@ const CREATIVE_ITEMS: CreativeItem[] = [
   },
 ];
 
-const PAGE_BACKGROUND = 'min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900';
+// Mesmo fundo escuro com brilhos do Design Premium, em todo o Painel Criativo.
+const PAGE_BACKGROUND = PREMIUM_BACKGROUND;
 
 /** Conteúdo de uma ferramenta disponível. Ferramentas em desenvolvimento não chegam aqui. */
 function renderTool(type: CreativeItem['type'], creditsAvailable: number) {
@@ -274,7 +275,7 @@ export default function CreativePanel() {
               <Palette className="h-8 w-8 text-white" aria-hidden="true" />
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="text-2xl font-bold text-white">Design Premium</h2>
+              <h2 className="font-['Unbounded'] text-2xl font-extrabold text-white">Design Premium</h2>
               <p className="mt-1 text-slate-300">Artes profissionais com direção de arte IA · 1 a 2 créditos</p>
             </div>
             <ChevronRight className="h-6 w-6 shrink-0 text-white opacity-60 transition-opacity group-hover:opacity-100" aria-hidden="true" />
@@ -298,7 +299,7 @@ export default function CreativePanel() {
                 >
                   <div className={`shrink-0 rounded-2xl bg-gradient-to-br ${category.color} p-4 text-white shadow-lg`}>{category.icon}</div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-lg font-semibold text-white">{category.title}</h3>
+                    <h3 className="font-['Unbounded'] text-base font-bold text-white">{category.title}</h3>
                     <p className="text-sm text-slate-400">{category.description}</p>
                     <p className="mt-2 text-xs text-slate-500">
                       {tools.map((tool) => tool.title).join(' · ')}
