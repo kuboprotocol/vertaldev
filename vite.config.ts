@@ -47,6 +47,11 @@ export default defineConfig(({ command, mode }) => {
           'game/**/*.webp',
         ],
         workbox: {
+          // Um deploy novo precisa tomar o lugar do Service Worker antigo sem esperar
+          // todas as abas fecharem; senão o index.html em cache continua mostrando a versão anterior.
+          skipWaiting: true,
+          clientsClaim: true,
+          cleanupOutdatedCaches: true,
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
           globPatterns: [
             'index.html',
