@@ -1,15 +1,27 @@
-// Painel Design Premium: troca entre IA, editor manual, PhotoCraft e ferramentas gratuitas.
+// Painel Design Premium: IA, mundos (Canvas, Estúdio Pro, Avatares, Galeria) e as páginas de cada um.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { functions: { invoke } } }));
+// O tldraw é pesado para o jsdom; o mundo Canvas não é aberto nestes testes.
+vi.mock('tldraw', () => ({ getSnapshot: vi.fn(() => ({})) }));
+vi.mock('@/components/canvas/TLDrawEditor', () => ({ default: () => null }));
 
 import { CreativeDesign } from '../CreativeDesign';
 
 const modeButton = (label: string) => screen.getByRole('button', { name: label });
+const pageButton = (label: string) => screen.getByRole('button', { name: label });
 
-describe('CreativeDesign modes', () => {
+const renderPanel = () =>
+  render(
+    <MemoryRouter>
+      <CreativeDesign creditsAvailable={100} />
+    </MemoryRouter>,
+  );
+
+describe('CreativeDesign worlds', () => {
   let getContextSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
@@ -37,28 +49,30 @@ describe('CreativeDesign modes', () => {
     getContextSpy.mockRestore();
   });
 
-  it('opens on the AI studio and offers the three modes', () => {
-    render(<CreativeDesign creditsAvailable={100} />);
+  it('opens on the AI studio and offers the worlds', () => {
+    renderPanel();
     expect(modeButton('Com IA')).toHaveAttribute('aria-pressed', 'true');
-    expect(modeButton('Editor manual')).toHaveAttribute('aria-pressed', 'false');
-    expect(modeButton('Ferramentas grátis')).toHaveAttribute('aria-pressed', 'false');
+    for (const world of ['Canvas', 'Estúdio Pro', 'Avatares', 'Galeria']) {
+      expect(modeButton(world)).toHaveAttribute('aria-pressed', 'false');
+    }
     expect(screen.getByRole('button', { name: /Criar design/ })).toBeInTheDocument();
   });
 
-  it('keeps the AI prompt when switching modes and coming back', () => {
-    render(<CreativeDesign creditsAvailable={100} />);
+  it('keeps the AI prompt when switching worlds and coming back', () => {
+    renderPanel();
     fireEvent.change(screen.getByLabelText('Descreva o design'), { target: { value: 'Cartaz de jazz' } });
 
-    fireEvent.click(modeButton('Editor manual'));
+    fireEvent.click(modeButton('Estúdio Pro'));
     expect(screen.queryByRole('button', { name: /Criar design/ })).toBeNull();
 
     fireEvent.click(modeButton('Com IA'));
     expect(screen.getByLabelText('Descreva o design')).toHaveValue('Cartaz de jazz');
   });
 
-  it('shows the manual editor and adds a text layer', () => {
-    render(<CreativeDesign creditsAvailable={100} />);
-    fireEvent.click(modeButton('Editor manual'));
+  it('shows the manual editor inside the Estúdio Pro world and adds a text layer', () => {
+    renderPanel();
+    fireEvent.click(modeButton('Estúdio Pro'));
+    fireEvent.click(pageButton('Editor manual'));
 
     expect(screen.getByRole('heading', { name: 'Monte sua arte à mão' })).toBeVisible();
     expect(screen.getByText('Nenhuma camada selecionada')).toBeInTheDocument();
@@ -69,8 +83,9 @@ describe('CreativeDesign modes', () => {
   });
 
   it('focuses the text field with the placeholder selected when a text layer is added', () => {
-    render(<CreativeDesign creditsAvailable={100} />);
-    fireEvent.click(modeButton('Editor manual'));
+    renderPanel();
+    fireEvent.click(modeButton('Estúdio Pro'));
+    fireEvent.click(pageButton('Editor manual'));
     fireEvent.click(screen.getByRole('button', { name: 'Texto' }));
 
     const field = screen.getByLabelText('Texto da camada');
@@ -98,8 +113,9 @@ describe('CreativeDesign modes', () => {
     const spy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as never);
 
     try {
-      render(<CreativeDesign creditsAvailable={100} />);
-      fireEvent.click(modeButton('Editor manual'));
+      renderPanel();
+      fireEvent.click(modeButton('Estúdio Pro'));
+      fireEvent.click(pageButton('Editor manual'));
       fireEvent.click(modeButton('Banner 16:9'));
       fireEvent.click(screen.getByRole('button', { name: 'Retângulo' }));
       fireEvent.click(modeButton('Story 9:16'));
@@ -112,27 +128,30 @@ describe('CreativeDesign modes', () => {
     }
   });
 
-  it('embeds the PhotoCraft editor in its own mode', () => {
-    render(<CreativeDesign creditsAvailable={100} />);
-    fireEvent.click(modeButton('PhotoCraft'));
+  it('embeds the PhotoCraft editor as a page of the Estúdio Pro world', () => {
+    renderPanel();
+    fireEvent.click(modeButton('Estúdio Pro'));
+    fireEvent.click(pageButton('PhotoCraft'));
 
     const frame = screen.getByTitle('PhotoCraft editor de imagens');
     expect(frame.tagName).toBe('IFRAME');
     expect(frame).toHaveAttribute('src', '/photocraft/');
   });
 
-  it('lists the free tools and opens the in-app editors from the hub', () => {
-    render(<CreativeDesign creditsAvailable={100} />);
-    fireEvent.click(modeButton('Ferramentas grátis'));
+  it('opens the in-app editors from the free tools page', () => {
+    renderPanel();
+    fireEvent.click(modeButton('Estúdio Pro'));
+    fireEvent.click(pageButton('Ferramentas grátis'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Abrir PhotoCraft' }));
-    expect(modeButton('PhotoCraft')).toHaveAttribute('aria-pressed', 'true');
+    expect(pageButton('PhotoCraft')).toHaveAttribute('aria-current', 'page');
     expect(screen.getByTitle('PhotoCraft editor de imagens')).toBeInTheDocument();
   });
 
   it('links the open-source tools to GitHub in a new tab', () => {
-    render(<CreativeDesign creditsAvailable={100} />);
-    fireEvent.click(modeButton('Ferramentas grátis'));
+    renderPanel();
+    fireEvent.click(modeButton('Estúdio Pro'));
+    fireEvent.click(pageButton('Ferramentas grátis'));
 
     for (const name of ['VectorCraft', 'FilmCraft', 'WordCraft', 'GridCraft', 'DeckCraft']) {
       expect(screen.getByText(name)).toBeInTheDocument();
@@ -144,5 +163,20 @@ describe('CreativeDesign modes', () => {
       expect(link).toHaveAttribute('target', '_blank');
       expect(link).toHaveAttribute('rel', 'noopener noreferrer');
     }
+  });
+
+  it('shows the Galeria world with its feed as in development, without fake designs', () => {
+    renderPanel();
+    fireEvent.click(modeButton('Galeria'));
+    expect(screen.getByRole('heading', { name: 'Feed de designs' })).toBeVisible();
+    expect(screen.getAllByText('Em desenvolvimento').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('img', { name: /design publicado/i })).toBeNull();
+  });
+
+  it('exits a world back to the Design Premium home', () => {
+    renderPanel();
+    fireEvent.click(modeButton('Avatares'));
+    fireEvent.click(screen.getByRole('button', { name: /Design Premium/ }));
+    expect(modeButton('Início')).toHaveAttribute('aria-pressed', 'true');
   });
 });
