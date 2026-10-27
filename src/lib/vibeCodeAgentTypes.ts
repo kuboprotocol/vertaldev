@@ -1,4 +1,7 @@
 // Shared types between the Vibe Code Agent UI and the `vibe-code-agent` edge function.
+import type { DetectedRequirement } from "@/config/connectorCatalog";
+
+export type VibeRequirement = DetectedRequirement;
 
 export type VibeStepKind =
   | "thinking"
@@ -13,6 +16,10 @@ export type VibeStepKind =
   | "connector"
   | "message"
   | "memory"
+  | "conversation"
+  | "requirements"
+  | "question"
+  | "review"
   | "error"
   | "done";
 
@@ -36,6 +43,11 @@ export interface VibeStep {
   reverted?: boolean;
   /** Persisted checkpoint id (vibe_checkpoints), enables timeline rollback. */
   checkpointId?: string;
+  /** Conversa (caixinha) à qual este passo pertence. */
+  conversationId?: string;
+  isNew?: boolean;
+  /** Conectores e APIs que a aplicação precisa (kind "requirements"). */
+  requirements?: VibeRequirement[];
   /** Model tier chosen by the DeepSeek router for this cycle. */
   tier?: VibeModelTier;
   estimatedCost?: number;
@@ -59,8 +71,21 @@ export type VibeAgentMode =
   /** Generates a plan and commits the changes straight to GitHub. */
   | "apply";
 
+export interface VibeConversation {
+  id: string;
+  project_id: string | null;
+  title: string;
+  summary: string | null;
+  message_count: number;
+  archived: boolean;
+  created_at: string;
+  last_message_at: string;
+}
+
 export interface VibeAgentRequest {
   prompt: string;
+  /** Conversa existente; omitida = o agente abre uma nova caixinha. */
+  conversationId?: string;
   projectId?: string;
   mode: VibeAgentMode;
   /** Apply an already-previewed set of file writes. */

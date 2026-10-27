@@ -24,7 +24,10 @@ import { VibeLivePreview } from "./VibeLivePreview";
 import { VibeCheckpointTimeline } from "./VibeCheckpointTimeline";
 import { VibeAgentActivityPanel } from "./VibeAgentActivityPanel";
 import { VibePrimeMemoryPanel } from "./VibePrimeMemoryPanel";
+import { VibeConversationList } from "./VibeConversationList";
+import { useVibeConversations } from "@/hooks/useVibeConversations";
 import { useWorkspaceProject } from "@/hooks/useWorkspaceProject";
+import type { VibeConversationsApi } from "@/hooks/useVibeConversations";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
@@ -32,6 +35,7 @@ export default function VibeCodeLayout() {
   const [activeTab, setActiveTab] = useState("agent");
   const [isMobile, setIsMobile] = useState(false);
   const { projectId, loadProjects } = useWorkspaceProject();
+  const conversations = useVibeConversations(projectId || undefined);
 
   useEffect(() => {
     void loadProjects();
@@ -55,9 +59,9 @@ export default function VibeCodeLayout() {
         <main className="flex-1 overflow-auto p-4 pb-20 md:p-6 md:pb-6">
           <div className="mx-auto max-w-7xl">
             {isMobile ? (
-              <MobileView activeTab={activeTab} projectId={projectId} />
+              <MobileView activeTab={activeTab} projectId={projectId} conversations={conversations} />
             ) : (
-              <DesktopView activeTab={activeTab} setActiveTab={setActiveTab} projectId={projectId} />
+              <DesktopView activeTab={activeTab} setActiveTab={setActiveTab} projectId={projectId} conversations={conversations} />
             )}
           </div>
         </main>
@@ -108,11 +112,20 @@ export default function VibeCodeLayout() {
   );
 }
 
-function DesktopView({ activeTab, projectId }: { activeTab: string; setActiveTab: (t: string) => void; projectId: string }) {
+function DesktopView({
+  activeTab,
+  projectId,
+  conversations,
+}: {
+  activeTab: string;
+  setActiveTab: (t: string) => void;
+  projectId: string;
+  conversations: VibeConversationsApi;
+}) {
   if (activeTab === 'agent' || activeTab === 'files') {
     return (
       <div className="grid h-[calc(100vh-8rem)] gap-6 lg:grid-cols-[400px_1fr_260px]">
-        <VibeCodeAgentChat projectId={projectId} />
+        <VibeCodeAgentChat projectId={projectId} conversations={conversations} />
         <div className="flex flex-col gap-6 min-w-0">
           <Tabs defaultValue="preview" className="flex-1 flex flex-col">
             <TabsList className="bg-white/5 border border-white/10">
@@ -130,9 +143,20 @@ function DesktopView({ activeTab, projectId }: { activeTab: string; setActiveTab
               <p className="text-xs text-muted-foreground/60">Aba de rede em breve.</p>
             </TabsContent>
           </Tabs>
-          <VibeConnectorPanel />
+          <VibeConnectorPanel projectId={projectId || undefined} />
         </div>
-        <VibeCheckpointTimeline projectRepo={undefined} />
+        <div className="flex min-h-0 flex-col gap-4">
+          <div className="flex h-56 min-h-0 flex-col rounded-2xl border border-border/40 bg-card/20 p-3">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Conversas</h3>
+            <VibeConversationList
+              api={conversations}
+              className="min-h-0 flex-1"
+              onSelect={(id) => void conversations.open(id)}
+              onNew={conversations.startNew}
+            />
+          </div>
+          <VibeCheckpointTimeline projectRepo={undefined} />
+        </div>
       </div>
     );
   }
@@ -163,7 +187,15 @@ function DesktopView({ activeTab, projectId }: { activeTab: string; setActiveTab
   );
 }
 
-function MobileView({ activeTab, projectId }: { activeTab: string; projectId: string }) {
+function MobileView({
+  activeTab,
+  projectId,
+  conversations,
+}: {
+  activeTab: string;
+  projectId: string;
+  conversations: VibeConversationsApi;
+}) {
   switch (activeTab) {
     case 'agent':
       // The chat's message list scrolls inside its own box, so it needs a bounded height
@@ -171,7 +203,7 @@ function MobileView({ activeTab, projectId }: { activeTab: string; projectId: st
       // the full transcript and the page is too heavy to scroll.
       return (
         <div className="flex h-[calc(100dvh-10rem)] min-h-[420px] min-w-0 flex-col">
-          <VibeCodeAgentChat projectId={projectId} />
+          <VibeCodeAgentChat projectId={projectId} conversations={conversations} />
         </div>
       );
     case 'domains':
