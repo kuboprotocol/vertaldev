@@ -19,6 +19,9 @@ import {
   BookmarkCheck,
   Gauge,
   Database,
+  HelpCircle,
+  ShieldCheck,
+  MessagesSquare,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,9 +30,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { VibeChatMessage, VibeStep, VibeStepKind } from "@/lib/vibeCodeAgentTypes";
+import type { VibeConversationsApi } from "@/hooks/useVibeConversations";
+import { VibeConversationList } from "./VibeConversationList";
+import { VibeRequirementsCard } from "./VibeRequirementsCard";
 
 const AGENT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/vibe-code-agent`;
 
@@ -46,6 +53,10 @@ const STEP_ICON: Record<VibeStepKind, typeof Brain> = {
   connector: Plug,
   message: MessageSquare,
   memory: Database,
+  conversation: MessageSquare,
+  requirements: Plug,
+  question: HelpCircle,
+  review: ShieldCheck,
   error: AlertCircle,
   done: CheckCircle2,
 };
@@ -71,8 +82,35 @@ function DiffView({ diff }: { diff: string }) {
   );
 }
 
-export function VibeCodeAgentChat({ projectId }: { projectId?: string }) {
-  const [messages, setMessages] = useState<VibeChatMessage[]>([]);
+export function VibeCodeAgentChat({
+  projectId,
+  conversations,
+}: {
+  projectId?: string;
+  conversations: VibeConversationsApi;
+}) {
+  const { messages, setMessages, setActiveId, refresh, open, startNew } = conversations;
+  const activeIdRef = useRef<string | null>(conversations.activeId);
+  activeIdRef.current = conversations.activeId;
+  const activeTitle = conversations.conversations.find((c) => c.id === conversations.activeId)?.title;
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const openConversation = useCallback(
+    async (id: string) => {
+      setPickerOpen(false);
+      try {
+        await open(id);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Não foi possível abrir a conversa.");
+      }
+    },
+    [open],
+  );
+
+  const newConversation = useCallback(() => {
+    setPickerOpen(false);
+    startNew();
+  }, [startNew]);
   const [input, setInput] = useState("");
   const [running, setRunning] = useState(false);
   const [autoApply, setAutoApply] = useState(false);
@@ -96,7 +134,7 @@ export function VibeCodeAgentChat({ projectId }: { projectId?: string }) {
         return { ...m, steps };
       }),
     );
-  }, []);
+  }, [setMessages]);
 
   const runStream = useCallback(
     async (payload: Record<string, unknown>, assistantId: string) => {
@@ -116,7 +154,7 @@ export function VibeCodeAgentChat({ projectId }: { projectId?: string }) {
           Authorization: `Bearer ${session.access_token}`,
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
-        body: JSON.stringify({ projectId, ...payload }),
+        body: JSON.stringify({ projectId, conversationId: activeIdRef.current ?? undefined, ...payload }),
       });
 
       if (!resp.ok || !resp.body) {
@@ -146,6 +184,10 @@ export function VibeCodeAgentChat({ projectId }: { projectId?: string }) {
           if (!line.startsWith("data: ")) continue;
           try {
             const evt = JSON.parse(line.slice(6));
+            if (evt.kind === "conversation" && typeof evt.conversationId === "string") {
+              activeIdRef.current = evt.conversationId;
+              setActiveId(evt.conversationId);
+            }
             pushStep(assistantId, {
               id: crypto.randomUUID(),
               startedAt: Date.now(),
@@ -157,7 +199,7 @@ export function VibeCodeAgentChat({ projectId }: { projectId?: string }) {
         }
       }
     },
-    [projectId, pushStep],
+    [projectId, pushStep, setActiveId],
   );
 
   const send = async () => {
@@ -180,6 +222,7 @@ export function VibeCodeAgentChat({ projectId }: { projectId?: string }) {
     } finally {
       setRunning(false);
       abortRef.current = null;
+      void refresh();
     }
   };
 
@@ -244,6 +287,17 @@ export function VibeCodeAgentChat({ projectId }: { projectId?: string }) {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-7 max-w-[150px] gap-1.5 border-border/30 px-2 text-[10px]">
+                <MessagesSquare className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{activeTitle ?? "Conversas"}</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="h-80 w-72 p-3">
+              <VibeConversationList api={conversations} onSelect={(id) => void openConversation(id)} onNew={newConversation} disabled={running} className="h-full" />
+            </PopoverContent>
+          </Popover>
           <div className="flex items-center gap-2 rounded-full bg-black/40 px-3 py-1 border border-border/20">
             <Label htmlFor="auto-apply" className="text-[10px] font-bold uppercase tracking-tighter text-muted-foreground">
               Auto-Commit
@@ -259,7 +313,8 @@ export function VibeCodeAgentChat({ projectId }: { projectId?: string }) {
         <div className="relative ml-4 space-y-6 border-l border-border/10 pl-6">
           {messages.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              Describe a change — the agent plans it, previews the diff, and commits it to your repository.
+              Descreva o que quer construir. O agente lê o projeto, raciocina, revisa o próprio código, guarda tudo
+              nesta conversa e avisa de quais conectores e APIs a aplicação precisa.
             </p>
           )}
 
@@ -272,7 +327,7 @@ export function VibeCodeAgentChat({ projectId }: { projectId?: string }) {
               </div>
             ) : (
               <div key={m.id} className="space-y-6">
-                {(m.steps ?? []).map((step) => {
+                {(m.steps ?? []).filter((step) => step.kind !== "conversation").map((step) => {
                   const Icon = STEP_ICON[step.kind] ?? Brain;
                   return (
                     <div
@@ -348,6 +403,10 @@ export function VibeCodeAgentChat({ projectId }: { projectId?: string }) {
                           <DiffView diff={step.diff} />
                         </div>
                       )}
+
+                      {step.kind === "requirements" && step.requirements && step.requirements.length > 0 && (
+                        <VibeRequirementsCard requirements={step.requirements} />
+                      )}
                     </div>
                   );
                 })}
@@ -403,7 +462,7 @@ export function VibeCodeAgentChat({ projectId }: { projectId?: string }) {
           </Button>
         </div>
         <p className="mt-2 text-center text-[9px] font-medium tracking-tight text-muted-foreground/40 uppercase">
-          Agent executes real commits via GitHub API
+          Cada conversa guarda memória e código · commits reais via GitHub quando conectado
         </p>
       </div>
     </Card>

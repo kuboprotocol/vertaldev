@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Github, Database, CreditCard, Globe, Plug, CheckCircle2, Circle } from "lucide-react";
+import { Github, Database, CreditCard, Globe, Plug, CheckCircle2, Circle, KeyRound } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,8 +32,43 @@ const BASE: VibeConnectorState[] = [
   { slug: "mcp", label: "MCP", description: "External tool servers for the agent.", connected: false },
 ];
 
-export function VibeConnectorPanel() {
+interface PendingRequirement {
+  id: string;
+  slug: string;
+  name: string;
+  reason: string | null;
+  secrets: string[];
+}
+
+const REQUIREMENTS = "vibe_requirements" as never;
+
+export function VibeConnectorPanel({ projectId }: { projectId?: string }) {
   const [connectors, setConnectors] = useState<VibeConnectorState[]>(BASE);
+  const [pending, setPending] = useState<PendingRequirement[]>([]);
+
+  // Conectores e APIs que o agente detectou como necessários para os apps do usuário.
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        let query = supabase
+          .from(REQUIREMENTS)
+          .select("id, slug, name, reason, secrets")
+          .eq("status", "needed")
+          .order("updated_at", { ascending: false })
+          .limit(20);
+        if (projectId) query = query.eq("project_id", projectId);
+        const { data } = await query;
+        if (active) setPending((data ?? []) as unknown as PendingRequirement[]);
+      } catch {
+        // Sem a lista de exigências o painel continua útil; só não mostra o aviso.
+        if (active) setPending([]);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [projectId]);
 
   useEffect(() => {
     let active = true;
@@ -65,6 +100,23 @@ export function VibeConnectorPanel() {
           {connectors.filter((c) => c.connected).length}/{connectors.length}
         </Badge>
       </div>
+
+      {pending.length > 0 && (
+        <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3" data-testid="pending-requirements">
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-400">
+            <KeyRound className="h-3.5 w-3.5" /> Exigidos pelo seu app ({pending.length})
+          </p>
+          {pending.map((r) => (
+            <div key={r.id} className="text-xs">
+              <span className="font-medium">{r.name}</span>
+              {r.reason && <span className="text-muted-foreground"> — {r.reason}</span>}
+              {r.secrets.length > 0 && (
+                <span className="ml-1 font-mono text-[10px] text-muted-foreground">({r.secrets.join(", ")})</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="space-y-2">
         {connectors.map((c) => {
