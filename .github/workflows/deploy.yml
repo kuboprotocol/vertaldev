@@ -44,7 +44,7 @@ jobs:
           fail=0
           for dir in supabase/functions/*/; do
             name=$(basename "$dir")
-            case "$name" in _*) continue;; esac
+            case "$name" in _*|ping-*) continue;; esac
             [ -f "$dir/index.ts" ] || continue
             if out=$(supabase functions deploy "$name" --project-ref "$SUPABASE_PROJECT_REF" --use-api 2>&1); then
               echo "ok: $name"
