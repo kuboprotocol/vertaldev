@@ -38,7 +38,24 @@ jobs:
 
       - name: Deploy edge functions
         if: env.SUPABASE_ACCESS_TOKEN != ''
-        run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF"
+        run: |
+          # Deploy one function at a time so a single bad function cannot abort the rest,
+          # and surface each failure as an annotation (readable without log access).
+          fail=0
+          for dir in supabase/functions/*/; do
+            name=$(basename "$dir")
+            case "$name" in _*) continue;; esac
+            [ -f "$dir/index.ts" ] || continue
+            if out=$(supabase functions deploy "$name" --project-ref "$SUPABASE_PROJECT_REF" --use-api 2>&1); then
+              echo "ok: $name"
+            else
+              fail=$((fail+1))
+              msg=$(echo "$out" | tail -n 4 | tr '\n' ' ' | cut -c1-400)
+              echo "::error title=deploy failed: $name::$msg"
+            fi
+          done
+          echo "failed functions: $fail"
+          [ "$fail" -eq 0 ]
 
   verify-deployment:
     name: ✅ Verify Deployment
