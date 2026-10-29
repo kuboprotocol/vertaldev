@@ -1,23 +1,29 @@
 // supabase/functions/creative-video/index.ts
 // Kubo Shorts + Avatar — text/image to short video.
 //   Shorts: POST { prompt, duration } → script + thumbnail.
-//   Avatar: POST { mode: "avatar", prompt, voice, image_url? } → narration (MiniMax) and, with a photo,
-//           a lip-sync job (Kling AI Avatar) on the fal.ai queue; POST { mode: "avatar", action: "status", asset_id }.
+//   Avatar: POST { mode: "avatar", prompt, voice, image_url? }; POST { mode: "avatar", action: "status", asset_id }.
+//           With a photo (default): HeyGen Avatar IV through OpenRouter (HeyGen voices the script itself).
+//           Without a photo: narration only (MiniMax via fal.ai, needs FAL_KEY).
+//           AVATAR_PROVIDER=fal switches the photo path back to narration (MiniMax) + lip-sync (Kling AI Avatar) on fal.ai.
 import { corsHeaders } from "../_shared/cors.ts";
 import { getUser, deductCredits, recordAsset, sanitizeError, supaAdmin, withRefundOnFailure } from "../_shared/creative.ts";
 import {
+  AVATAR_HEYGEN_MODEL,
   AVATAR_LIMITS,
   AVATAR_TTS_MODEL,
   AVATAR_VIDEO_MODEL,
   AVATAR_VOICES,
   avatarVideoCredits,
   avatarVoiceCredits,
+  estimateAvatarSeconds,
+  heygenVideoCredits,
   isAvatarVoice,
-  quoteAvatar,
+  quoteAvatarFal,
 } from "../_shared/avatarConfig.ts";
 
 const FAL_RUN = "https://fal.run/";
 const FAL_QUEUE = "https://queue.fal.run/";
+const OPENROUTER_VIDEOS = "https://openrouter.ai/api/v1/videos";
 
 Deno.serve(withRefundOnFailure(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -142,16 +148,22 @@ interface AvatarJob {
 }
 interface AvatarMeta {
   mode: "avatar";
+  /** Missing on assets created before HeyGen: those are fal.ai jobs. */
+  provider?: "heygen" | "fal";
   voice: string;
   source: "photo" | "text";
   image_url: string | null;
-  audio_url: string;
+  /** Narration file (fal path only); HeyGen voices the video itself. */
+  audio_url: string | null;
   seconds: number;
   voice_credits: number;
   /** Credits actually charged for the video (0 for admins), refunded if the lip-sync fails. */
   video_credits_charged: number;
   submitted_at: string;
   job?: AvatarJob;
+  /** OpenRouter video job id (HeyGen path). */
+  or_job_id?: string;
+  provider_cost_usd?: number | null;
   video_url?: string;
   error?: string;
   refunded?: boolean;
@@ -173,14 +185,18 @@ async function avatarSubmit(
     imageUrl = body.image_url;
   }
 
+  const useHeygen = Deno.env.get("AVATAR_PROVIDER") !== "fal";
+  if (useHeygen && imageUrl) return await heygenSubmit(user, text, imageUrl, voice, idempotencyKey);
+
   const falKey = Deno.env.get("FAL_KEY");
-  if (!falKey) return j(503, { error: "avatar_ai_not_configured" });
+  // HeyGen needs a photo; without one only the fal.ai narration is possible.
+  if (!falKey) return useHeygen ? j(400, { error: "avatar_photo_required" }) : j(503, { error: "avatar_ai_not_configured" });
   const auth = { Authorization: `Key ${falKey}`, "Content-Type": "application/json" };
 
   // 1) Voice. Charged first; withRefundOnFailure gives it back if anything below fails.
   const voiceCredits = avatarVoiceCredits(text.length);
   const dedVoice = await deductCredits(user.id, voiceCredits, "creative_avatar_voice", { chars: text.length, voice }, user.email, idempotencyKey);
-  if (!dedVoice.ok) return j(dedVoice.status ?? 402, { error: dedVoice.error, credits_required: quoteAvatar(text, !!imageUrl).credits });
+  if (!dedVoice.ok) return j(dedVoice.status ?? 402, { error: dedVoice.error, credits_required: quoteAvatarFal(text, !!imageUrl).credits });
 
   const tts = await fetch(FAL_RUN + (Deno.env.get("FAL_MODEL_AVATAR_TTS") || AVATAR_TTS_MODEL), {
     method: "POST",
@@ -198,11 +214,12 @@ async function avatarSubmit(
     console.warn(`[creative-video] avatar tts failed (${tts.status})`, JSON.stringify(ttsData).slice(0, 300));
     return j(502, { error: "voice_generation_failed" });
   }
-  const seconds = Number(ttsData?.duration_ms) > 0 ? Number(ttsData.duration_ms) / 1000 : quoteAvatar(text, false).seconds;
+  const seconds = Number(ttsData?.duration_ms) > 0 ? Number(ttsData.duration_ms) / 1000 : estimateAvatarSeconds(text);
   const audioUrl = (await rehost(falAudioUrl, `${user.id}/avatar/${crypto.randomUUID()}.mp3`, "audio/mpeg")) ?? falAudioUrl;
 
   const meta: AvatarMeta = {
     mode: "avatar",
+    provider: "fal",
     voice,
     source: imageUrl ? "photo" : "text",
     image_url: imageUrl,
@@ -264,6 +281,121 @@ async function avatarSubmit(
   });
 }
 
+/** HeyGen Avatar IV through OpenRouter: one photo + the script, HeyGen voices it. Priced by estimated duration, refunded if the job fails. */
+async function heygenSubmit(
+  user: { id: string; email?: string | null },
+  text: string,
+  imageUrl: string,
+  voice: string,
+  idempotencyKey: string | undefined,
+) {
+  const key = Deno.env.get("OPENROUTER_API_KEY");
+  if (!key) return j(503, { error: "avatar_ai_not_configured" });
+
+  const seconds = estimateAvatarSeconds(text);
+  const credits = heygenVideoCredits(seconds);
+  // Charged first; withRefundOnFailure gives it back if anything below answers with an error.
+  const ded = await deductCredits(user.id, credits, "creative_avatar_video", { seconds, provider: "heygen" }, user.email, idempotencyKey);
+  if (!ded.ok) return j(ded.status ?? 402, { error: ded.error, credits_required: credits });
+
+  const r = await fetch(OPENROUTER_VIDEOS, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://kubovibe.dev",
+      "X-Title": "KUBO Vibe",
+    },
+    body: JSON.stringify({
+      model: AVATAR_HEYGEN_MODEL,
+      prompt: text,
+      resolution: "720p",
+      aspect_ratio: "1:1",
+      input_references: [{ type: "image_url", image_url: { url: imageUrl } }],
+    }),
+  });
+  const job = await r.json().catch(() => ({}));
+  if (!r.ok || typeof job?.id !== "string") {
+    console.warn(`[creative-video] heygen submit failed (${r.status})`, JSON.stringify(job).slice(0, 300));
+    return j(502, { error: "avatar_submit_failed" });
+  }
+
+  const { data: isAdmin } = await supaAdmin().rpc("is_admin", { p_user_id: user.id });
+  const charged = isAdmin ? 0 : credits;
+  const meta: AvatarMeta = {
+    mode: "avatar",
+    provider: "heygen",
+    voice,
+    source: "photo",
+    image_url: imageUrl,
+    audio_url: null,
+    seconds,
+    voice_credits: 0,
+    video_credits_charged: charged,
+    submitted_at: new Date().toISOString(),
+    or_job_id: job.id,
+  };
+  const assetId = await recordAsset(user.id, {
+    tool: "avatar",
+    status: "processing",
+    prompt: text,
+    credits_spent: charged,
+    metadata: meta as unknown as Record<string, unknown>,
+  });
+  if (!assetId) throw new Error("asset_insert_failed");
+
+  return j(200, { ok: true, asset_id: assetId, status: "processing", audio_url: null, video_url: null, credits_charged: charged });
+}
+
+/** Poll the OpenRouter video job. Mutates meta (video_url / error / provider_cost_usd) and returns the new status. */
+async function pollHeygen(meta: AvatarMeta, userId: string, assetId: string): Promise<"processing" | "completed" | "failed"> {
+  const key = Deno.env.get("OPENROUTER_API_KEY");
+  if (!key) return "processing";
+  const auth = { Authorization: `Bearer ${key}` };
+  const expired = Date.now() - Date.parse(meta.submitted_at) > AVATAR_LIMITS.jobTimeoutMinutes * 60_000;
+  const timeout = (): "failed" => { meta.error = "timeout"; return "failed"; };
+  try {
+    const s = await fetch(`${OPENROUTER_VIDEOS}/${meta.or_job_id}`, { headers: auth });
+    const sd = await s.json().catch(() => ({}));
+    if (!s.ok) {
+      console.warn(`[creative-video] heygen poll http ${s.status}`);
+      if (s.status === 404) { meta.error = "job_not_found"; return "failed"; }
+      return expired ? timeout() : "processing";
+    }
+    const st = String(sd?.status ?? "pending");
+
+    if (st === "completed") {
+      const c = await fetch(`${OPENROUTER_VIDEOS}/${meta.or_job_id}/content?index=0`, { headers: auth });
+      if (!c.ok) {
+        console.warn(`[creative-video] heygen download http ${c.status}`);
+        return expired ? timeout() : "processing"; // retried on the next poll
+      }
+      const path = `${userId}/avatar/${assetId}.mp4`;
+      const storage = supaAdmin().storage.from("uploads");
+      const { error } = await storage.upload(path, new Uint8Array(await c.arrayBuffer()), { contentType: "video/mp4", upsert: true });
+      if (error) {
+        console.error("[creative-video] heygen upload failed:", error);
+        return expired ? timeout() : "processing";
+      }
+      const { data } = await storage.createSignedUrl(path, 60 * 60 * 24 * 30);
+      if (!data?.signedUrl) return expired ? timeout() : "processing";
+      meta.video_url = data.signedUrl;
+      meta.provider_cost_usd = typeof sd?.usage?.cost === "number" ? sd.usage.cost : null;
+      return "completed";
+    }
+
+    if (st === "failed" || st === "cancelled" || st === "expired") {
+      console.warn(`[creative-video] heygen job ${st}:`, JSON.stringify(sd?.error ?? "").slice(0, 300));
+      meta.error = "generation_failed";
+      return "failed";
+    }
+    return expired ? timeout() : "processing";
+  } catch (err) {
+    console.error("[creative-video] heygen poll error:", err);
+    return expired ? timeout() : "processing";
+  }
+}
+
 async function avatarStatus(userId: string, assetId: unknown) {
   if (typeof assetId !== "string") return j(400, { error: "asset_id_required" });
   const admin = supaAdmin();
@@ -279,8 +411,13 @@ async function avatarStatus(userId: string, assetId: unknown) {
   const meta = asset.metadata as AvatarMeta;
   let status: string = asset.status;
   const falKey = Deno.env.get("FAL_KEY");
+  let polled = false;
 
-  if (status === "processing" && meta.job && falKey) {
+  if (status === "processing" && meta.provider === "heygen" && meta.or_job_id) {
+    polled = true;
+    status = await pollHeygen(meta, userId, assetId);
+  } else if (status === "processing" && meta.job && falKey) {
+    polled = true;
     const auth = { Authorization: `Key ${falKey}` };
     const expired = Date.now() - Date.parse(meta.submitted_at) > AVATAR_LIMITS.jobTimeoutMinutes * 60_000;
     try {
@@ -308,7 +445,9 @@ async function avatarStatus(userId: string, assetId: unknown) {
         status = "failed";
       }
     }
+  }
 
+  if (polled) {
     if (status === "failed" && !meta.refunded) {
       if (meta.video_credits_charged > 0) {
         const { error } = await admin.rpc("execute_atomic_credit_topup", {

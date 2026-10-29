@@ -29,7 +29,7 @@ import { ClipStudio } from "./ClipStudio";
 import { AvatarProgressSteps, type AvatarStepState, type AvatarStepKey } from "./AvatarProgressSteps";
 import { cn } from "@/lib/utils";
 import { PUTER_MODELS, creativeInvoke } from "@/lib/puterAI";
-import { AVATAR_LIMITS, quoteAvatar } from "@/config/avatarPricing";
+import { AVATAR_LIMITS, HEYGEN_CREDITS_PER_SECOND, quoteAvatar } from "@/config/avatarPricing";
 import { functionErrorCode } from "@/lib/functionError";
 
 // supabase.functions.invoke hides the body of non-2xx responses; these map the codes creative-video returns.
@@ -37,6 +37,7 @@ function avatarErrorMessage(code: string | null): string {
   if (code?.startsWith("text_max_")) return `O texto passou de ${AVATAR_LIMITS.maxTextChars} caracteres.`;
   const messages: Record<string, string> = {
     avatar_ai_not_configured: "O serviço de avatar ainda não está configurado no servidor.",
+    avatar_photo_required: "Envie uma foto para o avatar falar.",
     voice_generation_failed: "Não foi possível gerar a voz. Tente de novo.",
     avatar_submit_failed: "Não foi possível enviar o vídeo para a geração.",
     invalid_image_url: "A foto não pôde ser usada. Envie a imagem de novo.",
@@ -61,7 +62,7 @@ const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: strin
   { key: "image_editor", title: "Editor de Imagens", desc: "Edite, corte e redimensione suas imagens perfeitamente", icon: Sliders, cost: "Grátis" },
   { key: "downloader", title: "Downloader Universal", desc: "YouTube, Instagram, TikTok, Facebook", icon: Download, cost: "2 créditos" },
   { key: "clips", title: "Vertal Clips", desc: "Cortes virais automáticos", icon: Scissors, cost: "1 crédito" },
-  { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes realistas", icon: User2, cost: "4 créditos/s de vídeo" },
+  { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes realistas", icon: User2, cost: `~${HEYGEN_CREDITS_PER_SECOND.toFixed(1).replace(".", ",")} créditos/s de vídeo` },
   { key: "shorts", title: "Vertal Shorts", desc: "Vídeos curtos a partir de texto", icon: Video, cost: "3 créditos" },
   { key: "music", title: "MusKAI Music", desc: "Redireciona para MusKAI", icon: Music, cost: "Externo" },
   { key: "ebook", title: "Vertal Ebook AI", desc: "eBooks completos com capítulos", icon: BookOpen, cost: `a partir de ${ebookCost(EBOOK_MIN_CHAPTERS).credits} créditos` },
