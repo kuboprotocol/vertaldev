@@ -1894,7 +1894,7 @@ FOR DELETE TO authenticated
 USING (public.has_any_role(ARRAY['admin','analyst']));
 
 -- 20260611031357 [pwa_telemetry_clear_logs]
-CREATE POLICY "Admins can view clear logs" ON public.pwa_telemetry_clear_logs
+CREATE POLICY "Admins can view clear logs" ON public.pwa_telemetry_audit_logs
   FOR SELECT USING (public.has_any_role(ARRAY['admin']));
 
 -- 20260611031856 [pwa_telemetry_webhooks]
