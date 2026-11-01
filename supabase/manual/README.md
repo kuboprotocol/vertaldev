@@ -7,7 +7,8 @@ arquivos de novo nele duplicaria políticas.
 
 | Arquivo | O que faz | Aplicado em |
 |---|---|---|
-| `20261102_restore_missing_objects.sql` | Cria os objetos (tabelas, funções, views, políticas e triggers) que existem nas migrations mas nunca chegaram à produção, que foi montada com os blocos consolidados `part_001`–`part_005`. Extraído só com comandos sobre objetos ausentes; funções e views na definição mais recente. Não redefine nada que já existe. | ver histórico de migrations do projeto (`restore_missing_objects`) |
+| `20261102_restore_missing_objects.sql` | Cria os objetos (tabelas, funções, views, políticas e triggers) que existem nas migrations mas nunca chegaram à produção, que foi montada com os blocos consolidados `part_001`–`part_005`. Extraído só com comandos sobre objetos ausentes; funções e views na definição mais recente. Não redefine nada que já existe. | 2026-11-01, migration `restore_missing_objects` |
+| `20261102_harden_restored_objects.sql` | Views restauradas com `security_invoker` (`affiliate_install_stats` exporia todos os afiliados), `detect_fraud_by_ip` só para service role, `can_be_affiliate` fora do acesso anônimo, `search_path` fixo em `update_shortlinks_updated_at`. | 2026-11-01, migration `harden_restored_objects` |
 
 Desvio intencional: as tabelas `app_logos`, `logo_ai_generations`,
 `app_integrations`, `app_deployments`, `app_navbar_configs`, `app_analytics` e
