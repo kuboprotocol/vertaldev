@@ -48,7 +48,7 @@ export default function AILogoGenerator({ appId, onLogoGenerated }: AILogoGenera
       if (!session) return
 
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/generate-logo-ai?action=list-generations&app_id=${appId}`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-logo-ai?action=list-generations&app_id=${appId}`,
         {
           headers: { 'Authorization': `Bearer ${session.access_token}` },
         }
@@ -101,7 +101,7 @@ export default function AILogoGenerator({ appId, onLogoGenerated }: AILogoGenera
       }
 
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/generate-logo-ai?action=generate&app_id=${appId}`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-logo-ai?action=generate&app_id=${appId}`,
         {
           method: 'POST',
           headers: {

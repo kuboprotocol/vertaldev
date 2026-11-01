@@ -51,7 +51,8 @@ export async function requestSafeGPUDevice(): Promise<GPUDevice | null> {
   try {
     const adapter = await nav.gpu.requestAdapter();
     if (!adapter) return null;
-    return await adapter.requestDevice();
+    // @babylonjs/core traz tipagens WebGPU próprias que divergem das do lib.dom.
+    return (await adapter.requestDevice()) as unknown as GPUDevice;
   } catch {
     return null;
   }

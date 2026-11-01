@@ -74,7 +74,7 @@ export default function CreditsPurchasePanel({
       if (!session) return
 
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/stripe-payments?action=list-transactions`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-payments?action=list-transactions`,
         {
           headers: { 'Authorization': `Bearer ${session.access_token}` },
         }
@@ -101,7 +101,7 @@ export default function CreditsPurchasePanel({
       }
 
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/stripe-payments?action=create-session`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-payments?action=create-session`,
         {
           method: 'POST',
           headers: {

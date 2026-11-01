@@ -68,7 +68,7 @@ export default function NavbarCustomizer({ appId, appName = 'Seu App' }: NavbarC
       if (!session) return
 
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/navbar-config?action=get&app_id=${appId}`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navbar-config?action=get&app_id=${appId}`,
         {
           headers: { 'Authorization': `Bearer ${session.access_token}` },
         }
@@ -129,7 +129,7 @@ export default function NavbarCustomizer({ appId, appName = 'Seu App' }: NavbarC
       }
 
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/navbar-config?action=save`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navbar-config?action=save`,
         {
           method: 'POST',
           headers: {

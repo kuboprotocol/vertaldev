@@ -52,7 +52,7 @@ export default function IntegrationsManager({ appId, appName = 'Seu App' }: Inte
       if (!session) return
 
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/integrations?action=list&app_id=${appId}`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/integrations?action=list&app_id=${appId}`,
         {
           headers: { 'Authorization': `Bearer ${session.access_token}` },
         }
@@ -79,7 +79,7 @@ export default function IntegrationsManager({ appId, appName = 'Seu App' }: Inte
       }
 
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/integrations?action=oauth-url`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/integrations?action=oauth-url`,
         {
           method: 'POST',
           headers: {
@@ -110,7 +110,7 @@ export default function IntegrationsManager({ appId, appName = 'Seu App' }: Inte
       if (!session) return
 
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/integrations?action=disconnect`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/integrations?action=disconnect`,
         {
           method: 'POST',
           headers: {

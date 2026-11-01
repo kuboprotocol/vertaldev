@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useCreativeChat } from '@/hooks/useCreativeChat';
+import { conversationService } from '@/services/conversationService';
 import { useAuth } from '@/hooks/useAuth';
 import { ConversationSidebar } from './ConversationSidebar';
 import { ConversationHeader } from './ConversationHeader';
@@ -80,7 +81,11 @@ export function CreativeChat() {
         }}
         onSelectConversation={loadConversation}
         onDeleteConversation={deleteConversation}
-        onArchiveConversation={archiveConversation}
+        onArchiveConversation={async (id, archived) => {
+          // A barra lateral arquiva qualquer conversa da lista, não só a aberta.
+          await conversationService.archiveConversation(id, archived);
+          await loadConversations();
+        }}
         onPinConversation={pinConversation}
       />
 

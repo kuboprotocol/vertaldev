@@ -74,7 +74,7 @@ export default function AppLogoManager({ appId, onLogosChange }: AppLogoManagerP
       formData.append('name', file.name.split('.')[0])
 
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/app-logos?action=upload&app_id=${appId}`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/app-logos?action=upload&app_id=${appId}`,
         {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${session.access_token}` },
@@ -106,7 +106,7 @@ export default function AppLogoManager({ appId, onLogosChange }: AppLogoManagerP
       }
 
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/app-logos?action=set-primary&app_id=${appId}`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/app-logos?action=set-primary&app_id=${appId}`,
         {
           method: 'POST',
           headers: {
@@ -150,7 +150,7 @@ export default function AppLogoManager({ appId, onLogosChange }: AppLogoManagerP
       if (!confirm('Tem certeza que deseja deletar este logo?')) return
 
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/app-logos?action=delete&app_id=${appId}`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/app-logos?action=delete&app_id=${appId}`,
         {
           method: 'POST',
           headers: {

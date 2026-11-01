@@ -5,7 +5,8 @@ import * as supabaseModule from '@/integrations/supabase/client';
 // Mock Supabase with proper query chain
 vi.mock('@/integrations/supabase/client', () => {
   const createChain = () => {
-    const chain = {
+    const chain: Record<string, ReturnType<typeof vi.fn>> = {};
+    Object.assign(chain, {
       select: vi.fn().mockReturnValue(chain),
       insert: vi.fn().mockReturnValue(chain),
       update: vi.fn().mockReturnValue(chain),
@@ -13,7 +14,7 @@ vi.mock('@/integrations/supabase/client', () => {
       eq: vi.fn().mockReturnValue(chain),
       single: vi.fn().mockResolvedValue({ data: null, error: null }),
       returns: vi.fn().mockResolvedValue({ data: null, error: null }),
-    };
+    });
     return chain;
   };
 

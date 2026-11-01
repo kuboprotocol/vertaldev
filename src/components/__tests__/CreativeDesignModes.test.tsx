@@ -44,7 +44,7 @@ describe('CreativeDesign worlds', () => {
       restore: vi.fn(),
       setLineDash: vi.fn(),
       measureText: () => ({ width: 100 }),
-    } as unknown as CanvasRenderingContext2D);
+    } as never);
   });
 
   afterEach(() => {

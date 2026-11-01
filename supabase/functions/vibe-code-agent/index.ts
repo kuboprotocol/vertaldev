@@ -378,7 +378,7 @@ Deno.serve(async (req) => {
       let seq = 0;
       const recorded: Array<Record<string, unknown>> = [];
       const send = (event: Record<string, unknown>) => {
-        const full = { id: `s${++seq}`, ...event };
+        const full: Record<string, unknown> = { id: `s${++seq}`, ...event };
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(full)}\n\n`));
         if (recorded.length < MAX_STORED_STEPS) {
           recorded.push({

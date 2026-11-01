@@ -68,7 +68,7 @@ export function CreativeSheets({ creditsAvailable }: CreativeSheetsProps) {
     }
 
     if (format === 'xlsx' && data instanceof Uint8Array) {
-      const blob = new Blob([data], { type });
+      const blob = new Blob([new Uint8Array(data)], { type });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -78,7 +78,7 @@ export function CreativeSheets({ creditsAvailable }: CreativeSheetsProps) {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } else {
-      const blob = new Blob([data], { type });
+      const blob = new Blob([typeof data === 'string' ? data : new Uint8Array(data)], { type });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
