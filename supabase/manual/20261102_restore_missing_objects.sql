@@ -2,8 +2,10 @@
 -- banco de produção (que foi montado com blocos consolidados part_001..part_005).
 -- Extraído das migrations: só comandos sobre objetos AUSENTES; funções e views na
 -- definição mais recente. Nenhum objeto que já existe é redefinido.
--- Desvio das migrations: a FK app_id -> public.apps(id) foi removida porque a
--- tabela apps não existe em nenhum lugar (nem nas migrations nem em produção).
+-- Desvios das migrations: (1) a FK app_id -> public.apps(id) foi removida porque a
+-- tabela apps não existe; (2) enqueue_email/delete_email/move_to_dlq/read_email_batch
+-- ficaram de fora: são atalhos para internal.* sobre pgmq, que não está instalado,
+-- e nada no código as chama.
 
 -- ===== tabelas, índices, constraints, grants (268) =====
 -- 20260607210209 [performance_metrics]
@@ -1335,7 +1337,7 @@ GRANT SELECT, INSERT ON creative_conversations TO anon;
 -- 20261010090000 [creative_messages]
 GRANT SELECT, INSERT, UPDATE ON creative_messages TO anon;
 
--- ===== funções (definição mais recente) (14) =====
+-- ===== funções (definição mais recente) (10) =====
 -- 20260608004728 [execute_job_action]
 CREATE OR REPLACE FUNCTION public.execute_job_action(p_job_id uuid, p_action text, p_actor_id uuid, p_correlation_id text DEFAULT NULL::text)
  RETURNS jsonb
@@ -1422,26 +1424,6 @@ BEGIN
     RETURN jsonb_build_object('ok', true, 'new_status', v_new_status, 'audit_id', v_audit_id);
 END;
 $function$;
-
--- 20260608012723 [enqueue_email]
-CREATE OR REPLACE FUNCTION public.enqueue_email(queue_name text, payload jsonb)
- RETURNS bigint LANGUAGE sql SECURITY INVOKER SET search_path TO 'public' AS 
-$$ SELECT internal.enqueue_email(queue_name, payload); $$;
-
--- 20260608012723 [delete_email]
-CREATE OR REPLACE FUNCTION public.delete_email(queue_name text, message_id bigint)
- RETURNS boolean LANGUAGE sql SECURITY INVOKER SET search_path TO 'public' AS 
-$$ SELECT internal.delete_email(queue_name, message_id); $$;
-
--- 20260608012723 [move_to_dlq]
-CREATE OR REPLACE FUNCTION public.move_to_dlq(source_queue text, dlq_name text, message_id bigint, payload jsonb)
- RETURNS bigint LANGUAGE sql SECURITY INVOKER SET search_path TO 'public' AS 
-$$ SELECT internal.move_to_dlq(source_queue, dlq_name, message_id, payload); $$;
-
--- 20260608012723 [read_email_batch]
-CREATE OR REPLACE FUNCTION public.read_email_batch(queue_name text, batch_size integer, vt integer)
- RETURNS TABLE(msg_id bigint, read_ct integer, message jsonb) LANGUAGE sql SECURITY INVOKER SET search_path TO 'public' AS 
-$$ SELECT * FROM internal.read_email_batch(queue_name, batch_size, vt); $$;
 
 -- 20260609155319 [notify_creative_status_change]
 CREATE OR REPLACE FUNCTION public.notify_creative_status_change()
