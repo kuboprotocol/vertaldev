@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { buildDesignPrompt, resolveDesignConfig } from "../_shared/designIntelligence.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -202,7 +203,17 @@ serve(async (req) => {
     const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 
     // Select system prompt based on KUBO FLOW mode
-    const systemPrompt = MODE_PROMPTS[mode] || FLOW_PROMPT;
+    const basePrompt = MODE_PROMPTS[mode] || FLOW_PROMPT;
+    // Vertal Design Intelligence (desligável por pedido ou DESIGN_INTELLIGENCE=off).
+    const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+    const design = resolveDesignConfig({
+      prompt: lastUser,
+      envFlag: Deno.env.get("DESIGN_INTELLIGENCE"),
+      requestEnabled: body?.designIntelligence,
+      requestSurface: body?.designSurface,
+    });
+    const systemPrompt = design.enabled ? basePrompt + buildDesignPrompt(design.surface, { target: "html" }) : basePrompt;
+    console.log(`Design Intelligence: ${design.enabled ? design.surface : "off"}`);
     console.log(`KUBO FLOW mode: ${mode.toUpperCase()}`);
 
     const fullMessages = [{ role: "system", content: systemPrompt }, ...messages];

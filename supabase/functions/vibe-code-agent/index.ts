@@ -35,6 +35,12 @@ import {
   formatConnectorsForPrompt,
   mergeDeclaredRequirements,
 } from "../_shared/connectorCatalog.ts";
+import {
+  auditGeneratedCode,
+  buildDesignPrompt,
+  formatAuditSummary,
+  resolveDesignConfig,
+} from "../_shared/designIntelligence.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
@@ -343,6 +349,10 @@ Deno.serve(async (req) => {
     apply?: Array<{ path: string; content: string }>;
     revertSha?: string;
     revertCheckpointId?: string;
+    /** false desliga o Vertal Design Intelligence só neste pedido. */
+    designIntelligence?: boolean;
+    /** Força o perfil de design (web_app | saas_dashboard | mobile_app | landing_page). */
+    designSurface?: string;
   };
   try {
     body = await req.json();
@@ -557,8 +567,28 @@ Deno.serve(async (req) => {
         ]);
         if (history.length) send({ kind: "memory", status: "success", title: `Lembrando ${history.length} mensagem(ns) desta conversa` });
 
+        // Vertal Design Intelligence: regras de UI/UX, tokens e checklist no
+        // prompt; a auditoria de design entra na auto-revisão abaixo.
+        // Desligável por pedido (designIntelligence:false) ou globalmente
+        // (secret DESIGN_INTELLIGENCE=off) — rollback sem deploy de código.
+        const design = resolveDesignConfig({
+          prompt,
+          envFlag: Deno.env.get("DESIGN_INTELLIGENCE"),
+          requestEnabled: body.designIntelligence,
+          requestSurface: body.designSurface,
+        });
+        if (design.enabled) {
+          send({
+            kind: "design",
+            status: "success",
+            title: `Design Intelligence: perfil ${design.surface}`,
+            detail: design.surfaceSource === "explicit" ? "perfil escolhido pelo usuário" : "perfil detectado pelo pedido",
+          });
+        }
+
         const system =
           SYSTEM +
+          (design.enabled ? buildDesignPrompt(design.surface, { target: "react" }) : "") +
           formatMemoriesForPrompt(memories) +
           formatConnectorsForPrompt(connected) +
           (conv?.summary ? `\n\nResumo da conversa até aqui:\n${conv.summary}` : "");
@@ -589,6 +619,7 @@ Deno.serve(async (req) => {
         let repairsLeft = MAX_REPAIRS;
         let repaired = false;
         let reviewProblems: Record<string, string[]> = {};
+        let designProblems: Record<string, string[]> = {};
         const readCache = new Map<string, Observation>();
 
         for (let turn = 1; turn <= MAX_TURNS; turn++) {
@@ -700,11 +731,23 @@ Deno.serve(async (req) => {
             const problems = lintGeneratedFile(path, file.content);
             if (problems.length) reviewProblems[path] = problems;
           }
-          const failing = Object.keys(reviewProblems);
+          // Bloqueadores de design (acessibilidade, marca) entram no mesmo
+          // auto-reparo, mas nunca barram o arquivo: só pedem correção.
+          designProblems = {};
+          if (design.enabled && proposed.size) {
+            const audit = auditGeneratedCode([...proposed].map(([path, f]) => ({ path, content: f.content })));
+            for (const f of audit.findings) {
+              if (f.severity !== "blocker" || !f.path) continue;
+              (designProblems[f.path] ??= []).push(`design: ${f.message} Correção: ${f.fix}${f.line ? ` (linha ${f.line})` : ""}`);
+            }
+          }
+          const failing = [...new Set([...Object.keys(reviewProblems), ...Object.keys(designProblems)])];
           if (failing.length && repairsLeft > 0 && turn < MAX_TURNS) {
             repairsLeft--;
             repaired = true;
-            const list = failing.map((p) => `- ${p}: ${reviewProblems[p].join("; ")}`).join("\n");
+            const list = failing
+              .map((p) => `- ${p}: ${[...(reviewProblems[p] ?? []), ...(designProblems[p] ?? [])].join("; ")}`)
+              .join("\n");
             send({ kind: "review", status: "running", title: `Auto-revisão encontrou problemas em ${failing.length} arquivo(s); corrigindo`, detail: list });
             messages.push({ role: "assistant", content: llm.content });
             messages.push({
@@ -737,6 +780,18 @@ Deno.serve(async (req) => {
           });
         } else if (proposed.size) {
           send({ kind: "review", status: "success", title: repaired ? "Auto-revisão: corrigido e aprovado" : "Auto-revisão: código aprovado", detail: `${proposed.size} arquivo(s) verificados` });
+        }
+
+        if (design.enabled && proposed.size) {
+          const audit = auditGeneratedCode([...proposed].map(([path, f]) => ({ path, content: f.content })));
+          if (audit.checkedFiles) {
+            send({
+              kind: "design",
+              status: audit.blockers ? "failed" : "success",
+              title: `Auditoria de design: ${audit.score}/100`,
+              detail: formatAuditSummary(audit),
+            });
+          }
         }
 
         if (mode === "apply" && proposed.size) {
