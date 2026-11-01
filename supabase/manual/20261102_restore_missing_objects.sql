@@ -2,6 +2,8 @@
 -- banco de produção (que foi montado com blocos consolidados part_001..part_005).
 -- Extraído das migrations: só comandos sobre objetos AUSENTES; funções e views na
 -- definição mais recente. Nenhum objeto que já existe é redefinido.
+-- Desvio das migrations: a FK app_id -> public.apps(id) foi removida porque a
+-- tabela apps não existe em nenhum lugar (nem nas migrations nem em produção).
 
 -- ===== tabelas, índices, constraints, grants (268) =====
 -- 20260607210209 [performance_metrics]
@@ -899,7 +901,7 @@ grant select on daily_shortlink_rewards to authenticated;
 -- 20261009000000 [app_logos]
 CREATE TABLE IF NOT EXISTS public.app_logos (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  app_id           uuid NOT NULL REFERENCES public.apps(id) ON DELETE CASCADE,
+  app_id           uuid NOT NULL,
   user_id          uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
 
   
@@ -945,7 +947,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.app_logos TO authenticated;
 -- 20261009010000 [logo_ai_generations]
 CREATE TABLE IF NOT EXISTS public.logo_ai_generations (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  app_id           uuid NOT NULL REFERENCES public.apps(id) ON DELETE CASCADE,
+  app_id           uuid NOT NULL,
   user_id          uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
 
   
@@ -1064,7 +1066,7 @@ CREATE INDEX IF NOT EXISTS stripe_webhook_events_created_at_idx ON public.stripe
 -- 20261009020000 [app_analytics]
 CREATE TABLE IF NOT EXISTS public.app_analytics (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  app_id           uuid NOT NULL REFERENCES public.apps(id) ON DELETE CASCADE,
+  app_id           uuid NOT NULL,
   user_id          uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
 
   
@@ -1104,7 +1106,7 @@ GRANT SELECT ON public.app_analytics TO authenticated;
 -- 20261009030000 [app_integrations]
 CREATE TABLE IF NOT EXISTS public.app_integrations (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  app_id           uuid NOT NULL REFERENCES public.apps(id) ON DELETE CASCADE,
+  app_id           uuid NOT NULL,
   user_id          uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
 
   
@@ -1153,7 +1155,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.app_integrations TO authenticated
 -- 20261009030000 [app_deployments]
 CREATE TABLE IF NOT EXISTS public.app_deployments (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  app_id           uuid NOT NULL REFERENCES public.apps(id) ON DELETE CASCADE,
+  app_id           uuid NOT NULL,
   integration_id   uuid REFERENCES public.app_integrations(id) ON DELETE SET NULL,
   user_id          uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
 
@@ -1205,7 +1207,7 @@ CREATE TABLE IF NOT EXISTS public.oauth_states (
   state            text PRIMARY KEY,
   user_id          uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   provider         text NOT NULL,
-  app_id           uuid REFERENCES public.apps(id) ON DELETE CASCADE,
+  app_id           uuid,
   created_at       timestamptz NOT NULL DEFAULT now(),
   expires_at       timestamptz NOT NULL
 );
@@ -1219,7 +1221,7 @@ CREATE INDEX IF NOT EXISTS oauth_states_expires_at_idx ON public.oauth_states(ex
 -- 20261009040000 [app_navbar_configs]
 CREATE TABLE IF NOT EXISTS public.app_navbar_configs (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  app_id           uuid NOT NULL REFERENCES public.apps(id) ON DELETE CASCADE,
+  app_id           uuid NOT NULL,
   user_id          uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
 
   
