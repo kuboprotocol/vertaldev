@@ -14,6 +14,10 @@ Desvio intencional: as tabelas `app_logos`, `logo_ai_generations`,
 `stripe_transactions` são criadas sem a FK `app_id -> public.apps(id)`, porque a
 tabela `apps` não existe em nenhuma migration nem em produção.
 
+Endurecimento adicional (não estava nas migrations): RLS em `oauth_states`
+(o usuário só insere o próprio state; o callback lê com a service role) e em
+`stripe_webhook_events` (só service role).
+
 Também ficaram de fora `enqueue_email`, `delete_email`, `move_to_dlq` e
 `read_email_batch`: são atalhos para funções `internal.*` que dependem da
 extensão `pgmq`, que não está instalada, e nada no código as chama.

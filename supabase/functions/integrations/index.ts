@@ -54,13 +54,17 @@ Deno.serve(async (req) => {
         return json({ error: "Invalid provider" }, 400);
       }
 
-      const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!);
+      // O callback chega sem JWT do usuário: quem identifica o usuário é o
+      // state (gravado por ele no oauth-url). A tabela tem RLS sem leitura
+      // pública, então a validação e a gravação usam a service role.
+      const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
       // Validar state (CSRF protection)
       const { data: stateRecord } = await db
         .from("oauth_states")
         .select("user_id, app_id, expires_at")
         .eq("state", state)
+        .eq("provider", provider)
         .single();
 
       if (!stateRecord) return json({ error: "Invalid state" }, 400);

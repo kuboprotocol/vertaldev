@@ -2451,3 +2451,16 @@ create trigger shortlinks_updated_at_trigger
 before update on shortlinks
 for each row
 execute function update_shortlinks_updated_at();
+
+-- ===== endurecimento (não estava nas migrations) =====
+-- oauth_states guarda o token anti-CSRF do OAuth e stripe_webhook_events os
+-- eventos do Stripe: sem RLS, qualquer um com a chave pública leria os dois.
+-- O usuário só grava o próprio state; leitura e limpeza ficam com a service role.
+ALTER TABLE public.oauth_states ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.oauth_states FROM anon;
+DROP POLICY IF EXISTS "oauth_states_insert_own" ON public.oauth_states;
+CREATE POLICY "oauth_states_insert_own" ON public.oauth_states
+  FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());
+
+ALTER TABLE public.stripe_webhook_events ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.stripe_webhook_events FROM anon, authenticated;
