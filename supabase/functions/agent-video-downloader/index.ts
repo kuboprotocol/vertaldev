@@ -9,7 +9,21 @@ const InputSchema = z.object({
 });
 
 function detectPlatform(url: string): string {
-...
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase().replace(/^www\./, "").replace(/^m\./, "");
+  } catch {
+    return "unknown";
+  }
+  const is = (domain: string) => host === domain || host.endsWith(`.${domain}`);
+  if (is("youtube.com") || is("youtu.be") || is("youtube-nocookie.com")) return "youtube";
+  if (is("vimeo.com")) return "vimeo";
+  if (is("tiktok.com")) return "tiktok";
+  if (is("instagram.com")) return "instagram";
+  if (is("facebook.com") || is("fb.watch")) return "facebook";
+  if (is("twitter.com") || is("x.com")) return "twitter";
+  if (is("twitch.tv")) return "twitch";
+  if (is("dailymotion.com") || is("dai.ly")) return "dailymotion";
   return "unknown";
 }
 

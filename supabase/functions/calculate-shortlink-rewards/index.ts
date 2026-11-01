@@ -30,8 +30,7 @@ Deno.serve(async (req) => {
     const { data: usersWithShortlinks, error: usersError } = await db
       .from("shortlinks")
       .select("user_id")
-      .eq("status", "active")
-      .distinct();
+      .eq("status", "active");
 
     if (usersError) throw usersError;
 
@@ -44,7 +43,8 @@ Deno.serve(async (req) => {
     }
 
     // Get unique user IDs
-    const uniqueUserIds = [...new Set(usersWithShortlinks.map(u => (u as any).user_id))];
+    // O PostgREST não tem DISTINCT; a deduplicação é feita aqui.
+    const uniqueUserIds = [...new Set(usersWithShortlinks.map((u: { user_id: string }) => u.user_id))];
 
     const results: any[] = [];
     let processed = 0;

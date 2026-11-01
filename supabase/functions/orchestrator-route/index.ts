@@ -110,7 +110,8 @@ Deno.serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 
-  const idempotencyKey = req.headers.get("x-idempotency-key") || body.input?.idempotency_key;
+  const rawIdempotency = req.headers.get("x-idempotency-key") || body.input?.idempotency_key;
+  const idempotencyKey = typeof rawIdempotency === "string" && rawIdempotency ? rawIdempotency : null;
   if (idempotencyKey) {
     const { data: existingJob } = await admin
       .from("agent_jobs")

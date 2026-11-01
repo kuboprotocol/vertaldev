@@ -6,7 +6,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, { apiVersion: "2024-06-20" });
+const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
+  // Versão de API usada em produção; os tipos do stripe@14 só listam 2023-10-16.
+  apiVersion: "2024-06-20" as Stripe.LatestApiVersion,
+});
 
 // Somente planos até US$ 49,99/mês estão à venda. Premium 2 e Business 1–7
 // saíram da venda: pedidos desses planos caem em "Unknown plan" (400).

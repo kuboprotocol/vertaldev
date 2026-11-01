@@ -15,7 +15,7 @@ interface ReferralNotificationProps {
 const ReferralNotificationEmail = ({ referredName, creditsEarned = 100 }: ReferralNotificationProps) => (
   <Html lang="pt-BR" dir="ltr">
     <Head />
-    <Preview>Você ganhou {creditsEarned} créditos por indicação!</Preview>
+    <Preview>{`Você ganhou ${creditsEarned} créditos por indicação!`}</Preview>
     <Body style={main}>
       <Container style={container}>
         <Text style={brand}>⚡ KUBO VIBE</Text>

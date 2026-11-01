@@ -1,6 +1,6 @@
 import Stripe from "npm:stripe@^18";
 import { createClient } from "npm:@supabase/supabase-js@^2";
-import { corsHeaders, sanitizeError } from "../_shared/cors.ts";
+import { sanitizeError } from "../_shared/cors.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

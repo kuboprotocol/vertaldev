@@ -243,7 +243,9 @@ Deno.serve(async (req) => {
 
     const { data: dom } = await svc.from("kubo_domains").insert({
       user_id: user.id, domain_name: domain, tld, source: "transfer",
-      status: status === "completed" ? "active" : "pending", credits_spent: price,
+      // A transferência acabou de ser criada: o domínio só fica "active" quando o
+      // registrar concluir (tratado no fluxo de status).
+      status: "pending", credits_spent: price,
     }).select().single();
 
     const next_retry_at = ["pending", "validating", "transferring"].includes(status) ? nextBackoff(0).toISOString() : null;

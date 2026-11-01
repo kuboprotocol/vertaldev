@@ -25,7 +25,6 @@ function isAllowedRedirect(u: string | undefined): boolean {
   }
 }
 
-import Stripe from "npm:stripe@^18";
 
 import { corsHeaders, sanitizeError } from "../_shared/cors.ts";
 
