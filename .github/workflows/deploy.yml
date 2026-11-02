@@ -38,9 +38,28 @@ jobs:
         with:
           version: latest
 
-      - name: Deploy edge functions
+      # O plano do Supabase limita o número de funções do projeto (criar uma nova
+      # dá 402 "Max number of functions reached" e derruba o deploy inteiro).
+      # Por isso atualizamos só as que já existem; as novas aparecem como aviso
+      # e precisam de espaço no plano (ou de remover funções sem uso).
+      - name: Deploy edge functions (existing ones)
         if: env.SUPABASE_ACCESS_TOKEN != ''
-        run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF"
+        run: |
+          set -euo pipefail
+          existing=$(supabase functions list --project-ref "$SUPABASE_PROJECT_REF" -o json | jq -r '.[].slug')
+          to_deploy=()
+          for dir in supabase/functions/*/; do
+            name=$(basename "$dir")
+            [[ "$name" == _* ]] && continue
+            [[ -f "$dir/index.ts" ]] || continue
+            if grep -qxF "$name" <<< "$existing"; then
+              to_deploy+=("$name")
+            else
+              echo "::warning::Função '$name' não existe no projeto e não foi criada (limite de funções do plano)."
+            fi
+          done
+          echo "Atualizando ${#to_deploy[@]} função(ões) existentes."
+          supabase functions deploy "${to_deploy[@]}" --project-ref "$SUPABASE_PROJECT_REF"
 
   verify-deployment:
     name: ✅ Verify Deployment
