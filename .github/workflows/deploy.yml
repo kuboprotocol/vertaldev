@@ -58,8 +58,24 @@ jobs:
               echo "::warning::Função '$name' não existe no projeto e não foi criada (limite de funções do plano)."
             fi
           done
-          echo "Atualizando ${#to_deploy[@]} função(ões) existentes."
-          supabase functions deploy "${to_deploy[@]}" --project-ref "$SUPABASE_PROJECT_REF"
+          # O "bulk update" da CLI também esbarra no limite do plano (402);
+          # uma função por vez funciona. As do agente de código vão primeiro.
+          priority=(vibe-code-agent generate-code)
+          ordered=()
+          for p in "${priority[@]}"; do grep -qxF "$p" <<< "$existing" && ordered+=("$p"); done
+          for n in "${to_deploy[@]}"; do [[ " ${priority[*]} " == *" $n "* ]] || ordered+=("$n"); done
+          echo "Atualizando ${#ordered[@]} função(ões) existentes, uma por vez."
+          failed=()
+          for n in "${ordered[@]}"; do
+            if ! supabase functions deploy "$n" --project-ref "$SUPABASE_PROJECT_REF"; then
+              echo "::error::Falha ao publicar $n"
+              failed+=("$n")
+            fi
+          done
+          if (( ${#failed[@]} )); then
+            echo "::error::${#failed[@]} função(ões) falharam: ${failed[*]}"
+            exit 1
+          fi
 
   verify-deployment:
     name: ✅ Verify Deployment
