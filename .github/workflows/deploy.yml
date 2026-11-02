@@ -22,8 +22,8 @@ jobs:
     name: 📦 Deploy Supabase Edge Functions
     runs-on: ubuntu-latest
     env:
-      # SUPABASE_ACCESS_TOKEN1 é o token criado em out/2026; o antigo ficou sem
-      # permissão de edge functions. Usa o novo quando existir.
+      # O token ativo fica no secret SUPABASE_ACCESS_TOKEN1 (o SUPABASE_ACCESS_TOKEN
+      # antigo ficou sem permissão de edge functions e foi removido).
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN1 || secrets.SUPABASE_ACCESS_TOKEN }}
     steps:
       - name: Skip when SUPABASE_ACCESS_TOKEN is not configured
