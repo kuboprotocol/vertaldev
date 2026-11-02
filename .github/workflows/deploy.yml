@@ -22,7 +22,9 @@ jobs:
     name: 📦 Deploy Supabase Edge Functions
     runs-on: ubuntu-latest
     env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      # O token ativo fica no secret SUPABASE_ACCESS_TOKEN1 (o SUPABASE_ACCESS_TOKEN
+      # antigo ficou sem permissão de edge functions e foi removido).
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN1 || secrets.SUPABASE_ACCESS_TOKEN }}
     steps:
       - name: Skip when SUPABASE_ACCESS_TOKEN is not configured
         if: env.SUPABASE_ACCESS_TOKEN == ''
@@ -36,9 +38,44 @@ jobs:
         with:
           version: latest
 
-      - name: Deploy edge functions
+      # O plano do Supabase limita o número de funções do projeto (criar uma nova
+      # dá 402 "Max number of functions reached" e derruba o deploy inteiro).
+      # Por isso atualizamos só as que já existem; as novas aparecem como aviso
+      # e precisam de espaço no plano (ou de remover funções sem uso).
+      - name: Deploy edge functions (existing ones)
         if: env.SUPABASE_ACCESS_TOKEN != ''
-        run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF"
+        run: |
+          set -euo pipefail
+          existing=$(supabase functions list --project-ref "$SUPABASE_PROJECT_REF" -o json | jq -r '.[].slug')
+          to_deploy=()
+          for dir in supabase/functions/*/; do
+            name=$(basename "$dir")
+            [[ "$name" == _* ]] && continue
+            [[ -f "$dir/index.ts" ]] || continue
+            if grep -qxF "$name" <<< "$existing"; then
+              to_deploy+=("$name")
+            else
+              echo "::warning::Função '$name' não existe no projeto e não foi criada (limite de funções do plano)."
+            fi
+          done
+          # O "bulk update" da CLI também esbarra no limite do plano (402);
+          # uma função por vez funciona. As do agente de código vão primeiro.
+          priority=(vibe-code-agent generate-code)
+          ordered=()
+          for p in "${priority[@]}"; do grep -qxF "$p" <<< "$existing" && ordered+=("$p"); done
+          for n in "${to_deploy[@]}"; do [[ " ${priority[*]} " == *" $n "* ]] || ordered+=("$n"); done
+          echo "Atualizando ${#ordered[@]} função(ões) existentes, uma por vez."
+          failed=()
+          for n in "${ordered[@]}"; do
+            if ! supabase functions deploy "$n" --project-ref "$SUPABASE_PROJECT_REF"; then
+              echo "::error::Falha ao publicar $n"
+              failed+=("$n")
+            fi
+          done
+          if (( ${#failed[@]} )); then
+            echo "::error::${#failed[@]} função(ões) falharam: ${failed[*]}"
+            exit 1
+          fi
 
   verify-deployment:
     name: ✅ Verify Deployment
