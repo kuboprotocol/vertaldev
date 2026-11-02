@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyConnectionStatus,
+  CONNECTOR_CATALOG,
   detectRequirements,
   extractEnvVarNames,
   formatConnectorsForPrompt,
@@ -15,7 +16,9 @@ describe("detectRequirements", () => {
     expect(slugs(r)).toEqual(expect.arrayContaining(["stripe", "gmail"]));
     const stripe = r.find((x) => x.slug === "stripe")!;
     expect(stripe.secrets).toEqual(["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"]);
-    expect(stripe.connectPath).toBe("/connect");
+    // Stripe do cliente: sem página Vertal (/connect é a cobrança da própria Vertal); aponta para o site.
+    expect(stripe.connectPath).toBeUndefined();
+    expect(stripe.keysUrl).toBe("https://dashboard.stripe.com/apikeys");
     expect(stripe.status).toBe("needed");
   });
 
@@ -105,5 +108,22 @@ describe("applyConnectionStatus / formatConnectorsForPrompt", () => {
     expect(text).toContain("- github (GitHub): conectado");
     expect(text).toContain("- stripe (Stripe (pagamentos)): não conectado");
     expect(text).toContain("- supabase (Cloud (banco, login e arquivos)): da plataforma");
+  });
+});
+
+describe("caminho para conectar cada conector", () => {
+  it("todo conector que o usuário precisa tem um caminho: Vertal, página própria ou site do provedor", () => {
+    const external = CONNECTOR_CATALOG.filter((e) => !e.builtin);
+    expect(external.length).toBeGreaterThan(0);
+    for (const e of external) {
+      const hasPath = !!(e.vertalOffer || e.connectPath || e.keysUrl);
+      expect(hasPath, `${e.slug} sem caminho para conectar`).toBe(true);
+    }
+  });
+
+  it("conectores com equivalente Vertal apontam para uma rota interna", () => {
+    for (const e of CONNECTOR_CATALOG.filter((x) => x.vertalOffer)) {
+      expect(e.vertalOffer!.to.startsWith("/"), e.slug).toBe(true);
+    }
   });
 });

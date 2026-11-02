@@ -23,8 +23,9 @@ import {
   ShieldCheck,
   MessagesSquare,
   Palette,
+  ChevronDown,
+  Sparkles,
 } from "lucide-react";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,6 +39,7 @@ import type { VibeChatMessage, VibeStep, VibeStepKind } from "@/lib/vibeCodeAgen
 import type { VibeConversationsApi } from "@/hooks/useVibeConversations";
 import { VibeConversationList } from "./VibeConversationList";
 import { VibeRequirementsCard } from "./VibeRequirementsCard";
+import { cn } from "@/lib/utils";
 
 const AGENT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/vibe-code-agent`;
 
@@ -84,6 +86,118 @@ function DiffView({ diff }: { diff: string }) {
   );
 }
 
+const SUGGESTIONS = [
+  "Crie um app de agendamento com login e calendário",
+  "Monte um painel de vendas com gráficos e exportação",
+  "Crie uma loja com pagamento Pix e carrinho",
+];
+
+function StepRow({ step, disabled, onRevert }: { step: VibeStep; disabled: boolean; onRevert: (s: VibeStep) => void }) {
+  const Icon = STEP_ICON[step.kind] ?? Brain;
+  const failed = step.status === "failed";
+  return (
+    <div className="py-2">
+      <div className="flex items-center gap-2 text-xs">
+        {step.status === "running" ? (
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
+        ) : (
+          <Icon className={cn("h-3.5 w-3.5 shrink-0", failed ? "text-rose-400" : "text-muted-foreground")} />
+        )}
+        <span className={cn("min-w-0 truncate", failed ? "text-rose-300" : "text-foreground/85")}>{step.title}</span>
+        {step.commitSha && <span className="font-mono text-[10px] text-primary/80">{step.commitSha.slice(0, 7)}</span>}
+        {typeof step.creditsCharged === "number" && (
+          <span className="font-mono text-[10px] text-muted-foreground">-{step.creditsCharged} cr.</span>
+        )}
+        {step.reverted && <span className="text-[10px] text-rose-400">revertido</span>}
+        {(step.commitSha || step.checkpointId) && !step.reverted && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="ml-auto h-6 px-2 text-[10px] text-muted-foreground hover:text-primary"
+            onClick={() => onRevert(step)}
+            disabled={disabled}
+          >
+            <Undo2 className="mr-1 h-3 w-3" /> Reverter
+          </Button>
+        )}
+      </div>
+      {step.detail && step.kind !== "diff" && (
+        <p className="mt-0.5 pl-5 text-[11px] leading-relaxed text-muted-foreground line-clamp-2">{step.detail}</p>
+      )}
+      {step.diff && (
+        <div className="pl-5">
+          <DiffView diff={step.diff} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AssistantBlock({
+  steps,
+  open,
+  onToggle,
+  disabled,
+  onRevert,
+}: {
+  steps: VibeStep[];
+  open: boolean;
+  onToggle: () => void;
+  disabled: boolean;
+  onRevert: (s: VibeStep) => void;
+}) {
+  const visible = steps.filter((s) => s.kind !== "conversation");
+  if (visible.length === 0) return null;
+  const running = visible.some((s) => s.status === "running");
+  const failed = visible.some((s) => s.status === "failed");
+  const headline =
+    [...visible].reverse().find((s) => s.kind === "done" || s.kind === "message" || s.kind === "plan") ??
+    visible[visible.length - 1];
+  const requirements = visible.filter((s) => s.kind === "requirements" && s.requirements && s.requirements.length > 0);
+  const work = visible.filter((s) => s.kind !== "requirements");
+  const expanded = open || running || failed;
+  const files = visible.filter((s) => s.kind === "diff" && s.proposedContent).length;
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-2xl border border-border/40 bg-card/40 px-4 py-3">
+        <div className="flex items-start gap-2">
+          {running ? (
+            <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-primary" />
+          ) : failed ? (
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
+          ) : (
+            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          )}
+          <p className="min-w-0 flex-1 text-sm leading-relaxed text-foreground/90">{headline.title}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onToggle}
+          className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+        >
+          <ChevronDown className={cn("h-3 w-3 transition-transform", !expanded && "-rotate-90")} />
+          {work.length} passo{work.length === 1 ? "" : "s"}
+          {files > 0 && ` · ${files} arquivo${files === 1 ? "" : "s"} proposto${files === 1 ? "" : "s"}`}
+        </button>
+        {expanded && (
+          <div className="mt-2 divide-y divide-border/30 border-t border-border/30">
+            {work.map((step) => (
+              <StepRow key={step.id} step={step} disabled={disabled} onRevert={onRevert} />
+            ))}
+          </div>
+        )}
+      </div>
+      {requirements.map((step) => (
+        <div key={step.id} className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3">
+          <p className="text-xs font-medium text-amber-300">{step.title}</p>
+          <VibeRequirementsCard requirements={step.requirements ?? []} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function VibeCodeAgentChat({
   projectId,
   conversations,
@@ -116,6 +230,7 @@ export function VibeCodeAgentChat({
   const [input, setInput] = useState("");
   const [running, setRunning] = useState(false);
   const [autoApply, setAutoApply] = useState(false);
+  const [openSteps, setOpenSteps] = useState<Record<string, boolean>>({});
   const abortRef = useRef<AbortController | null>(null);
 
   const pendingEdits = useMemo(() => {
@@ -274,173 +389,92 @@ export function VibeCodeAgentChat({
   };
 
   return (
-    <Card className="flex h-full flex-col overflow-hidden border-border/40 bg-[#080808]/80 backdrop-blur-xl transition-all">
-      <div className="flex items-center justify-between border-b border-border/40 bg-white/[0.02] px-4 py-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary shadow-[0_0_10px_rgba(201,148,26,0.2)]">
-            <Bot className="h-4 w-4" />
-          </div>
-          <div>
-            <h2 className="text-xs font-bold uppercase tracking-widest text-foreground/90">Vibe Code Agent</h2>
-            <div className="flex items-center gap-1.5">
-              <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <p className="text-[10px] font-medium text-muted-foreground/80">Active in Branch: main</p>
-            </div>
-          </div>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border/40 bg-background/60">
+      <header className="flex items-center gap-3 border-b border-border/30 px-4 py-2.5">
+        <Bot className="h-4 w-4 shrink-0 text-primary" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-foreground/90">{activeTitle ?? "Nova conversa"}</p>
+          <p className="text-[11px] text-muted-foreground">{running ? "Trabalhando…" : "Pronto"}</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="h-7 max-w-[150px] gap-1.5 border-border/30 px-2 text-[10px]">
-                <MessagesSquare className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">{activeTitle ?? "Conversas"}</span>
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="h-80 w-72 p-3">
-              <VibeConversationList api={conversations} onSelect={(id) => void openConversation(id)} onNew={newConversation} disabled={running} className="h-full" />
-            </PopoverContent>
-          </Popover>
-          <div className="flex items-center gap-2 rounded-full bg-black/40 px-3 py-1 border border-border/20">
-            <Label htmlFor="auto-apply" className="text-[10px] font-bold uppercase tracking-tighter text-muted-foreground">
-              Auto-Commit
-            </Label>
-            <Switch id="auto-apply" checked={autoApply} onCheckedChange={setAutoApply} className="scale-75" />
-          </div>
+        <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs text-muted-foreground">
+              <MessagesSquare className="h-3.5 w-3.5" /> Conversas
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="h-80 w-72 p-3">
+            <VibeConversationList api={conversations} onSelect={(id) => void openConversation(id)} onNew={newConversation} disabled={running} className="h-full" />
+          </PopoverContent>
+        </Popover>
+        <div className="flex items-center gap-1.5">
+          <Label htmlFor="auto-apply" className="text-[11px] text-muted-foreground">Auto-commit</Label>
+          <Switch id="auto-apply" checked={autoApply} onCheckedChange={setAutoApply} className="scale-75" />
         </div>
-      </div>
+      </header>
 
-      {/* Radix sets the viewport content to display:table, which lets long lines widen the
-          whole transcript past the card; force block so the content keeps the viewport width. */}
-      <ScrollArea className="min-h-0 flex-1 px-4 py-6 [&_[data-radix-scroll-area-viewport]>div]:!block">
-        <div className="relative ml-4 space-y-6 border-l border-border/10 pl-6">
+      {/* Radix sets the viewport content to display:table; force block so long lines wrap inside the chat. */}
+      <ScrollArea className="min-h-0 flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
+        <div className="mx-auto max-w-3xl space-y-5 px-4 py-6">
           {messages.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              Descreva o que quer construir. O agente lê o projeto, raciocina, revisa o próprio código, guarda tudo
-              nesta conversa e avisa de quais conectores e APIs a aplicação precisa.
-            </p>
+            <div className="space-y-4 py-8 text-center">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-base font-medium">O que você quer criar?</p>
+                <p className="text-xs text-muted-foreground">
+                  O agente lê o projeto, escreve o código, revisa e avisa quais conectores o app precisa.
+                </p>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                {SUGGESTIONS.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setInput(t)}
+                    className="rounded-full border border-border/50 bg-card/40 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
 
           {messages.map((m) =>
             m.role === "user" ? (
-              <div key={m.id} className="flex justify-end pb-4">
-                <div className="max-w-[85%] rounded-2xl bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-foreground shadow-lg shadow-primary/5">
+              <div key={m.id} className="flex justify-end">
+                <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-primary/10 px-4 py-2.5 text-sm text-foreground">
                   {m.content}
                 </div>
               </div>
             ) : (
-              <div key={m.id} className="space-y-6">
-                {(m.steps ?? []).filter((step) => step.kind !== "conversation").map((step) => {
-                  const Icon = STEP_ICON[step.kind] ?? Brain;
-                  return (
-                    <div
-                      key={step.id}
-                      className="group relative rounded-xl border border-border/40 bg-card/40 px-3 py-3 transition-all hover:bg-card/60"
-                    >
-                      <div className="absolute -left-[31px] top-4 h-2.5 w-2.5 rounded-full border-2 border-primary bg-background shadow-[0_0_8px_rgba(201,148,26,0.4)]" />
-
-                      <div className="flex items-center gap-2">
-                        {step.status === "running" ? (
-                          <div className="relative">
-                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                            <div className="absolute inset-0 animate-ping rounded-full bg-primary/20" />
-                          </div>
-                        ) : (
-                          <Icon
-                            className={`h-4 w-4 ${
-                              step.status === "failed" ? "text-rose-500" : "text-primary"
-                            }`}
-                          />
-                        )}
-                        <span className="text-sm font-medium tracking-tight text-foreground/90">
-                          {step.title}
-                        </span>
-                        
-                        {step.commitSha && (
-                          <Badge variant="outline" className="h-4 rounded-md border-primary/20 bg-primary/5 px-1.5 text-[9px] font-mono text-primary uppercase">
-                            {step.commitSha.slice(0, 7)}
-                          </Badge>
-                        )}
-
-                        {step.tier && (
-                          <Badge variant="outline" className="h-4 rounded-md border-border/30 px-1.5 text-[9px] uppercase text-muted-foreground/70">
-                            {step.tier}
-                          </Badge>
-                        )}
-
-                        {typeof step.creditsCharged === "number" && (
-                          <Badge variant="outline" className="h-4 rounded-md border-rose-500/20 bg-rose-500/5 px-1.5 text-[9px] font-mono text-rose-400">
-                            -{step.creditsCharged} cr.
-                            {typeof step.balanceAfter === "number" ? ` · saldo ${step.balanceAfter}` : ""}
-                          </Badge>
-                        )}
-
-                        {step.reverted && (
-                          <Badge variant="secondary" className="h-4 rounded-md bg-rose-500/10 px-1.5 text-[9px] text-rose-500 uppercase">
-                            reverted
-                          </Badge>
-                        )}
-                        
-                        {(step.commitSha || step.checkpointId) && !step.reverted && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="ml-auto h-6 gap-1.5 px-2 text-[10px] text-muted-foreground hover:text-primary"
-                            onClick={() => revertStep(step)}
-                            disabled={running}
-                          >
-                            <Undo2 className="h-3 w-3" /> Revert
-                          </Button>
-                        )}
-                      </div>
-                      
-                      {step.detail && (
-                        <div className="mt-2 flex items-start gap-2 rounded-lg bg-black/40 p-2 font-mono text-[10px] text-muted-foreground/80">
-                          <span className="text-primary/60 mt-0.5">$</span>
-                          <p className="leading-relaxed">{step.detail}</p>
-                        </div>
-                      )}
-                      
-                      {step.diff && (
-                        <div className="mt-3">
-                          <DiffView diff={step.diff} />
-                        </div>
-                      )}
-
-                      {step.kind === "requirements" && step.requirements && step.requirements.length > 0 && (
-                        <VibeRequirementsCard requirements={step.requirements} />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+              <AssistantBlock
+                key={m.id}
+                steps={m.steps ?? []}
+                open={!!openSteps[m.id]}
+                onToggle={() => setOpenSteps((prev) => ({ ...prev, [m.id]: !prev[m.id] }))}
+                disabled={running}
+                onRevert={revertStep}
+              />
             ),
           )}
         </div>
       </ScrollArea>
 
       {pendingEdits.length > 0 && (
-        <div className="flex animate-in fade-in slide-in-from-bottom-2 items-center justify-between border-t border-border/40 bg-primary/5 px-4 py-3 backdrop-blur-md">
-          <div className="flex items-center gap-2">
-            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/20 text-primary">
-              <Eye className="h-3 w-3" />
-            </div>
-            <span className="text-xs font-medium text-foreground/80">
-              {pendingEdits.length} staged change{pendingEdits.length > 1 ? 's' : ''} ready
-            </span>
-          </div>
-          <Button 
-            size="sm" 
-            onClick={applyPending} 
-            disabled={running}
-            className="h-8 gap-2 bg-primary px-4 text-xs font-bold uppercase text-primary-foreground shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
-          >
-            Deploy Changes <Rocket className="h-3.5 w-3.5" />
+        <div className="flex items-center justify-between gap-3 border-t border-border/30 bg-primary/5 px-4 py-2.5">
+          <span className="text-xs text-foreground/80">
+            {pendingEdits.length} arquivo{pendingEdits.length > 1 ? "s" : ""} pronto{pendingEdits.length > 1 ? "s" : ""} para salvar
+          </span>
+          <Button size="sm" onClick={applyPending} disabled={running} className="h-8 gap-2 px-3 text-xs">
+            Salvar alterações <Rocket className="h-3.5 w-3.5" />
           </Button>
         </div>
       )}
 
-      <div className="border-t border-border/40 bg-white/[0.01] p-4">
-        <div className="relative group">
+      <div className="border-t border-border/30 p-3">
+        <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border border-border/50 bg-card/60 p-2 focus-within:border-primary/40">
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -450,24 +484,25 @@ export function VibeCodeAgentChat({
                 void send();
               }
             }}
-            placeholder="Ask Vibe Agent to build, fix or refactor..."
-            className="min-h-[60px] w-full resize-none border-border/20 bg-black/60 pl-3 pr-12 pt-3 text-xs font-medium placeholder:text-muted-foreground/40 focus:border-primary/50 focus:ring-primary/20 rounded-xl transition-all"
+            placeholder="Peça para criar, corrigir ou alterar…"
+            className="min-h-[44px] flex-1 resize-none border-0 bg-transparent p-2 text-sm shadow-none focus-visible:ring-0"
             disabled={running}
           />
-          <Button 
-            onClick={() => void send()} 
-            disabled={running || !input.trim()} 
+          <Button
+            onClick={() => void send()}
+            disabled={running || !input.trim()}
             size="icon"
-            className="absolute bottom-2.5 right-2.5 h-8 w-8 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition-all shadow-[0_0_15px_rgba(201,148,26,0.1)]"
+            className="h-9 w-9 shrink-0 rounded-xl"
+            aria-label="Enviar"
           >
             {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </div>
-        <p className="mt-2 text-center text-[9px] font-medium tracking-tight text-muted-foreground/40 uppercase">
-          Cada conversa guarda memória e código · commits reais via GitHub quando conectado
+        <p className="mx-auto mt-2 max-w-3xl text-center text-[10px] text-muted-foreground/60">
+          Cada conversa guarda memória e código. Commits reais no GitHub quando conectado.
         </p>
       </div>
-    </Card>
+    </div>
   );
 }
 
