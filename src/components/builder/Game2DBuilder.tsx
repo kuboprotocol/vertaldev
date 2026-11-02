@@ -12,6 +12,7 @@ interface Game2DConfig {
   gravity?: number
   audioEnabled?: boolean
   volume?: number
+  masterVolume?: number
   difficulty?: 'easy' | 'normal' | 'hard' | 'nightmare'
 }
 
@@ -22,7 +23,7 @@ interface Game {
   game_type: '2d'
   engine: string
   cover_image_url?: string
-  config: Game2DConfig
+  config?: Game2DConfig
 }
 
 interface Game2DBuilderProps {
@@ -32,7 +33,7 @@ interface Game2DBuilderProps {
 }
 
 export default function Game2DBuilder({ game, onBack, onSave }: Game2DBuilderProps) {
-  const [config, setConfig] = useState(game.config)
+  const [config, setConfig] = useState<Game2DConfig>(game.config ?? {})
   const [saving, setSaving] = useState(false)
   const [sessionToken, setSessionToken] = useState('')
 
@@ -51,7 +52,7 @@ export default function Game2DBuilder({ game, onBack, onSave }: Game2DBuilderPro
     try {
       setSaving(true)
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/update-game`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-game`,
         {
           method: 'POST',
           headers: {
@@ -222,7 +223,7 @@ export default function Game2DBuilder({ game, onBack, onSave }: Game2DBuilderPro
             <div className="border-t border-border pt-4">
               <h3 className="font-semibold mb-3">Dificuldade</h3>
               <div className="space-y-2">
-                {['Easy', 'Normal', 'Hard', 'Nightmare'].map(difficulty => (
+                {(['easy', 'normal', 'hard', 'nightmare'] as const).map(difficulty => (
                   <label key={difficulty} className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="radio"
@@ -230,7 +231,7 @@ export default function Game2DBuilder({ game, onBack, onSave }: Game2DBuilderPro
                       checked={config.difficulty === difficulty}
                       onChange={() => setConfig({ ...config, difficulty })}
                     />
-                    <span className="text-sm">{difficulty}</span>
+                    <span className="text-sm capitalize">{difficulty}</span>
                   </label>
                 ))}
               </div>

@@ -2,7 +2,6 @@
 // POST /functions/v1/stripe-payments?action=create-session|webhook
 
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { crypto } from "npm:std@0.208.0/crypto/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

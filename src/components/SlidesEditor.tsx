@@ -13,7 +13,7 @@ interface Props {
   onUpdateSlide: (slideId: string, updates: Partial<Slide>) => void;
   onDeleteSlide: (slideId: string) => void;
   onReorderSlides: (fromIndex: number, toIndex: number) => void;
-  onThemeChange: (theme: string) => void;
+  onThemeChange: (theme: Presentation['theme']) => void;
 }
 
 export function SlidesEditor({

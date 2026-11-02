@@ -71,7 +71,7 @@ export class ConversationService {
     // Update conversation stats
     await this.updateConversationStats(conversationId, tokensUsed, isFree);
 
-    return data;
+    return data as ConversationMessage;
   }
 
   /**
@@ -85,7 +85,7 @@ export class ConversationService {
       .order('created_at', { ascending: true });
 
     if (error) throw new Error(`Failed to load conversation: ${error.message}`);
-    return data || [];
+    return (data || []) as ConversationMessage[];
   }
 
   /**
@@ -104,7 +104,7 @@ export class ConversationService {
       .range(offset, offset + limit - 1);
 
     if (error) throw new Error(`Failed to load conversation: ${error.message}`);
-    return (data || []).reverse();
+    return ((data || []) as ConversationMessage[]).reverse();
   }
 
   /**

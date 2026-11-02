@@ -33,17 +33,13 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const gameId = url.searchParams.get("game_id");
 
-    let query = db
+    const query = db
       .from("games")
       .select("*")
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
 
-    if (gameId) {
-      query = query.eq("id", gameId).single();
-    }
-
-    const { data, error } = await query;
+    const { data, error } = gameId ? await query.eq("id", gameId).single() : await query;
 
     if (error) throw error;
 

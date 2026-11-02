@@ -14,6 +14,12 @@ interface GameMetaverseConfig {
   tradingEnabled?: boolean
   cryptoEnabled?: boolean
   serverType?: string
+  avatarCustomization?: boolean
+  voiceChat?: boolean
+  textChat?: boolean
+  friendSystem?: boolean
+  trading?: boolean
+  cryptocurrency?: boolean
 }
 
 interface Game {
@@ -23,7 +29,7 @@ interface Game {
   game_type: 'metaverse'
   engine: string
   cover_image_url?: string
-  config: GameMetaverseConfig
+  config?: GameMetaverseConfig
 }
 
 interface GameMetaverseBuilderProps {
@@ -33,7 +39,7 @@ interface GameMetaverseBuilderProps {
 }
 
 export default function GameMetaverseBuilder({ game, onBack, onSave }: GameMetaverseBuilderProps) {
-  const [config, setConfig] = useState(game.config)
+  const [config, setConfig] = useState<GameMetaverseConfig>(game.config ?? {})
   const [saving, setSaving] = useState(false)
   const [sessionToken, setSessionToken] = useState('')
 
@@ -52,7 +58,7 @@ export default function GameMetaverseBuilder({ game, onBack, onSave }: GameMetav
     try {
       setSaving(true)
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/update-game`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-game`,
         {
           method: 'POST',
           headers: {

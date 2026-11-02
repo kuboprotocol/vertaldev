@@ -6,6 +6,7 @@ const corsHeaders = {
 };
 import { z } from 'npm:zod@3'
 import { getFreshAccessToken, loadAccount } from '../_shared/gmailToken.ts'
+import { sanitizeError } from '../_shared/cors.ts'
 
 const Body = z.object({
   accountId: z.string().uuid(),

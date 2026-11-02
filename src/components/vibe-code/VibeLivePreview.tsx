@@ -27,6 +27,9 @@ async function callE2b(body: Record<string, unknown>) {
     creditsChargedNow?: number;
     balanceAfter?: number;
     note?: string;
+    /** Resposta do stop: créditos cobrados na sessão inteira. */
+    totalCredits?: number;
+    durationMinutes?: number;
   };
 }
 
@@ -96,7 +99,7 @@ export function VibeLivePreview() {
           )}
         </div>
         <div className="flex items-center gap-1.5">
-          {status !== "running" ? (
+          {status !== "running" && status !== "stopping" ? (
             <Button size="sm" className="h-7 gap-1.5 text-[10px]" onClick={() => void start()} disabled={status === "starting"}>
               {status === "starting" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
               Iniciar sandbox

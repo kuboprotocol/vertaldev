@@ -10,6 +10,7 @@ interface GameRetroConfig {
   style?: string
   fps?: number
   chiptune?: boolean
+  chiptuneEnabled?: boolean
   selectedColor?: string
   palette?: string[]
 }
@@ -21,7 +22,7 @@ interface Game {
   game_type: 'retro'
   engine: string
   cover_image_url?: string
-  config: GameRetroConfig
+  config?: GameRetroConfig
 }
 
 interface GameRetroBuilderProps {
@@ -31,7 +32,7 @@ interface GameRetroBuilderProps {
 }
 
 export default function GameRetroBuilder({ game, onBack, onSave }: GameRetroBuilderProps) {
-  const [config, setConfig] = useState(game.config)
+  const [config, setConfig] = useState<GameRetroConfig>(game.config ?? {})
   const [saving, setSaving] = useState(false)
   const [sessionToken, setSessionToken] = useState('')
 
@@ -50,7 +51,7 @@ export default function GameRetroBuilder({ game, onBack, onSave }: GameRetroBuil
     try {
       setSaving(true)
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/update-game`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-game`,
         {
           method: 'POST',
           headers: {

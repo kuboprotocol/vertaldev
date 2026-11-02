@@ -4,7 +4,10 @@ import Stripe from "npm:stripe@^14";
 import { corsHeaders } from "../_shared/cors.ts";
 import { getUser, supaAdmin, sanitizeError } from "../_shared/creative.ts";
 
-const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", { apiVersion: "2024-06-20" });
+const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", {
+  // Versão de API usada em produção; os tipos do stripe@14 só listam 2023-10-16.
+  apiVersion: "2024-06-20" as Stripe.LatestApiVersion,
+});
 const SITE_URL = Deno.env.get("SITE_URL") || "https://kubovibe.dev";
 
 function json(body: unknown, status = 200) {

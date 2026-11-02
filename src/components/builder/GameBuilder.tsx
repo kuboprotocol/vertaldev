@@ -11,12 +11,17 @@ import GameRealisticBuilder from './GameRealisticBuilder'
 import GameMetaverseBuilder from './GameMetaverseBuilder'
 import Game4DBuilder from './Game4DBuilder'
 
-interface Game {
+type GameType = '2d' | '3d' | 'retro' | 'realistic' | 'metaverse' | '4d'
+
+// União discriminada por game_type: dentro de cada `case` do switch o TS
+// sabe qual builder recebe o jogo.
+type Game = { [K in GameType]: GameBase & { game_type: K } }[GameType]
+
+interface GameBase {
   id: string
   user_id: string
   title: string
   description?: string
-  game_type: '2d' | '3d' | 'retro' | 'realistic' | 'metaverse' | '4d'
   engine: string
   cover_image_url?: string
   status: 'draft' | 'published' | 'archived'
@@ -53,7 +58,7 @@ export default function GameBuilder() {
       if (!session?.access_token) return
 
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/get-games`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-games`,
         {
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
@@ -84,7 +89,7 @@ export default function GameBuilder() {
       if (!session?.access_token) return
 
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/create-game`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-game`,
         {
           method: 'POST',
           headers: {
@@ -114,7 +119,7 @@ export default function GameBuilder() {
       if (!session?.access_token) return
 
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/delete-game?game_id=${gameId}`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-game?game_id=${gameId}`,
         {
           method: 'DELETE',
           headers: {

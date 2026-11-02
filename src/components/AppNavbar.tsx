@@ -72,7 +72,7 @@ export default function AppNavbar({
       try {
         setLoading(true)
         const response = await fetch(
-          `${supabase.supabaseUrl}/functions/v1/navbar-config?action=get&app_id=${appId}`,
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/navbar-config?action=get&app_id=${appId}`,
           {
             headers: {
               'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token || ''}`,

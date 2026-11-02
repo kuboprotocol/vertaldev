@@ -8,6 +8,7 @@ interface GameRealisticConfig {
   rayTracingEnabled?: boolean
   bloomEnabled?: boolean
   depthOfFieldEnabled?: boolean
+  dofEnabled?: boolean
   giQuality?: string
   bounces?: number
   resolution?: string
@@ -22,7 +23,7 @@ interface Game {
   game_type: 'realistic'
   engine: string
   cover_image_url?: string
-  config: GameRealisticConfig
+  config?: GameRealisticConfig
 }
 
 interface GameRealisticBuilderProps {
@@ -32,7 +33,7 @@ interface GameRealisticBuilderProps {
 }
 
 export default function GameRealisticBuilder({ game, onBack, onSave }: GameRealisticBuilderProps) {
-  const [config, setConfig] = useState(game.config)
+  const [config, setConfig] = useState<GameRealisticConfig>(game.config ?? {})
   const [saving, setSaving] = useState(false)
   const [sessionToken, setSessionToken] = useState('')
 
@@ -51,7 +52,7 @@ export default function GameRealisticBuilder({ game, onBack, onSave }: GameReali
     try {
       setSaving(true)
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/update-game`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-game`,
         {
           method: 'POST',
           headers: {

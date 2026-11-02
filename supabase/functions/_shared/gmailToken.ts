@@ -1,8 +1,13 @@
+import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import { decryptSecret, encryptSecret } from './gmailCrypto.ts'
+
+// Aceita clientes criados com qualquer import (npm:/esm.sh) e schema.
+// deno-lint-ignore no-explicit-any
+type AdminClient = SupabaseClient<any, any, any>
 
 /** Garante um access_token válido, refrescando se necessário. */
 export async function getFreshAccessToken(
-  admin: ReturnType<typeof import('npm:@supabase/supabase-js@2').createClient>,
+  admin: AdminClient,
   account: {
     id: string
     refresh_token_ciphertext: string
@@ -46,13 +51,12 @@ export async function getFreshAccessToken(
     update.refresh_token_iv = enc.iv
     update.refresh_token_tag = enc.tag
   }
-  // @ts-expect-error supabase typing genérica
   await admin.from('gmail_accounts').update(update).eq('id', account.id)
   return json.access_token
 }
 
 export async function loadAccount(
-  admin: ReturnType<typeof import('npm:@supabase/supabase-js@2').createClient>,
+  admin: AdminClient,
   userId: string,
   accountId: string,
 ) {

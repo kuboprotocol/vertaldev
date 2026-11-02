@@ -155,7 +155,7 @@ export function ConversationHeader({
               <button
                 onClick={async () => {
                   setShowActions(false);
-                  await handleArchive();
+                  await onArchive();
                 }}
                 className="dropdown-action archive-action"
                 disabled={loading}

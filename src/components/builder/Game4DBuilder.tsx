@@ -26,7 +26,7 @@ interface Game {
   game_type: '4d'
   engine: string
   cover_image_url?: string
-  config: Game4DConfig
+  config?: Game4DConfig
 }
 
 interface Game4DBuilderProps {
@@ -36,7 +36,7 @@ interface Game4DBuilderProps {
 }
 
 export default function Game4DBuilder({ game, onBack, onSave }: Game4DBuilderProps) {
-  const [config, setConfig] = useState(game.config)
+  const [config, setConfig] = useState<Game4DConfig>(game.config ?? {})
   const [saving, setSaving] = useState(false)
   const [sessionToken, setSessionToken] = useState('')
 
@@ -55,7 +55,7 @@ export default function Game4DBuilder({ game, onBack, onSave }: Game4DBuilderPro
     try {
       setSaving(true)
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/update-game`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-game`,
         {
           method: 'POST',
           headers: {

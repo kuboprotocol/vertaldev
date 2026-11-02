@@ -2,7 +2,6 @@
 // POST /functions/v1/affiliate-installs?action=create|list|update|delete|stats
 
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { crypto } from "npm:std@0.208.0/crypto/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -88,16 +87,19 @@ Deno.serve(async (req) => {
       }
 
       // Log audit de nova instalação
-      await db
-        .from("affiliate_audit_log")
-        .insert({
+      // Não falhar se o log falhar. O builder do Supabase não tem .catch():
+      // erros de banco voltam em { error }, e falhas de rede caem no try.
+      try {
+        await db.from("affiliate_audit_log").insert({
           affiliate_id: userId,
           action: "create_install",
           details: { domain: body.domain },
           ip_address: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
           user_agent: req.headers.get("user-agent"),
-        })
-        .catch(() => null); // Não falhar se log falhar
+        });
+      } catch (logErr) {
+        console.warn("affiliate audit log failed:", logErr);
+      }
 
       const embedCode = generateEmbedCode();
       const { data, error } = await db

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Save, Play, Cube, Lightbulb } from 'lucide-react'
+import { ArrowLeft, Save, Play, Lightbulb } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/integrations/supabase/client'
 
@@ -8,6 +8,7 @@ interface Game3DConfig {
   scenes?: string[]
   selectedScene?: string
   ambientLightIntensity?: number
+  ambientLight?: number
   backgroundColor?: string
   physicsEngine?: string
   gravity?: number
@@ -22,7 +23,7 @@ interface Game {
   game_type: '3d' | 'realistic' | 'metaverse' | '4d'
   engine: string
   cover_image_url?: string
-  config: Game3DConfig
+  config?: Game3DConfig
 }
 
 interface Game3DBuilderProps {
@@ -32,7 +33,7 @@ interface Game3DBuilderProps {
 }
 
 export default function Game3DBuilder({ game, onBack, onSave }: Game3DBuilderProps) {
-  const [config, setConfig] = useState(game.config)
+  const [config, setConfig] = useState<Game3DConfig>(game.config ?? {})
   const [selectedScene, setSelectedScene] = useState('main')
   const [saving, setSaving] = useState(false)
   const [sessionToken, setSessionToken] = useState('')
@@ -52,7 +53,7 @@ export default function Game3DBuilder({ game, onBack, onSave }: Game3DBuilderPro
     try {
       setSaving(true)
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/update-game`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-game`,
         {
           method: 'POST',
           headers: {

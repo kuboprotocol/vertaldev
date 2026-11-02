@@ -39,7 +39,7 @@ async function getKey() {
   const raw = Deno.env.get('CONNECTOR_ENC_KEY')
   if (!raw) throw new Error('CONNECTOR_ENC_KEY not configured')
   // accept hex (64) or base64 (44) of 32 bytes
-  let bytes: Uint8Array
+  let bytes: Uint8Array<ArrayBuffer>
   if (/^[0-9a-fA-F]{64}$/.test(raw)) {
     bytes = new Uint8Array(raw.match(/.{1,2}/g)!.map(h => parseInt(h, 16)))
   } else {

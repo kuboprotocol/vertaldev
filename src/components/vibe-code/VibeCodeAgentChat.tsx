@@ -22,6 +22,7 @@ import {
   HelpCircle,
   ShieldCheck,
   MessagesSquare,
+  Palette,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,7 @@ const STEP_ICON: Record<VibeStepKind, typeof Brain> = {
   requirements: Plug,
   question: HelpCircle,
   review: ShieldCheck,
+  design: Palette,
   error: AlertCircle,
   done: CheckCircle2,
 };

@@ -1,7 +1,10 @@
-import { createClient } from "npm:@supabase/supabase-js@^2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@^2";
 import Stripe from "npm:stripe@^14";
 
-const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, { apiVersion: "2024-06-20" });
+const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
+  // Versão de API usada em produção; os tipos do stripe@14 só listam 2023-10-16.
+  apiVersion: "2024-06-20" as Stripe.LatestApiVersion,
+});
 const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET")!;
 const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, stripe-signature" };
 const BUSINESS_PLANS = ["business_1","business_2","business_3","business_4","business_5","business_6","business_7","enterprise"];
@@ -9,7 +12,8 @@ const BUSINESS_PLANS = ["business_1","business_2","business_3","business_4","bus
 // Afiliação: 5% do valor pago vai para quem indicou o pagador (se houver).
 // Nunca derruba o webhook: o pagamento já foi aplicado antes disto.
 async function recordAffiliateCommission(
-  supabase: ReturnType<typeof createClient>,
+  // deno-lint-ignore no-explicit-any
+  supabase: SupabaseClient<any, any, any>,
   referredId: string,
   source: "subscription" | "renewal" | "credit_topup",
   sourceRef: string,

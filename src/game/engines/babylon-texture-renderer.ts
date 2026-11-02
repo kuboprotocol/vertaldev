@@ -68,7 +68,7 @@ export class BabylonTextureRenderer {
     camera.angularSensibilityY = 1000;
 
     // Setup background
-    this.scene.clearColor = new BABYLON.Color3(0.53, 0.81, 0.92); // Sky blue
+    this.scene.clearColor = new BABYLON.Color4(0.53, 0.81, 0.92, 1); // Sky blue
 
     // Render loop
     this.engine.runRenderLoop(() => {
@@ -144,9 +144,9 @@ export class BabylonTextureRenderer {
       const r = ((entity.renderable.color >> 16) & 255) / 255;
       const g = ((entity.renderable.color >> 8) & 255) / 255;
       const b = (entity.renderable.color & 255) / 255;
-      material.diffuse = new BABYLON.Color3(r, g, b);
+      material.diffuseColor = new BABYLON.Color3(r, g, b);
     } else {
-      material.diffuse = new BABYLON.Color3(0.8, 0.8, 0.8);
+      material.diffuseColor = new BABYLON.Color3(0.8, 0.8, 0.8);
     }
 
     // Apply emissive for glow
@@ -224,12 +224,12 @@ export class BabylonTextureRenderer {
   }
 
   screenshot(): string {
-    if (!this.scene) return '';
-    return BABYLON.ScreenshotTools.CreateScreenshot(
-      this.engine!,
-      this.camera! as any,
-      1920
-    );
+    if (!this.scene || !this.canvas) return '';
+    // ScreenshotTools.CreateScreenshot só entrega a imagem por callback.
+    // Renderizar e ler o canvas no mesmo tick devolve o quadro atual de forma
+    // síncrona (o buffer ainda não foi limpo pelo navegador).
+    this.scene.render();
+    return this.canvas.toDataURL('image/png');
   }
 
   private get camera(): BABYLON.Camera | null {
