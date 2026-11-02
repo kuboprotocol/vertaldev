@@ -26,6 +26,15 @@ export interface CatalogEntry {
   connectPath?: string;
   /** A plataforma já fornece (nada para o usuário configurar). */
   builtin?: boolean;
+  /** Página do provedor (fora da Vertal) onde o cliente cria a chave/API. */
+  keysUrl?: string;
+  /** Conector equivalente do grupo Vertal, oferecido antes do link externo. */
+  vertalOffer?: VertalOffer;
+}
+
+export interface VertalOffer {
+  label: string;
+  to: string;
 }
 
 export interface DetectedRequirement {
@@ -38,6 +47,8 @@ export interface DetectedRequirement {
   connectPath?: string;
   builtin: boolean;
   status: RequirementStatus;
+  keysUrl?: string;
+  vertalOffer?: VertalOffer;
 }
 
 export const CONNECTOR_CATALOG: CatalogEntry[] = [
@@ -57,6 +68,8 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
   },
   {
     slug: "github",
+    keysUrl: "https://github.com/settings/tokens",
+    vertalOffer: { label: "Conector GitHub da Vertal", to: "/connectors/github" },
     label: "GitHub",
     kind: "connector",
     description: "Guarda cada edição do agente num repositório seu.",
@@ -70,11 +83,12 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
     kind: "connector",
     description: "Cobrança, assinaturas e checkout.",
     secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"],
-    connectPath: "/connect",
+    keysUrl: "https://dashboard.stripe.com/apikeys",
     signals: [/\bstripe\b/i, /api\.stripe\.com/i, /\b(checkout|assinaturas?|subscriptions?|cobran[çc]a|pagamentos?|payments?)\b/i],
   },
   {
     slug: "mercadopago",
+    keysUrl: "https://www.mercadopago.com.br/developers/panel/app",
     label: "Mercado Pago / Pix",
     kind: "api",
     description: "Pix, cartão e boleto no Brasil.",
@@ -83,6 +97,7 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
   },
   {
     slug: "gmail",
+    vertalOffer: { label: "Conector Gmail da Vertal", to: "/connectors/gmail" },
     label: "Gmail",
     kind: "connector",
     description: "Ler e enviar e-mails da conta Google do usuário.",
@@ -92,6 +107,7 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
   },
   {
     slug: "slack",
+    vertalOffer: { label: "Conector Slack da Vertal", to: "/connectors/slack" },
     label: "Slack",
     kind: "connector",
     description: "Enviar e ler mensagens em canais do Slack.",
@@ -101,6 +117,7 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
   },
   {
     slug: "web3",
+    vertalOffer: { label: "Conector Web3 da Vertal", to: "/connectors/web3" },
     label: "Web3 / carteiras",
     kind: "connector",
     description: "Carteiras, contratos e redes blockchain.",
@@ -110,6 +127,7 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
   },
   {
     slug: "ionos",
+    vertalOffer: { label: "Domínios da Vertal", to: "/domains" },
     label: "Domínios (IONOS)",
     kind: "connector",
     description: "Comprar, transferir e apontar domínios e DNS.",
@@ -119,6 +137,8 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
   },
   {
     slug: "render",
+    keysUrl: "https://dashboard.render.com/u/settings#api-keys",
+    vertalOffer: { label: "Conector Render da Vertal", to: "/connectors/render" },
     label: "Render (hospedagem)",
     kind: "connector",
     description: "Publicar backends e sites no Render.",
@@ -137,6 +157,7 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
   },
   {
     slug: "resend",
+    keysUrl: "https://resend.com/api-keys",
     label: "Resend (e-mail transacional)",
     kind: "api",
     description: "Enviar e-mails de boas-vindas, recibos e avisos.",
@@ -145,6 +166,7 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
   },
   {
     slug: "twilio",
+    keysUrl: "https://console.twilio.com",
     label: "Twilio (SMS / WhatsApp)",
     kind: "api",
     description: "SMS, WhatsApp e ligações.",
@@ -153,6 +175,7 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
   },
   {
     slug: "google-maps",
+    keysUrl: "https://console.cloud.google.com/apis/credentials",
     label: "Google Maps",
     kind: "api",
     description: "Mapas, geocodificação e rotas.",
@@ -161,6 +184,8 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
   },
   {
     slug: "cloudflare",
+    keysUrl: "https://dash.cloudflare.com/profile/api-tokens",
+    vertalOffer: { label: "Conector Cloudflare da Vertal", to: "/connectors/cloudflare/setup" },
     label: "Cloudflare",
     kind: "api",
     description: "DNS, CDN, Workers e proteção.",
@@ -170,6 +195,7 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
   },
   {
     slug: "firecrawl",
+    keysUrl: "https://www.firecrawl.dev/app/api-keys",
     label: "Firecrawl (coleta de sites)",
     kind: "api",
     description: "Ler e extrair conteúdo de páginas da web.",
@@ -225,6 +251,8 @@ function toDetected(entry: CatalogEntry, reason: string, secrets?: string[]): De
     reason,
     secrets: secrets ?? entry.secrets,
     connectPath: entry.connectPath,
+    keysUrl: entry.keysUrl,
+    vertalOffer: entry.vertalOffer,
     builtin: !!entry.builtin,
     status: entry.builtin ? "connected" : "needed",
   };

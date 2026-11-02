@@ -18,7 +18,7 @@ describe('VibeConnectorPanel', () => {
 
     const expected: Record<string, string> = {
       GitHub: '/connectors/github',
-      Stripe: '/connect',
+      'Cobrança Vertal': '/connect',
       IONOS: '/domains',
       MCP: '/docs/mcp',
     }

@@ -16,7 +16,8 @@ describe("VibeRequirementsCard", () => {
     expect(screen.getByText("Stripe (pagamentos)")).toBeInTheDocument();
     expect(screen.getByText("STRIPE_SECRET_KEY")).toBeInTheDocument();
     expect(screen.getByText("falta conectar")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /conectar/i })).toHaveAttribute("href", "/connect");
+    // Stripe não tem conector Vertal: leva ao site do próprio Stripe para criar a API.
+    expect(screen.getByRole("link", { name: /criar api/i })).toHaveAttribute("href", "https://dashboard.stripe.com/apikeys");
     // Slack já conectado: sem botão de conectar.
     expect(screen.getAllByRole("link")).toHaveLength(1);
     expect(screen.getByText("conectado")).toBeInTheDocument();

@@ -83,6 +83,7 @@ const PwaTelemetryPage = lazy(() => import("./pages/PwaTelemetry"));
 const PwaExportJobDetailsPage = lazy(() => import("./pages/PwaExportJobDetails"));
 const DocsPage = lazy(() => import("./pages/DocsPage"));
 const VibeCodePage = lazy(() => import("./pages/VibeCodePage"));
+const VibeSecretsVaultPage = lazy(() => import("./pages/VibeSecretsVaultPage"));
 const MobileAgentPage = lazy(() => import("./pages/MobileAgentPage"));
 const AnywherePage = lazy(() => import("./pages/AnywherePage"));
 const AffiliateProgramPage = lazy(() => import("./pages/AffiliateProgramPage"));
@@ -267,6 +268,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/admin/skills" element={<ProtectedRoute requireRoles={["admin"]}><AdminSkillsPage /></ProtectedRoute>} />
                 <Route path="/domains" element={<ProtectedRoute><DomainsPage /></ProtectedRoute>} />
                 <Route path="/vibe-code" element={<ProtectedRoute><VibeCodePage /></ProtectedRoute>} />
+                <Route path="/vibe-code/cofre" element={<ProtectedRoute><VibeSecretsVaultPage /></ProtectedRoute>} />
                 <Route path="/affiliate-program" element={<ProtectedRoute><AffiliateProgramPage /></ProtectedRoute>} />
                 <Route path="/docs/mcp" element={<DocsMcpPage />} />
                 

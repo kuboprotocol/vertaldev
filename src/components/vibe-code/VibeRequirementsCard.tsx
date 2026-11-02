@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { CheckCircle2, Circle, KeyRound, Plug, Copy } from "lucide-react";
+import { CheckCircle2, Circle, KeyRound, Plug, Copy, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,9 +66,19 @@ export function VibeRequirementsCard({ requirements }: { requirements: VibeRequi
 
               {!connected && (
                 <Button asChild size="sm" variant="outline" className="h-7 shrink-0 gap-1 text-xs">
-                  <Link to={r.connectPath ?? "/connectors"}>
-                    <Plug className="h-3 w-3" /> {r.connectPath ? "Conectar" : "Configurar"}
-                  </Link>
+                  {r.vertalOffer || r.connectPath ? (
+                    <Link to={r.vertalOffer?.to ?? r.connectPath!}>
+                      <Plug className="h-3 w-3" /> Conectar
+                    </Link>
+                  ) : r.keysUrl ? (
+                    <a href={r.keysUrl} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-3 w-3" /> Criar API
+                    </a>
+                  ) : (
+                    <Link to="/connectors">
+                      <Plug className="h-3 w-3" /> Configurar
+                    </Link>
+                  )}
                 </Button>
               )}
             </div>

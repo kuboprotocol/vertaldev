@@ -25,6 +25,7 @@ import { VibeCheckpointTimeline } from "./VibeCheckpointTimeline";
 import { VibeAgentActivityPanel } from "./VibeAgentActivityPanel";
 import { VibePrimeMemoryPanel } from "./VibePrimeMemoryPanel";
 import { VibeConversationList } from "./VibeConversationList";
+import { VibeConversationCode } from "./VibeConversationCode";
 import { useVibeConversations } from "@/hooks/useVibeConversations";
 import { useWorkspaceProject } from "@/hooks/useWorkspaceProject";
 import type { VibeConversationsApi } from "@/hooks/useVibeConversations";
@@ -123,42 +124,7 @@ function DesktopView({
   conversations: VibeConversationsApi;
 }) {
   if (activeTab === 'agent' || activeTab === 'files') {
-    return (
-      <div className="grid h-[calc(100vh-8rem)] gap-6 lg:grid-cols-[400px_1fr_260px]">
-        <VibeCodeAgentChat projectId={projectId} conversations={conversations} />
-        <div className="flex flex-col gap-6 min-w-0">
-          <Tabs defaultValue="preview" className="flex-1 flex flex-col">
-            <TabsList className="bg-white/5 border border-white/10">
-              <TabsTrigger value="preview">Live Preview</TabsTrigger>
-              <TabsTrigger value="console">Console</TabsTrigger>
-              <TabsTrigger value="network">Network</TabsTrigger>
-            </TabsList>
-            <TabsContent value="preview" className="mt-4 flex-1 rounded-2xl border border-border/40 bg-card/20 backdrop-blur-sm relative overflow-hidden">
-              <VibeLivePreview />
-            </TabsContent>
-            <TabsContent value="console" className="mt-4 flex-1 rounded-2xl border border-dashed border-border/40 flex items-center justify-center">
-              <p className="text-xs text-muted-foreground/60">Console do sandbox em breve.</p>
-            </TabsContent>
-            <TabsContent value="network" className="mt-4 flex-1 rounded-2xl border border-dashed border-border/40 flex items-center justify-center">
-              <p className="text-xs text-muted-foreground/60">Aba de rede em breve.</p>
-            </TabsContent>
-          </Tabs>
-          <VibeConnectorPanel projectId={projectId || undefined} />
-        </div>
-        <div className="flex min-h-0 flex-col gap-4">
-          <div className="flex h-56 min-h-0 flex-col rounded-2xl border border-border/40 bg-card/20 p-3">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Conversas</h3>
-            <VibeConversationList
-              api={conversations}
-              className="min-h-0 flex-1"
-              onSelect={(id) => void conversations.open(id)}
-              onNew={conversations.startNew}
-            />
-          </div>
-          <VibeCheckpointTimeline projectRepo={undefined} />
-        </div>
-      </div>
-    );
+    return <DesktopAgentWorkspace projectId={projectId} conversations={conversations} />;
   }
 
   if (activeTab === 'domains') {
@@ -182,6 +148,64 @@ function DesktopView({
       <div className="text-center">
         <h3 className="text-lg font-medium text-muted-foreground">Módulo em construção</h3>
         <p className="text-sm text-muted-foreground/60">A seção de {activeTab} estará disponível em breve.</p>
+      </div>
+    </div>
+  );
+}
+
+function DesktopAgentWorkspace({
+  projectId,
+  conversations,
+}: {
+  projectId: string;
+  conversations: VibeConversationsApi;
+}) {
+  const [rightTab, setRightTab] = useState("preview");
+  const openConversationCode = (id: string) => {
+    void conversations.open(id);
+    setRightTab("code");
+  };
+
+  return (
+    <div className="grid h-[calc(100vh-8rem)] gap-6 lg:grid-cols-[400px_1fr_260px]">
+      <VibeCodeAgentChat projectId={projectId} conversations={conversations} />
+      <div className="flex flex-col gap-6 min-w-0">
+        <Tabs value={rightTab} onValueChange={setRightTab} className="flex-1 flex flex-col">
+          <TabsList className="bg-white/5 border border-white/10">
+            <TabsTrigger value="code">Código</TabsTrigger>
+            <TabsTrigger value="preview">Live Preview</TabsTrigger>
+            <TabsTrigger value="console">Console</TabsTrigger>
+            <TabsTrigger value="network">Network</TabsTrigger>
+          </TabsList>
+          <TabsContent value="code" className="mt-4 flex-1 min-h-0 rounded-2xl border border-border/40 bg-card/20 p-3">
+            <VibeConversationCode
+              conversationId={conversations.activeId}
+              title={conversations.conversations.find((c) => c.id === conversations.activeId)?.title}
+            />
+          </TabsContent>
+          <TabsContent value="preview" className="mt-4 flex-1 rounded-2xl border border-border/40 bg-card/20 backdrop-blur-sm relative overflow-hidden">
+            <VibeLivePreview />
+          </TabsContent>
+          <TabsContent value="console" className="mt-4 flex-1 rounded-2xl border border-dashed border-border/40 flex items-center justify-center">
+            <p className="text-xs text-muted-foreground/60">Console do sandbox em breve.</p>
+          </TabsContent>
+          <TabsContent value="network" className="mt-4 flex-1 rounded-2xl border border-dashed border-border/40 flex items-center justify-center">
+            <p className="text-xs text-muted-foreground/60">Aba de rede em breve.</p>
+          </TabsContent>
+        </Tabs>
+        <VibeConnectorPanel projectId={projectId || undefined} />
+      </div>
+      <div className="flex min-h-0 flex-col gap-4">
+        <div className="flex h-56 min-h-0 flex-col rounded-2xl border border-border/40 bg-card/20 p-3">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Conversas</h3>
+          <VibeConversationList
+            api={conversations}
+            className="min-h-0 flex-1"
+            onSelect={openConversationCode}
+            onNew={conversations.startNew}
+          />
+        </div>
+        <VibeCheckpointTimeline projectRepo={undefined} />
       </div>
     </div>
   );
