@@ -39,3 +39,12 @@ create policy "owner reads own domain orders"
   for select
   to authenticated
   using (auth.uid() = user_id);
+
+-- Grants: new public tables get no privileges by default.
+-- Prices: edge functions only.
+GRANT ALL ON public.kubo_domain_prices TO service_role;
+-- Orders: edge functions do everything; the owner reads a column subset.
+-- auth_code and Stripe identifiers are never exposed to the browser.
+GRANT ALL ON public.kubo_domain_orders TO service_role;
+GRANT SELECT (id, user_id, kind, domain, tld, project_id, price_cents, status, ionos_ref, error, created_at, updated_at)
+  ON public.kubo_domain_orders TO authenticated;
