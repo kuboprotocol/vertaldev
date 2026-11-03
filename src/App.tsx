@@ -67,6 +67,7 @@ const AdminUsersPage = lazy(() => import("./pages/AdminUsersPage"));
 const AdminTeamsPage = lazy(() => import("./pages/AdminTeamsPage"));
 const AdminSkillsPage = lazy(() => import("./pages/AdminSkillsPage"));
 const DomainsPage = lazy(() => import("./pages/DomainsPage"));
+const PublishDomainPage = lazy(() => import("./pages/PublishDomainPage"));
 const CreativePage = lazy(() => import("./pages/CreativePage"));
 const InvestigationPage = lazy(() => import("./pages/creative/InvestigationPage"));
 const AuditTrailPage = lazy(() => import("./pages/creative/AuditTrailPage"));
@@ -220,6 +221,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
                 <Route path="/builder" element={<ProtectedRoute><BuilderPage /></ProtectedRoute>} />
                 <Route path="/builder/:projectId" element={<ProtectedRoute><BuilderPage /></ProtectedRoute>} />
+                <Route path="/builder/:projectId/dominio" element={<ProtectedRoute><PublishDomainPage /></ProtectedRoute>} />
                 <Route path="/canvas" element={<ProtectedRoute><CanvasPage /></ProtectedRoute>} />
                 <Route path="/canvas/:canvasId" element={<ProtectedRoute><CanvasPage /></ProtectedRoute>} />
                 <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />

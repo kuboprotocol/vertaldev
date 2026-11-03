@@ -39,6 +39,7 @@ interface BuilderToolbarProps {
   generatedCode: string
   isPublished: boolean
   publishedUrl: string | null
+  projectId: string | null
 }
 
 export default function BuilderToolbar({
@@ -46,7 +47,7 @@ export default function BuilderToolbar({
   landscape = false, onToggleLandscape,
   onRefreshPreview, onSave, onDownload, onShowTemplates, onCloneSite, onPublish,
   saving, hasCode, editsRemaining, isSubscribed, generatedCode,
-  isPublished, publishedUrl,
+  isPublished, publishedUrl, projectId,
 }: BuilderToolbarProps) {
   const navigate = useNavigate()
   const [shareCopied, setShareCopied] = useState(false)
@@ -294,6 +295,16 @@ export default function BuilderToolbar({
                   <ExternalLink className="h-3 w-3" />
                 </Button>
               </div>
+            )}
+            {publishedUrl && projectId && (
+              <Button
+                variant="ghost"
+                className="w-full justify-between rounded-xl border border-border/50 text-xs"
+                onClick={() => { setPublishOpen(false); navigate(`/builder/${projectId}/dominio`) }}
+              >
+                Conectar domínio próprio
+                <Globe className="h-3.5 w-3.5 text-primary" />
+              </Button>
             )}
           </div>
           <DialogFooter>
