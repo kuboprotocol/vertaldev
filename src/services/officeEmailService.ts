@@ -45,18 +45,21 @@ const ERRORS: Record<string, string> = {
 
 export async function sendOfficeEmail(input: SendOfficeEmailInput): Promise<void> {
   const { data, error } = await supabase.functions.invoke<{ success?: boolean; error?: string }>(
-    'office-email-send',
+    'creative-router',
     {
       body: {
-        accountId: input.accountId,
-        to: input.to,
-        subject: input.subject,
-        body: input.body,
-        attachment: {
-          filename: input.attachment.filename,
-          contentBase64: bytesToBase64(input.attachment.bytes),
+        tool: 'office_email',
+        office: {
+          accountId: input.accountId,
+          to: input.to,
+          subject: input.subject,
+          body: input.body,
+          attachment: {
+            filename: input.attachment.filename,
+            contentBase64: bytesToBase64(input.attachment.bytes),
+          },
+          confirmed: true,
         },
-        confirmed: true,
       },
     },
   );
