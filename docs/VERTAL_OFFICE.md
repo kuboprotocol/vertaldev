@@ -33,7 +33,7 @@ Regras que valem para essa integração:
 1. **Confirmação antes de cada envio.** O agente prepara o e-mail (destinatário, assunto, texto e anexo) e o usuário confirma antes de sair. Nenhum agente envia e-mail sozinho.
 2. **Só com conta conectada pelo próprio usuário.** O agente usa somente contas que o usuário autorizou, com OAuth e tokens criptografados, como o Gmail já funciona.
 3. **Anexos são gerados a partir do arquivo do usuário**, nos formatos já suportados (`.xlsx`, `.html`, `.md`, `.txt`, `.csv`).
-4. **Custo:** a preparação do e-mail pela IA consome 1 crédito por uso, como qualquer outra ação de IA. O envio em si não é cobrado.
+4. **Custo (confirmado):** a preparação do e-mail pela IA consome 1 crédito por uso, como qualquer outra ação de IA. O envio em si não é cobrado.
 
 Status: **não implementado**. O envio com anexo e a confirmação no painel ainda precisam ser construídos.
 
