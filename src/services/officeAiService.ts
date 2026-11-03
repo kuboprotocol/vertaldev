@@ -1,4 +1,4 @@
-// Chamada da IA do Pacote Office (edge function `office-ai`).
+// Chamada da IA do Vertal Office (edge function `office-ai`).
 // Cada chamada cobra 1 crédito. O X-Idempotency-Key evita cobrança dupla em retry.
 import { supabase } from '@/integrations/supabase/client';
 import type { BlockType } from '@/lib/office/documentModel';

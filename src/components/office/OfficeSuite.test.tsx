@@ -8,15 +8,15 @@ vi.mock('@/services/officeAiService', () => ({
   runOfficeAi: vi.fn(),
 }));
 
-describe('Pacote Office', () => {
+describe('Vertal Office', () => {
   beforeEach(() => {
     window.localStorage.clear();
   });
 
   it('deixa claro que o editor é grátis e a IA custa 1 crédito', () => {
     render(<OfficeSuite creditsAvailable={5} />);
-    expect(screen.getByText('Pacote Office')).toBeTruthy();
-    expect(screen.getByText(/Documentos e planilhas são grátis/)).toBeTruthy();
+    expect(screen.getByText('Vertal Office')).toBeTruthy();
+    expect(screen.getByText(/Grátis para usar. Só o uso da IA é pago/)).toBeTruthy();
     expect(screen.getByText(/Custa 1 crédito por uso · você tem 5/)).toBeTruthy();
   });
 

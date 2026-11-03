@@ -1,4 +1,4 @@
-// Pacote Office: IA para preencher planilhas e escrever documentos.
+// Vertal Office: IA para preencher planilhas e escrever documentos.
 //
 // Cobrança: 1 crédito por uso da IA. O editor e a exportação são grátis e não
 // passam por aqui. Se a IA falhar ou a saída for inválida, withRefundOnFailure

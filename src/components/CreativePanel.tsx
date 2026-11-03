@@ -109,7 +109,7 @@ const CREATIVE_ITEMS: CreativeItem[] = [
   {
     id: 'office',
     type: 'office',
-    title: 'Pacote Office',
+    title: 'Vertal Office',
     description: 'Documentos e planilhas grátis. A IA custa 1 crédito por uso',
     icon: <FileText className="h-5 w-5" />,
     color: 'from-violet-500 to-fuchsia-500',

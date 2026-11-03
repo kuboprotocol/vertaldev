@@ -8,7 +8,7 @@ import {
   parseOfficeOutput,
 } from '../../../supabase/functions/_shared/officeAi';
 
-describe('contrato da IA do Pacote Office', () => {
+describe('contrato da IA do Vertal Office', () => {
   it('monta mensagens com o formato exigido e o material marcado como dado', () => {
     const msgs = buildOfficeMessages('sheet', 'Lista de vendas', 'Café 3');
     expect(msgs[0].role).toBe('system');

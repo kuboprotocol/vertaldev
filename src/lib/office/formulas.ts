@@ -1,4 +1,4 @@
-// Motor de fórmulas da planilha do Pacote Office.
+// Motor de fórmulas da planilha do Vertal Office.
 //
 // Sem eval: a fórmula é tokenizada, interpretada por um parser recursivo e
 // avaliada sobre o mapa de células. Suporta referências (A1), intervalos

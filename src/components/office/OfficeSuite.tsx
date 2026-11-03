@@ -1,4 +1,4 @@
-// Pacote Office do Painel Criativo: Documento + Planilha.
+// Vertal Office do Painel Criativo: Documento + Planilha.
 // Editor e exportação são grátis. Cada uso da IA custa 1 crédito.
 import React, { useMemo, useState } from 'react';
 import { FileText, Sheet as SheetIcon, Sparkles, Plus, Trash2, Download, Loader2 } from 'lucide-react';
@@ -404,9 +404,9 @@ export function OfficeSuite({ creditsAvailable }: { creditsAvailable: number }) 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 text-slate-100">
       <header className="space-y-2">
-        <h2 className="font-['Unbounded'] text-xl font-bold text-white">Pacote Office</h2>
+        <h2 className="font-['Unbounded'] text-xl font-bold text-white">Vertal Office</h2>
         <p className="text-sm text-slate-400">
-          Documentos e planilhas são grátis. A IA custa {OFFICE_AI_CREDIT_COST} crédito por uso.
+          Grátis para usar. Só o uso da IA é pago: {OFFICE_AI_CREDIT_COST} crédito por uso.
         </p>
       </header>
 

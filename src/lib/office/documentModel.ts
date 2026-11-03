@@ -1,4 +1,4 @@
-// Modelo do documento do Pacote Office: blocos simples (título, cabeçalho,
+// Modelo do documento do Vertal Office: blocos simples (título, cabeçalho,
 // parágrafo, item de lista) e exportação em HTML, Markdown e texto puro.
 import { newId } from './sheetModel';
 

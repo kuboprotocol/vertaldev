@@ -1,4 +1,4 @@
-// Modelo da planilha do Pacote Office: edição imutável, exportação CSV e XLSX.
+// Modelo da planilha do Vertal Office: edição imutável, exportação CSV e XLSX.
 import * as XLSX from 'xlsx';
 import { CellMap, columnLetters, evaluateAll, parseRef, toRef } from './formulas';
 
