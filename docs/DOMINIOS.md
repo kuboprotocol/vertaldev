@@ -53,13 +53,33 @@ A função `cloudflare-domains` consulta disponibilidade e preço pela Registrar
 
 A Cloudflare vende a preço de custo e não tem programa de afiliados ou revenda para domínio (ver pesquisa de novembro de 2026). Por isso ela não entra no fluxo de compra. Só serve para busca, se você quiser comparar preço.
 
+## Estado atual (implementado, não testado de ponta a ponta)
+
+| Peça | Arquivo | O que faz |
+|------|---------|-----------|
+| Preços de atacado | `supabase/migrations/20261103120000_domain_checkout.sql` (`kubo_domain_prices`) | Uma linha por extensão. Sem linha = venda recusada (`price_unavailable`). |
+| Pedidos | mesma migration (`kubo_domain_orders`) | Status: `awaiting_payment` → `paid` → `ordered`, ou `failed` → `refunded`. |
+| Checkout | `supabase/functions/domain-checkout/index.ts` | Calcula preço = atacado × 1,38, cria o pedido e abre o Stripe Checkout (cartão). Aceita `purchase` e `transfer`. |
+| Fulfilment | `supabase/functions/_shared/domainOrders.ts` | Chamado pelo webhook depois do pagamento. Faz o pedido na IONOS. Se a IONOS recusar, estorna o cartão. |
+| Webhook | `supabase/functions/stripe-webhook/index.ts` | Ramo `kind = domain_purchase | domain_transfer` em `checkout.session.completed`. |
+| Compra antiga | `supabase/functions/domain-purchase/index.ts` | Aposentada: responde 410. |
+| Transferência antiga | `supabase/functions/domain-transfer/index.ts` | Ação `start` aposentada (410). O código abaixo do `return` ainda existe e deve ser removido. |
+| UI | `src/pages/DomainsPage.tsx` | Compra e transferência redirecionam para o checkout. |
+
+**Regras de dinheiro:**
+- Nada é pedido na IONOS antes do pagamento confirmado (`payment_status = paid`).
+- Se a IONOS recusar depois do pagamento, o estorno é automático e o pedido vai para `refunded`.
+- Depois que a IONOS aceita, a exceção de gravação local não estorna: é registrada no log para conciliação manual.
+- O código de transferência (EPP) fica no pedido só até a IONOS responder, e é apagado em seguida.
+
 ## Pendências
 
-- [ ] Tabela de atacado IONOS por extensão (adicionar à seção Preço).
+- [ ] **Tabela de atacado IONOS por extensão**: inserir em `kubo_domain_prices`. Sem isso, nenhuma compra é aceita.
 - [ ] Confirmar no contrato de reseller IONOS se a marca precisa aparecer de forma visível (o texto discreto pode não bastar).
-- [ ] Trocar `domain-purchase` de créditos para cartão no checkout.
-- [ ] Cobrança antes de iniciar a transferência em `domain-transfer`.
-- [ ] Textos de checkout com a política de não reembolso e os impostos.
+- [ ] Testar o fluxo completo com Stripe em modo teste e a API da IONOS (nada foi executado ainda).
+- [ ] `domain-search` (IONOS, `/domains`) ainda mostra preços em créditos fixos (`TLD_PRICES`). Precisa mostrar o preço real de `kubo_domain_prices` × 1,38, ou não mostrar preço.
+- [ ] Remover o código morto de `domain-transfer` abaixo do `return` de 410.
+- [ ] Acompanhar o status da transferência depois que a IONOS aceita (hoje só o pedido é registrado; o polling antigo de `domain-transfer` não é mais alimentado).
 - [ ] Decidir se a busca usa IONOS (para ter o mesmo catálogo da compra) ou Cloudflare.
 
 ## Referências no código

@@ -233,12 +233,13 @@ function BuyTab({ onPurchased }: { onPurchased: () => void }) {
     const r = confirmBuy;
     setConfirmBuy(null);
     setBuying(r.domain);
-    const { data, error } = await supabase.functions.invoke("domain-purchase", { body: { domain: r.domain } });
+    // Paid by card at checkout; the domain is ordered after the payment is confirmed.
+    const { data, error } = await supabase.functions.invoke("domain-checkout", { body: { action: "purchase", domain: r.domain } });
     setBuying(null);
     if (error) { toast.error(error.message); return; }
-    if (data?.error) { toast.error(data.error); return; }
-    toast.success(`✓ ${r.domain} registered · balance: ${data?.balance_after ?? "?"}`);
-    onPurchased();
+    if (data?.error) { toast.error(data.error === "price_unavailable" ? "Preço indisponível para esta extensão." : data.error); return; }
+    if (data?.url) { window.location.href = data.url; return; }
+    toast.error("Não foi possível abrir o pagamento.");
   };
 
   return (
@@ -381,14 +382,14 @@ function TransferTab({ transfers, onTransferred }: { transfers: Transfer[]; onTr
   const start = async () => {
     setConfirm(false);
     setBusy(true);
-    const { data, error } = await supabase.functions.invoke("domain-transfer", {
-      body: { action: "start", domain, auth_code: authCode, current_registrar: registrar, notify_email: notifyEmail || undefined },
+    // Paid by card first; the transfer starts at IONOS only after the payment is confirmed.
+    const { data, error } = await supabase.functions.invoke("domain-checkout", {
+      body: { action: "transfer", domain, auth_code: authCode },
     });
     setBusy(false);
-    if (error || data?.error) { toast.error(error?.message ?? data.error); return; }
-    toast.success(`Transfer started · balance: ${data?.balance_after ?? "?"}`);
-    setDomain(""); setAuthCode(""); setRegistrar(""); setNotifyEmail("");
-    onTransferred();
+    if (error || data?.error) { toast.error(error?.message ?? (data.error === "price_unavailable" ? "Preço indisponível para esta extensão." : data.error)); return; }
+    if (data?.url) { window.location.href = data.url; return; }
+    toast.error("Não foi possível abrir o pagamento.");
   };
 
   const refresh = async (id: string) => {

@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@^2";
 import Stripe from "npm:stripe@^14";
+import { handleDomainCheckout } from "../_shared/domainOrders.ts";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
   // Versão de API usada em produção; os tipos do stripe@14 só listam 2023-10-16.
@@ -54,6 +55,14 @@ Deno.serve(async (req: Request) => {
   try {
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
+
+      // Domain orders (purchase / transfer): fulfilled at IONOS only after payment.
+      const kind = session.metadata?.kind;
+      if (kind === "domain_purchase" || kind === "domain_transfer") {
+        await handleDomainCheckout(supabase, stripe, session);
+        return new Response(JSON.stringify({ received: true }), { status: 200 });
+      }
+
       const userId = session.metadata?.supabase_user_id;
       const plan = session.metadata?.plan;
       const period = session.metadata?.period;
