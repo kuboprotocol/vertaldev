@@ -67,7 +67,7 @@ jobs:
           echo "Atualizando ${#ordered[@]} função(ões) existentes, uma por vez."
           failed=()
           for n in "${ordered[@]}"; do
-            if ! supabase functions deploy "$n" --project-ref "$SUPABASE_PROJECT_REF"; then
+            if ! supabase functions deploy "$n" --project-ref "$SUPABASE_PROJECT_REF" --yes; then
               echo "::error::Falha ao publicar $n"
               failed+=("$n")
             fi
