@@ -192,6 +192,12 @@ Deno.serve(async (req) => {
     }
 
     // ============================ START ============================
+    // Retired: transfers are paid by card first (domain-checkout, action "transfer"); the webhook
+    // starts the IONOS transfer after payment. Nothing is charged or ordered here any more.
+    return new Response(JSON.stringify({ error: "use_domain_checkout" }), {
+      status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+    // eslint-disable-next-line no-unreachable
     const domain = String(body?.domain ?? "").trim().toLowerCase();
     const auth_code = String(body?.auth_code ?? "").trim();
     const current_registrar = body?.current_registrar ?? null;

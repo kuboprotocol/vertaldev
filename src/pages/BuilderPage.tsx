@@ -476,6 +476,7 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
         generatedCode={generatedCode}
         isPublished={isPublished}
         publishedUrl={publishedUrl}
+        projectId={currentProjectId}
       />
 
       {/* Main content */}
