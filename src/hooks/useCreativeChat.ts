@@ -271,7 +271,7 @@ export function useCreativeChat(): UseCreativeChatReturn {
         await conversationService.addMessage(convId, 'user', content, 0, isFreeConversation);
 
         // Call OpenRouter API
-        const response = await openRouterService.chat({
+        const response = await openRouterService.chatViaServer({
           messages: messages.map(({ id, timestamp, isFree, ...msg }) => msg),
         });
 

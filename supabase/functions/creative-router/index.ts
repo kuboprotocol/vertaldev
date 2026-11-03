@@ -25,7 +25,7 @@ const InputSchema = z.object({
     content: z.string().min(1),
   })).optional(),
   prompt: z.string().optional(),
-  tool: z.enum(["chat", "image", "video", "music", "pdf", "docs", "slide", "edit_image", "edit_video", "office_ai", "office_email"]),
+  tool: z.enum(["chat", "image", "video", "music", "pdf", "docs", "slide", "edit_image", "edit_video", "office_ai", "office_email", "chat_json"]),
   model: z.string().optional(),
   temperature: z.number().optional(),
   max_tokens: z.number().optional(),
@@ -48,6 +48,7 @@ const COSTS: Record<string, number> = {
   edit_video: 0, // Local Utility
   office_ai: 1,    // Vertal Office: preparar/gerar com IA (1 crédito por uso)
   office_email: 0, // Vertal Office: envio de e-mail não é cobrado
+  chat_json: 0,    // Modo de conversa via servidor: cobrança continua no cliente (como antes)
 };
 
 Deno.serve(withRefundOnFailure(async (req) => {
@@ -96,6 +97,8 @@ Deno.serve(withRefundOnFailure(async (req) => {
       return await handleOfficeAi(office ?? {}, cost);
     } else if (tool === "office_email") {
       return await handleOfficeEmail(user, office ?? {});
+    } else if (tool === "chat_json") {
+      return await handleChatJson(user, messages ?? [], temperature, max_tokens);
     }
 
     return new Response(JSON.stringify({ error: "tool_not_implemented_in_router" }), {
@@ -335,5 +338,56 @@ async function handleOfficeEmail(user: { id: string; email?: string | null }, ra
     if (e instanceof OfficeEmailError) return jsonResponse(400, { error: e.message });
     throw e;
   }
+}
+
+// ─── Modo de conversa (resposta JSON, sem streaming) ─────────────────────
+
+const CHAT_JSON_MODEL = "openai/gpt-3.5-turbo";
+const CHAT_JSON_MAX_MESSAGES = 40;
+const CHAT_JSON_MAX_CHARS = 8_000;
+
+/** Conversa com a OpenRouter a partir do servidor: a chave fica no segredo do Supabase, nunca no navegador. */
+async function handleChatJson(
+  user: { id: string; email?: string | null },
+  messages: Array<{ role: string; content: string }>,
+  temperature?: number,
+  max_tokens?: number,
+): Promise<Response> {
+  const limit = await enforceRateLimit(user.id, "chat_json", { max: 30, windowSeconds: 60, userEmail: user.email ?? null });
+  if (!limit.ok) return jsonResponse(429, { error: limit.error });
+
+  const trimmed = messages
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .slice(-CHAT_JSON_MAX_MESSAGES)
+    .map((m) => ({ role: m.role, content: String(m.content).slice(0, CHAT_JSON_MAX_CHARS) }));
+  if (trimmed.length === 0 || trimmed[trimmed.length - 1].role !== "user") {
+    return jsonResponse(400, { error: "invalid_messages" });
+  }
+
+  const key = Deno.env.get("OPENROUTER_API_KEY");
+  if (!key) return jsonResponse(503, { error: "openrouter_not_configured" });
+
+  const resp = await fetchWithRetry("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${key}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://vertal.dev",
+      "X-Title": "Vertal Creative Panel",
+    },
+    body: JSON.stringify({
+      model: CHAT_JSON_MODEL,
+      messages: trimmed,
+      temperature: Math.min(Math.max(temperature ?? 0.7, 0), 1.5),
+      max_tokens: Math.min(max_tokens ?? 1000, 2000),
+    }),
+  });
+
+  if (!resp.ok) {
+    console.error("[creative-router] chat_json OpenRouter failed:", resp.status);
+    return jsonResponse(502, { error: `openrouter_http_${resp.status}` });
+  }
+  const data = await resp.json();
+  return jsonResponse(200, data);
 }
 

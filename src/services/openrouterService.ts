@@ -30,6 +30,8 @@ export interface ChatRequest {
   max_tokens?: number;
 }
 
+import { supabase } from '@/integrations/supabase/client';
+
 export class OpenRouterService {
   private apiKey: string;
   private apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
@@ -46,6 +48,41 @@ export class OpenRouterService {
     }
     // Client-side - use from env
     return (import.meta as any).env.VITE_OPENROUTER_API_KEY || '';
+  }
+
+  /**
+   * Conversa pelo servidor (creative-router, ferramenta chat_json).
+   * A chave da OpenRouter fica no segredo do Supabase; nada sensível vai ao navegador.
+   */
+  async chatViaServer(request: ChatRequest): Promise<OpenRouterResponse> {
+    const { data, error } = await supabase.functions.invoke<OpenRouterResponse & { error?: string }>(
+      'creative-router',
+      {
+        body: {
+          tool: 'chat_json',
+          messages: request.messages,
+          temperature: request.temperature,
+          max_tokens: request.max_tokens,
+        },
+      },
+    );
+    if (error) {
+      const ctx = (error as { context?: Response })?.context;
+      let code: string | undefined;
+      try {
+        code = ((await ctx?.json()) as { error?: string } | undefined)?.error;
+      } catch {
+        code = undefined;
+      }
+      if (code === 'openrouter_not_configured') throw new Error('O chat ainda não está configurado no servidor. Avise o suporte.');
+      if (code === 'invalid_messages') throw new Error('Mensagem vazia. Escreva algo para enviar.');
+      if (code === 'rate_limited' || code === 'Too many requests') throw new Error('Muitas mensagens em pouco tempo. Aguarde um minuto.');
+      throw new Error('Não foi possível responder agora. Tente de novo.');
+    }
+    if (!data || !Array.isArray((data as OpenRouterResponse).choices)) {
+      throw new Error('Resposta inesperada do chat.');
+    }
+    return data as OpenRouterResponse;
   }
 
   /**
