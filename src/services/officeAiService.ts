@@ -31,8 +31,8 @@ async function readErrorCode(error: unknown): Promise<string | null> {
 }
 
 export async function runOfficeAi(request: OfficeAiRequest): Promise<OfficeAiResponse> {
-  const { data, error } = await supabase.functions.invoke<OfficeAiResponse & { error?: string }>('office-ai', {
-    body: request,
+  const { data, error } = await supabase.functions.invoke<OfficeAiResponse & { error?: string }>('creative-router', {
+    body: { tool: 'office_ai', office: request },
     headers: { 'X-Idempotency-Key': crypto.randomUUID() },
   });
 
