@@ -76,6 +76,7 @@ export class OpenRouterService {
       }
       if (code === 'openrouter_not_configured') throw new Error('O chat ainda não está configurado no servidor. Avise o suporte.');
       if (code === 'invalid_messages') throw new Error('Mensagem vazia. Escreva algo para enviar.');
+      if (code === 'deduction_failed' || code === 'insufficient_credits') throw new Error('Sem créditos para esta conversa. Compre créditos para continuar.');
       if (code === 'rate_limited' || code === 'Too many requests') throw new Error('Muitas mensagens em pouco tempo. Aguarde um minuto.');
       throw new Error('Não foi possível responder agora. Tente de novo.');
     }
