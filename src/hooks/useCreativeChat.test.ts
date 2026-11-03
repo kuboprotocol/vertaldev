@@ -335,7 +335,7 @@ describe('useCreativeChat', () => {
       );
       (conversationServiceModule.conversationService.addMessage as any).mockResolvedValue({});
       (conversationServiceModule.conversationService.listConversations as any).mockResolvedValue([]);
-      (openRouterServiceModule.openRouterService.chat as any).mockResolvedValue(mockResponse);
+      (openRouterServiceModule.openRouterService.chatViaServer as any).mockResolvedValue(mockResponse);
       (quotaServiceModule.quotaService.getQuotaStatus as any).mockReturnValue({
         canUseFree: true,
         creditsAvailable: 0,
@@ -391,7 +391,7 @@ describe('useCreativeChat', () => {
       );
       (conversationServiceModule.conversationService.addMessage as any).mockResolvedValue({});
       (conversationServiceModule.conversationService.listConversations as any).mockResolvedValue([]);
-      (openRouterServiceModule.openRouterService.chat as any).mockResolvedValue(mockResponse);
+      (openRouterServiceModule.openRouterService.chatViaServer as any).mockResolvedValue(mockResponse);
       (quotaServiceModule.quotaService.getQuotaStatus as any).mockReturnValue({
         canUseFree: false,
         creditsAvailable: 5,
@@ -408,7 +408,7 @@ describe('useCreativeChat', () => {
 
     it('should handle send errors', async () => {
       const mockError = new Error('API error');
-      (openRouterServiceModule.openRouterService.chat as any).mockRejectedValue(mockError);
+      (openRouterServiceModule.openRouterService.chatViaServer as any).mockRejectedValue(mockError);
       (conversationServiceModule.conversationService.createConversation as any).mockResolvedValue({
         id: 'conv-123',
       });
@@ -483,7 +483,7 @@ describe('useCreativeChat', () => {
     });
 
     it('should be false when loading', async () => {
-      (openRouterServiceModule.openRouterService.chat as any).mockImplementation(
+      (openRouterServiceModule.openRouterService.chatViaServer as any).mockImplementation(
         () => new Promise(() => {}) // Never resolves
       );
       (conversationServiceModule.conversationService.createConversation as any).mockResolvedValue({

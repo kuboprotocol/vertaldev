@@ -1,5 +1,5 @@
 import { corsHeaders } from "../_shared/cors.ts";
-import { getUser, deductCredits, recordAsset, sanitizeError, withRefundOnFailure, enforceRateLimit } from "../_shared/creative.ts";
+import { getUser, deductCredits, recordAsset, sanitizeError, withRefundOnFailure, enforceRateLimit, supaAdmin } from "../_shared/creative.ts";
 import { z } from "npm:zod@3";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { runGateway, GatewayError } from "../_shared/aiGateway.ts";
@@ -25,7 +25,7 @@ const InputSchema = z.object({
     content: z.string().min(1),
   })).optional(),
   prompt: z.string().optional(),
-  tool: z.enum(["chat", "image", "video", "music", "pdf", "docs", "slide", "edit_image", "edit_video", "office_ai", "office_email"]),
+  tool: z.enum(["chat", "image", "video", "music", "pdf", "docs", "slide", "edit_image", "edit_video", "office_ai", "office_email", "chat_json"]),
   model: z.string().optional(),
   temperature: z.number().optional(),
   max_tokens: z.number().optional(),
@@ -48,6 +48,7 @@ const COSTS: Record<string, number> = {
   edit_video: 0, // Local Utility
   office_ai: 1,    // Vertal Office: preparar/gerar com IA (1 crédito por uso)
   office_email: 0, // Vertal Office: envio de e-mail não é cobrado
+  chat_json: 0,    // Modo de conversa: custo real vem de chatJsonCost (grátis até 5/dia, depois 1)
 };
 
 Deno.serve(withRefundOnFailure(async (req) => {
@@ -78,6 +79,10 @@ Deno.serve(withRefundOnFailure(async (req) => {
     if (tool === "chat" && model?.includes("sonnet")) {
       cost = COSTS.chat_premium;
     }
+    // Modo de conversa: 5 grátis por dia (UTC), a partir da sexta 1 crédito.
+    if (tool === "chat_json") {
+      cost = await chatJsonCost(user.id);
+    }
 
     // Deduct credits
     const ded = await deductCredits(user.id, cost, `creative_${tool}`, metadata ?? {}, user.email, idempotencyKey);
@@ -96,6 +101,8 @@ Deno.serve(withRefundOnFailure(async (req) => {
       return await handleOfficeAi(office ?? {}, cost);
     } else if (tool === "office_email") {
       return await handleOfficeEmail(user, office ?? {});
+    } else if (tool === "chat_json") {
+      return await handleChatJson(user, messages ?? [], temperature, max_tokens, cost === 0);
     }
 
     return new Response(JSON.stringify({ error: "tool_not_implemented_in_router" }), {
@@ -335,5 +342,78 @@ async function handleOfficeEmail(user: { id: string; email?: string | null }, ra
     if (e instanceof OfficeEmailError) return jsonResponse(400, { error: e.message });
     throw e;
   }
+}
+
+// ─── Modo de conversa (resposta JSON, sem streaming) ─────────────────────
+
+const CHAT_JSON_MODEL = "openai/gpt-3.5-turbo";
+const CHAT_FREE_PER_DAY = 5;
+const CHAT_JSON_MAX_MESSAGES = 40;
+const CHAT_JSON_MAX_CHARS = 8_000;
+
+/** Conversa com a OpenRouter a partir do servidor: a chave fica no segredo do Supabase, nunca no navegador. */
+/** Conta a conversa no dia e devolve o custo: 0 (grátis) até o limite diário, depois 1 crédito. */
+async function chatJsonCost(userId: string): Promise<number> {
+  const { data, error } = await supaAdmin().rpc("increment_creative_chat_usage", { p_user_id: userId });
+  if (error || typeof data !== "number") throw new Error("chat_quota_unavailable");
+  return data <= CHAT_FREE_PER_DAY ? 0 : 1;
+}
+
+async function releaseChatSlot(userId: string): Promise<void> {
+  const { error } = await supaAdmin().rpc("release_creative_chat_usage", { p_user_id: userId });
+  if (error) console.error("[creative-router] release_creative_chat_usage failed:", error);
+}
+
+async function handleChatJson(
+  user: { id: string; email?: string | null },
+  messages: Array<{ role: string; content: string }>,
+  temperature?: number,
+  max_tokens?: number,
+  freeSlot = false,
+): Promise<Response> {
+  const limit = await enforceRateLimit(user.id, "chat_json", { max: 30, windowSeconds: 60, userEmail: user.email ?? null });
+  if (!limit.ok) {
+    if (freeSlot) await releaseChatSlot(user.id);
+    return jsonResponse(429, { error: limit.error });
+  }
+
+  const trimmed = messages
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .slice(-CHAT_JSON_MAX_MESSAGES)
+    .map((m) => ({ role: m.role, content: String(m.content).slice(0, CHAT_JSON_MAX_CHARS) }));
+  if (trimmed.length === 0 || trimmed[trimmed.length - 1].role !== "user") {
+    if (freeSlot) await releaseChatSlot(user.id);
+    return jsonResponse(400, { error: "invalid_messages" });
+  }
+
+  const key = Deno.env.get("OPENROUTER_API_KEY");
+  if (!key) {
+    if (freeSlot) await releaseChatSlot(user.id);
+    return jsonResponse(503, { error: "openrouter_not_configured" });
+  }
+
+  const resp = await fetchWithRetry("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${key}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://vertal.dev",
+      "X-Title": "Vertal Creative Panel",
+    },
+    body: JSON.stringify({
+      model: CHAT_JSON_MODEL,
+      messages: trimmed,
+      temperature: Math.min(Math.max(temperature ?? 0.7, 0), 1.5),
+      max_tokens: Math.min(max_tokens ?? 1000, 2000),
+    }),
+  });
+
+  if (!resp.ok) {
+    console.error("[creative-router] chat_json OpenRouter failed:", resp.status);
+    if (freeSlot) await releaseChatSlot(user.id);
+    return jsonResponse(502, { error: `openrouter_http_${resp.status}` });
+  }
+  const data = await resp.json();
+  return jsonResponse(200, data);
 }
 
