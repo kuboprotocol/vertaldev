@@ -24,22 +24,41 @@ Suíte de escritório do Painel Criativo: documentos, planilhas e (em evolução
 - Várias abas ou vários documentos por conta. Hoje há um documento e uma planilha por navegador.
 - Busca na web ao vivo pela IA. A IA organiza o pedido e o material que o usuário colar.
 
-## Agentes e e-mail (planejado)
+## Enviar por e-mail
 
-Os agentes do Vertal poderão **ler arquivos do Vertal Office e enviá-los por e-mail**, por exemplo pelo Gmail (já existe a função `gmail-send-message`, hoje só com texto, sem anexo) e, depois, por outras contas de e-mail que forem instaladas.
+O usuário pode enviar um documento ou uma planilha como anexo pela própria conta Gmail, conectada em `/connectors/gmail`.
 
-Regras que valem para essa integração:
+Fluxo, na ordem:
 
-1. **Confirmação antes de cada envio.** O agente prepara o e-mail (destinatário, assunto, texto e anexo) e o usuário confirma antes de sair. Nenhum agente envia e-mail sozinho.
-2. **Só com conta conectada pelo próprio usuário.** O agente usa somente contas que o usuário autorizou, com OAuth e tokens criptografados, como o Gmail já funciona.
-3. **Anexos são gerados a partir do arquivo do usuário**, nos formatos já suportados (`.xlsx`, `.html`, `.md`, `.txt`, `.csv`).
-4. **Custo (confirmado):** a preparação do e-mail pela IA consome 1 crédito por uso, como qualquer outra ação de IA. O envio em si não é cobrado.
+1. **Escolhe a conta e o destinatário**, e o formato do anexo.
+2. **(Opcional) A IA prepara o assunto e o texto** a partir do conteúdo do arquivo. Custa **1 crédito por uso**.
+3. **Revisa** o assunto e o texto.
+4. **Marca a confirmação** ("Revisei o e-mail e confirmo o envio").
+5. **Confirma o envio.** Só então o e-mail sai.
 
-Status: **não implementado**. O envio com anexo e a confirmação no painel ainda precisam ser construídos.
+Regras:
+
+- **Nenhum envio acontece sem confirmação.** A confirmação é exigida também no servidor (`confirmed: true`), não só na tela. Editar o assunto ou o texto desfaz a confirmação.
+- **Nenhum agente envia e-mail sozinho.** A função de envio só roda a partir de uma ação do usuário.
+- **Anexos permitidos:** `.xlsx`, `.csv`, `.html`, `.md`, `.txt`. O tipo do arquivo vem da extensão, não do cliente. Limite de 10 MB.
+- **Só contas conectadas pelo próprio usuário**, com OAuth e tokens criptografados, como o Gmail já funciona.
+- **Custo:** a preparação do texto pela IA consome 1 crédito por uso. O envio não é cobrado.
+
+Limitações atuais:
+
+- **Só Gmail.** Outras contas de e-mail serão adicionadas depois.
+- **Sem agente automático.** Hoje o envio começa sempre pela interface do usuário.
+
+## Agentes do Vertal (planejado)
+
+Os agentes poderão, no futuro, preparar um e-mail com anexo e pedir a confirmação do usuário pela mesma tela. A regra de confirmação antes do envio continua valendo.
 
 ## Arquitetura (resumo)
 
 - `src/lib/office/`: motor de fórmulas, modelos de documento e planilha, exportação.
 - `src/components/office/OfficeSuite.tsx`: interface do Vertal Office.
-- `supabase/functions/office-ai/`: edge function da IA, com cobrança de 1 crédito, idempotência e reembolso em falha.
+- `supabase/functions/office-ai/`: edge function da IA (ações `sheet`, `doc` e `email`), com cobrança de 1 crédito, idempotência e reembolso em falha.
+- `supabase/functions/office-email-send/`: envio pelo Gmail com anexo. Exige `confirmed: true`.
+- `supabase/functions/_shared/officeEmail.ts`: montagem MIME, nomes de anexo e cabeçalhos seguros.
+- `src/components/office/OfficeEmailDialog.tsx`: diálogo de envio com confirmação.
 - `supabase/functions/_shared/officeAi.ts`: prompts e validação da saída da IA.

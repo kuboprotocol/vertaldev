@@ -19,7 +19,7 @@ import {
 import { z } from "npm:zod@3";
 
 const InputSchema = z.object({
-  action: z.enum(["sheet", "doc"]),
+  action: z.enum(["sheet", "doc", "email"]),
   prompt: z.string().trim().min(3).max(2000),
   source: z.string().max(60_000).optional(),
 });

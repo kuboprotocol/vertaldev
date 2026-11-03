@@ -26,6 +26,7 @@ import {
 } from '@/lib/office/sheetModel';
 import { columnLetters, evaluateAll, toRef } from '@/lib/office/formulas';
 import { OFFICE_AI_CREDIT_COST, runOfficeAi } from '@/services/officeAiService';
+import { OfficeEmailDialog } from './OfficeEmailDialog';
 
 const DOC_KEY = 'kubo-office-doc-v1';
 const SHEET_KEY = 'kubo-office-sheet-v1';
@@ -128,6 +129,7 @@ function AiPanel({ placeholder, creditsAvailable, busy, onRun, actionLabel }: Ai
 function DocumentTab({ creditsAvailable }: { creditsAvailable: number }) {
   const [doc, setDoc] = useState<DocData>(() => loadLocal(DOC_KEY, () => createEmptyDoc()));
   const [busy, setBusy] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   const update = (next: DocData) => {
@@ -244,8 +246,25 @@ function DocumentTab({ creditsAvailable }: { creditsAvailable: number }) {
           <ExportButton label="HTML" onClick={() => exportAs('html')} />
           <ExportButton label="Markdown" onClick={() => exportAs('md')} />
           <ExportButton label="Texto" onClick={() => exportAs('txt')} />
+          <ExportButton label="Enviar por e-mail" onClick={() => setEmailOpen(true)} />
         </div>
       </div>
+      <OfficeEmailDialog
+        open={emailOpen}
+        onClose={() => setEmailOpen(false)}
+        title={doc.title}
+        creditsAvailable={creditsAvailable}
+        formats={[
+          { id: 'html', label: 'HTML', ext: 'html' },
+          { id: 'md', label: 'Markdown', ext: 'md' },
+          { id: 'txt', label: 'Texto', ext: 'txt' },
+        ]}
+        buildFile={(id) => {
+          const text = id === 'html' ? docToHtml(doc) : id === 'md' ? docToMarkdown(doc) : docToText(doc);
+          return { bytes: new TextEncoder().encode(text) };
+        }}
+        sourceText={() => docToText(doc)}
+      />
     </div>
   );
 }
@@ -266,6 +285,7 @@ function SheetTab({ creditsAvailable }: { creditsAvailable: number }) {
   const [sheet, setSheet] = useState<SheetData>(() => loadLocal(SHEET_KEY, () => createEmptySheet()));
   const [selected, setSelected] = useState('A1');
   const [busy, setBusy] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   const values = useMemo(() => evaluateAll(sheet.cells), [sheet.cells]);
@@ -392,8 +412,25 @@ function SheetTab({ creditsAvailable }: { creditsAvailable: number }) {
               )
             }
           />
+          <ExportButton label="Enviar por e-mail" onClick={() => setEmailOpen(true)} />
         </div>
       </div>
+      <OfficeEmailDialog
+        open={emailOpen}
+        onClose={() => setEmailOpen(false)}
+        title={sheet.title}
+        creditsAvailable={creditsAvailable}
+        formats={[
+          { id: 'xlsx', label: 'Excel (.xlsx)', ext: 'xlsx' },
+          { id: 'csv', label: 'CSV', ext: 'csv' },
+        ]}
+        buildFile={(id) =>
+          id === 'csv'
+            ? { bytes: new TextEncoder().encode(sheetToCsv(sheet.cells)) }
+            : { bytes: new Uint8Array(sheetToXlsx(sheet)) }
+        }
+        sourceText={() => sheetToCsv(sheet.cells)}
+      />
     </div>
   );
 }

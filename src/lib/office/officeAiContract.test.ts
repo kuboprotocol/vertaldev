@@ -87,4 +87,14 @@ describe('contrato da IA do Vertal Office', () => {
     expect(() => parseOfficeOutput('sheet', '{"headers":[],"rows":[]}')).toThrow(OfficeAiOutputError);
     expect(() => parseOfficeOutput('doc', '{"title":"x"}')).toThrow(OfficeAiOutputError);
   });
+
+  it('e-mail: aceita assunto e corpo e remove quebras do assunto', () => {
+    const out = parseOfficeOutput('email', JSON.stringify({ subject: 'Oi\r\nBcc: x', body: 'Corpo do e-mail' }));
+    expect(out).toEqual({ subject: 'Oi Bcc: x', body: 'Corpo do e-mail' });
+  });
+
+  it('e-mail: rejeita resposta sem assunto ou corpo vazio', () => {
+    expect(() => parseOfficeOutput('email', '{"subject":"x"}')).toThrow(OfficeAiOutputError);
+    expect(() => parseOfficeOutput('email', '{"subject":"  ","body":"x"}')).toThrow(OfficeAiOutputError);
+  });
 });

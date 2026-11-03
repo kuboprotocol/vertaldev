@@ -7,7 +7,7 @@
 // isso o modelo recebe um formato rígido e a saída é validada e limitada antes
 // de chegar ao usuário. Saída inválida vira erro e o crédito é devolvido.
 
-export type OfficeAiAction = 'sheet' | 'doc';
+export type OfficeAiAction = 'sheet' | 'doc' | 'email';
 
 /** Preço de cada uso da IA em créditos. */
 export const OFFICE_AI_CREDIT_COST = 1;
@@ -23,6 +23,8 @@ export const OFFICE_LIMITS = {
   maxDocBlocks: 300,
   maxBlockChars: 4_000,
   maxTitleChars: 120,
+  maxSubjectChars: 200,
+  maxEmailBodyChars: 20_000,
 } as const;
 
 export type Msg = { role: 'system' | 'user' | 'assistant'; content: string };
@@ -37,7 +39,12 @@ export interface DocOutput {
   blocks: Array<{ type: 'heading' | 'paragraph' | 'bullet'; text: string }>;
 }
 
-export type OfficeOutput = SheetOutput | DocOutput;
+export interface EmailOutput {
+  subject: string;
+  body: string;
+}
+
+export type OfficeOutput = SheetOutput | DocOutput | EmailOutput;
 
 export class OfficeAiOutputError extends Error {
   constructor(message: string) {
@@ -56,15 +63,18 @@ export function clipSource(source: string): string {
 }
 
 const SHEET_SHAPE = '{"headers": ["Coluna 1", "Coluna 2"], "rows": [["valor", 10], ["valor", 20]]}';
+const EMAIL_SHAPE = '{"subject": "Assunto curto", "body": "Texto do e-mail, em português, com saudação e despedida"}';
 const DOC_SHAPE =
   '{"title": "Título do documento", "blocks": [{"type": "heading", "text": "Seção"}, {"type": "paragraph", "text": "Texto"}, {"type": "bullet", "text": "Item"}]}';
 
 export function buildOfficeMessages(action: OfficeAiAction, prompt: string, source: string): Msg[] {
-  const shape = action === 'sheet' ? SHEET_SHAPE : DOC_SHAPE;
+  const shape = action === 'sheet' ? SHEET_SHAPE : action === 'email' ? EMAIL_SHAPE : DOC_SHAPE;
   const task =
     action === 'sheet'
       ? `Organize os dados pedidos em uma tabela com no máximo ${OFFICE_LIMITS.maxRows} linhas de dados e ${OFFICE_LIMITS.maxCols} colunas. Números devem ser números JSON, não texto.`
-      : `Escreva o documento pedido em blocos curtos e claros. No máximo ${OFFICE_LIMITS.maxDocBlocks} blocos.`;
+      : action === 'email'
+        ? 'Escreva um e-mail profissional e educado que apresente o arquivo em anexo. Não invente destinatário, valores ou prazos que não estejam no pedido.'
+        : `Escreva o documento pedido em blocos curtos e claros. No máximo ${OFFICE_LIMITS.maxDocBlocks} blocos.`;
 
   const system = [
     'Você é o gerador do Vertal Office. Responda somente com um objeto JSON válido, sem texto antes ou depois, sem markdown.',
@@ -141,6 +151,16 @@ function validateDoc(obj: Record<string, unknown>): DocOutput {
   };
 }
 
+function validateEmail(obj: Record<string, unknown>): EmailOutput {
+  if (typeof obj.subject !== 'string' || typeof obj.body !== 'string') {
+    throw new OfficeAiOutputError('email_shape');
+  }
+  const subject = obj.subject.replace(/[\r\n]+/g, ' ').trim().slice(0, OFFICE_LIMITS.maxSubjectChars);
+  const body = obj.body.trim().slice(0, OFFICE_LIMITS.maxEmailBodyChars);
+  if (!subject || !body) throw new OfficeAiOutputError('email_empty');
+  return { subject, body };
+}
+
 /** Valida a resposta do modelo. Lança OfficeAiOutputError se o formato não bater. */
 export function parseOfficeOutput(action: OfficeAiAction, raw: string): OfficeOutput {
   const obj = extractJson(raw);
@@ -148,5 +168,7 @@ export function parseOfficeOutput(action: OfficeAiAction, raw: string): OfficeOu
     throw new OfficeAiOutputError('not_an_object');
   }
   const record = obj as Record<string, unknown>;
-  return action === 'sheet' ? validateSheet(record) : validateDoc(record);
+  if (action === 'sheet') return validateSheet(record);
+  if (action === 'email') return validateEmail(record);
+  return validateDoc(record);
 }
