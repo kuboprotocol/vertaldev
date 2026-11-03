@@ -23,7 +23,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 DROP TRIGGER IF EXISTS on_creative_status_change ON public.creative_assets;
 CREATE TRIGGER on_creative_status_change

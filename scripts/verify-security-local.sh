@@ -65,7 +65,10 @@ echo "🔍 [1/3] Lint estático em supabase/migrations + edge functions"
       if grep -qiE 'alter[[:space:]]+database[[:space:]]+postgres' "$f"; then
         echo "❌ ALTER DATABASE postgres proibido: $f"
       fi
-      if grep -qiE '(create|alter|drop)[[:space:]]+(table|function|schema|view|trigger|index)[[:space:]]+[^;]*(auth|storage|realtime|vault|supabase_functions)\.' "$f"; then
+      # FK que apenas referencia uma tabela de schema reservado (ex.: REFERENCES auth.users)
+      # não é DDL nesse schema: removemos essa referência antes de checar.
+      if sed -E 's/references[[:space:]]+(auth|storage|realtime|vault|supabase_functions)\./references fk_ref./gI' "$f" \
+         | grep -qiE '(create|alter|drop)[[:space:]]+(table|function|schema|view|trigger|index)[[:space:]]+[^;]*(auth|storage|realtime|vault|supabase_functions)\.'; then
         echo "❌ Toca schema reservado: $f"
       fi
     done

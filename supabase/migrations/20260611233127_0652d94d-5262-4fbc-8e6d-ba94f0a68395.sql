@@ -13,7 +13,7 @@ BEGIN
     DELETE FROM public.rate_limit_counters WHERE created_at < now() - interval '24 hours';
     RETURN NULL;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 DROP TRIGGER IF EXISTS trigger_cleanup_rate_limits ON public.rate_limit_counters;
 CREATE TRIGGER trigger_cleanup_rate_limits
