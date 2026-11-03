@@ -7,7 +7,7 @@ BEGIN
     WHERE user_id = auth.uid() AND role = 'admin'
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 -- 2. Safe View for api_credentials
 CREATE OR REPLACE VIEW public.api_credentials_safe AS

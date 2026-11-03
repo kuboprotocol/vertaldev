@@ -40,7 +40,7 @@ BEGIN
   EXECUTE v_query INTO v_results;
   RETURN COALESCE(v_results, '[]'::jsonb);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 GRANT EXECUTE ON FUNCTION get_creative_audit_logs TO authenticated;
 GRANT EXECUTE ON FUNCTION get_creative_audit_logs TO service_role;
