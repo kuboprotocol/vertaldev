@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Sparkles, Zap, Image, Music, Code, Video, Pen, Layout, BarChart3, Palette, ArrowLeft, ChevronRight } from 'lucide-react';
+import { Sparkles, Zap, Image, Music, Code, Video, Pen, Layout, BarChart3, Palette, ArrowLeft, ChevronRight, FileText } from 'lucide-react';
+import { OfficeSuite } from './office/OfficeSuite';
 import ChatWidget from './ChatWidget';
 import { CreativeChat } from './CreativeChat';
 import { CreativeSlides } from './CreativeSlides';
@@ -14,7 +15,7 @@ type CategoryId = 'design' | 'content' | 'media' | 'digital';
 
 interface CreativeItem {
   id: string;
-  type: 'text' | 'image' | 'audio' | 'code' | 'video' | 'slides' | 'spreadsheet' | 'music' | 'design';
+  type: 'text' | 'image' | 'audio' | 'code' | 'video' | 'slides' | 'spreadsheet' | 'music' | 'design' | 'office';
   title: string;
   description: string;
   icon: React.ReactNode;
@@ -106,6 +107,16 @@ const CREATIVE_ITEMS: CreativeItem[] = [
     status: 'available',
   },
   {
+    id: 'office',
+    type: 'office',
+    title: 'Pacote Office',
+    description: 'Documentos e planilhas grátis. A IA custa 1 crédito por uso',
+    icon: <FileText className="h-5 w-5" />,
+    color: 'from-violet-500 to-fuchsia-500',
+    category: 'content',
+    status: 'available',
+  },
+  {
     id: 'music',
     type: 'music',
     title: 'Gerador de Músicas',
@@ -151,6 +162,8 @@ function renderTool(type: CreativeItem['type'], creditsAvailable: number) {
       return <CreativeImages creditsAvailable={creditsAvailable} />;
     case 'spreadsheet':
       return <CreativeSheets creditsAvailable={creditsAvailable} />;
+    case 'office':
+      return <OfficeSuite creditsAvailable={creditsAvailable} />;
     case 'music':
       return <CreativeMusic creditsAvailable={creditsAvailable} />;
     default:
