@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Camera, Image as ImageIcon, Paperclip, Monitor, Puzzle, Code2, Smartphone,
-  Presentation, Wand2, Search, MessageSquare, Calendar, Table2, Music, Video, Scissors, BookOpen, Sparkles, User2, Download, Clapperboard, Palette
+  Presentation, FileText, Wand2, Search, MessageSquare, Calendar, Table2, Music, Video, Scissors, BookOpen, Sparkles, User2, Download, Clapperboard, Palette
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -33,6 +33,7 @@ const ITEMS: Item[] = [
   { key: "chat_mode", label: "Modo de conversa", icon: MessageSquare, onSelect: ({ setActive }) => setActive("chat") },
   { key: "schedule", label: "Tarefas agendadas", icon: Calendar, onSelect: ({ navigate }) => navigate("/creative/investigation") },
   { key: "sheet", label: "Criar planilha", icon: Table2, onSelect: ({ setActive }) => setActive("sheet") },
+  { key: "office", label: "Vertal Office", icon: FileText, badge: "NOVO", onSelect: ({ setActive }) => setActive("office") },
   { key: "music", label: "Música IA", icon: Music, onSelect: ({ setActive }) => setActive("music") },
   { key: "video_studio", label: "Criar vídeo com fotos", icon: Clapperboard, badge: "NOVO", onSelect: ({ setActive }) => setActive("video_studio") },
   { key: "shorts", label: "Shorts/Vídeo IA", icon: Video, onSelect: ({ setActive }) => setActive("shorts") },
