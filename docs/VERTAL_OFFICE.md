@@ -4,7 +4,7 @@ Suíte de escritório do Painel Criativo: documentos, planilhas e (em evolução
 
 ## Modelo de cobrança
 
-- **Grátis para usar:** editor de documentos, editor de planilhas, exportação (HTML, Markdown, texto, CSV, Excel `.xlsx`) e rascunhos salvos no navegador. Não há cobrança por abrir, editar ou exportar.
+- **Grátis para usar:** editores de documento, planilha e apresentação, exportação (HTML, Markdown, texto, CSV, Excel `.xlsx`, Word `.docx`, PowerPoint `.pptx`, PDF) e rascunhos salvos no navegador. Não há cobrança por abrir, editar ou exportar.
 - **Pago só o uso da IA:** cada ação de IA (escrever documento, preencher planilha) custa **1 crédito por uso**. Se a IA falhar ou devolver um resultado inválido, o crédito é devolvido automaticamente.
 - **Nada é obrigatório:** o usuário pode usar o Vertal Office inteiro sem nunca tocar na IA.
 
@@ -15,12 +15,13 @@ Suíte de escritório do Painel Criativo: documentos, planilhas e (em evolução
 | Documento | Blocos de título, parágrafo e item de lista. Exporta HTML, Markdown e texto. |
 | Planilha | Grade de até 200 linhas × 26 colunas. Fórmulas: `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `ROUND`, `ABS`, operadores `+ - * / ^` e parênteses. Erros: `#DIV/0!`, `#REF!`, `#VALUE!`, `#NAME?`, `#CYCLE!`. Exporta CSV e `.xlsx`. |
 | IA | Escreve documento e preenche planilha a partir de um pedido e de material colado opcional. 1 crédito por uso. |
-| Armazenamento | Rascunho local no navegador (um documento e uma planilha por vez). |
+| Apresentação | Slides com título e tópicos. Exporta PDF (paisagem), HTML, texto e PowerPoint (`.pptx`). |
+| Word | Exporta documento em `.docx`. |
+| Armazenamento | Rascunho local no navegador (um documento, uma planilha e uma apresentação por vez). |
 
 ## O que ainda não funciona
 
-- Exportação para `.docx` e `.pptx`.
-- Apresentações (slides) dentro do Vertal Office.
+- IA para gerar apresentações (slides) — ainda só edição manual.
 - Várias abas ou vários documentos por conta. Hoje há um documento e uma planilha por navegador.
 - Busca na web ao vivo pela IA. A IA organiza o pedido e o material que o usuário colar.
 

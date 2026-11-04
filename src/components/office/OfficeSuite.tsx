@@ -27,6 +27,7 @@ import {
 import { columnLetters, evaluateAll, toRef } from '@/lib/office/formulas';
 import { OFFICE_AI_CREDIT_COST, runOfficeAi } from '@/services/officeAiService';
 import { OfficeEmailDialog } from './OfficeEmailDialog';
+import { docToDocx } from '@/lib/office/officeFiles';
 import { SlidesTab } from './SlidesTab';
 
 const DOC_KEY = 'kubo-office-doc-v1';
@@ -247,6 +248,7 @@ function DocumentTab({ creditsAvailable }: { creditsAvailable: number }) {
           <ExportButton label="HTML" onClick={() => exportAs('html')} />
           <ExportButton label="Markdown" onClick={() => exportAs('md')} />
           <ExportButton label="Texto" onClick={() => exportAs('txt')} />
+          <ExportButton label="Word (.docx)" onClick={() => docToDocx(doc).then((b) => download(b, `${safeName(doc.title)}.docx`, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'))} />
           <ExportButton label="Enviar por e-mail" onClick={() => setEmailOpen(true)} />
         </div>
       </div>
