@@ -53,6 +53,20 @@ Como funciona:
 - Admins nunca veem anúncio.
 - **Teste:** `src/test/ad-policy.test.ts` cobre cada plano.
 
+### Anúncio patrocinado no Painel Criativo (TERRA ADS)
+
+Um cartão "Patrocinado" em linha, no mesmo formato de resultado patrocinado,
+aparece em cada área do Painel Criativo: início, cada categoria (inclusive o
+Vertal Office) e o Design Premium (todos os modos, exceto o editor Canvas, que
+tem o seu slot na página inicial do mundo).
+
+- **Componente:** `src/components/creative/SponsoredSlot.tsx`, que carrega o
+  script `TERRA_ADS_NATIVE_BANNER_SRC` de `src/lib/terraAds.ts`.
+- **Quem vê:** a mesma regra de `AD_SUPPORTED_PLANS` (Free e Starter). Pagos,
+  admin e visitante sem login não veem. Sem frequência: é um espaço fixo na
+  página, não um intersticial.
+- **Teste:** `src/components/creative/SponsoredSlot.test.tsx`.
+
 ### Shortlinks (opcional, todos os planos)
 
 A página `/shortlinks` não é anúncio empurrado: o próprio usuário decide abrir

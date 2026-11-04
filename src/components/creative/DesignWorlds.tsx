@@ -6,6 +6,7 @@ import { DesignGalleryFeed, MyPublishedDesigns, type DesignCopy } from './Design
 import { FreeCreativeTools } from './FreeCreativeTools';
 import { ManualDesignEditor } from './ManualDesignEditor';
 import { PhotocraftEditor } from './PhotocraftEditor';
+import { SponsoredSlot } from './SponsoredSlot';
 
 // O canvas (tldraw) é pesado: só carrega quando o mundo Canvas é aberto.
 const CanvasDesignStudio = lazy(() =>
@@ -71,25 +72,28 @@ export function CanvasWorld({
           key: 'home',
           label: 'Início',
           render: (goTo) => (
-            <WorldHome
-              heading="Comece um canvas"
-              items={[
-                {
-                  title: 'Novo canvas',
-                  description: 'Abra o editor em branco e comece do zero',
-                  onSelect: () => goTo('editor'),
-                  icon: <Plus className="h-5 w-5" />,
-                  gradient: 'from-rose-500 to-orange-400',
-                },
-                {
-                  title: 'Modelos',
-                  description: 'Comece de um modelo publicado',
-                  onSelect: () => goTo('models'),
-                  icon: <LayoutGrid className="h-5 w-5" />,
-                  gradient: 'from-amber-400 to-yellow-300',
-                },
-              ]}
-            />
+            <div className="space-y-8">
+              <WorldHome
+                heading="Comece um canvas"
+                items={[
+                  {
+                    title: 'Novo canvas',
+                    description: 'Abra o editor em branco e comece do zero',
+                    onSelect: () => goTo('editor'),
+                    icon: <Plus className="h-5 w-5" />,
+                    gradient: 'from-rose-500 to-orange-400',
+                  },
+                  {
+                    title: 'Modelos',
+                    description: 'Comece de um modelo publicado',
+                    onSelect: () => goTo('models'),
+                    icon: <LayoutGrid className="h-5 w-5" />,
+                    gradient: 'from-amber-400 to-yellow-300',
+                  },
+                ]}
+              />
+              <SponsoredSlot />
+            </div>
           ),
         },
         {

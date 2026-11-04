@@ -10,6 +10,7 @@ import { CreativeMusic } from './CreativeMusic';
 import { CreativeDesign } from './CreativeDesign';
 import { DesignWorld, PREMIUM_BACKGROUND, PendingPage } from './creative/DesignWorld';
 import { useAuth } from '@/hooks/useAuth';
+import { SponsoredSlot } from './creative/SponsoredSlot';
 
 type CategoryId = 'design' | 'content' | 'media' | 'digital';
 
@@ -185,6 +186,9 @@ function CategoryWorld({
 }) {
   return (
     <div className={PAGE_BACKGROUND}>
+      <div className="px-4 pt-6 sm:px-6 lg:px-8">
+        <SponsoredSlot />
+      </div>
       <DesignWorld
         backLabel="Painel Criativo"
         eyebrow="Painel Criativo"
@@ -294,6 +298,8 @@ export default function CreativePanel() {
             <ChevronRight className="h-6 w-6 shrink-0 text-white opacity-60 transition-opacity group-hover:opacity-100" aria-hidden="true" />
           </div>
         </button>
+
+        <SponsoredSlot />
 
         {/* Categorias: cada uma abre um mundo com as ferramentas como páginas */}
         <section aria-labelledby="creative-categories-title" className="space-y-5">
