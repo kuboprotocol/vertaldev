@@ -274,6 +274,44 @@ const DashboardPage = forwardRef<HTMLDivElement, any>((props, ref) => {
           </div>
         </motion.div>
 
+        {/* Banner de publicidade: Vertal Office grátis (Painel Criativo) */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.048 }} className="mb-8">
+          <div
+            onClick={() => navigate('/creative/office')}
+            role="link"
+            tabIndex={0}
+            aria-label="Abrir o Vertal Office grátis"
+            onKeyDown={(e) => { if (e.key === 'Enter') navigate('/creative/office') }}
+            className="glass-premium hover-glow rounded-2xl p-6 md:p-8 cursor-pointer relative overflow-hidden group bg-gradient-to-r from-violet-500/15 via-background to-fuchsia-500/15"
+          >
+            <div className="absolute inset-0 dot-pattern opacity-20 pointer-events-none" />
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-3">
+                  <FileText className="w-5 h-5 text-violet-300" />
+                  <span className="text-xs tracking-[0.3em] text-muted-foreground">VERTAL OFFICE</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-400/15 text-emerald-300 border border-emerald-300/30 font-mono">GRÁTIS</span>
+                </div>
+                <h3 className="text-2xl md:text-3xl font-display font-bold mb-2">
+                  Seu escritório completo, <span className="neon-text">sem pagar nada</span>
+                </h3>
+                <p className="text-sm text-muted-foreground max-w-xl mb-4">
+                  Escreva documentos e monte planilhas direto no navegador, sem instalar nada e sem assinatura.
+                  Baixe em Word e Excel ou envie por e-mail. Sem tempo? A IA escreve por você por só 1 crédito.
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {['Documentos', 'Planilhas', 'Word (.docx)', 'Excel (.xlsx)', 'Envio por e-mail'].map((t) => (
+                    <span key={t} className="text-[10px] px-2 py-0.5 rounded-md bg-violet-400/10 text-violet-200 border border-violet-300/20 font-mono">{t}</span>
+                  ))}
+                </div>
+              </div>
+              <Button className="rounded-xl gap-2 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:opacity-90 font-semibold">
+                <FileText className="w-4 h-4" /> Usar grátis agora
+              </Button>
+            </div>
+          </div>
+        </motion.div>
+
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="mb-6">
           <div className="flex items-center justify-between">
             <div>
