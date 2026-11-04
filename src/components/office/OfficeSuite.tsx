@@ -1,7 +1,7 @@
 // Vertal Office do Painel Criativo: Documento + Planilha.
 // Editor e exportação são grátis. Cada uso da IA custa 1 crédito.
 import React, { useMemo, useState } from 'react';
-import { FileText, Sheet as SheetIcon, Sparkles, Plus, Trash2, Download, Loader2 } from 'lucide-react';
+import { FileText, Sheet as SheetIcon, Presentation, Sparkles, Plus, Trash2, Download, Loader2 } from 'lucide-react';
 import {
   DocData,
   BlockType,
@@ -27,6 +27,7 @@ import {
 import { columnLetters, evaluateAll, toRef } from '@/lib/office/formulas';
 import { OFFICE_AI_CREDIT_COST, runOfficeAi } from '@/services/officeAiService';
 import { OfficeEmailDialog } from './OfficeEmailDialog';
+import { SlidesTab } from './SlidesTab';
 
 const DOC_KEY = 'kubo-office-doc-v1';
 const SHEET_KEY = 'kubo-office-sheet-v1';
@@ -436,22 +437,26 @@ function SheetTab({ creditsAvailable }: { creditsAvailable: number }) {
 }
 
 export function OfficeSuite({ creditsAvailable }: { creditsAvailable: number }) {
-  const [tab, setTab] = useState<'doc' | 'sheet'>('doc');
+  const [tab, setTab] = useState<'doc' | 'sheet' | 'slides'>('doc');
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 text-slate-100">
-      <header className="space-y-2">
-        <h2 className="font-['Unbounded'] text-xl font-bold text-white">Vertal Office</h2>
-        <p className="text-sm text-slate-400">
-          Grátis para usar. Só o uso da IA é pago: {OFFICE_AI_CREDIT_COST} crédito por uso.
-        </p>
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-1">
+          <h2 className="font-['Unbounded'] text-2xl font-bold text-white">Vertal Office</h2>
+          <p className="text-sm text-slate-400">Documentos, planilhas e apresentações. Grátis para usar.</p>
+        </div>
+        <span className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-200">
+          Só a IA é paga · {OFFICE_AI_CREDIT_COST} crédito por uso
+        </span>
       </header>
 
-      <div role="tablist" className="inline-flex rounded-xl border border-white/10 bg-slate-900/60 p-1">
+      <div role="tablist" aria-label="Aplicativos do Office" className="grid grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-slate-900/60 p-1.5">
         {(
           [
-            { id: 'doc', label: 'Documento', icon: <FileText className="h-4 w-4" /> },
-            { id: 'sheet', label: 'Planilha', icon: <SheetIcon className="h-4 w-4" /> },
+            { id: 'doc', label: 'Documento', icon: <FileText className="h-4 w-4" />, accent: 'from-violet-500/30' },
+            { id: 'sheet', label: 'Planilha', icon: <SheetIcon className="h-4 w-4" />, accent: 'from-cyan-500/30' },
+            { id: 'slides', label: 'Apresentação', icon: <Presentation className="h-4 w-4" />, accent: 'from-amber-500/30' },
           ] as const
         ).map((t) => (
           <button
@@ -460,21 +465,21 @@ export function OfficeSuite({ creditsAvailable }: { creditsAvailable: number }) 
             role="tab"
             aria-selected={tab === t.id}
             onClick={() => setTab(t.id)}
-            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium ${
-              tab === t.id ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'
+            className={`inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+              tab === t.id
+                ? `bg-gradient-to-br ${t.accent} to-transparent text-white ring-1 ring-white/15`
+                : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
             }`}
           >
-            {t.icon} {t.label}
+            {t.icon} <span>{t.label}</span>
           </button>
         ))}
       </div>
 
-      <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 sm:p-6">
-        {tab === 'doc' ? (
-          <DocumentTab creditsAvailable={creditsAvailable} />
-        ) : (
-          <SheetTab creditsAvailable={creditsAvailable} />
-        )}
+      <section className="rounded-2xl border border-white/10 bg-gradient-to-b from-slate-900/80 to-slate-950/80 p-4 shadow-2xl shadow-black/30 sm:p-6">
+        {tab === 'doc' && <DocumentTab creditsAvailable={creditsAvailable} />}
+        {tab === 'sheet' && <SheetTab creditsAvailable={creditsAvailable} />}
+        {tab === 'slides' && <SlidesTab />}
       </section>
     </div>
   );
