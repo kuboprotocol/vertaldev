@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, type ReactNode } from 'react';
-import { Layers, LayoutGrid, Loader2, Plus, Sparkles, User, Wrench } from 'lucide-react';
+import { Layers, LayoutGrid, Loader2, Plus, SlidersHorizontal, Sparkles, User, Wand2, Wrench } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { DesignWorld, PendingPage, StartCard } from './DesignWorld';
 import { DesignGalleryFeed, MyPublishedDesigns, type DesignCopy } from './DesignGallery';
@@ -11,6 +11,11 @@ import { SponsoredSlot } from './SponsoredSlot';
 // O canvas (tldraw) é pesado: só carrega quando o mundo Canvas é aberto.
 const CanvasDesignStudio = lazy(() =>
   import('./CanvasDesignStudio').then((module) => ({ default: module.CanvasDesignStudio })),
+);
+
+// Editor de imagens e Nano Banana: vieram do painel criativo e agora vivem só no Estúdio Pro.
+const CreativeToolInterface = lazy(() =>
+  import('./CreativeToolInterface').then((module) => ({ default: module.CreativeToolInterface })),
 );
 
 interface WorldProps {
@@ -118,13 +123,17 @@ export function CanvasWorld({
 }
 
 /** Mundo Estúdio Pro: editor manual, PhotoCraft e ferramentas grátis. */
-export function StudioWorld({ onExit }: WorldProps) {
+/** Páginas do Estúdio Pro que podem ser abertas direto de fora (ex.: painel criativo). */
+export type StudioPage = 'manual' | 'photocraft' | 'free' | 'image_editor' | 'nano_banana';
+
+export function StudioWorld({ onExit, jumpTo }: WorldProps & { jumpTo?: { key: StudioPage } }) {
   return (
     <DesignWorld
       eyebrow="Estúdio Pro"
       title="Estúdio Pro"
       description="Camadas, fotos e ferramentas abertas, em um só lugar."
       onExit={onExit}
+      jumpTo={jumpTo}
       pages={[
         {
           key: 'home',
@@ -133,6 +142,20 @@ export function StudioWorld({ onExit }: WorldProps) {
             <WorldHome
               heading="Ferramentas"
               items={[
+                {
+                  title: 'Editar com IA',
+                  description: 'Nano Banana: crie ou edite uma imagem descrevendo o que quer',
+                  onSelect: () => goTo('nano_banana'),
+                  icon: <Wand2 className="h-5 w-5" />,
+                  gradient: 'from-amber-400 to-rose-500',
+                },
+                {
+                  title: 'Editor de imagens',
+                  description: 'Corte, redimensione e ajuste qualquer imagem · grátis',
+                  onSelect: () => goTo('image_editor'),
+                  icon: <SlidersHorizontal className="h-5 w-5" />,
+                  gradient: 'from-sky-400 to-indigo-500',
+                },
                 {
                   title: 'Editor manual',
                   description: 'Monte a arte à mão: textos, formas e imagens',
@@ -171,6 +194,28 @@ export function StudioWorld({ onExit }: WorldProps) {
           key: 'photocraft',
           label: 'PhotoCraft',
           render: () => <PhotocraftEditor />,
+        },
+        {
+          key: 'nano_banana',
+          label: 'Editar com IA',
+          render: () => (
+            <div className="mx-auto max-w-4xl">
+              <Suspense fallback={<Spinner />}>
+                <CreativeToolInterface toolKey="nano_banana" />
+              </Suspense>
+            </div>
+          ),
+        },
+        {
+          key: 'image_editor',
+          label: 'Editor de imagens',
+          render: () => (
+            <div className="mx-auto max-w-4xl">
+              <Suspense fallback={<Spinner />}>
+                <CreativeToolInterface toolKey="image_editor" />
+              </Suspense>
+            </div>
+          ),
         },
         {
           key: 'free',
