@@ -5,15 +5,13 @@ interface SponsoredSlotProps {
   className?: string
 }
 
-/** Tempo máximo para o anúncio preencher o espaço. Depois disso o espaço some, sem caixa vazia. */
-const FILL_TIMEOUT_MS = 6000
-
 /**
  * Anúncio nativo TERRA ADS no Painel Criativo, no mesmo formato de resultado patrocinado.
  * Vale para todos os usuários (admin e planos pagos inclusive), enquanto o Painel Criativo
  * e o Design Premium estiverem liberados.
  * Ocupa a largura da coluna em que está, sem borda nem caixa própria, e fica fora do fluxo
- * enquanto não há anúncio: nunca deixa espaço vazio nem empurra o conteúdo.
+ * enquanto não há anúncio: nunca deixa espaço vazio nem empurra o conteúdo. Continua observando
+ * até o anúncio chegar, porque o script pode demorar mais do que alguns segundos.
  */
 export function SponsoredSlot({ className = '' }: SponsoredSlotProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -37,9 +35,6 @@ export function SponsoredSlot({ className = '' }: SponsoredSlotProps) {
     }
     const fillObserver = new MutationObserver(checkFilled)
     fillObserver.observe(container, { childList: true, subtree: true })
-    const timeout = window.setTimeout(() => {
-      if (!checkFilled()) fillObserver.disconnect()
-    }, FILL_TIMEOUT_MS)
 
     // Mesmo filtro cosmético do banner TERRA ADS: remove overlays grandes injetados fora do próprio espaço.
     const overlayObserver = new MutationObserver(() => {
@@ -53,7 +48,6 @@ export function SponsoredSlot({ className = '' }: SponsoredSlotProps) {
     overlayObserver.observe(document.body, { childList: true })
 
     return () => {
-      window.clearTimeout(timeout)
       fillObserver.disconnect()
       overlayObserver.disconnect()
       script.remove()
