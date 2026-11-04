@@ -1,12 +1,12 @@
 /**
  * Chaves de lançamento de módulos do ecossistema.
  *
- * `creativeEconomy`: enquanto `false`, quem clica em "Economia Criativa" vê o
- * aviso "Economia Criativa em Construção" e as rotas /creative/* mostram a
- * mesma tela. Admins continuam acessando o módulo para testes.
+ * `creativeEconomy`: aberto ao público desde 2026-11-04 (painel criativo e
+ * Canvas para todos os usuários logados). Se voltar a `false`, quem clica em
+ * "Economia Criativa" vê o aviso "em construção" e só admins acessam.
  */
 export const FEATURES = {
-  creativeEconomy: false,
+  creativeEconomy: true,
 } as const
 
 export const CREATIVE_ECONOMY_COPY = {

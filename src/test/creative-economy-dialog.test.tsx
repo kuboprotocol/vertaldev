@@ -17,6 +17,13 @@ vi.mock('@/integrations/supabase/client', () => ({
 }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
+// Interruptor do lançamento: os testes do aviso "em construção" rodam com ele desligado.
+const flag = { open: false }
+vi.mock('@/config/features', async (orig) => {
+  const real = await orig<typeof import('@/config/features')>()
+  return { ...real, canAccessCreativeEconomy: (isAdmin: boolean) => flag.open || isAdmin }
+})
+
 import { useCreativeEconomyEntry, CreativeEconomyGate } from '@/components/creative/CreativeEconomyComingSoon'
 
 const MESSAGE = 'O Painel de Economia Criativa está em construção, estamos criando algo poderoso pra você e por você.'
@@ -43,7 +50,7 @@ function renderAt(path: string) {
 }
 
 describe('botão Economia Criativa', () => {
-  beforeEach(() => { authState.isAdmin = false; db.founder = null; db.inserts = 0 })
+  beforeEach(() => { authState.isAdmin = false; flag.open = false; db.founder = null; db.inserts = 0 })
 
   it('cliente vê o aviso toda vez que clica', () => {
     renderAt('/dashboard')
@@ -74,6 +81,21 @@ describe('botão Economia Criativa', () => {
   it('admin continua acessando o painel', () => {
     authState.isAdmin = true
     renderAt('/creative')
+    expect(screen.getByText('painel criativo')).toBeTruthy()
+  })
+
+  it('painel aberto: cliente comum entra direto, sem aviso', () => {
+    flag.open = true
+    renderAt('/creative')
+    expect(screen.getByText('painel criativo')).toBeTruthy()
+    expect(screen.queryByTestId('creative-economy-coming-soon-page')).toBeNull()
+  })
+
+  it('painel aberto: botão leva direto ao painel', () => {
+    flag.open = true
+    renderAt('/dashboard')
+    fireEvent.click(screen.getByText('Creative Economy'))
+    expect(screen.queryByTestId('creative-economy-coming-soon')).toBeNull()
     expect(screen.getByText('painel criativo')).toBeTruthy()
   })
 })
