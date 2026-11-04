@@ -1321,7 +1321,8 @@ export default function CreativePage() {
             </div>
           </TabsContent>
 
-          {TOOLS.map((t) => (
+          {/* "office" tem aba própria abaixo; a genérica não tem configuração e quebraria. */}
+          {TOOLS.filter((t) => t.key !== "office").map((t) => (
             <TabsContent key={t.key} value={t.key}>
               <div className="space-y-6">
                 <Button variant="ghost" size="sm" onClick={() => { setActive("dashboard"); navigate("/creative"); }} className="mb-2">
