@@ -16,7 +16,8 @@ describe('Vertal Office', () => {
   it('deixa claro que o editor é grátis e a IA custa 1 crédito', () => {
     render(<OfficeSuite creditsAvailable={5} />);
     expect(screen.getByText('Vertal Office')).toBeTruthy();
-    expect(screen.getByText(/Grátis para usar. Só o uso da IA é pago/)).toBeTruthy();
+    expect(screen.getByText(/Grátis para usar/)).toBeTruthy();
+    expect(screen.getByText(/Só a IA é paga/)).toBeTruthy();
     expect(screen.getByText(/Custa 1 crédito por uso · você tem 5/)).toBeTruthy();
   });
 
