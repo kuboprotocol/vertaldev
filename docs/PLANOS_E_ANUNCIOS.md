@@ -66,6 +66,14 @@ tem o seu slot na página inicial do mundo).
   admin e visitante sem login não veem. Sem frequência: é um espaço fixo na
   página, não um intersticial.
 - **Teste:** `src/components/creative/SponsoredSlot.test.tsx`.
+- **Quem chega a ver a tela:** as rotas `/creative/*` passam por
+  `CreativeEconomyGate`, que libera só com `FEATURES.creativeEconomy` ligado
+  (`src/config/features.ts`, hoje `false`) ou para admin. Com a flag desligada,
+  usuário comum vê "em construção" e não chega ao anúncio. Admin chega à tela,
+  mas não vê anúncio, pela regra de admin acima.
+- **Painel de categorias:** `CreativePanel` não está montado em nenhuma rota
+  (`CreativePanelPage` não está em `src/App.tsx`), então os slots de início e de
+  categoria não aparecem ao usuário até essa decisão ser tomada.
 
 ### Shortlinks (opcional, todos os planos)
 
