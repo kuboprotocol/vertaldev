@@ -186,7 +186,7 @@ function CategoryWorld({
 }) {
   return (
     <div className={PAGE_BACKGROUND}>
-      <div className="px-4 pt-6 sm:px-6 lg:px-8">
+      <div className="px-4 sm:px-6 lg:px-8">
         <SponsoredSlot />
       </div>
       <DesignWorld

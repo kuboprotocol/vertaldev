@@ -61,6 +61,20 @@ describe('SponsoredSlot', () => {
     expect(screen.queryByText('Patrocinado')).toBeNull();
   });
 
+  it('fica fora do fluxo até o anúncio preencher o espaço', async () => {
+    await renderSlot();
+    const aside = screen.getByRole('complementary', { name: 'Anúncio patrocinado' });
+    expect(aside.className).toContain('h-0');
+    expect(aside.className).not.toContain('my-6');
+
+    const container = document.getElementById('container-0806a737bf211f386495f9ac7cdc8180')!;
+    await act(async () => {
+      container.appendChild(document.createElement('div'));
+    });
+    expect(aside.className).toContain('my-6');
+    expect(aside.className).not.toContain('h-0');
+  });
+
   it('não mostra para admin', async () => {
     state.isAdmin = true;
     await renderSlot();
