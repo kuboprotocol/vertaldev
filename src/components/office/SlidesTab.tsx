@@ -12,6 +12,7 @@ import {
   deckToText,
   makeSlide,
 } from '@/lib/office/slidesModel';
+import { deckToPptx } from '@/lib/office/officeFiles';
 
 const DECK_KEY = 'kubo-office-deck-v1';
 
@@ -209,6 +210,7 @@ export function SlidesTab() {
           <ExportBtn label="PDF" onClick={() => download(deckToPdf(deck), `${safe}.pdf`, 'application/pdf')} />
           <ExportBtn label="HTML" onClick={() => download(deckToHtml(deck), `${safe}.html`, 'text/html;charset=utf-8')} />
           <ExportBtn label="Texto" onClick={() => download(deckToText(deck), `${safe}.txt`, 'text/plain;charset=utf-8')} />
+          <ExportBtn label="PowerPoint (.pptx)" onClick={() => deckToPptx(deck).then((b) => download(b, `${safe}.pptx`, 'application/vnd.openxmlformats-officedocument.presentationml.presentation'))} />
         </div>
       </div>
     </div>
