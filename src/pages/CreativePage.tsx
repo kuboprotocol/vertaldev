@@ -27,6 +27,7 @@ import { CreativeSheets } from "@/components/CreativeSheets";
 import { OfficeSuite } from "@/components/office/OfficeSuite";
 import { CreativeDesign } from "@/components/CreativeDesign";
 import { SponsoredSlot } from "@/components/creative/SponsoredSlot";
+import { CreativeAdFrame } from "@/components/creative/AdBanner";
 
 type ToolKey = "dashboard" | "chat" | "nano_banana" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "video_studio" | "image_editor" | "unified_history" | "slides" | "sheet" | "design" | "office";
 
@@ -927,6 +928,7 @@ export default function CreativePage() {
         </div>
       </header>
       <main className="container max-w-7xl mx-auto px-4 py-6">
+        <CreativeAdFrame>
         {errorState && (
           <Alert variant="destructive" className="mb-6 bg-destructive/10 border-destructive/30 animate-in fade-in slide-in-from-top-4 duration-300">
             <AlertCircle className="h-5 w-5" />
@@ -1279,6 +1281,7 @@ export default function CreativePage() {
             </React.Suspense>
           );
         })()}
+        </CreativeAdFrame>
       </main>
     </div>
   );
