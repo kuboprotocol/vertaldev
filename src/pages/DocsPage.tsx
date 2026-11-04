@@ -326,12 +326,11 @@ testimonials and a waitlist form.`}</Pre>
           single panel: chat, images, video, music, ebooks, shorts, avatars and download
           utilities.
         </P>
-        <Callout type="warn">
-          <strong>Economia Criativa em Construção.</strong> Every &quot;Creative Economy&quot;
-          button and every <Code>/creative</Code> route shows the under-construction notice
-          (&quot;Estamos construindo um ecossistema poderoso pra você e por você.&quot;) until
-          the module launches. Admins keep full access for testing. The switch is{' '}
-          <Code>FEATURES.creativeEconomy</Code> in <Code>src/config/features.ts</Code>.
+        <Callout type="info">
+          <strong>Open to everyone.</strong> Since November 4, 2026 the Creative Economy panel
+          and Canvas are available to every signed-in user. The launch switch is{' '}
+          <Code>FEATURES.creativeEconomy</Code> in <Code>src/config/features.ts</Code>; setting it
+          back to <Code>false</Code> restores the under-construction notice (admins only).
         </Callout>
         <H3>Tools</H3>
         <UL>
