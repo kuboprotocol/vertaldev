@@ -10,13 +10,12 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
   MessageSquare, Image as ImageIcon, Download, Scissors, User2,
   Video, Music, BookOpen, Sparkles, Loader2, Coins, ArrowLeft, RotateCw, AlertTriangle, Upload,
-  FileDown, History, Check, Search, ArrowRight, Settings2, X, AlertCircle, ListTodo, Clapperboard, SlidersHorizontal, FileText } from "lucide-react";
+  FileDown, History, Search, ArrowRight, X, AlertCircle, ListTodo, Clapperboard, SlidersHorizontal, FileText } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { ManusLauncher } from "@/components/creative/ManusLauncher";
 import { CreativeToolInterface } from "@/components/creative/CreativeToolInterface";
@@ -27,6 +26,8 @@ import { CreativeSlides } from "@/components/CreativeSlides";
 import { CreativeSheets } from "@/components/CreativeSheets";
 import { OfficeSuite } from "@/components/office/OfficeSuite";
 import { CreativeDesign } from "@/components/CreativeDesign";
+import { SponsoredSlot } from "@/components/creative/SponsoredSlot";
+import { CreativeAdFrame } from "@/components/creative/AdBanner";
 
 type ToolKey = "dashboard" | "chat" | "nano_banana" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "video_studio" | "image_editor" | "unified_history" | "slides" | "sheet" | "design" | "office";
 
@@ -927,6 +928,7 @@ export default function CreativePage() {
         </div>
       </header>
       <main className="container max-w-7xl mx-auto px-4 py-6">
+        <CreativeAdFrame>
         {errorState && (
           <Alert variant="destructive" className="mb-6 bg-destructive/10 border-destructive/30 animate-in fade-in slide-in-from-top-4 duration-300">
             <AlertCircle className="h-5 w-5" />
@@ -1018,78 +1020,8 @@ export default function CreativePage() {
           </DialogContent>
         </Dialog>
 
-        {/* Progress Bar Flow */}
-        <div className="max-w-2xl mx-auto mb-10 space-y-6">
-          <div className="flex justify-between items-center relative">
-            <div className="absolute top-5 left-0 w-full h-0.5 bg-muted -z-10" />
-            {[
-              { label: "Seleção", icon: Search },
-              { label: "Configuração", icon: Settings2 },
-              { label: "Execução", icon: Loader2 }
-            ].map((step, i) => {
-              const stepNum = i + 1;
-              const isDashboard = active === "dashboard";
-              
-              // Status logic
-              const hasProcessing = history.some(h => (h.status === "processing" || h.status === "queued"));
-              
-              let currentStep = 1;
-              if (!isDashboard) currentStep = 2;
-              if (hasProcessing) currentStep = 3;
-
-              const isCompleted = stepNum < currentStep;
-              const isActive = stepNum === currentStep;
-              const Icon = step.icon;
-
-              return (
-                <div key={step.label} className="flex flex-col items-center gap-2 bg-background px-4">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-500 z-10 ${
-                    isCompleted ? "bg-primary border-primary text-primary-foreground shadow-[0_0_20px_rgba(var(--primary),0.4)]" :
-                    isActive ? "border-primary text-primary bg-primary/5 shadow-[0_0_15px_rgba(var(--primary),0.25)]" :
-                    "border-muted text-muted-foreground bg-background"
-                  }`}>
-                    {isCompleted ? <Check className="h-5 w-5" /> : <Icon className={`h-5 w-5 ${isActive ? "animate-pulse" : ""}`} />}
-                  </div>
-                  <div className="flex flex-col items-center text-center">
-                    <span className={`text-[10px] font-black uppercase tracking-widest ${isActive ? "text-primary" : "text-muted-foreground/60"}`}>
-                      {step.label}
-                    </span>
-                    {isActive && (
-                      <Badge variant="outline" className="text-[8px] h-4 mt-1 border-primary/30 text-primary px-1.5 py-0 leading-none">
-                        {currentStep === 1 ? "INÍCIO" : currentStep === 2 ? "PRÓXIMO" : "AO VIVO"}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          
-          {(() => {
-            const isDashboard = active === "dashboard";
-            const hasProcessing = history.some(h => (h.status === "processing" || h.status === "queued"));
-            let currentStep = 1;
-            if (!isDashboard) currentStep = 2;
-            if (hasProcessing) currentStep = 3;
-            
-            return (
-              <div className="space-y-2">
-                <div className="flex justify-between items-end mb-1">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-primary animate-ping" />
-                    <span className="text-xs font-bold text-foreground/80 uppercase tracking-tighter">
-                      Fluxo de Habilidades
-                    </span>
-                  </div>
-                  <span className="text-xs font-mono text-muted-foreground">
-                    {Math.round((currentStep / 3) * 100)}%
-                  </span>
-                </div>
-                <Progress value={(currentStep / 3) * 100} className="h-2 bg-muted/30" />
-              </div>
-            );
-          })()}
-        </div>
+        {/* Anúncio patrocinado no lugar do fluxo de habilidades (TERRA ADS, só Free e Starter) */}
+        <SponsoredSlot className="max-w-2xl mx-auto" />
 
         <Tabs value={active} onValueChange={(v) => { setActive(v as ToolKey); navigate(v === "dashboard" ? "/creative" : `/creative/${v}`); }}>
           <TabsList className="mb-6 grid grid-cols-2 max-w-md mx-auto bg-muted/20">
@@ -1349,6 +1281,7 @@ export default function CreativePage() {
             </React.Suspense>
           );
         })()}
+        </CreativeAdFrame>
       </main>
     </div>
   );
