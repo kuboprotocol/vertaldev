@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { Fragment, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Camera, Image as ImageIcon, Paperclip, Monitor, Puzzle, Code2, Smartphone,
@@ -93,20 +93,39 @@ export function ManusLauncher({ setActive }: Props) {
       <Card className="overflow-hidden bg-card/40 backdrop-blur border-border/40">
         <ul className="divide-y divide-border/30">
           {ITEMS.map((it) => (
-            <li key={it.key} className={it.divider ? "border-b border-border/40" : ""}>
-              <button
-                onClick={() => it.onSelect({ navigate, setActive })}
-                className="w-full flex items-center gap-4 px-4 py-3.5 text-left transition hover:bg-muted/40 active:bg-muted/60"
-              >
-                <it.icon className="h-5 w-5 text-foreground/70 shrink-0" />
-                <span className="flex-1 text-[15px] text-foreground/90">{it.label}</span>
-                {it.badge && (
-                  <span className="text-[10px] font-semibold rounded-md bg-primary/15 text-primary px-1.5 py-0.5">
-                    {it.badge}
-                  </span>
-                )}
-              </button>
-            </li>
+            <Fragment key={it.key}>
+              <li className={it.divider ? "border-b border-border/40" : ""}>
+                <button
+                  onClick={() => it.onSelect({ navigate, setActive })}
+                  className="w-full flex items-center gap-4 px-4 py-3.5 text-left transition hover:bg-muted/40 active:bg-muted/60"
+                >
+                  <it.icon className="h-5 w-5 text-foreground/70 shrink-0" />
+                  <span className="flex-1 text-[15px] text-foreground/90">{it.label}</span>
+                  {it.badge && (
+                    <span className="text-[10px] font-semibold rounded-md bg-primary/15 text-primary px-1.5 py-0.5">
+                      {it.badge}
+                    </span>
+                  )}
+                </button>
+              </li>
+              {it.key === "design" && (
+                <li className="p-3">
+                  <button
+                    type="button"
+                    onClick={() => setActive("office")}
+                    aria-label="Abrir Vertal Office"
+                    className="w-full flex items-center gap-4 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 p-4 text-left text-white shadow-lg transition hover:brightness-110 active:scale-[0.99]"
+                  >
+                    <FileText className="h-8 w-8 shrink-0" />
+                    <span className="flex-1">
+                      <span className="block text-base font-bold">Vertal Office</span>
+                      <span className="block text-sm text-white/90">Documentos e planilhas totalmente grátis. Só a IA é paga.</span>
+                    </span>
+                    <span className="text-xs font-semibold rounded-md bg-white/20 px-2 py-1">Abrir</span>
+                  </button>
+                </li>
+              )}
+            </Fragment>
           ))}
         </ul>
       </Card>
