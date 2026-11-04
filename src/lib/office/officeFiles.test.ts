@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { docFromAi } from './documentModel';
 import { createEmptyDeck, makeSlide } from './slidesModel';
+import JSZip from 'jszip';
 import { deckToPptx, docToDocx } from './officeFiles';
 
 const isZip = (bytes: Uint8Array) => bytes[0] === 0x50 && bytes[1] === 0x4b;
@@ -24,6 +25,12 @@ describe('exportação Word e PowerPoint', () => {
     const blob = await docToDocx(doc);
     expect(blob.size).toBeGreaterThan(0);
     expect(isZip(await blobBytes(blob))).toBe(true);
+    const zip = await JSZip.loadAsync(await blobBytes(blob));
+    const xml = await zip.file('word/document.xml')!.async('string');
+    const parsed = new DOMParser().parseFromString(xml, 'application/xml');
+    expect(parsed.getElementsByTagName('parsererror')).toHaveLength(0);
+    expect(xml).toContain('Proposta');
+    expect(xml).toContain('• Item');
   });
 
   it('gera um .pptx válido (arquivo zip) com um slide por item', async () => {

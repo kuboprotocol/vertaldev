@@ -99,7 +99,6 @@
     "cmdk": "^1.1.1",
     "date-fns": "^3.6.0",
     "diff": "^9.0.0",
-    "docx": "^9.15.2",
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "^12.34.4",
     "gsap": "^3.12.2",
