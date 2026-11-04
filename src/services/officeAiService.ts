@@ -5,12 +5,13 @@ import type { BlockType } from '@/lib/office/documentModel';
 
 export const OFFICE_AI_CREDIT_COST = 1;
 
-export type OfficeAiRequest = { action: 'sheet' | 'doc' | 'email'; prompt: string; source?: string };
+export type OfficeAiRequest = { action: 'sheet' | 'doc' | 'email' | 'slides'; prompt: string; source?: string };
 
 export type OfficeAiResponse =
   | { action: 'sheet'; output: { headers: string[]; rows: Array<Array<string | number>> } }
   | { action: 'doc'; output: { title: string; blocks: Array<{ type: BlockType; text: string }> } }
-  | { action: 'email'; output: { subject: string; body: string } };
+  | { action: 'email'; output: { subject: string; body: string } }
+  | { action: 'slides'; output: { title: string; slides: Array<{ title: string; bullets: string[] }> } };
 
 const ERROR_MESSAGES: Record<string, string> = {
   insufficient_credits: 'Créditos insuficientes. Recarregue para usar a IA.',

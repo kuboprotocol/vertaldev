@@ -14,14 +14,13 @@ Suíte de escritório do Painel Criativo: documentos, planilhas e (em evolução
 |------|----------|
 | Documento | Blocos de título, parágrafo e item de lista. Exporta HTML, Markdown e texto. |
 | Planilha | Grade de até 200 linhas × 26 colunas. Fórmulas: `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `ROUND`, `ABS`, operadores `+ - * / ^` e parênteses. Erros: `#DIV/0!`, `#REF!`, `#VALUE!`, `#NAME?`, `#CYCLE!`. Exporta CSV e `.xlsx`. |
-| IA | Escreve documento e preenche planilha a partir de um pedido e de material colado opcional. 1 crédito por uso. |
-| Apresentação | Slides com título e tópicos. Exporta PDF (paisagem), HTML, texto e PowerPoint (`.pptx`). |
+| IA | Escreve documento, preenche planilha e gera slides a partir de um pedido e de material colado opcional. 1 crédito por uso. |
+| Apresentação | Slides com título e tópicos. A IA gera a apresentação inteira ou adiciona slides depois do atual (1 crédito por uso). Exporta PDF (paisagem), HTML, texto e PowerPoint (`.pptx`). |
 | Word | Exporta documento em `.docx`. |
 | Armazenamento | Rascunho local no navegador (um documento, uma planilha e uma apresentação por vez). |
 
 ## O que ainda não funciona
 
-- IA para gerar apresentações (slides) — ainda só edição manual.
 - Várias abas ou vários documentos por conta. Hoje há um documento e uma planilha por navegador.
 - Busca na web ao vivo pela IA. A IA organiza o pedido e o material que o usuário colar.
 
