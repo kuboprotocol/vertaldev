@@ -97,4 +97,40 @@ describe('contrato da IA do Vertal Office', () => {
     expect(() => parseOfficeOutput('email', '{"subject":"x"}')).toThrow(OfficeAiOutputError);
     expect(() => parseOfficeOutput('email', '{"subject":"  ","body":"x"}')).toThrow(OfficeAiOutputError);
   });
+
+  it('apresentação: monta o pedido com o formato de slides e normaliza a saída', () => {
+    const msgs = buildOfficeMessages('slides', 'Lançamento da cafeteria', '');
+    expect(msgs[0].content).toContain('"slides"');
+    const out = parseOfficeOutput(
+      'slides',
+      JSON.stringify({
+        title: '',
+        slides: [
+          { title: '  Abertura ', bullets: ['  um ', '', 'dois'] },
+          { title: '', bullets: [] },
+          { title: 'Vazio', bullets: ['   '] },
+        ],
+      }),
+    );
+    expect(out).toEqual({
+      title: 'Apresentação sem título',
+      slides: [
+        { title: 'Abertura', bullets: ['um', 'dois'] },
+        { title: 'Vazio', bullets: [] },
+      ],
+    });
+  });
+
+  it('apresentação: limita quantidade de slides e tópicos e rejeita saída vazia', () => {
+    const slides = Array.from({ length: OFFICE_LIMITS.maxSlides + 5 }, (_, i) => ({
+      title: `S${i}`,
+      bullets: Array.from({ length: OFFICE_LIMITS.maxSlideBullets + 4 }, (_, j) => `b${j}`),
+    }));
+    const out = parseOfficeOutput('slides', JSON.stringify({ title: 'T', slides }));
+    if (!('slides' in out)) throw new Error('shape');
+    expect(out.slides).toHaveLength(OFFICE_LIMITS.maxSlides);
+    expect(out.slides[0].bullets).toHaveLength(OFFICE_LIMITS.maxSlideBullets);
+    expect(() => parseOfficeOutput('slides', '{"title":"x","slides":[]}')).toThrow(OfficeAiOutputError);
+    expect(() => parseOfficeOutput('slides', '{"title":"x"}')).toThrow(OfficeAiOutputError);
+  });
 });

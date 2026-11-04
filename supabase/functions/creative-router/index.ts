@@ -247,7 +247,7 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 const OfficeAiInput = z.object({
-  action: z.enum(["sheet", "doc", "email"]),
+  action: z.enum(["sheet", "doc", "email", "slides"]),
   prompt: z.string().trim().min(3).max(2000),
   source: z.string().max(60_000).optional(),
 });

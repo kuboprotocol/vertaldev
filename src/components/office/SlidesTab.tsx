@@ -13,6 +13,8 @@ import {
   makeSlide,
 } from '@/lib/office/slidesModel';
 import { deckToPptx } from '@/lib/office/officeFiles';
+import { OFFICE_AI_CREDIT_COST, runOfficeAi } from '@/services/officeAiService';
+import { AiPanel } from './AiPanel';
 
 const DECK_KEY = 'kubo-office-deck-v1';
 
@@ -80,9 +82,11 @@ function deckToPdf(deck: DeckData): ArrayBuffer {
   return pdf.output('arraybuffer');
 }
 
-export function SlidesTab() {
+export function SlidesTab({ creditsAvailable }: { creditsAvailable: number }) {
   const [deck, setDeck] = useState<DeckData>(loadDeck);
   const [selected, setSelected] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   const commit = (next: DeckData) => {
     const stamped = { ...next, updatedAt: new Date().toISOString() };
@@ -117,6 +121,32 @@ export function SlidesTab() {
     const created = makeSlide('Novo slide');
     commit({ ...deck, slides: [...slides.slice(0, index + 1), created, ...slides.slice(index + 1)] });
     setSelected(index + 1);
+  };
+
+  /** IA: adiciona os slides gerados depois do slide atual (ou substitui a apresentação vazia). Não apaga nada. */
+  const runAi = async (prompt: string, source: string) => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await runOfficeAi({ action: 'slides', prompt, source: source || undefined });
+      if (res.action !== 'slides') throw new Error('Resposta inesperada da IA.');
+      const generated = res.output.slides.map((g) => makeSlide(g.title, g.bullets));
+      const hasContent = slides.some((sl) => sl.title.trim() || sl.bullets.some((b) => b.trim()));
+      const merged = hasContent
+        ? [...slides.slice(0, index + 1), ...generated, ...slides.slice(index + 1)]
+        : generated;
+      commit({
+        ...deck,
+        title: deck.title.startsWith('Apresentação sem') ? res.output.title : deck.title,
+        slides: merged.slice(0, DECK_MAX_SLIDES),
+      });
+      setSelected(hasContent ? index + 1 : 0);
+      setMessage({ kind: 'ok', text: `${generated.length} slides gerados com IA (${OFFICE_AI_CREDIT_COST} crédito).` });
+    } catch (e) {
+      setMessage({ kind: 'err', text: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const bulletsText = current.bullets.join('\n');
@@ -203,6 +233,20 @@ export function SlidesTab() {
           </div>
         </div>
       </div>
+
+      <AiPanel
+        placeholder="Ex.: Apresentação de 6 slides sobre o lançamento de uma cafeteria de bairro."
+        creditsAvailable={creditsAvailable}
+        busy={busy}
+        onRun={runAi}
+        actionLabel={`Gerar slides com IA · ${OFFICE_AI_CREDIT_COST} crédito`}
+      />
+
+      {message && (
+        <p className={`text-sm ${message.kind === 'ok' ? 'text-emerald-300' : 'text-red-300'}`} role="status">
+          {message.text}
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
         <span className="text-xs text-slate-400">{slides.length} slides · salvo neste navegador</span>

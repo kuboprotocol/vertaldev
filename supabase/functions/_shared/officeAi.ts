@@ -7,7 +7,7 @@
 // isso o modelo recebe um formato rígido e a saída é validada e limitada antes
 // de chegar ao usuário. Saída inválida vira erro e o crédito é devolvido.
 
-export type OfficeAiAction = 'sheet' | 'doc' | 'email';
+export type OfficeAiAction = 'sheet' | 'doc' | 'email' | 'slides';
 
 /** Preço de cada uso da IA em créditos. */
 export const OFFICE_AI_CREDIT_COST = 1;
@@ -25,6 +25,9 @@ export const OFFICE_LIMITS = {
   maxTitleChars: 120,
   maxSubjectChars: 200,
   maxEmailBodyChars: 20_000,
+  maxSlides: 40,
+  maxSlideBullets: 12,
+  maxBulletChars: 300,
 } as const;
 
 export type Msg = { role: 'system' | 'user' | 'assistant'; content: string };
@@ -44,7 +47,12 @@ export interface EmailOutput {
   body: string;
 }
 
-export type OfficeOutput = SheetOutput | DocOutput | EmailOutput;
+export interface SlidesOutput {
+  title: string;
+  slides: Array<{ title: string; bullets: string[] }>;
+}
+
+export type OfficeOutput = SheetOutput | DocOutput | EmailOutput | SlidesOutput;
 
 export class OfficeAiOutputError extends Error {
   constructor(message: string) {
@@ -64,17 +72,22 @@ export function clipSource(source: string): string {
 
 const SHEET_SHAPE = '{"headers": ["Coluna 1", "Coluna 2"], "rows": [["valor", 10], ["valor", 20]]}';
 const EMAIL_SHAPE = '{"subject": "Assunto curto", "body": "Texto do e-mail, em português, com saudação e despedida"}';
+const SLIDES_SHAPE =
+  '{"title": "Título da apresentação", "slides": [{"title": "Título do slide", "bullets": ["Tópico curto", "Outro tópico"]}]}';
 const DOC_SHAPE =
   '{"title": "Título do documento", "blocks": [{"type": "heading", "text": "Seção"}, {"type": "paragraph", "text": "Texto"}, {"type": "bullet", "text": "Item"}]}';
 
 export function buildOfficeMessages(action: OfficeAiAction, prompt: string, source: string): Msg[] {
-  const shape = action === 'sheet' ? SHEET_SHAPE : action === 'email' ? EMAIL_SHAPE : DOC_SHAPE;
+  const shape =
+    action === 'sheet' ? SHEET_SHAPE : action === 'email' ? EMAIL_SHAPE : action === 'slides' ? SLIDES_SHAPE : DOC_SHAPE;
   const task =
     action === 'sheet'
       ? `Organize os dados pedidos em uma tabela com no máximo ${OFFICE_LIMITS.maxRows} linhas de dados e ${OFFICE_LIMITS.maxCols} colunas. Números devem ser números JSON, não texto.`
       : action === 'email'
         ? 'Escreva um e-mail profissional e educado que apresente o arquivo em anexo. Não invente destinatário, valores ou prazos que não estejam no pedido.'
-        : `Escreva o documento pedido em blocos curtos e claros. No máximo ${OFFICE_LIMITS.maxDocBlocks} blocos.`;
+        : action === 'slides'
+          ? `Monte uma apresentação com no máximo ${OFFICE_LIMITS.maxSlides} slides. Cada slide tem um título curto e no máximo ${OFFICE_LIMITS.maxSlideBullets} tópicos objetivos.`
+          : `Escreva o documento pedido em blocos curtos e claros. No máximo ${OFFICE_LIMITS.maxDocBlocks} blocos.`;
 
   const system = [
     'Você é o gerador do Vertal Office. Responda somente com um objeto JSON válido, sem texto antes ou depois, sem markdown.',
@@ -161,6 +174,27 @@ function validateEmail(obj: Record<string, unknown>): EmailOutput {
   return { subject, body };
 }
 
+function validateSlides(obj: Record<string, unknown>): SlidesOutput {
+  if (!Array.isArray(obj.slides)) throw new OfficeAiOutputError('slides_shape');
+  const slides = obj.slides.slice(0, OFFICE_LIMITS.maxSlides).flatMap((s) => {
+    if (!s || typeof s !== 'object') return [];
+    const slide = s as Record<string, unknown>;
+    const title = clipText(slide.title, OFFICE_LIMITS.maxTitleChars).trim();
+    const bullets = Array.isArray(slide.bullets)
+      ? slide.bullets
+          .slice(0, OFFICE_LIMITS.maxSlideBullets)
+          .map((b) => clipText(b, OFFICE_LIMITS.maxBulletChars).trim())
+          .filter(Boolean)
+      : [];
+    return title || bullets.length ? [{ title: title || 'Slide', bullets }] : [];
+  });
+  if (slides.length === 0) throw new OfficeAiOutputError('slides_empty');
+  return {
+    title: clipText(obj.title, OFFICE_LIMITS.maxTitleChars).trim() || 'Apresentação sem título',
+    slides,
+  };
+}
+
 /** Valida a resposta do modelo. Lança OfficeAiOutputError se o formato não bater. */
 export function parseOfficeOutput(action: OfficeAiAction, raw: string): OfficeOutput {
   const obj = extractJson(raw);
@@ -170,5 +204,6 @@ export function parseOfficeOutput(action: OfficeAiAction, raw: string): OfficeOu
   const record = obj as Record<string, unknown>;
   if (action === 'sheet') return validateSheet(record);
   if (action === 'email') return validateEmail(record);
+  if (action === 'slides') return validateSlides(record);
   return validateDoc(record);
 }
