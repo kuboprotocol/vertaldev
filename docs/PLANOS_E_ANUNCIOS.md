@@ -55,25 +55,28 @@ Como funciona:
 
 ### Anúncio patrocinado no Painel Criativo (TERRA ADS)
 
-Um cartão "Patrocinado" em linha, no mesmo formato de resultado patrocinado,
-aparece em cada área do Painel Criativo: início, cada categoria (inclusive o
-Vertal Office) e o Design Premium (todos os modos, exceto o editor Canvas, que
-tem o seu slot na página inicial do mundo).
+Decisão do dono do produto (2026-11-04): um cartão "Patrocinado" em linha, no
+formato de resultado patrocinado, aparece para **todos os usuários**, inclusive
+admin e planos pagos, em:
+
+- início do Painel Criativo (`CreativePanel`, sem rota hoje);
+- cada categoria do Painel Criativo, inclusive o Vertal Office (`CreativePanel`, sem rota hoje);
+- Design Premium: topo da coluna em todos os modos, menos o Canvas;
+- Canvas: página inicial do mundo (o editor fica sem anúncio);
+- `/creative/*`: no lugar do antigo bloco "Fluxo de Habilidades" (`CreativePage`).
 
 - **Componente:** `src/components/creative/SponsoredSlot.tsx`, que carrega o
-  script `TERRA_ADS_NATIVE_BANNER_SRC` de `src/lib/terraAds.ts`.
-- **Quem vê:** a mesma regra de `AD_SUPPORTED_PLANS` (Free e Starter). Pagos,
-  admin e visitante sem login não veem. Sem frequência: é um espaço fixo na
-  página, não um intersticial.
+  script `TERRA_ADS_NATIVE_BANNER_SRC` de `src/lib/terraAds.ts`. Não há mais
+  checagem de plano nem de admin para este slot.
+- **Quando aparece:** só se o script da Terra preencher o espaço. Sem anúncio
+  em 6 s, o espaço some e a página não fica com caixa vazia.
+- **Acesso às telas:** as rotas `/creative/*` passam por `CreativeEconomyGate`,
+  liberadas com `FEATURES.creativeEconomy` ligado (`src/config/features.ts`,
+  hoje `false`) ou para admin. Enquanto a flag estiver `false`, usuário comum
+  vê "em construção" e não chega ao anúncio.
+- **Limite:** esta decisão vale só para o anúncio patrocinado. A regra de
+  intersticial acima (Free e Starter apenas) continua igual.
 - **Teste:** `src/components/creative/SponsoredSlot.test.tsx`.
-- **Quem chega a ver a tela:** as rotas `/creative/*` passam por
-  `CreativeEconomyGate`, que libera só com `FEATURES.creativeEconomy` ligado
-  (`src/config/features.ts`, hoje `false`) ou para admin. Com a flag desligada,
-  usuário comum vê "em construção" e não chega ao anúncio. Admin chega à tela,
-  mas não vê anúncio, pela regra de admin acima.
-- **Painel de categorias:** `CreativePanel` não está montado em nenhuma rota
-  (`CreativePanelPage` não está em `src/App.tsx`), então os slots de início e de
-  categoria não aparecem ao usuário até essa decisão ser tomada.
 
 ### Shortlinks (opcional, todos os planos)
 

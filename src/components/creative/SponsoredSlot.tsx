@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { useSponsoredEligibility } from '@/hooks/useSponsoredEligibility'
 import { TERRA_ADS_NATIVE_BANNER_ID, TERRA_ADS_NATIVE_BANNER_SRC } from '@/lib/terraAds'
 
 interface SponsoredSlotProps {
@@ -11,18 +10,18 @@ const FILL_TIMEOUT_MS = 6000
 
 /**
  * Anúncio nativo TERRA ADS no Painel Criativo, no mesmo formato de resultado patrocinado.
+ * Vale para todos os usuários (admin e planos pagos inclusive), enquanto o Painel Criativo
+ * e o Design Premium estiverem liberados.
  * Ocupa a largura da coluna em que está, sem borda nem caixa própria, e fica fora do fluxo
  * enquanto não há anúncio: nunca deixa espaço vazio nem empurra o conteúdo.
- * Só aparece para planos que exibem anúncio (Free e Starter) e nunca para admin.
  */
 export function SponsoredSlot({ className = '' }: SponsoredSlotProps) {
-  const eligible = useSponsoredEligibility()
   const containerRef = useRef<HTMLDivElement>(null)
   const [filled, setFilled] = useState(false)
 
   useEffect(() => {
     const container = containerRef.current
-    if (!eligible || !container) return
+    if (!container) return
 
     const script = document.createElement('script')
     script.async = true
@@ -59,9 +58,7 @@ export function SponsoredSlot({ className = '' }: SponsoredSlotProps) {
       overlayObserver.disconnect()
       script.remove()
     }
-  }, [eligible])
-
-  if (!eligible) return null
+  }, [])
 
   return (
     <aside
