@@ -2,7 +2,7 @@ import { Fragment, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Camera, Image as ImageIcon, Paperclip, Monitor, Puzzle, Code2, Smartphone,
-  Presentation, FileText, Wand2, Search, MessageSquare, Calendar, Table2, Music, Video, Scissors, BookOpen, Sparkles, User2, Download, Clapperboard, Palette
+  FileText, Search, MessageSquare, Calendar, Table2, Music, Video, Scissors, BookOpen, Sparkles, User2, Download, Clapperboard, Palette
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -26,9 +26,8 @@ const ITEMS: Item[] = [
   { key: "skills", label: "Adicionar Habilidades", icon: Puzzle, onSelect: ({ navigate }) => navigate("/agents"), divider: true },
   { key: "site", label: "Criar website", icon: Code2, onSelect: ({ navigate }) => navigate("/builder") },
   { key: "apps", label: "Desenvolver aplicativos", icon: Smartphone, onSelect: ({ navigate }) => navigate("/builder?mode=app") },
-  { key: "slides", label: "Criar slides", icon: Presentation, badge: "AI", onSelect: ({ setActive }) => setActive("slides") },  { key: "image", label: "Criar imagem", icon: ImageIcon, badge: "AI", onSelect: ({ setActive }) => setActive("nano_banana") },
+  // Criar imagem, editar imagem e criar slides ficam só no Design Premium (e no Canvas).
   { key: "design", label: "Design Premium", icon: Palette, badge: "AI", onSelect: ({ setActive }) => setActive("design") },
-  { key: "edit_image", label: "Editar imagem", icon: Wand2, onSelect: ({ setActive }) => setActive("image_editor") },
   { key: "research", label: "Wide Research", icon: Search, onSelect: ({ setActive }) => setActive("chat") },
   { key: "chat_mode", label: "Modo de conversa", icon: MessageSquare, onSelect: ({ setActive }) => setActive("chat") },
   { key: "schedule", label: "Tarefas agendadas", icon: Calendar, onSelect: ({ navigate }) => navigate("/creative/investigation") },
@@ -67,7 +66,7 @@ export function ManusLauncher({ setActive }: Props) {
       toast.error("Não foi possível abrir a imagem no editor");
       return;
     }
-    toast.success(`${kind} pronto: ${f.name}`, { description: "Abrindo no Editor de Imagens..." });
+    toast.success(`${kind} pronto: ${f.name}`, { description: "Abrindo no Editor de Imagens do Design Premium..." });
     setActive("image_editor");
   };
 

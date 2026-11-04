@@ -1,7 +1,8 @@
-import { useCallback, useState, type ReactNode } from 'react';
-import { Check, Download, Home, LayoutGrid, LayoutTemplate, Layers, Loader2, Search, Sparkles, User, Wand2 } from 'lucide-react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Check, Download, Home, LayoutGrid, LayoutTemplate, Layers, Loader2, Presentation, Search, Sparkles, User, Wand2 } from 'lucide-react';
+import { CreativeSlides } from './CreativeSlides';
 import { supabase } from '@/integrations/supabase/client';
-import { AvatarsWorld, CanvasWorld, GalleryWorld, StudioWorld } from './creative/DesignWorlds';
+import { AvatarsWorld, CanvasWorld, GalleryWorld, StudioWorld, type StudioPage } from './creative/DesignWorlds';
 import { StartCard } from './creative/DesignWorld';
 import { SponsoredSlot } from './creative/SponsoredSlot';
 import type { DesignCopy } from './creative/DesignGallery';
@@ -20,6 +21,8 @@ import {
 
 interface CreativeDesignProps {
   creditsAvailable: number;
+  /** Abre direto num modo (e numa página do Estúdio Pro). Um objeto novo a cada pedido. */
+  open?: { mode: Exclude<DesignMode, 'home'>; studioPage?: StudioPage };
 }
 
 interface DesignImage {
@@ -35,11 +38,12 @@ interface DesignResponse {
 
 const MIN_PROMPT_LENGTH = 3;
 
-type DesignMode = 'home' | 'ai' | 'canvas' | 'studio' | 'avatars' | 'gallery';
+export type DesignMode = 'home' | 'ai' | 'slides' | 'canvas' | 'studio' | 'avatars' | 'gallery';
 
 const DESIGN_MODES: Array<{ key: DesignMode; label: string; icon: ReactNode }> = [
   { key: 'home', label: 'Início', icon: <Home className="h-4 w-4" /> },
   { key: 'ai', label: 'Com IA', icon: <Wand2 className="h-4 w-4" /> },
+  { key: 'slides', label: 'Slides', icon: <Presentation className="h-4 w-4" /> },
   { key: 'canvas', label: 'Canvas', icon: <LayoutTemplate className="h-4 w-4" /> },
   { key: 'studio', label: 'Estúdio Pro', icon: <Layers className="h-4 w-4" /> },
   { key: 'avatars', label: 'Avatares', icon: <User className="h-4 w-4" /> },
@@ -50,16 +54,31 @@ const DESIGN_MODES: Array<{ key: DesignMode; label: string; icon: ReactNode }> =
 const WORLD_MODES: DesignMode[] = ['canvas', 'studio', 'avatars', 'gallery'];
 
 /** Painel Design Premium: início, criação com IA e os mundos Canvas, Estúdio Pro, Avatares e Galeria. */
-export function CreativeDesign({ creditsAvailable }: CreativeDesignProps) {
-  const [mode, setMode] = useState<DesignMode>('ai');
-  const [openedWorlds, setOpenedWorlds] = useState<DesignMode[]>([]);
+export function CreativeDesign({ creditsAvailable, open }: CreativeDesignProps) {
+  const [mode, setMode] = useState<DesignMode>(open?.mode ?? 'ai');
+  const [openedWorlds, setOpenedWorlds] = useState<DesignMode[]>(
+    open && WORLD_MODES.includes(open.mode) ? [open.mode] : [],
+  );
+  const [studioJump, setStudioJump] = useState<{ key: StudioPage } | undefined>(
+    open?.studioPage ? { key: open.studioPage } : undefined,
+  );
+  // Slides só monta na primeira abertura e fica montado, como os mundos.
+  const [slidesOpened, setSlidesOpened] = useState(open?.mode === 'slides');
 
   const selectMode = (next: DesignMode) => {
-    if (WORLD_MODES.includes(next) && !openedWorlds.includes(next)) {
-      setOpenedWorlds([...openedWorlds, next]);
+    if (WORLD_MODES.includes(next)) {
+      setOpenedWorlds((list) => (list.includes(next) ? list : [...list, next]));
     }
+    if (next === 'slides') setSlidesOpened(true);
     setMode(next);
   };
+
+  // Pedido de fora (ex.: atalho do painel criativo) depois de já montado.
+  useEffect(() => {
+    if (!open) return;
+    selectMode(open.mode);
+    if (open.studioPage) setStudioJump({ key: open.studioPage });
+  }, [open]);
   const exitWorld = () => selectMode('home');
 
   // Cópia de um design da galeria: abre no Canvas, como design novo.
@@ -114,6 +133,11 @@ export function CreativeDesign({ creditsAvailable }: CreativeDesignProps) {
         <div hidden={mode !== 'ai'}>
           <AiDesignStudio creditsAvailable={creditsAvailable} />
         </div>
+        {slidesOpened && (
+          <div hidden={mode !== 'slides'} className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+            <CreativeSlides creditsAvailable={creditsAvailable} />
+          </div>
+        )}
         {openedWorlds.includes('canvas') && (
           <div hidden={mode !== 'canvas'}>
             <CanvasWorld onExit={exitWorld} initialCopy={pendingCopy} onCopyConsumed={consumeCopy} />
@@ -121,7 +145,7 @@ export function CreativeDesign({ creditsAvailable }: CreativeDesignProps) {
         )}
         {openedWorlds.includes('studio') && (
           <div hidden={mode !== 'studio'}>
-            <StudioWorld onExit={exitWorld} />
+            <StudioWorld onExit={exitWorld} jumpTo={studioJump} />
           </div>
         )}
         {openedWorlds.includes('avatars') && (
@@ -335,9 +359,16 @@ const DESIGN_STARTS: DesignStart[] = [
   {
     key: 'ai',
     title: 'Com IA',
-    description: 'Gere uma arte a partir de um texto · 1 a 2 créditos',
+    description: 'Criar imagem: gere uma arte a partir de um texto · 1 a 2 créditos',
     icon: <Wand2 className="h-5 w-5" />,
     gradient: 'from-amber-400 to-rose-500',
+  },
+  {
+    key: 'slides',
+    title: 'Slides',
+    description: 'Apresentações com IA, prontas para editar e exportar',
+    icon: <Presentation className="h-5 w-5" />,
+    gradient: 'from-sky-400 to-violet-500',
   },
   {
     key: 'canvas',
@@ -349,7 +380,7 @@ const DESIGN_STARTS: DesignStart[] = [
   {
     key: 'studio',
     title: 'Estúdio Pro',
-    description: 'Editor manual, PhotoCraft e ferramentas grátis',
+    description: 'Editar imagem com IA, editor de imagens, PhotoCraft e mais',
     icon: <Layers className="h-5 w-5" />,
     gradient: 'from-violet-500 to-blue-500',
   },

@@ -13,30 +13,41 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
-  MessageSquare, Image as ImageIcon, Download, Scissors, User2,
+  MessageSquare, Download, Scissors, User2,
   Video, Music, BookOpen, Sparkles, Loader2, Coins, ArrowLeft, RotateCw, AlertTriangle, Upload,
-  FileDown, History, Search, ArrowRight, X, AlertCircle, ListTodo, Clapperboard, SlidersHorizontal, FileText } from "lucide-react";
+  FileDown, History, Search, ArrowRight, X, AlertCircle, ListTodo, Clapperboard, FileText } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { ManusLauncher } from "@/components/creative/ManusLauncher";
 import { CreativeToolInterface } from "@/components/creative/CreativeToolInterface";
 import { EBOOK_DEFAULT_CHAPTERS, EBOOK_MIN_CHAPTERS, ebookCost } from "@/config/ebookPricing";
 import { SkillExecutionsList } from "@/components/creative/SkillExecutionsList";
 import { ApiStatusPanel } from "@/components/creative/ApiStatusPanel";
-import { CreativeSlides } from "@/components/CreativeSlides";
 import { CreativeSheets } from "@/components/CreativeSheets";
 import { OfficeSuite } from "@/components/office/OfficeSuite";
 import { CreativeDesign } from "@/components/CreativeDesign";
 import { SponsoredSlot } from "@/components/creative/SponsoredSlot";
 import { CreativeAdFrame } from "@/components/creative/AdBanner";
 
-type ToolKey = "dashboard" | "chat" | "nano_banana" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "video_studio" | "image_editor" | "unified_history" | "slides" | "sheet" | "design" | "office";
+type ToolKey = "dashboard" | "chat" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "video_studio" | "unified_history" | "sheet" | "design" | "office";
+
+/**
+ * Criar imagem, editar imagem e criar slides saíram do painel criativo: ficam só no Design Premium.
+ * Links e atalhos antigos (/creative/slides, /creative/nano_banana, /creative/image_editor) abrem lá.
+ */
+const MOVED_TO_DESIGN: Record<string, DesignOpen> = {
+  slides: { mode: "slides" },
+  nano_banana: { mode: "studio", studioPage: "nano_banana" },
+  image_editor: { mode: "studio", studioPage: "image_editor" },
+};
+type DesignOpen = NonNullable<React.ComponentProps<typeof CreativeDesign>["open"]>;
+
+/** Nomes no histórico para execuções antigas dessas ferramentas. */
+const LEGACY_TOOL_TITLES: Record<string, string> = { nano_banana: "Nano Banana", image_editor: "Editor de Imagens" };
 
 const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: string }[] = [
   { key: "office", title: "Vertal Office", desc: "Documentos e planilhas grátis. Só a IA é paga", icon: FileText, cost: "Grátis (IA: 1 crédito)" },
   { key: "video_studio", title: "Vertal Video Studio", desc: "1 a 10 fotos viram clipe musical, meme ou anúncio com IA realista", icon: Clapperboard, cost: "a partir de 2 créditos" },
-  { key: "image_editor", title: "Editor de Imagens", desc: "Corte, redimensione e ajuste qualquer imagem", icon: SlidersHorizontal, cost: "Grátis" },
   { key: "chat", title: "Vertal Chat", desc: "Conversas, resumos, traduções, geração de textos", icon: MessageSquare, cost: "1 crédito/msg" },
-  { key: "nano_banana", title: "Nano Banana", desc: "Criar e editar imagens com IA", icon: ImageIcon, cost: "1 crédito" },
   { key: "downloader", title: "Downloader Universal", desc: "YouTube, Instagram, TikTok, Facebook, Kwai", icon: Download, cost: "2 créditos" },
   { key: "clips", title: "Vertal Clips", desc: "IA acha os momentos virais, reenquadra em 9:16 e legenda palavra por palavra", icon: Scissors, cost: "1 crédito a cada 5 min" },
   { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes com narração IA", icon: User2, cost: "4 créditos/s de vídeo" },
@@ -150,7 +161,18 @@ export default function CreativePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { subscription, editsRemaining, refetch } = useSubscription();
-  const [active, setActive] = useState<ToolKey>((tool as ToolKey) || "dashboard");
+  const [active, setActiveRaw] = useState<ToolKey>(() => (tool && MOVED_TO_DESIGN[tool] ? "design" : (tool as ToolKey) || "dashboard"));
+  const [designOpen, setDesignOpen] = useState<DesignOpen | undefined>(() => (tool ? MOVED_TO_DESIGN[tool] : undefined));
+  // Toda troca de ferramenta passa por aqui: as que foram para o Design Premium abrem lá.
+  const setActive = (key: string) => {
+    const moved = MOVED_TO_DESIGN[key];
+    if (moved) {
+      setDesignOpen({ ...moved });
+      setActiveRaw("design");
+      return;
+    }
+    setActiveRaw(key as ToolKey);
+  };
   const [history, setHistory] = useState<any[]>([]);
   const [filter, setFilter] = useState<"all" | "queued" | "processing" | "completed" | "failed">("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -230,7 +252,15 @@ export default function CreativePage() {
 
 
   useEffect(() => {
-    if (tool) setActive(tool as ToolKey);
+    if (!tool) return;
+    if (MOVED_TO_DESIGN[tool]) {
+      setDesignOpen({ ...MOVED_TO_DESIGN[tool] });
+      setActiveRaw("design");
+      navigate("/creative/design", { replace: true });
+      return;
+    }
+    setActiveRaw(tool as ToolKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tool]);
 
   async function loadHistory(before: string | null = null) {
@@ -1032,7 +1062,7 @@ export default function CreativePage() {
           <TabsContent value="dashboard">
              <div className="space-y-6">
                <ApiStatusPanel />
-               <ManusLauncher setActive={(k) => { setActive(k as ToolKey); navigate(k === "dashboard" ? "/creative" : `/creative/${k}`); }} />
+               <ManusLauncher setActive={(k) => { setActive(k); navigate(k === "dashboard" ? "/creative" : `/creative/${MOVED_TO_DESIGN[k] ? "design" : k}`); }} />
                
                <div className="pt-6 border-t border-border/40">
                  <div className="flex flex-wrap gap-4 items-end mb-4">
@@ -1166,7 +1196,7 @@ export default function CreativePage() {
                                  <Badge variant={h.status === 'completed' ? 'default' : h.status === 'failed' ? 'destructive' : 'outline'} className="capitalize">
                                    {h.status}
                                  </Badge>
-                                 <span className="font-semibold text-sm">{TOOLS.find(t => t.key === h.tool)?.title || h.tool}</span>
+                                 <span className="font-semibold text-sm">{TOOLS.find(t => t.key === h.tool)?.title || LEGACY_TOOL_TITLES[h.tool] || h.tool}</span>
                                  <span className="text-[10px] text-muted-foreground font-mono">{new Date(h.created_at).toLocaleString()}</span>
                                </div>
                                <p className="text-sm text-foreground/80 line-clamp-1 italic">"{h.prompt || "Sem prompt"}"</p>
@@ -1222,18 +1252,14 @@ export default function CreativePage() {
             </div>
           </TabsContent>
 
-          {(["slides", "sheet"] as const).map((key) => (
-            <TabsContent key={key} value={key}>
-              <div className="space-y-6">
-                <Button variant="ghost" size="sm" onClick={() => { setActive("dashboard"); navigate("/creative"); }} className="mb-2">
-                  <ArrowLeft className="h-4 w-4 mr-2" /> Voltar ao Painel
-                </Button>
-                {key === "slides"
-                  ? <CreativeSlides creditsAvailable={editsRemaining} />
-                  : <CreativeSheets creditsAvailable={editsRemaining} />}
-              </div>
-            </TabsContent>
-          ))}
+          <TabsContent value="sheet">
+            <div className="space-y-6">
+              <Button variant="ghost" size="sm" onClick={() => { setActive("dashboard"); navigate("/creative"); }} className="mb-2">
+                <ArrowLeft className="h-4 w-4 mr-2" /> Voltar ao Painel
+              </Button>
+              <CreativeSheets creditsAvailable={editsRemaining} />
+            </div>
+          </TabsContent>
 
           <TabsContent value="office">
             <div className="space-y-6">
@@ -1249,7 +1275,7 @@ export default function CreativePage() {
               <Button variant="ghost" size="sm" onClick={() => { setActive("dashboard"); navigate("/creative"); }} className="mb-2">
                 <ArrowLeft className="h-4 w-4 mr-2" /> Voltar ao Painel
               </Button>
-              <CreativeDesign creditsAvailable={editsRemaining} />
+              <CreativeDesign creditsAvailable={editsRemaining} open={designOpen} />
             </div>
           </TabsContent>
 
