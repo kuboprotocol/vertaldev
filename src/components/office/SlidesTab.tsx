@@ -152,82 +152,103 @@ export function SlidesTab({ creditsAvailable }: { creditsAvailable: number }) {
   const bulletsText = current.bullets.join('\n');
   const safe = safeName(deck.title);
 
-  return (
-    <div className="space-y-4">
-      <input
-        value={deck.title}
-        onChange={(e) => commit({ ...deck, title: e.target.value })}
-        aria-label="Título da apresentação"
-        className="w-full bg-transparent text-2xl font-bold text-white focus:outline-none"
-      />
+  const field =
+    'mt-1 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 transition focus:border-amber-400/50 focus:outline-none focus:ring-2 focus:ring-amber-400/30';
 
-      <div className="grid gap-4 md:grid-cols-[200px_1fr]">
-        <ol className="flex gap-2 overflow-x-auto md:flex-col md:overflow-visible" aria-label="Slides">
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-2 border-b border-white/10 pb-4">
+        <input
+          value={deck.title}
+          onChange={(e) => commit({ ...deck, title: e.target.value })}
+          aria-label="Título da apresentação"
+          placeholder="Título da apresentação"
+          className="mr-auto min-w-0 flex-1 bg-transparent text-xl font-bold text-white placeholder:text-slate-600 focus:outline-none sm:text-2xl"
+        />
+        <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] font-medium text-amber-200">
+          {slides.length} de {DECK_MAX_SLIDES} slides
+        </span>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[220px_1fr]">
+        <ol className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-y-auto lg:pb-0 lg:pr-1" aria-label="Slides">
           {slides.map((s, i) => (
-            <li key={s.id} className="shrink-0 md:shrink">
+            <li key={s.id} className="shrink-0 lg:shrink">
               <button
                 type="button"
                 onClick={() => setSelected(i)}
                 aria-current={s.id === current.id}
-                className={`w-40 rounded-lg border p-2 text-left text-xs md:w-full ${
+                className={`w-44 rounded-xl border p-2 text-left transition lg:w-full ${
                   s.id === current.id
-                    ? 'border-amber-400/60 bg-amber-400/10 text-white'
-                    : 'border-white/10 bg-slate-950/40 text-slate-300 hover:bg-white/5'
+                    ? 'border-amber-400/60 bg-amber-400/10 text-white shadow-lg shadow-amber-900/20'
+                    : 'border-white/10 bg-slate-950/50 text-slate-300 hover:border-white/20 hover:bg-white/5'
                 }`}
               >
-                <span className="block text-[10px] text-slate-500">Slide {i + 1}</span>
-                <span className="line-clamp-2 font-medium">{s.title || 'Sem título'}</span>
+                <span className="flex aspect-video w-full flex-col justify-center overflow-hidden rounded-md bg-gradient-to-br from-slate-100 to-slate-300 px-2 text-slate-900">
+                  <span className="line-clamp-2 text-[10px] font-bold leading-tight">{s.title || 'Sem título'}</span>
+                </span>
+                <span className="mt-1.5 block text-[10px] font-medium text-slate-500">Slide {i + 1}</span>
               </button>
             </li>
           ))}
-          <li className="shrink-0 md:shrink">
+          <li className="shrink-0 lg:shrink">
             <button
               type="button"
               onClick={addSlide}
               disabled={slides.length >= DECK_MAX_SLIDES}
-              className="inline-flex w-40 items-center justify-center gap-1 rounded-lg border border-dashed border-white/15 p-2 text-xs text-slate-300 hover:bg-white/5 disabled:opacity-40 md:w-full"
+              className="inline-flex h-full min-h-[84px] w-44 items-center justify-center gap-1.5 rounded-xl border border-dashed border-white/15 p-2 text-xs font-medium text-slate-300 transition hover:border-amber-400/40 hover:bg-amber-400/5 disabled:opacity-40 lg:w-full"
             >
               <Plus className="h-3.5 w-3.5" /> Novo slide
             </button>
           </li>
         </ol>
 
-        <div className="space-y-3">
-          <div className="aspect-video w-full overflow-hidden rounded-xl border border-white/10 bg-white p-6 text-slate-900 shadow-lg sm:p-10">
-            <h3 className="text-xl font-bold sm:text-3xl">{current.title || 'Sem título'}</h3>
-            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm sm:text-lg">
+        <div className="space-y-4">
+          {/* Palco do slide em 16:9, com faixa de acento e tipografia de apresentação. */}
+          <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-gradient-to-br from-white via-white to-amber-50 p-6 text-slate-900 shadow-2xl shadow-black/40 ring-1 ring-black/5 sm:p-10">
+            <span className="absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-amber-400 to-fuchsia-500" aria-hidden />
+            <span className="absolute bottom-4 right-6 text-[10px] font-semibold uppercase tracking-widest text-slate-400" aria-hidden>
+              {index + 1} / {slides.length}
+            </span>
+            <h3 className="font-['Unbounded'] text-xl font-bold leading-tight tracking-tight sm:text-3xl">{current.title || 'Sem título'}</h3>
+            <ul className="mt-4 space-y-2 text-sm text-slate-700 sm:text-lg">
               {current.bullets.map((b, i) => (
-                <li key={i}>{b}</li>
+                <li key={i} className="flex gap-3">
+                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden />
+                  <span>{b}</span>
+                </li>
               ))}
             </ul>
           </div>
 
-          <label className="block text-xs text-slate-400">
-            Título do slide
-            <input
-              value={current.title}
-              onChange={(e) => updateSlide({ title: e.target.value })}
-              className="mt-1 w-full rounded-md border border-white/10 bg-slate-950/60 px-2 py-1.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
-            />
-          </label>
-          <label className="block text-xs text-slate-400">
-            Tópicos (um por linha, até {SLIDE_MAX_BULLETS})
-            <textarea
-              value={bulletsText}
-              onChange={(e) => updateSlide({ bullets: e.target.value.split('\n').slice(0, SLIDE_MAX_BULLETS) })}
-              rows={4}
-              className="mt-1 w-full rounded-md border border-white/10 bg-slate-950/60 px-2 py-1.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-400/50"
-            />
-          </label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block text-xs font-medium text-slate-400">
+              Título do slide
+              <input
+                value={current.title}
+                onChange={(e) => updateSlide({ title: e.target.value })}
+                className={field}
+              />
+            </label>
+            <label className="block text-xs font-medium text-slate-400">
+              Tópicos (um por linha, até {SLIDE_MAX_BULLETS})
+              <textarea
+                value={bulletsText}
+                onChange={(e) => updateSlide({ bullets: e.target.value.split('\n').slice(0, SLIDE_MAX_BULLETS) })}
+                rows={4}
+                className={field}
+              />
+            </label>
+          </div>
 
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => move(-1)} aria-label="Mover slide para cima" className="rounded-md border border-white/10 p-1.5 text-slate-300 hover:bg-white/5">
+          <div className="flex items-center gap-1.5">
+            <button type="button" onClick={() => move(-1)} aria-label="Mover slide para cima" className="rounded-lg border border-white/10 p-2 text-slate-300 transition hover:border-white/20 hover:bg-white/5">
               <ChevronUp className="h-4 w-4" />
             </button>
-            <button type="button" onClick={() => move(1)} aria-label="Mover slide para baixo" className="rounded-md border border-white/10 p-1.5 text-slate-300 hover:bg-white/5">
+            <button type="button" onClick={() => move(1)} aria-label="Mover slide para baixo" className="rounded-lg border border-white/10 p-2 text-slate-300 transition hover:border-white/20 hover:bg-white/5">
               <ChevronDown className="h-4 w-4" />
             </button>
-            <button type="button" onClick={removeCurrent} aria-label="Remover slide" className="rounded-md border border-white/10 p-1.5 text-slate-500 hover:bg-white/5 hover:text-red-300">
+            <button type="button" onClick={removeCurrent} aria-label="Remover slide" className="rounded-lg border border-white/10 p-2 text-slate-500 transition hover:border-red-400/30 hover:bg-red-400/10 hover:text-red-300">
               <Trash2 className="h-4 w-4" />
             </button>
           </div>
@@ -243,14 +264,23 @@ export function SlidesTab({ creditsAvailable }: { creditsAvailable: number }) {
       />
 
       {message && (
-        <p className={`text-sm ${message.kind === 'ok' ? 'text-emerald-300' : 'text-red-300'}`} role="status">
+        <p
+          role="status"
+          className={`rounded-lg border px-3 py-2 text-sm ${
+            message.kind === 'ok' ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200' : 'border-red-400/30 bg-red-400/10 text-red-200'
+          }`}
+        >
           {message.text}
         </p>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
-        <span className="text-xs text-slate-400">{slides.length} slides · salvo neste navegador</span>
-        <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 text-xs text-slate-400">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" aria-hidden />
+          {slides.length} slides · salvo neste navegador
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Exportar</span>
           <ExportBtn label="PDF" onClick={() => download(deckToPdf(deck), `${safe}.pdf`, 'application/pdf')} />
           <ExportBtn label="HTML" onClick={() => download(deckToHtml(deck), `${safe}.html`, 'text/html;charset=utf-8')} />
           <ExportBtn label="Texto" onClick={() => download(deckToText(deck), `${safe}.txt`, 'text/plain;charset=utf-8')} />
@@ -266,7 +296,7 @@ function ExportBtn({ label, onClick }: { label: string; onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-200 hover:bg-white/5"
+      className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/5"
     >
       <Download className="h-3.5 w-3.5" /> {label}
     </button>
