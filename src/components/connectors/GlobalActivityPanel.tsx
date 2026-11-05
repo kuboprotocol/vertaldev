@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { connectors } from '@/lib/connectorsConfig'
+import { ConnectorIcon } from '@/components/connectors/ConnectorIcon'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Activity, CheckCircle2, XCircle, AlertCircle, Info, ChevronRight, RefreshCw } from 'lucide-react'
@@ -115,7 +116,6 @@ export function GlobalActivityPanel() {
             <AnimatePresence initial={false}>
               {logs.map(log => {
                 const connector = connectorMap.get(log.connector_slug)
-                const Icon = connector?.icon
                 return (
                   <motion.li
                     key={log.id}
@@ -133,8 +133,8 @@ export function GlobalActivityPanel() {
                         className="flex items-center justify-center h-8 w-8 rounded-lg shrink-0"
                         style={{ backgroundColor: connector ? `${connector.color}15` : 'hsl(var(--muted))' }}
                       >
-                        {Icon ? (
-                          <Icon className="h-4 w-4" style={{ color: connector!.color }} />
+                        {connector ? (
+                          <ConnectorIcon connector={connector} className="h-4 w-4" />
                         ) : (
                           <Activity className="h-4 w-4 text-muted-foreground" />
                         )}

@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { toast } from 'sonner'
 import { getConnectorBySlug } from '@/lib/connectorsConfig'
+import { ConnectorIcon } from '@/components/connectors/ConnectorIcon'
 import { supabase } from '@/integrations/supabase/client'
 import { cn } from '@/lib/utils'
 
@@ -133,7 +134,6 @@ export default function ConnectorSetupPage() {
     }
   }
 
-  const Icon = connector.icon
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -148,7 +148,7 @@ export default function ConnectorSetupPage() {
               className="h-10 w-10 rounded-xl flex items-center justify-center"
               style={{ backgroundColor: `${connector.color}20` }}
             >
-              <Icon className="h-5 w-5" style={{ color: connector.color }} />
+              <ConnectorIcon connector={connector} className="h-5 w-5" />
             </div>
             <div>
               <h1 className="text-xl font-bold font-display">Connect {connector.name}</h1>

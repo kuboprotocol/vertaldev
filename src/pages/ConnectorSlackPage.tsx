@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import { ArrowLeft, RefreshCw, Send, Hash, Lock, Users, MessageSquare, Search, Download } from 'lucide-react'
+import { ArrowLeft, RefreshCw, Send, Hash, Lock, Users, Search, Download } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 type Channel = { id: string; name: string; is_private: boolean; is_member?: boolean; num_members?: number; topic?: string; purpose?: string }
@@ -122,8 +122,8 @@ export default function ConnectorSlackPage() {
             <Button variant="ghost" size="sm" onClick={() => navigate('/connectors')}>
               <ArrowLeft className="w-4 h-4 mr-1" /> Back
             </Button>
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#4A154B' }}>
-              <MessageSquare className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-white">
+              <img src="/connectors/slack.png" alt="Slack" className="w-6 h-6 object-contain" draggable={false} />
             </div>
             <div>
               <h1 className="text-lg font-bold font-orbitron">Slack Connector</h1>

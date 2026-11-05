@@ -10,6 +10,8 @@ export interface ConnectorConfig {
   name: string
   slug: string
   icon: LucideIcon
+  /** Logo oficial (em /public). Quando existe, aparece no lugar do ícone. */
+  logoUrl?: string
   color: string
   authType: 'oauth' | 'api_key' | 'webhook' | 'manual'
   category: 'ecosystem' | 'development' | 'payments' | 'design' | 'infrastructure' | 'communication' | 'analytics'
@@ -146,6 +148,7 @@ export const connectors: ConnectorConfig[] = [
     name: 'Supabase',
     slug: 'supabase',
     icon: Database,
+    logoUrl: '/connectors/supabase.png',
     color: '#3ECF8E',
     authType: 'api_key',
     category: 'infrastructure',
@@ -189,6 +192,7 @@ export const connectors: ConnectorConfig[] = [
     name: 'Gmail',
     slug: 'gmail',
     icon: Mail,
+    logoUrl: '/connectors/gmail.png',
     color: '#EA4335',
     authType: 'oauth',
     category: 'communication',
@@ -211,6 +215,7 @@ export const connectors: ConnectorConfig[] = [
     name: 'Slack',
     slug: 'slack',
     icon: MessageSquare,
+    logoUrl: '/connectors/slack.png',
     color: '#4A154B',
     authType: 'oauth',
     category: 'communication',
@@ -277,6 +282,7 @@ export const connectors: ConnectorConfig[] = [
     name: 'Cloudflare',
     slug: 'cloudflare',
     icon: Shield,
+    logoUrl: '/connectors/cloudflare.png',
     color: '#F38020',
     authType: 'api_key',
     category: 'infrastructure',

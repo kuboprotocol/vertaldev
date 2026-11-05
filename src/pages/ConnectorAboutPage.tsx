@@ -15,6 +15,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
 import { getConnectorBySlug } from '@/lib/connectorsConfig'
+import { ConnectorIcon } from '@/components/connectors/ConnectorIcon'
 
 const SCROLL_KEY_PREFIX = 'connector-about-scroll:'
 const NAV_STATE_KEY_PREFIX = 'connector-about-nav:'
@@ -49,7 +50,6 @@ export default function ConnectorAboutPage({ navLockMs = DEFAULT_NAV_LOCK_MS }: 
     )
   }
 
-  const Icon = connector.icon
   const isComingSoon = connector.status === 'coming_soon'
   const scrollKey = `${SCROLL_KEY_PREFIX}${slug}`
   const navStateKey = `${NAV_STATE_KEY_PREFIX}${slug}`
@@ -189,7 +189,7 @@ export default function ConnectorAboutPage({ navLockMs = DEFAULT_NAV_LOCK_MS }: 
               className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0"
               style={{ backgroundColor: `${connector.color}20` }}
             >
-              <Icon className="h-5 w-5" style={{ color: connector.color }} />
+              <ConnectorIcon connector={connector} className="h-5 w-5" />
             </div>
             <div className="min-w-0">
               <h1 className="text-xl font-bold font-display truncate">{connector.name}</h1>

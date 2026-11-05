@@ -116,7 +116,17 @@ export default function ConnectorGmailPage() {
     const { data, error } = await supabase.functions.invoke('gmail-oauth-start', {
       body: { returnUrl: '/connectors/gmail', origin: window.location.origin },
     })
-    if (error || !data?.url) { toast.error('Não foi possível iniciar OAuth'); return }
+    if (error || !data?.url) {
+      // Mostra o motivo real que a função devolveu (ex.: credenciais Google não configuradas).
+      let code = ''
+      try { code = (await (error as { context?: Response })?.context?.json())?.error ?? '' } catch { /* corpo sem JSON */ }
+      toast.error(
+        code === 'gmail_oauth_not_configured'
+          ? 'Conexão com Gmail indisponível: o login do Google ainda não foi configurado no servidor.'
+          : 'Não foi possível iniciar a conexão com o Gmail. Tente de novo em instantes.',
+      )
+      return
+    }
     window.location.href = data.url as string
   }
 
@@ -391,7 +401,7 @@ export default function ConnectorGmailPage() {
           </Button>
           <div className="flex-1">
             <h1 className="text-xl font-bold font-['Orbitron'] flex items-center gap-2">
-              <Mail className="h-5 w-5 text-[#C9941A]" /> Gmail
+              <img src="/connectors/gmail.png" alt="" className="h-5 w-5 object-contain" draggable={false} /> Gmail
             </h1>
             <p className="text-sm text-muted-foreground">Conecte suas contas Gmail para leitura e envio via IA.</p>
           </div>
