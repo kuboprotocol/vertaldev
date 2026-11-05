@@ -35,6 +35,8 @@ DROP POLICY IF EXISTS "mcp_access_keys_select_own" ON public.mcp_access_keys;
 CREATE POLICY "mcp_access_keys_select_own" ON public.mcp_access_keys
   FOR SELECT TO authenticated USING ((SELECT auth.uid()) = user_id);
 
+-- O dono lê as próprias linhas via RLS. O key_hash fica visível só para ele, e isso
+-- é inofensivo: é um SHA-256 de uma chave de 256 bits, que não permite recuperar a chave.
+-- (Grant por coluna não serve aqui: a checagem de GRANT do banco usa has_table_privilege.)
 REVOKE ALL ON public.mcp_access_keys FROM anon, authenticated;
-GRANT SELECT (id, user_id, name, key_prefix, scopes, created_at, last_used_at, expires_at, revoked_at)
-  ON public.mcp_access_keys TO authenticated;
+GRANT SELECT ON public.mcp_access_keys TO authenticated;
