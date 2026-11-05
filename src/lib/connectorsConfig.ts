@@ -82,6 +82,7 @@ export const connectors: ConnectorConfig[] = [
     name: 'GitHub',
     slug: 'github',
     icon: Github,
+    logoUrl: '/connectors/github.png',
     color: '#8B5CF6',
     authType: 'api_key',
     category: 'development',
