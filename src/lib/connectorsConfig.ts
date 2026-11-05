@@ -281,6 +281,7 @@ export const connectors: ConnectorConfig[] = [
     name: 'Cloudflare',
     slug: 'cloudflare',
     icon: Shield,
+    logoUrl: '/connectors/cloudflare.png',
     color: '#F38020',
     authType: 'api_key',
     category: 'infrastructure',

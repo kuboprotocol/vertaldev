@@ -11,6 +11,12 @@ describe('ConnectorIcon', () => {
     expect(img.getAttribute('src')).toBe('/connectors/slack.png')
   })
 
+  it('Cloudflare mostra o logo oficial', () => {
+    const cf = connectors.find((c) => c.slug === 'cloudflare')!
+    render(<ConnectorIcon connector={cf} className="h-6 w-6" />)
+    expect(screen.getByRole('img', { name: 'Cloudflare' }).getAttribute('src')).toBe('/connectors/cloudflare.png')
+  })
+
   it('Gmail mostra o logo oficial', () => {
     const gmail = connectors.find((c) => c.slug === 'gmail')!
     render(<ConnectorIcon connector={gmail} className="h-6 w-6" />)
