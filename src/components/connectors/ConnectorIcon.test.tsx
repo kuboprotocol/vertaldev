@@ -11,6 +11,48 @@ describe('ConnectorIcon', () => {
     expect(img.getAttribute('src')).toBe('/connectors/slack.png')
   })
 
+  it('Stripe mostra o logo oficial', () => {
+    const st = connectors.find((c) => c.slug === 'stripe')!
+    render(<ConnectorIcon connector={st} className="h-6 w-6" />)
+    expect(screen.getByRole('img', { name: 'Stripe' }).getAttribute('src')).toBe('/connectors/stripe.png')
+  })
+
+  it('GitHub mostra o logo oficial', () => {
+    const gh = connectors.find((c) => c.slug === 'github')!
+    render(<ConnectorIcon connector={gh} className="h-6 w-6" />)
+    expect(screen.getByRole('img', { name: 'GitHub' }).getAttribute('src')).toBe('/connectors/github.png')
+  })
+
+  it('Figma mostra o logo oficial', () => {
+    const fg = connectors.find((c) => c.slug === 'figma')!
+    render(<ConnectorIcon connector={fg} className="h-6 w-6" />)
+    expect(screen.getByRole('img', { name: 'Figma' }).getAttribute('src')).toBe('/connectors/figma.png')
+  })
+
+  it('Render mostra o logo oficial', () => {
+    const rd = connectors.find((c) => c.slug === 'render')!
+    render(<ConnectorIcon connector={rd} className="h-6 w-6" />)
+    expect(screen.getByRole('img', { name: 'Render' }).getAttribute('src')).toBe('/connectors/render.png')
+  })
+
+  it('Docker Hub mostra o logo oficial', () => {
+    const dk = connectors.find((c) => c.slug === 'docker')!
+    render(<ConnectorIcon connector={dk} className="h-6 w-6" />)
+    expect(screen.getByRole('img', { name: 'Docker Hub' }).getAttribute('src')).toBe('/connectors/docker.png')
+  })
+
+  it('Discord mostra o logo oficial', () => {
+    const dc = connectors.find((c) => c.slug === 'discord')!
+    render(<ConnectorIcon connector={dc} className="h-6 w-6" />)
+    expect(screen.getByRole('img', { name: 'Discord' }).getAttribute('src')).toBe('/connectors/discord.png')
+  })
+
+  it('Alchemy mostra o logo oficial', () => {
+    const al = connectors.find((c) => c.slug === 'alchemy')!
+    render(<ConnectorIcon connector={al} className="h-6 w-6" />)
+    expect(screen.getByRole('img', { name: 'Alchemy' }).getAttribute('src')).toBe('/connectors/alchemy.png')
+  })
+
   it('Supabase mostra o logo oficial', () => {
     const sb = connectors.find((c) => c.slug === 'supabase')!
     render(<ConnectorIcon connector={sb} className="h-6 w-6" />)
