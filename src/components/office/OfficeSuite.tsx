@@ -1,33 +1,63 @@
 // Vertal Office do Painel Criativo: Documento, Planilha e Apresentação.
 // Editor e exportação são grátis. Cada uso da IA custa 1 crédito.
-import React, { useMemo, useState } from 'react';
-import { FileText, Sheet as SheetIcon, Presentation, Plus, Trash2, Download, Mail, Heading, AlignLeft, List, ShieldCheck } from 'lucide-react';
+import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  DocData,
+  FileText,
+  Sheet as SheetIcon,
+  Presentation,
+  Sparkles,
+  Trash2,
+  Mail,
+  Heading,
+  AlignLeft,
+  List,
+  Bold,
+  Italic,
+  Underline,
+  AlignCenter,
+  AlignRight,
+  Eraser,
+  Sigma,
+} from 'lucide-react';
+import {
+  BlockAlign,
+  BlockSize,
   BlockType,
+  DocBlock,
+  DocData,
   createEmptyDoc,
   docFromAi,
   docToHtml,
   docToMarkdown,
   docToText,
-  makeBlock,
+  formatBlock,
+  insertBlockAfter,
+  removeBlockById,
+  setBlockType,
   wordCount,
 } from '@/lib/office/documentModel';
 import {
+  CELL_FILLS,
+  CellAlign,
   SHEET_MAX_COLS,
   SHEET_MAX_ROWS,
   SheetData,
+  SheetFunction,
   createEmptySheet,
   setCell,
   sheetFromTable,
   sheetToCsv,
   sheetToXlsx,
+  styleCells,
+  suggestFormula,
   usedBounds,
 } from '@/lib/office/sheetModel';
 import { columnLetters, evaluateAll, toRef } from '@/lib/office/formulas';
 import { OFFICE_AI_CREDIT_COST, runOfficeAi } from '@/services/officeAiService';
 import { OfficeEmailDialog } from './OfficeEmailDialog';
 import { AiPanel } from './AiPanel';
+import { AppFrame } from './AppFrame';
+import { RibbonButton, RibbonGroup, RibbonSelect, RibbonTab } from './Ribbon';
 import { docToDocx } from '@/lib/office/officeFiles';
 import { SlidesTab } from './SlidesTab';
 
@@ -52,7 +82,7 @@ function saveLocal(key: string, value: unknown) {
   }
 }
 
-function download(data: BlobPart, filename: string, type: string) {
+export function download(data: BlobPart, filename: string, type: string) {
   const url = URL.createObjectURL(new Blob([data], { type }));
   const a = document.createElement('a');
   a.href = url;
@@ -63,7 +93,7 @@ function download(data: BlobPart, filename: string, type: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function safeName(title: string): string {
+export function safeName(title: string): string {
   return (title || 'arquivo').replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'arquivo';
 }
 
@@ -75,76 +105,83 @@ const BLOCK_LABELS: Record<BlockType, string> = {
   bullet: 'Item de lista',
 };
 
+const SIZE_LABELS: Array<{ value: BlockSize; label: string }> = [
+  { value: 'sm', label: 'Pequeno' },
+  { value: 'md', label: 'Normal' },
+  { value: 'lg', label: 'Grande' },
+];
+const SIZE_PX: Record<BlockSize, string> = { sm: '13px', md: '15px', lg: '20px' };
+
 const APPS = [
-  {
-    id: 'doc',
-    label: 'Documento',
-    hint: 'Textos, propostas e relatórios',
-    icon: FileText,
-    accent: 'from-violet-500/40 via-violet-500/10',
-    dot: 'bg-violet-400',
-  },
-  {
-    id: 'sheet',
-    label: 'Planilha',
-    hint: 'Tabelas, fórmulas e controles',
-    icon: SheetIcon,
-    accent: 'from-cyan-500/40 via-cyan-500/10',
-    dot: 'bg-cyan-400',
-  },
-  {
-    id: 'slides',
-    label: 'Apresentação',
-    hint: 'Slides com título e tópicos',
-    icon: Presentation,
-    accent: 'from-amber-500/40 via-amber-500/10',
-    dot: 'bg-amber-400',
-  },
+  { id: 'doc', label: 'Documento', icon: FileText, tile: 'from-blue-600 to-indigo-600' },
+  { id: 'sheet', label: 'Planilha', icon: SheetIcon, tile: 'from-emerald-600 to-teal-600' },
+  { id: 'slides', label: 'Apresentação', icon: Presentation, tile: 'from-orange-500 to-amber-500' },
 ] as const;
 
 type AppId = (typeof APPS)[number]['id'];
 
-/** Cabeçalho de cada app: nome, o que faz e a ação principal de criação. */
-function WorkspaceBar({ children }: { children: React.ReactNode }) {
+/** Ação de IA compartilhada: roda o pedido e devolve o aviso de resultado. */
+function useAiRunner(setMessage: (m: Notice) => void, setBusy: (b: boolean) => void) {
+  return async <T,>(run: () => Promise<T>, onOk: (res: T) => void, okText: string) => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      onOk(await run());
+      setMessage({ kind: 'ok', text: okText });
+    } catch (e) {
+      setMessage({ kind: 'err', text: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+}
+
+/** Textarea que cresce com o texto, como um parágrafo de editor. */
+function AutoTextarea({
+  value,
+  onChange,
+  onFocus,
+  ariaLabel,
+  style,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onFocus: () => void;
+  ariaLabel: string;
+  style: React.CSSProperties;
+  placeholder?: string;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value, style.fontSize]);
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-white/10 pb-4">{children}</div>
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value)}
+      onFocus={onFocus}
+      aria-label={ariaLabel}
+      style={style}
+      className="min-w-0 flex-1 resize-none overflow-hidden bg-transparent leading-relaxed text-slate-900 placeholder:text-slate-300 focus:outline-none"
+    />
   );
 }
 
-/** Barra de rodapé: status à esquerda, exportações e e-mail à direita. */
-function StatusBar({ status, children }: { status: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-2 text-xs text-slate-400">
-        <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" aria-hidden />
-        {status}
-      </div>
-      <div className="flex flex-wrap items-center gap-2">{children}</div>
-    </div>
-  );
-}
-
-/** Mensagem de resultado da IA ou de erro, com cor e ícone de estado. */
-function NoticeLine({ notice }: { notice: Notice }) {
-  if (!notice) return null;
-  const ok = notice.kind === 'ok';
-  return (
-    <p
-      role="status"
-      className={`rounded-lg border px-3 py-2 text-sm ${
-        ok ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200' : 'border-red-400/30 bg-red-400/10 text-red-200'
-      }`}
-    >
-      {notice.text}
-    </p>
-  );
-}
-
-function DocumentTab({ creditsAvailable }: { creditsAvailable: number }) {
+function DocumentTab({ creditsAvailable, assistantOpen }: { creditsAvailable: number; assistantOpen: boolean }) {
   const [doc, setDoc] = useState<DocData>(() => loadLocal(DOC_KEY, () => createEmptyDoc()));
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [tab, setTab] = useState('home');
   const [busy, setBusy] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [message, setMessage] = useState<Notice>(null);
+  const runAi = useAiRunner(setMessage, setBusy);
 
   const update = (next: DocData) => {
     const stamped = { ...next, updatedAt: new Date().toISOString() };
@@ -152,36 +189,39 @@ function DocumentTab({ creditsAvailable }: { creditsAvailable: number }) {
     saveLocal(DOC_KEY, stamped);
   };
 
-  const runAi = async (prompt: string, source: string) => {
-    setBusy(true);
-    setMessage(null);
-    try {
-      const res = await runOfficeAi({ action: 'doc', prompt, source: source || undefined });
-      if (res.action !== 'doc') throw new Error('Resposta inesperada da IA.');
-      const generated = docFromAi(res.output.title, res.output.blocks);
-      const isEmpty = doc.blocks.every((b) => b.text.trim() === '');
-      update({
-        ...doc,
-        title: isEmpty || doc.title.startsWith('Documento sem') ? generated.title : doc.title,
-        blocks: isEmpty ? generated.blocks : [...doc.blocks, ...generated.blocks],
-      });
-      setMessage({ kind: 'ok', text: `Texto gerado com IA (${OFFICE_AI_CREDIT_COST} crédito).` });
-    } catch (e) {
-      setMessage({ kind: 'err', text: (e as Error).message });
-    } finally {
-      setBusy(false);
-    }
+  const active: DocBlock | undefined = doc.blocks.find((b) => b.id === activeId) ?? doc.blocks[0];
+  const fmt = active?.format ?? {};
+
+  const applyFormat = (patch: Parameters<typeof formatBlock>[2]) => {
+    if (active) update(formatBlock(doc, active.id, patch));
   };
 
-  const setBlock = (id: string, patch: Partial<{ type: BlockType; text: string }>) =>
-    update({ ...doc, blocks: doc.blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)) });
+  const generate = (prompt: string, source: string) =>
+    runAi(
+      () => runOfficeAi({ action: 'doc', prompt, source: source || undefined }),
+      (res) => {
+        if (res.action !== 'doc') throw new Error('Resposta inesperada da IA.');
+        const generated = docFromAi(res.output.title, res.output.blocks);
+        const isEmpty = doc.blocks.every((b) => b.text.trim() === '');
+        update({
+          ...doc,
+          title: isEmpty || doc.title.startsWith('Documento sem') ? generated.title : doc.title,
+          blocks: isEmpty ? generated.blocks : [...doc.blocks, ...generated.blocks],
+        });
+      },
+      `Texto gerado com IA (${OFFICE_AI_CREDIT_COST} crédito).`,
+    );
 
-  const removeBlock = (id: string) => {
-    const blocks = doc.blocks.filter((b) => b.id !== id);
-    update({ ...doc, blocks: blocks.length ? blocks : [makeBlock()] });
+  const setText = (id: string, text: string) =>
+    update({ ...doc, blocks: doc.blocks.map((b) => (b.id === id ? { ...b, text } : b)) });
+
+  const insert = (type: BlockType) => {
+    const before = new Set(doc.blocks.map((b) => b.id));
+    const next = insertBlockAfter(doc, active?.id ?? null, type);
+    const added = next.blocks.find((b) => !before.has(b.id));
+    if (added) setActiveId(added.id);
+    update(next);
   };
-
-  const addBlock = (type: BlockType) => update({ ...doc, blocks: [...doc.blocks, makeBlock(type)] });
 
   const exportAs = (kind: 'html' | 'md' | 'txt') => {
     const name = safeName(doc.title);
@@ -191,100 +231,183 @@ function DocumentTab({ creditsAvailable }: { creditsAvailable: number }) {
   };
 
   const words = wordCount(doc);
+  const pageSize = doc.blocks.reduce((n, b) => n + b.text.length, 0);
+
+  const ribbons: Record<string, React.ReactNode> = {
+    home: (
+      <>
+        <RibbonGroup label="Estilo">
+          <RibbonSelect
+            label="Estilo do bloco"
+            width="w-36"
+            value={active?.type ?? 'paragraph'}
+            options={(Object.keys(BLOCK_LABELS) as BlockType[]).map((t) => ({ value: t, label: BLOCK_LABELS[t] }))}
+            onChange={(v) => active && update(setBlockType(doc, active.id, v as BlockType))}
+          />
+        </RibbonGroup>
+        <RibbonGroup label="Fonte">
+          <RibbonSelect
+            label="Tamanho da fonte"
+            width="w-28"
+            value={fmt.size ?? 'md'}
+            options={SIZE_LABELS}
+            onChange={(v) => applyFormat({ size: v as BlockSize })}
+          />
+          <RibbonButton icon={<Bold className="h-4 w-4" />} label="Negrito" pressed={!!fmt.bold} onClick={() => applyFormat({ bold: !fmt.bold })} />
+          <RibbonButton icon={<Italic className="h-4 w-4" />} label="Itálico" pressed={!!fmt.italic} onClick={() => applyFormat({ italic: !fmt.italic })} />
+          <RibbonButton icon={<Underline className="h-4 w-4" />} label="Sublinhado" pressed={!!fmt.underline} onClick={() => applyFormat({ underline: !fmt.underline })} />
+        </RibbonGroup>
+        <RibbonGroup label="Parágrafo">
+          {(
+            [
+              { v: 'left', icon: <AlignLeft className="h-4 w-4" />, label: 'Alinhar à esquerda' },
+              { v: 'center', icon: <AlignCenter className="h-4 w-4" />, label: 'Centralizar' },
+              { v: 'right', icon: <AlignRight className="h-4 w-4" />, label: 'Alinhar à direita' },
+            ] as Array<{ v: BlockAlign; icon: React.ReactNode; label: string }>
+          ).map((a) => (
+            <RibbonButton
+              key={a.v}
+              icon={a.icon}
+              label={a.label}
+              pressed={(fmt.align ?? 'left') === a.v}
+              onClick={() => applyFormat({ align: a.v })}
+            />
+          ))}
+        </RibbonGroup>
+      </>
+    ),
+    insert: (
+      <>
+        <RibbonGroup label="Blocos">
+          <RibbonButton wide icon={<Heading className="h-4 w-4" />} label="Título" onClick={() => insert('heading')} />
+          <RibbonButton wide icon={<AlignLeft className="h-4 w-4" />} label="Parágrafo" onClick={() => insert('paragraph')} />
+          <RibbonButton wide icon={<List className="h-4 w-4" />} label="Item de lista" onClick={() => insert('bullet')} />
+        </RibbonGroup>
+      </>
+    ),
+    share: (
+      <>
+        <RibbonGroup label="Exportar">
+          <RibbonButton wide icon={<span className="text-[10px] font-bold">HTML</span>} label="HTML" onClick={() => exportAs('html')} />
+          <RibbonButton wide icon={<span className="text-[10px] font-bold">MD</span>} label="Markdown" onClick={() => exportAs('md')} />
+          <RibbonButton wide icon={<span className="text-[10px] font-bold">TXT</span>} label="Texto" onClick={() => exportAs('txt')} />
+          <RibbonButton
+            wide
+            icon={<span className="text-[10px] font-bold">DOCX</span>}
+            label="Word (.docx)"
+            onClick={() =>
+              docToDocx(doc).then((b) =>
+                download(b, `${safeName(doc.title)}.docx`, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+              )
+            }
+          />
+        </RibbonGroup>
+        <RibbonGroup label="Enviar">
+          <RibbonButton wide primary icon={<Mail className="h-4 w-4" />} label="Enviar por e-mail" onClick={() => setEmailOpen(true)} />
+        </RibbonGroup>
+      </>
+    ),
+  };
+
+  const tabs: RibbonTab[] = [
+    { id: 'home', label: 'Início' },
+    { id: 'insert', label: 'Inserir' },
+    { id: 'share', label: 'Compartilhar' },
+  ];
 
   return (
-    <div className="space-y-5">
-      <WorkspaceBar>
-        <span className="mr-auto text-xs font-semibold uppercase tracking-[0.18em] text-violet-300">Inserir</span>
-        <InsertButton icon={<Heading className="h-3.5 w-3.5" />} label="Título" onClick={() => addBlock('heading')} />
-        <InsertButton icon={<AlignLeft className="h-3.5 w-3.5" />} label="Parágrafo" onClick={() => addBlock('paragraph')} />
-        <InsertButton icon={<List className="h-3.5 w-3.5" />} label="Item de lista" onClick={() => addBlock('bullet')} />
-      </WorkspaceBar>
-
-      {/* Folha de papel: o documento aparece como uma página, não como um formulário. */}
-      <div className="rounded-xl bg-slate-950/70 p-3 sm:p-6">
-        <article className="mx-auto w-full max-w-[760px] rounded-sm bg-[#fbfaf6] px-6 py-10 text-slate-900 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.6)] ring-1 ring-black/5 sm:px-14 sm:py-14">
-          <textarea
-            value={doc.title}
-            onChange={(e) => update({ ...doc, title: e.target.value })}
-            aria-label="Título do documento"
-            placeholder="Título do documento"
-            rows={1}
-            className="w-full resize-none bg-transparent font-serif text-2xl font-bold leading-tight tracking-tight text-slate-900 placeholder:text-slate-300 focus:outline-none sm:text-4xl"
-          />
-          <div className="mb-6 mt-4 h-px w-16 bg-violet-500/60" aria-hidden />
-
-          <div className="space-y-1">
-            {doc.blocks.map((b) => (
-              <div
-                key={b.id}
-                className="group relative -mx-3 flex flex-col gap-1 rounded-md px-3 py-1 transition hover:bg-slate-900/[0.03] focus-within:bg-slate-900/[0.03] sm:flex-row sm:items-start sm:gap-3"
-              >
-                {/* No celular, os controles ficam em linha própria. No desktop flutuam no canto, só no hover/foco, sem empurrar o texto. */}
-                <div className="flex items-center gap-1 self-start rounded-md bg-[#fbfaf6] p-0.5 sm:absolute sm:right-1 sm:top-1 sm:z-10 sm:self-auto sm:opacity-0 sm:shadow-sm sm:ring-1 sm:ring-slate-200 sm:transition sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
-                  <select
-                    value={b.type}
-                    onChange={(e) => setBlock(b.id, { type: e.target.value as BlockType })}
-                    aria-label="Tipo do bloco"
-                    className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] text-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-400/60"
-                  >
-                    {(Object.keys(BLOCK_LABELS) as BlockType[]).map((t) => (
-                      <option key={t} value={t}>
-                        {BLOCK_LABELS[t]}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => removeBlock(b.id)}
-                    aria-label="Remover bloco"
-                    className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                {b.type === 'bullet' && <span className="mt-2 text-violet-600" aria-hidden>•</span>}
-                <textarea
-                  value={b.text}
-                  onChange={(e) => setBlock(b.id, { text: e.target.value })}
-                  rows={b.type === 'paragraph' ? 2 : 1}
-                  aria-label="Texto do bloco"
-                  className={`min-w-0 flex-1 resize-none bg-transparent font-serif leading-relaxed text-slate-800 placeholder:text-slate-300 focus:outline-none ${
-                    b.type === 'heading' ? 'pt-1 text-xl font-semibold text-slate-900' : 'text-[15px]'
-                  }`}
-                />
+    <>
+      <AppFrame
+        title={doc.title}
+        titleLabel="Título do documento"
+        titlePlaceholder="Documento sem título"
+        onTitle={(title) => update({ ...doc, title })}
+        tabs={tabs}
+        activeTab={tab}
+        onTab={setTab}
+        ribbons={ribbons}
+        workspaceClass="bg-[#e9ecef]"
+        canvas={
+          <div className="px-3 py-8 sm:px-8">
+            {/* Página em formato carta: margens de 2,5 cm, sombra de papel. */}
+            <article
+              className="mx-auto w-full max-w-[816px] bg-white px-6 py-10 shadow-[0_1px_2px_rgba(15,23,42,0.2),0_6px_24px_-4px_rgba(15,23,42,0.22)] sm:min-h-[1056px] sm:px-[96px] sm:py-[96px]"
+              aria-label="Página do documento"
+            >
+              <div className="space-y-1">
+                {doc.blocks.map((b) => {
+                  const f = b.format ?? {};
+                  const isHeading = b.type === 'heading';
+                  const style: React.CSSProperties = {
+                    fontSize: f.size && f.size !== 'md' ? SIZE_PX[f.size] : isHeading ? '22px' : '15px',
+                    fontWeight: f.bold || isHeading ? 700 : 400,
+                    fontStyle: f.italic ? 'italic' : 'normal',
+                    textDecoration: f.underline ? 'underline' : 'none',
+                    textAlign: f.align ?? 'left',
+                  };
+                  return (
+                    <div
+                      key={b.id}
+                      className={`group relative flex items-start gap-2 rounded px-1 transition hover:bg-slate-50 focus-within:bg-slate-50 ${
+                        isHeading ? 'mt-4 first:mt-0' : ''
+                      } ${active?.id === b.id ? 'ring-1 ring-blue-200' : ''}`}
+                    >
+                      {b.type === 'bullet' && (
+                        <span className="mt-[0.35em] select-none text-slate-700" aria-hidden>
+                          •
+                        </span>
+                      )}
+                      <AutoTextarea
+                        value={b.text}
+                        onChange={(text) => setText(b.id, text)}
+                        onFocus={() => setActiveId(b.id)}
+                        ariaLabel="Texto do bloco"
+                        style={style}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => update(removeBlockById(doc, b.id))}
+                        aria-label="Remover bloco"
+                        className="mt-0.5 shrink-0 rounded p-1 text-slate-400 opacity-100 transition hover:bg-red-50 hover:text-red-600 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
+              <p className="mt-6 text-xs text-slate-400 sm:hidden">{pageSize} caracteres</p>
+            </article>
           </div>
-        </article>
-      </div>
-
-      <AiPanel
-        placeholder="Ex.: Escreva uma proposta comercial curta para uma loja de café de bairro."
-        creditsAvailable={creditsAvailable}
-        busy={busy}
-        onRun={runAi}
-        actionLabel={`Escrever com IA · ${OFFICE_AI_CREDIT_COST} crédito`}
+        }
+        assistant={
+          assistantOpen ? (
+            <AiPanel
+              placeholder="Ex.: Escreva uma proposta comercial curta para uma loja de café de bairro."
+              creditsAvailable={creditsAvailable}
+              busy={busy}
+              onRun={generate}
+              actionLabel={`Escrever com IA · ${OFFICE_AI_CREDIT_COST} crédito`}
+            />
+          ) : null
+        }
+        status={
+          <>
+            <div className="flex flex-wrap items-center gap-3">
+              <span>Página 1 de 1</span>
+              <span>{words} palavras</span>
+              <NoticeInline notice={message} />
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+                Salvo neste navegador
+              </span>
+              <span>Português (Brasil)</span>
+            </div>
+          </>
+        }
       />
-
-      <NoticeLine notice={message} />
-
-      <StatusBar status={<span>{words} palavras · salvo neste navegador</span>}>
-        <span className="mr-1 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Exportar</span>
-        <ExportButton label="HTML" onClick={() => exportAs('html')} />
-        <ExportButton label="Markdown" onClick={() => exportAs('md')} />
-        <ExportButton label="Texto" onClick={() => exportAs('txt')} />
-        <ExportButton
-          label="Word (.docx)"
-          onClick={() =>
-            docToDocx(doc).then((b) =>
-              download(b, `${safeName(doc.title)}.docx`, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
-            )
-          }
-        />
-        <ExportButton label="Enviar por e-mail" icon={<Mail className="h-3.5 w-3.5" />} primary onClick={() => setEmailOpen(true)} />
-      </StatusBar>
-
       <OfficeEmailDialog
         open={emailOpen}
         onClose={() => setEmailOpen(false)}
@@ -301,214 +424,291 @@ function DocumentTab({ creditsAvailable }: { creditsAvailable: number }) {
         }}
         sourceText={() => docToText(doc)}
       />
-    </div>
+    </>
   );
 }
 
-function InsertButton({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
+/** Aviso curto na barra de status (resultado da IA ou erro). */
+function NoticeInline({ notice }: { notice: Notice }) {
+  if (!notice) return null;
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-xs font-medium text-slate-200 transition hover:border-violet-400/40 hover:bg-violet-400/10"
-    >
-      {icon}
-      {label}
-    </button>
+    <span role="status" className={notice.kind === 'ok' ? 'text-emerald-700' : 'text-red-700'}>
+      {notice.text}
+    </span>
   );
 }
 
-function ExportButton({
-  label,
-  onClick,
-  icon,
-  primary = false,
-}: {
-  label: string;
-  onClick: () => void;
-  icon?: React.ReactNode;
-  primary?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-        primary
-          ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-lg shadow-violet-900/30 hover:brightness-110'
-          : 'border border-white/10 text-slate-200 hover:border-white/20 hover:bg-white/5'
-      }`}
-    >
-      {icon ?? <Download className="h-3.5 w-3.5" />} {label}
-    </button>
-  );
-}
-
-/** Converte índice de coluna da seleção (ex.: "C" de "C7") para comparar com o cabeçalho. */
 function columnOf(ref: string): string {
   return ref.replace(/\d+$/, '');
 }
 
-function SheetTab({ creditsAvailable }: { creditsAvailable: number }) {
+function SheetTab({ creditsAvailable, assistantOpen }: { creditsAvailable: number; assistantOpen: boolean }) {
   const [sheet, setSheet] = useState<SheetData>(() => loadLocal(SHEET_KEY, () => createEmptySheet()));
   const [selected, setSelected] = useState('A1');
+  const [tab, setTab] = useState('home');
   const [busy, setBusy] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [message, setMessage] = useState<Notice>(null);
+  const runAi = useAiRunner(setMessage, setBusy);
 
   const values = useMemo(() => evaluateAll(sheet.cells), [sheet.cells]);
   const bounds = usedBounds(sheet.cells);
   const rowCount = Math.min(SHEET_MAX_ROWS, Math.max(bounds.rows + 10, 20));
-  const colCount = Math.min(SHEET_MAX_COLS, Math.max(bounds.cols + 2, 8));
+  const colCount = Math.min(SHEET_MAX_COLS, Math.max(bounds.cols + 2, 10));
 
   const commit = (next: SheetData) => {
     setSheet(next);
     saveLocal(SHEET_KEY, next);
   };
 
-  const runAi = async (prompt: string, source: string) => {
+  const generate = (prompt: string, source: string) => {
     const hasData = Object.keys(sheet.cells).length > 0;
-    if (hasData && !window.confirm('A IA vai substituir o conteúdo atual da planilha. Continuar?')) return;
-    setBusy(true);
-    setMessage(null);
-    try {
-      const res = await runOfficeAi({ action: 'sheet', prompt, source: source || undefined });
-      if (res.action !== 'sheet') throw new Error('Resposta inesperada da IA.');
-      commit(sheetFromTable(sheet.title, res.output.headers, res.output.rows));
-      setMessage({ kind: 'ok', text: `Planilha preenchida com IA (${OFFICE_AI_CREDIT_COST} crédito).` });
-    } catch (e) {
-      setMessage({ kind: 'err', text: (e as Error).message });
-    } finally {
-      setBusy(false);
-    }
+    if (hasData && !window.confirm('A IA vai substituir o conteúdo atual da planilha. Continuar?')) return Promise.resolve();
+    return runAi(
+      () => runOfficeAi({ action: 'sheet', prompt, source: source || undefined }),
+      (res) => {
+        if (res.action !== 'sheet') throw new Error('Resposta inesperada da IA.');
+        commit(sheetFromTable(sheet.title, res.output.headers, res.output.rows));
+      },
+      `Planilha preenchida com IA (${OFFICE_AI_CREDIT_COST} crédito).`,
+    );
   };
 
   const rawSelected = sheet.cells[selected] ?? '';
+  const selStyle = sheet.styles?.[selected] ?? {};
   const selectedCol = columnOf(selected);
   const selectedRow = Number(selected.replace(/^[A-Z]+/, ''));
   const exportName = safeName(sheet.title);
   const filled = Object.keys(sheet.cells).length;
 
+  const moveTo = (ref: string) => {
+    setSelected(ref);
+    requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`[data-cell="${ref}"]`)?.focus());
+  };
+
+  const addFormula = (fn: SheetFunction) => {
+    commit(setCell(sheet, selected, suggestFormula(fn, selected)));
+  };
+
+  const ribbons: Record<string, React.ReactNode> = {
+    home: (
+      <>
+        <RibbonGroup label="Fonte">
+          <RibbonButton icon={<Bold className="h-4 w-4" />} label="Negrito" pressed={!!selStyle.bold} onClick={() => commit(styleCells(sheet, [selected], { bold: !selStyle.bold }))} />
+          <RibbonButton icon={<Italic className="h-4 w-4" />} label="Itálico" pressed={!!selStyle.italic} onClick={() => commit(styleCells(sheet, [selected], { italic: !selStyle.italic }))} />
+        </RibbonGroup>
+        <RibbonGroup label="Alinhamento">
+          {(
+            [
+              { v: 'left', icon: <AlignLeft className="h-4 w-4" />, label: 'Alinhar à esquerda' },
+              { v: 'center', icon: <AlignCenter className="h-4 w-4" />, label: 'Centralizar' },
+              { v: 'right', icon: <AlignRight className="h-4 w-4" />, label: 'Alinhar à direita' },
+            ] as Array<{ v: CellAlign; icon: React.ReactNode; label: string }>
+          ).map((a) => (
+            <RibbonButton
+              key={a.v}
+              icon={a.icon}
+              label={a.label}
+              pressed={(selStyle.align ?? 'left') === a.v}
+              onClick={() => commit(styleCells(sheet, [selected], { align: a.v }))}
+            />
+          ))}
+        </RibbonGroup>
+        <RibbonGroup label="Preenchimento">
+          <div className="flex items-center gap-1">
+            {CELL_FILLS.map((f) => (
+              <button
+                key={f.label}
+                type="button"
+                title={f.label}
+                aria-label={`Preencher: ${f.label}`}
+                onClick={() => commit(styleCells(sheet, [selected], { fill: f.color }))}
+                className={`h-6 w-6 rounded border ${f.color ? 'border-slate-300' : 'border-slate-300 bg-[linear-gradient(135deg,#fff_45%,#ef4444_45%,#ef4444_55%,#fff_55%)]'} transition hover:scale-110`}
+                style={f.color ? { background: f.color } : undefined}
+              />
+            ))}
+          </div>
+        </RibbonGroup>
+        <RibbonGroup label="Editar">
+          <RibbonButton
+            wide
+            icon={<Eraser className="h-4 w-4" />}
+            label="Limpar"
+            onClick={() => {
+              const cleared = setCell(sheet, selected, '');
+              commit(styleCells(cleared, [selected], { bold: false, italic: false, align: 'left', fill: null }));
+            }}
+          />
+        </RibbonGroup>
+      </>
+    ),
+    insert: (
+      <>
+        <RibbonGroup label="Fórmulas">
+          <RibbonButton wide icon={<Sigma className="h-4 w-4" />} label="Soma" onClick={() => addFormula('SUM')} />
+          <RibbonButton wide icon={<span className="text-[13px] font-bold">x̄</span>} label="Média" onClick={() => addFormula('AVERAGE')} />
+          <RibbonButton wide icon={<span className="text-[11px] font-bold">#</span>} label="Contar" onClick={() => addFormula('COUNT')} />
+        </RibbonGroup>
+      </>
+    ),
+    share: (
+      <>
+        <RibbonGroup label="Exportar">
+          <RibbonButton wide icon={<span className="text-[10px] font-bold">CSV</span>} label="CSV" onClick={() => download(sheetToCsv(sheet.cells), `${exportName}.csv`, 'text/csv;charset=utf-8')} />
+          <RibbonButton
+            wide
+            icon={<span className="text-[10px] font-bold">XLSX</span>}
+            label="Excel (.xlsx)"
+            onClick={() =>
+              download(sheetToXlsx(sheet), `${exportName}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            }
+          />
+        </RibbonGroup>
+        <RibbonGroup label="Enviar">
+          <RibbonButton wide primary icon={<Mail className="h-4 w-4" />} label="Enviar por e-mail" onClick={() => setEmailOpen(true)} />
+        </RibbonGroup>
+      </>
+    ),
+  };
+
+  const tabs: RibbonTab[] = [
+    { id: 'home', label: 'Início' },
+    { id: 'insert', label: 'Inserir' },
+    { id: 'share', label: 'Compartilhar' },
+  ];
+
   return (
-    <div className="space-y-4">
-      <WorkspaceBar>
-        <input
-          value={sheet.title}
-          onChange={(e) => commit({ ...sheet, title: e.target.value })}
-          aria-label="Título da planilha"
-          placeholder="Título da planilha"
-          className="mr-auto min-w-0 flex-1 bg-transparent text-xl font-bold text-white placeholder:text-slate-600 focus:outline-none sm:text-2xl"
-        />
-        <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2.5 py-1 text-[11px] font-medium text-cyan-200">
-          {filled} células
-        </span>
-      </WorkspaceBar>
-
-      {/* Barra de fórmulas: caixa de nome + campo da célula selecionada, como nas planilhas de escritório. */}
-      <div className="flex items-stretch overflow-hidden rounded-xl border border-white/10 bg-slate-950/70 shadow-inner shadow-black/40 focus-within:ring-2 focus-within:ring-cyan-400/40">
-        <span className="flex w-16 shrink-0 items-center justify-center border-r border-white/10 bg-slate-900/80 font-mono text-xs font-semibold text-slate-200">
-          {selected}
-        </span>
-        <span className="flex w-10 shrink-0 items-center justify-center border-r border-white/10 font-serif text-sm italic text-cyan-300" aria-hidden>
-          fx
-        </span>
-        <input
-          value={rawSelected}
-          onChange={(e) => commit(setCell(sheet, selected, e.target.value))}
-          placeholder="Digite um valor ou uma fórmula, ex.: =SUM(B2:B10)"
-          aria-label="Conteúdo da célula selecionada"
-          className="min-w-0 flex-1 bg-transparent px-3 py-2 font-mono text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none"
-        />
-      </div>
-
-      <div className="max-h-[460px] overflow-auto rounded-xl border border-white/10 bg-slate-950/60 shadow-inner shadow-black/30">
-        <table className="w-max border-separate border-spacing-0 text-sm">
-          <thead className="sticky top-0 z-20">
-            <tr>
-              <th className="sticky left-0 z-30 h-8 w-12 border-b border-r border-white/10 bg-slate-900" aria-hidden />
-              {Array.from({ length: colCount }, (_, c) => {
-                const letter = columnLetters(c);
-                const active = letter === selectedCol;
-                return (
-                  <th
-                    key={c}
-                    className={`h-8 min-w-[132px] border-b border-r border-white/10 px-2 text-[11px] font-semibold tracking-wider ${
-                      active ? 'bg-cyan-400/15 text-cyan-200' : 'bg-slate-900 text-slate-400'
-                    }`}
-                  >
-                    {letter}
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {Array.from({ length: rowCount }, (_, r) => {
-              const rowActive = r + 1 === selectedRow;
-              return (
-                <tr key={r}>
-                  <th
-                    className={`sticky left-0 z-10 h-8 border-b border-r border-white/10 px-2 text-center text-[11px] font-semibold ${
-                      rowActive ? 'bg-cyan-400/15 text-cyan-200' : 'bg-slate-900 text-slate-400'
-                    }`}
-                  >
-                    {r + 1}
-                  </th>
+    <>
+      <AppFrame
+        title={sheet.title}
+        titleLabel="Título da planilha"
+        titlePlaceholder="Planilha sem título"
+        onTitle={(title) => commit({ ...sheet, title })}
+        tabs={tabs}
+        activeTab={tab}
+        onTab={setTab}
+        ribbons={ribbons}
+        workspaceClass="bg-white"
+        canvasTop={
+          <div className="flex items-stretch border-b border-slate-200 bg-white">
+            <span className="flex w-20 shrink-0 items-center justify-center border-r border-slate-200 bg-slate-50 font-mono text-xs font-semibold text-slate-700">
+              {selected}
+            </span>
+            <span className="flex w-10 shrink-0 items-center justify-center border-r border-slate-200 font-serif text-sm italic text-slate-500" aria-hidden>
+              fx
+            </span>
+            <input
+              value={rawSelected}
+              onChange={(e) => commit(setCell(sheet, selected, e.target.value))}
+              placeholder="Digite um valor ou uma fórmula, ex.: =SUM(B2:B10)"
+              aria-label="Conteúdo da célula selecionada"
+              className="min-w-0 flex-1 bg-white px-3 py-1.5 font-mono text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400"
+            />
+          </div>
+        }
+        canvas={
+          <div className="h-full overflow-auto">
+            <table className="w-max border-separate border-spacing-0 text-[13px]">
+              <thead className="sticky top-0 z-20">
+                <tr>
+                  <th className="sticky left-0 z-30 h-6 w-10 border-b border-r border-slate-300 bg-slate-100" aria-hidden />
                   {Array.from({ length: colCount }, (_, c) => {
-                    const ref = toRef(c, r + 1);
-                    const isSel = ref === selected;
+                    const letter = columnLetters(c);
+                    const active = letter === selectedCol;
                     return (
-                      <td
-                        key={ref}
-                        className={`h-8 border-b border-r border-white/5 p-0 ${
-                          isSel ? 'relative z-[1] shadow-[inset_0_0_0_2px_rgb(34,211,238)]' : ''
+                      <th
+                        key={c}
+                        className={`h-6 min-w-[120px] border-b border-r border-slate-300 px-2 text-[11px] font-semibold ${
+                          active ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'
                         }`}
                       >
-                        <input
-                          value={isSel ? rawSelected : (values[ref] ?? '')}
-                          onFocus={() => setSelected(ref)}
-                          onChange={(e) => commit(setCell(sheet, ref, e.target.value))}
-                          aria-label={`Célula ${ref}`}
-                          className={`h-8 w-full min-w-[132px] bg-transparent px-2 font-mono text-[13px] focus:outline-none ${
-                            /^#/.test(values[ref] ?? '') ? 'text-red-300' : 'text-slate-100'
-                          } ${!isSel && (r % 2 === 1) ? 'bg-white/[0.015]' : ''}`}
-                        />
-                      </td>
+                        {letter}
+                      </th>
                     );
                   })}
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <AiPanel
-        placeholder="Ex.: Planilha de controle financeiro mensal com receitas, despesas e saldo por mês."
-        creditsAvailable={creditsAvailable}
-        busy={busy}
-        onRun={runAi}
-        actionLabel={`Preencher com IA · ${OFFICE_AI_CREDIT_COST} crédito`}
+              </thead>
+              <tbody>
+                {Array.from({ length: rowCount }, (_, r) => {
+                  const rowActive = r + 1 === selectedRow;
+                  return (
+                    <tr key={r}>
+                      <th
+                        className={`sticky left-0 z-10 h-6 border-b border-r border-slate-300 px-1 text-center text-[11px] font-semibold ${
+                          rowActive ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {r + 1}
+                      </th>
+                      {Array.from({ length: colCount }, (_, c) => {
+                        const ref = toRef(c, r + 1);
+                        const isSel = ref === selected;
+                        const st = sheet.styles?.[ref] ?? {};
+                        const shown = isSel ? rawSelected : (values[ref] ?? '');
+                        return (
+                          <td
+                            key={ref}
+                            style={{ background: st.fill ?? undefined }}
+                            className={`h-6 border-b border-r border-slate-200 p-0 ${
+                              isSel ? 'relative z-[1] shadow-[inset_0_0_0_2px_#2563eb]' : ''
+                            }`}
+                          >
+                            <input
+                              data-cell={ref}
+                              value={shown}
+                              onFocus={() => setSelected(ref)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  moveTo(toRef(c, Math.min(r + 2, SHEET_MAX_ROWS)));
+                                }
+                              }}
+                              onChange={(e) => commit(setCell(sheet, ref, e.target.value))}
+                              aria-label={`Célula ${ref}`}
+                              style={{
+                                textAlign: st.align ?? 'left',
+                                fontWeight: st.bold ? 700 : 400,
+                                fontStyle: st.italic ? 'italic' : 'normal',
+                              }}
+                              className={`h-6 w-full min-w-[120px] bg-transparent px-1.5 focus:outline-none ${
+                                /^#/.test(values[ref] ?? '') && !isSel ? 'text-red-600' : 'text-slate-900'
+                              }`}
+                            />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        }
+        assistant={
+          assistantOpen ? (
+            <AiPanel
+              placeholder="Ex.: Planilha de controle financeiro mensal com receitas, despesas e saldo por mês."
+              creditsAvailable={creditsAvailable}
+              busy={busy}
+              onRun={generate}
+              actionLabel={`Preencher com IA · ${OFFICE_AI_CREDIT_COST} crédito`}
+            />
+          ) : null
+        }
+        status={
+          <>
+            <div className="flex flex-wrap items-center gap-3">
+              <span>Pronto</span>
+              <span>{filled} células preenchidas</span>
+              <NoticeInline notice={message} />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+              Salvo neste navegador
+            </div>
+          </>
+        }
       />
-
-      <NoticeLine notice={message} />
-
-      <StatusBar status={<span>{filled} células preenchidas · salvo neste navegador</span>}>
-        <span className="mr-1 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Exportar</span>
-        <ExportButton label="CSV" onClick={() => download(sheetToCsv(sheet.cells), `${exportName}.csv`, 'text/csv;charset=utf-8')} />
-        <ExportButton
-          label="Excel (.xlsx)"
-          onClick={() =>
-            download(
-              sheetToXlsx(sheet),
-              `${exportName}.xlsx`,
-              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            )
-          }
-        />
-        <ExportButton label="Enviar por e-mail" icon={<Mail className="h-3.5 w-3.5" />} primary onClick={() => setEmailOpen(true)} />
-      </StatusBar>
-
       <OfficeEmailDialog
         open={emailOpen}
         onClose={() => setEmailOpen(false)}
@@ -525,98 +725,90 @@ function SheetTab({ creditsAvailable }: { creditsAvailable: number }) {
         }
         sourceText={() => sheetToCsv(sheet.cells)}
       />
-    </div>
+    </>
   );
 }
 
 export function OfficeSuite({ creditsAvailable }: { creditsAvailable: number }) {
-  const [tab, setTab] = useState<AppId>('doc');
+  const [app, setApp] = useState<AppId>('doc');
+  const [assistantOpen, setAssistantOpen] = useState(true);
   const hasCredit = creditsAvailable >= OFFICE_AI_CREDIT_COST;
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-6 text-slate-100 sm:py-8">
-      {/* Cabeçalho da suíte: identidade, promessa de preço e saldo de IA. */}
-      <header className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900 via-slate-900/90 to-violet-950/60 p-5 shadow-2xl shadow-black/40 sm:p-7">
-        <div
-          className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-fuchsia-500/20 blur-3xl"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute -bottom-28 left-1/3 h-56 w-56 rounded-full bg-cyan-500/10 blur-3xl"
-          aria-hidden
-        />
-        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 via-fuchsia-500 to-amber-400 font-['Unbounded'] text-lg font-bold text-white shadow-lg shadow-fuchsia-900/40 ring-1 ring-white/20" aria-hidden>
-              V
-            </span>
-            <div className="space-y-1">
-              <h2 className="font-['Unbounded'] text-2xl font-bold tracking-tight text-white">Vertal Office</h2>
-              <p className="text-sm text-slate-400">Documentos, planilhas e apresentações. Grátis para usar.</p>
-            </div>
+    <div className="mx-auto w-full max-w-7xl px-2 py-4 sm:px-4 sm:py-6">
+      <div className="overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-[0_30px_80px_-20px_rgba(15,23,42,0.45)]">
+        {/* Barra do sistema: identidade, custo da IA e saldo. */}
+        <header className="flex flex-wrap items-center gap-3 bg-gradient-to-r from-blue-700 via-blue-700 to-violet-700 px-3 py-2.5 text-white">
+          <span
+            aria-hidden
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/20 font-['Unbounded'] text-sm font-bold ring-1 ring-white/30"
+          >
+            V
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-['Unbounded'] text-sm font-bold leading-tight">Vertal Office</h2>
+            <p className="truncate text-[11px] text-blue-100">Documentos, planilhas e apresentações. Grátis para usar.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1.5 text-xs font-medium text-emerald-200">
-              <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
+            <span className="rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-medium">
               Só a IA é paga · {OFFICE_AI_CREDIT_COST} crédito por uso
             </span>
             <span
-              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium ${
-                hasCredit ? 'border-white/10 bg-white/5 text-slate-200' : 'border-amber-400/30 bg-amber-400/10 text-amber-200'
+              className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                hasCredit ? 'bg-white/15' : 'bg-amber-400/90 text-amber-950'
               }`}
             >
-              <span className={`h-1.5 w-1.5 rounded-full ${hasCredit ? 'bg-violet-400' : 'bg-amber-400'}`} aria-hidden />
               {creditsAvailable} {creditsAvailable === 1 ? 'crédito disponível' : 'créditos disponíveis'}
             </span>
-          </div>
-        </div>
-      </header>
-
-      {/* Seletor de aplicativos: cartões com estado ativo, não abas genéricas. */}
-      <div role="tablist" aria-label="Aplicativos do Office" className="grid gap-3 sm:grid-cols-3">
-        {APPS.map((app) => {
-          const active = tab === app.id;
-          const Icon = app.icon;
-          return (
             <button
-              key={app.id}
               type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => setTab(app.id)}
-              className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition ${
-                active
-                  ? 'border-white/20 bg-slate-900 shadow-xl shadow-black/40'
-                  : 'border-white/10 bg-slate-900/50 hover:border-white/20 hover:bg-slate-900/80'
+              aria-pressed={assistantOpen}
+              onClick={() => setAssistantOpen((v) => !v)}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
+                assistantOpen ? 'bg-white text-blue-800 shadow-sm' : 'bg-white/15 hover:bg-white/25'
               }`}
             >
-              {active && <span className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${app.accent} to-transparent`} aria-hidden />}
-              {active && <span className={`pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-gradient-to-br ${app.accent} to-transparent blur-2xl`} aria-hidden />}
-              <div className="relative flex items-center gap-3">
-                <span
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition ${
-                    active ? 'border-white/20 bg-white/10 text-white' : 'border-white/10 bg-white/5 text-slate-400 group-hover:text-slate-200'
+              <Sparkles className="h-3.5 w-3.5" aria-hidden />
+              Assistente
+            </button>
+          </div>
+        </header>
+
+        <div className="flex flex-col sm:flex-row">
+          {/* Navegação entre aplicativos: lateral no computador, linha no celular. */}
+          <nav
+            role="tablist"
+            aria-label="Aplicativos do Office"
+            className="flex shrink-0 flex-row gap-1 overflow-x-auto border-b border-slate-200 bg-slate-100 p-2 sm:w-[92px] sm:flex-col sm:border-b-0 sm:border-r sm:py-3"
+          >
+            {APPS.map((a) => {
+              const on = app === a.id;
+              const Icon = a.icon;
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={on}
+                  onClick={() => setApp(a.id)}
+                  className={`flex min-w-[84px] flex-col items-center gap-1 rounded-lg px-2 py-2 text-[11px] font-medium transition ${
+                    on ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200' : 'text-slate-600 hover:bg-white/70 hover:text-slate-900'
                   }`}
                 >
-                  <Icon className="h-5 w-5" />
-                </span>
-                <div className="min-w-0">
-                  <span className={`block text-sm font-semibold ${active ? 'text-white' : 'text-slate-200'}`}>{app.label}</span>
-                  <span className="block truncate text-xs text-slate-500" aria-hidden>
-                    {app.hint}
+                  <span className={`flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br text-white shadow-sm ${a.tile}`}>
+                    <Icon className="h-4.5 w-4.5" />
                   </span>
-                </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+                  <span>{a.label}</span>
+                </button>
+              );
+            })}
+          </nav>
 
-      <section className="rounded-3xl border border-white/10 bg-slate-900/60 p-4 shadow-2xl shadow-black/40 backdrop-blur sm:p-7">
-        {tab === 'doc' && <DocumentTab creditsAvailable={creditsAvailable} />}
-        {tab === 'sheet' && <SheetTab creditsAvailable={creditsAvailable} />}
-        {tab === 'slides' && <SlidesTab creditsAvailable={creditsAvailable} />}
-      </section>
+          {app === 'doc' && <DocumentTab creditsAvailable={creditsAvailable} assistantOpen={assistantOpen} />}
+          {app === 'sheet' && <SheetTab creditsAvailable={creditsAvailable} assistantOpen={assistantOpen} />}
+          {app === 'slides' && <SlidesTab creditsAvailable={creditsAvailable} assistantOpen={assistantOpen} />}
+        </div>
+      </div>
     </div>
   );
 }
