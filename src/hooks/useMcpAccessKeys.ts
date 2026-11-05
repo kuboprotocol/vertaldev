@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client'
 import type { McpAccessLevel, McpKeyRecord } from '@/lib/mcpClientConfig'
 import { scopesForLevel } from '@/lib/mcpClientConfig'
 
-const FUNCTION_NAME = 'mcp-access-keys'
+const FUNCTION_NAME = 'mcp/keys' // rota dentro da função mcp (keys.ts)
 
 /** Chama a Edge Function e devolve a mensagem de erro do servidor, quando houver. */
 async function call<T>(body: Record<string, unknown>): Promise<T> {
