@@ -349,6 +349,7 @@ export const connectors: ConnectorConfig[] = [
     name: 'Alchemy',
     slug: 'alchemy',
     icon: Zap,
+    logoUrl: '/connectors/alchemy.png',
     color: '#0E76FD',
     authType: 'api_key',
     category: 'infrastructure',

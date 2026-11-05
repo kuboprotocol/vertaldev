@@ -11,6 +11,11 @@ const ICONS: Record<string, React.ComponentType<{ className?: string; style?: Re
   'custom-rpc': Server,
 }
 
+// Logos oficiais dos provedores (em /public); quem não tem usa o ícone acima.
+const LOGOS: Record<string, string> = {
+  alchemy: '/connectors/alchemy.png',
+}
+
 export default function ConnectorWeb3HubPage() {
   const navigate = useNavigate()
 
@@ -72,7 +77,9 @@ export default function ConnectorWeb3HubPage() {
                         style={{ backgroundColor: `${p.color}15` }}
                         aria-hidden="true"
                       >
-                        <Icon className="h-6 w-6" style={{ color: p.color }} />
+                        {LOGOS[p.id]
+                          ? <img src={LOGOS[p.id]} alt={p.label} className="h-6 w-6 object-contain" draggable={false} />
+                          : <Icon className="h-6 w-6" style={{ color: p.color }} />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <h2 className="font-semibold text-foreground">{p.label}</h2>
