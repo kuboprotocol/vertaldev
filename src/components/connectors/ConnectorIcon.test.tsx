@@ -11,6 +11,12 @@ describe('ConnectorIcon', () => {
     expect(img.getAttribute('src')).toBe('/connectors/slack.png')
   })
 
+  it('Docker Hub mostra o logo oficial', () => {
+    const dk = connectors.find((c) => c.slug === 'docker')!
+    render(<ConnectorIcon connector={dk} className="h-6 w-6" />)
+    expect(screen.getByRole('img', { name: 'Docker Hub' }).getAttribute('src')).toBe('/connectors/docker.png')
+  })
+
   it('Discord mostra o logo oficial', () => {
     const dc = connectors.find((c) => c.slug === 'discord')!
     render(<ConnectorIcon connector={dc} className="h-6 w-6" />)

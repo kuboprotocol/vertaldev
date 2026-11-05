@@ -328,6 +328,7 @@ export const connectors: ConnectorConfig[] = [
     name: 'Docker Hub',
     slug: 'docker',
     icon: Container,
+    logoUrl: '/connectors/docker.png',
     color: '#2496ED',
     authType: 'api_key',
     category: 'infrastructure',
