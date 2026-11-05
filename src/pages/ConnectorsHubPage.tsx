@@ -9,7 +9,7 @@ import { ConnectorIcon } from '@/components/connectors/ConnectorIcon'
 import { ArrowLeft, Check, Search, Zap, ExternalLink, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { GlobalActivityPanel } from '@/components/connectors/GlobalActivityPanel'
-import { EcosystemActions, PRODUCT_ICONS, useEcosystemDialogs } from '@/components/ecosystem/EcosystemShowcase'
+import { EcosystemActions, ProductLogo, useEcosystemDialogs } from '@/components/ecosystem/EcosystemShowcase'
 import { getEcosystemProduct, siblingsOf } from '@/lib/ecosystem'
 
 type Availability = 'all' | 'available' | 'coming_soon'
@@ -145,12 +145,11 @@ export default function ConnectorsHubPage() {
           </div>
           <div className="relative mt-6 grid gap-4 md:grid-cols-2">
             {siblingsOf('vertal-dev').map(product => {
-              const Icon = PRODUCT_ICONS[product.id]
               return (
                 <div key={product.id} className="rounded-2xl border border-border bg-background/60 p-5 backdrop-blur">
                   <div className="mb-3 flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ backgroundColor: `${product.color}1f` }}>
-                      <Icon className="h-5 w-5" style={{ color: product.color }} />
+                      <ProductLogo product={product} className="h-5 w-5" />
                     </div>
                     <div className="min-w-0">
                       <button

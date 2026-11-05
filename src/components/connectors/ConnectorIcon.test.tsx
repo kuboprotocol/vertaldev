@@ -72,6 +72,18 @@ describe('ConnectorIcon', () => {
     expect(img.getAttribute('src')).toBe('/connectors/gmail.png')
   })
 
+  it('Vertal.app mostra o logo oficial', () => {
+    const app = connectors.find((c) => c.slug === 'vertal-app')!
+    render(<ConnectorIcon connector={app} className="h-6 w-6" />)
+    expect(screen.getByRole('img', { name: 'Vertal.app' }).getAttribute('src')).toBe('/connectors/vertal-app.png')
+  })
+
+  it('Vertal Run mostra o logo oficial', () => {
+    const run = connectors.find((c) => c.slug === 'vertal-run')!
+    render(<ConnectorIcon connector={run} className="h-6 w-6" />)
+    expect(screen.getByRole('img', { name: 'Vertal Run' }).getAttribute('src')).toBe('/connectors/vertal-run.png')
+  })
+
   it('conector sem logo continua com o ícone padrão', () => {
     const other = connectors.find((c) => !c.logoUrl)!
     const { container } = render(<ConnectorIcon connector={other} className="h-6 w-6" />)

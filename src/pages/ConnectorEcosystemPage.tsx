@@ -3,7 +3,7 @@ import { ArrowLeft, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { getEcosystemProduct } from '@/lib/ecosystem'
-import EcosystemShowcase, { EcosystemActions, PRODUCT_ICONS, useEcosystemDialogs } from '@/components/ecosystem/EcosystemShowcase'
+import EcosystemShowcase, { EcosystemActions, ProductLogo, useEcosystemDialogs } from '@/components/ecosystem/EcosystemShowcase'
 import NotFound from './NotFound'
 
 /** Conector de um produto irmão do ecossistema (Vertal.app ou Vertal Run). */
@@ -14,7 +14,6 @@ export default function ConnectorEcosystemPage() {
   const { openEmbed, openMcp, dialogs } = useEcosystemDialogs()
 
   if (!product || product.id === 'vertal-dev') return <NotFound />
-  const Icon = PRODUCT_ICONS[product.id]
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -25,7 +24,7 @@ export default function ConnectorEcosystemPage() {
           </Button>
           <div className="flex-1">
             <h1 className="flex items-center gap-2 font-display text-2xl font-bold">
-              <Icon className="h-5 w-5" style={{ color: product.color }} />
+              <ProductLogo product={product} className="h-5 w-5" />
               {product.name}
             </h1>
             <p className="text-sm text-muted-foreground">Conector do Ecossistema Vertal · {product.domain}</p>
