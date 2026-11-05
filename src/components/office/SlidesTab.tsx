@@ -1,20 +1,26 @@
 // Aba de Apresentação do Vertal Office. Editor e exportação são grátis.
 import React, { useState } from 'react';
-import { Plus, Trash2, Download, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Download, ChevronUp, ChevronDown, List } from 'lucide-react';
 import jsPDF from 'jspdf';
 import {
   DECK_MAX_SLIDES,
+  DECK_THEMES,
   DeckData,
+  DeckThemeId,
   SLIDE_MAX_BULLETS,
   Slide,
   createEmptyDeck,
   deckToHtml,
   deckToText,
   makeSlide,
+  setDeckTheme,
+  themeById,
 } from '@/lib/office/slidesModel';
 import { deckToPptx } from '@/lib/office/officeFiles';
 import { OFFICE_AI_CREDIT_COST, runOfficeAi } from '@/services/officeAiService';
 import { AiPanel } from './AiPanel';
+import { AppFrame } from './AppFrame';
+import { RibbonButton, RibbonGroup, RibbonTab } from './Ribbon';
 
 const DECK_KEY = 'kubo-office-deck-v1';
 
@@ -82,9 +88,10 @@ function deckToPdf(deck: DeckData): ArrayBuffer {
   return pdf.output('arraybuffer');
 }
 
-export function SlidesTab({ creditsAvailable }: { creditsAvailable: number }) {
+export function SlidesTab({ creditsAvailable, assistantOpen }: { creditsAvailable: number; assistantOpen: boolean }) {
   const [deck, setDeck] = useState<DeckData>(loadDeck);
   const [selected, setSelected] = useState(0);
+  const [tab, setTab] = useState('home');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
@@ -97,6 +104,7 @@ export function SlidesTab({ creditsAvailable }: { creditsAvailable: number }) {
   const slides = deck.slides;
   const current: Slide = slides[Math.min(selected, slides.length - 1)] ?? slides[0];
   const index = slides.indexOf(current);
+  const theme = themeById(deck.theme);
 
   const updateSlide = (patch: Partial<Slide>) =>
     commit({ ...deck, slides: slides.map((s) => (s.id === current.id ? { ...s, ...patch } : s)) });
@@ -123,6 +131,11 @@ export function SlidesTab({ creditsAvailable }: { creditsAvailable: number }) {
     setSelected(index + 1);
   };
 
+  const addBullet = () => {
+    if (current.bullets.length >= SLIDE_MAX_BULLETS) return;
+    updateSlide({ bullets: [...current.bullets, ''] });
+  };
+
   /** IA: adiciona os slides gerados depois do slide atual (ou substitui a apresentação vazia). Não apaga nada. */
   const runAi = async (prompt: string, source: string) => {
     setBusy(true);
@@ -132,9 +145,7 @@ export function SlidesTab({ creditsAvailable }: { creditsAvailable: number }) {
       if (res.action !== 'slides') throw new Error('Resposta inesperada da IA.');
       const generated = res.output.slides.map((g) => makeSlide(g.title, g.bullets));
       const hasContent = slides.some((sl) => sl.title.trim() || sl.bullets.some((b) => b.trim()));
-      const merged = hasContent
-        ? [...slides.slice(0, index + 1), ...generated, ...slides.slice(index + 1)]
-        : generated;
+      const merged = hasContent ? [...slides.slice(0, index + 1), ...generated, ...slides.slice(index + 1)] : generated;
       commit({
         ...deck,
         title: deck.title.startsWith('Apresentação sem') ? res.output.title : deck.title,
@@ -149,156 +160,193 @@ export function SlidesTab({ creditsAvailable }: { creditsAvailable: number }) {
     }
   };
 
-  const bulletsText = current.bullets.join('\n');
   const safe = safeName(deck.title);
 
-  const field =
-    'mt-1 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 transition focus:border-amber-400/50 focus:outline-none focus:ring-2 focus:ring-amber-400/30';
+  const ribbons: Record<string, React.ReactNode> = {
+    home: (
+      <>
+        <RibbonGroup label="Slide">
+          <RibbonButton wide icon={<Plus className="h-4 w-4" />} label="Novo slide" onClick={addSlide} />
+          <RibbonButton wide icon={<ChevronUp className="h-4 w-4" />} label="Subir" onClick={() => move(-1)} />
+          <RibbonButton wide icon={<ChevronDown className="h-4 w-4" />} label="Descer" onClick={() => move(1)} />
+          <RibbonButton wide icon={<Trash2 className="h-4 w-4" />} label="Remover" onClick={removeCurrent} />
+        </RibbonGroup>
+        <RibbonGroup label="Tema">
+          <div className="flex items-center gap-1.5 px-0.5">
+            {DECK_THEMES.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                aria-label={`Tema: ${t.label}`}
+                aria-pressed={theme.id === t.id}
+                title={`Tema ${t.label}`}
+                onClick={() => commit(setDeckTheme(deck, t.id as DeckThemeId))}
+                className={`flex h-8 w-[72px] items-center justify-center overflow-hidden whitespace-nowrap rounded-md border text-[11px] font-semibold transition ${
+                  theme.id === t.id ? 'border-blue-500 ring-2 ring-blue-200' : 'border-slate-300 hover:border-slate-400'
+                }`}
+                style={{ background: t.bg, color: t.fg }}
+              >
+                <span className="block h-1 w-6 rounded" style={{ background: t.accent }} aria-hidden />
+                <span className="ml-1">{t.label}</span>
+              </button>
+            ))}
+          </div>
+        </RibbonGroup>
+      </>
+    ),
+    insert: (
+      <>
+        <RibbonGroup label="Conteúdo">
+          <RibbonButton wide icon={<Plus className="h-4 w-4" />} label="Novo slide" onClick={addSlide} />
+          <RibbonButton wide icon={<List className="h-4 w-4" />} label="Tópico" onClick={addBullet} />
+        </RibbonGroup>
+      </>
+    ),
+    share: (
+      <>
+        <RibbonGroup label="Exportar">
+          <RibbonButton wide icon={<Download className="h-4 w-4" />} label="PDF" onClick={() => download(deckToPdf(deck), `${safe}.pdf`, 'application/pdf')} />
+          <RibbonButton wide icon={<span className="text-[10px] font-bold">HTML</span>} label="HTML" onClick={() => download(deckToHtml(deck), `${safe}.html`, 'text/html;charset=utf-8')} />
+          <RibbonButton wide icon={<span className="text-[10px] font-bold">TXT</span>} label="Texto" onClick={() => download(deckToText(deck), `${safe}.txt`, 'text/plain;charset=utf-8')} />
+          <RibbonButton
+            wide
+            icon={<span className="text-[10px] font-bold">PPTX</span>}
+            label="PowerPoint (.pptx)"
+            onClick={() =>
+              deckToPptx(deck).then((b) =>
+                download(b, `${safe}.pptx`, 'application/vnd.openxmlformats-officedocument.presentationml.presentation'),
+              )
+            }
+          />
+        </RibbonGroup>
+      </>
+    ),
+  };
+
+  const tabs: RibbonTab[] = [
+    { id: 'home', label: 'Início' },
+    { id: 'insert', label: 'Inserir' },
+    { id: 'share', label: 'Compartilhar' },
+  ];
+
+  const bulletsText = current.bullets.join('\n');
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-2 border-b border-white/10 pb-4">
-        <input
-          value={deck.title}
-          onChange={(e) => commit({ ...deck, title: e.target.value })}
-          aria-label="Título da apresentação"
-          placeholder="Título da apresentação"
-          className="mr-auto min-w-0 flex-1 bg-transparent text-xl font-bold text-white placeholder:text-slate-600 focus:outline-none sm:text-2xl"
-        />
-        <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] font-medium text-amber-200">
-          {slides.length} de {DECK_MAX_SLIDES} slides
-        </span>
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-[220px_1fr]">
-        <ol className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-y-auto lg:pb-0 lg:pr-1" aria-label="Slides">
-          {slides.map((s, i) => (
-            <li key={s.id} className="shrink-0 lg:shrink">
+    <AppFrame
+      title={deck.title}
+      titleLabel="Título da apresentação"
+      titlePlaceholder="Apresentação sem título"
+      onTitle={(title) => commit({ ...deck, title })}
+      tabs={tabs}
+      activeTab={tab}
+      onTab={setTab}
+      ribbons={ribbons}
+      workspaceClass="bg-[#e9ecef]"
+      canvas={
+        <div className="flex h-full min-h-[560px] flex-col sm:flex-row">
+          {/* Painel de miniaturas, como nas suítes de apresentação. */}
+          <ol
+            aria-label="Slides"
+            className="flex shrink-0 gap-2 overflow-x-auto border-b border-slate-300 bg-slate-200/70 p-3 sm:w-52 sm:flex-col sm:overflow-y-auto sm:overflow-x-hidden sm:border-b-0 sm:border-r"
+          >
+            {slides.map((s, i) => {
+              const t = themeById(deck.theme);
+              const on = s.id === current.id;
+              return (
+                <li key={s.id} className="shrink-0 sm:shrink">
+                  <button
+                    type="button"
+                    onClick={() => setSelected(i)}
+                    aria-current={on}
+                    className={`group relative w-40 rounded-md p-1 text-left transition sm:w-full ${
+                      on ? 'bg-blue-100 ring-2 ring-blue-500' : 'hover:bg-white/70'
+                    }`}
+                  >
+                    <span className="absolute left-1.5 top-1.5 rounded bg-white/90 px-1 text-[10px] font-semibold text-slate-600">{i + 1}</span>
+                    <span
+                      className="flex aspect-video w-full flex-col justify-center overflow-hidden rounded-sm px-3 shadow-sm ring-1 ring-black/10"
+                      style={{ background: t.bg, color: t.fg }}
+                    >
+                      <span className="line-clamp-2 text-[11px] font-bold leading-tight">{s.title || 'Sem título'}</span>
+                      <span className="mt-1 h-0.5 w-8 rounded" style={{ background: t.accent }} aria-hidden />
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+            <li className="shrink-0 sm:shrink">
               <button
                 type="button"
-                onClick={() => setSelected(i)}
-                aria-current={s.id === current.id}
-                className={`w-44 rounded-xl border p-2 text-left transition lg:w-full ${
-                  s.id === current.id
-                    ? 'border-amber-400/60 bg-amber-400/10 text-white shadow-lg shadow-amber-900/20'
-                    : 'border-white/10 bg-slate-950/50 text-slate-300 hover:border-white/20 hover:bg-white/5'
-                }`}
+                onClick={addSlide}
+                disabled={slides.length >= DECK_MAX_SLIDES}
+                className="flex h-full min-h-[64px] w-40 items-center justify-center gap-1.5 rounded-md border border-dashed border-slate-400 text-xs font-medium text-slate-600 transition hover:bg-white/70 disabled:opacity-40 sm:w-full"
               >
-                <span className="flex aspect-video w-full flex-col justify-center overflow-hidden rounded-md bg-gradient-to-br from-slate-100 to-slate-300 px-2 text-slate-900">
-                  <span className="line-clamp-2 text-[10px] font-bold leading-tight">{s.title || 'Sem título'}</span>
-                </span>
-                <span className="mt-1.5 block text-[10px] font-medium text-slate-500">Slide {i + 1}</span>
+                <Plus className="h-3.5 w-3.5" /> Novo slide
               </button>
             </li>
-          ))}
-          <li className="shrink-0 lg:shrink">
-            <button
-              type="button"
-              onClick={addSlide}
-              disabled={slides.length >= DECK_MAX_SLIDES}
-              className="inline-flex h-full min-h-[84px] w-44 items-center justify-center gap-1.5 rounded-xl border border-dashed border-white/15 p-2 text-xs font-medium text-slate-300 transition hover:border-amber-400/40 hover:bg-amber-400/5 disabled:opacity-40 lg:w-full"
+          </ol>
+
+          <div className="flex min-w-0 flex-1 flex-col items-center gap-3 p-4 sm:p-8">
+            {/* Palco do slide em 16:9. Título e tópicos são editados no próprio slide. */}
+            <div
+              className="relative aspect-video w-full max-w-[860px] overflow-hidden rounded-sm p-6 shadow-[0_2px_4px_rgba(15,23,42,0.2),0_12px_32px_-8px_rgba(15,23,42,0.35)] sm:p-12"
+              style={{ background: theme.bg, color: theme.fg }}
             >
-              <Plus className="h-3.5 w-3.5" /> Novo slide
-            </button>
-          </li>
-        </ol>
-
-        <div className="space-y-4">
-          {/* Palco do slide em 16:9, com faixa de acento e tipografia de apresentação. */}
-          <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-gradient-to-br from-white via-white to-amber-50 p-6 text-slate-900 shadow-2xl shadow-black/40 ring-1 ring-black/5 sm:p-10">
-            <span className="absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-amber-400 to-fuchsia-500" aria-hidden />
-            <span className="absolute bottom-4 right-6 text-[10px] font-semibold uppercase tracking-widest text-slate-400" aria-hidden>
-              {index + 1} / {slides.length}
-            </span>
-            <h3 className="font-['Unbounded'] text-xl font-bold leading-tight tracking-tight sm:text-3xl">{current.title || 'Sem título'}</h3>
-            <ul className="mt-4 space-y-2 text-sm text-slate-700 sm:text-lg">
-              {current.bullets.map((b, i) => (
-                <li key={i} className="flex gap-3">
-                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden />
-                  <span>{b}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block text-xs font-medium text-slate-400">
-              Título do slide
-              <input
+              <span className="absolute inset-x-0 top-0 h-1.5" style={{ background: theme.accent }} aria-hidden />
+              <textarea
                 value={current.title}
                 onChange={(e) => updateSlide({ title: e.target.value })}
-                className={field}
+                aria-label="Título do slide"
+                placeholder="Título do slide"
+                rows={2}
+                className="w-full resize-none bg-transparent font-['Unbounded'] text-lg font-bold leading-tight tracking-tight placeholder:opacity-40 focus:outline-none sm:text-3xl"
+                style={{ color: theme.fg }}
               />
-            </label>
-            <label className="block text-xs font-medium text-slate-400">
-              Tópicos (um por linha, até {SLIDE_MAX_BULLETS})
               <textarea
                 value={bulletsText}
                 onChange={(e) => updateSlide({ bullets: e.target.value.split('\n').slice(0, SLIDE_MAX_BULLETS) })}
-                rows={4}
-                className={field}
+                aria-label="Tópicos do slide"
+                placeholder="Um tópico por linha"
+                rows={6}
+                className="mt-4 w-full resize-none bg-transparent text-sm leading-relaxed placeholder:opacity-40 focus:outline-none sm:mt-6 sm:text-lg"
+                style={{ color: theme.fg }}
               />
-            </label>
+              <span className="absolute bottom-3 right-5 text-[11px] font-medium opacity-50" aria-hidden>
+                {index + 1} / {slides.length}
+              </span>
+            </div>
           </div>
-
+        </div>
+      }
+      assistant={
+        assistantOpen ? (
+          <AiPanel
+            placeholder="Ex.: Apresentação de 6 slides sobre o lançamento de uma cafeteria de bairro."
+            creditsAvailable={creditsAvailable}
+            busy={busy}
+            onRun={runAi}
+            actionLabel={`Gerar slides com IA · ${OFFICE_AI_CREDIT_COST} crédito`}
+          />
+        ) : null
+      }
+      status={
+        <>
+          <div className="flex flex-wrap items-center gap-3">
+            <span>
+              Slide {index + 1} de {slides.length}
+            </span>
+            {message && (
+              <span role="status" className={message.kind === 'ok' ? 'text-emerald-700' : 'text-red-700'}>
+                {message.text}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-1.5">
-            <button type="button" onClick={() => move(-1)} aria-label="Mover slide para cima" className="rounded-lg border border-white/10 p-2 text-slate-300 transition hover:border-white/20 hover:bg-white/5">
-              <ChevronUp className="h-4 w-4" />
-            </button>
-            <button type="button" onClick={() => move(1)} aria-label="Mover slide para baixo" className="rounded-lg border border-white/10 p-2 text-slate-300 transition hover:border-white/20 hover:bg-white/5">
-              <ChevronDown className="h-4 w-4" />
-            </button>
-            <button type="button" onClick={removeCurrent} aria-label="Remover slide" className="rounded-lg border border-white/10 p-2 text-slate-500 transition hover:border-red-400/30 hover:bg-red-400/10 hover:text-red-300">
-              <Trash2 className="h-4 w-4" />
-            </button>
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+            Salvo neste navegador
           </div>
-        </div>
-      </div>
-
-      <AiPanel
-        placeholder="Ex.: Apresentação de 6 slides sobre o lançamento de uma cafeteria de bairro."
-        creditsAvailable={creditsAvailable}
-        busy={busy}
-        onRun={runAi}
-        actionLabel={`Gerar slides com IA · ${OFFICE_AI_CREDIT_COST} crédito`}
-      />
-
-      {message && (
-        <p
-          role="status"
-          className={`rounded-lg border px-3 py-2 text-sm ${
-            message.kind === 'ok' ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200' : 'border-red-400/30 bg-red-400/10 text-red-200'
-          }`}
-        >
-          {message.text}
-        </p>
-      )}
-
-      <div className="flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2 text-xs text-slate-400">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" aria-hidden />
-          {slides.length} slides · salvo neste navegador
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="mr-1 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Exportar</span>
-          <ExportBtn label="PDF" onClick={() => download(deckToPdf(deck), `${safe}.pdf`, 'application/pdf')} />
-          <ExportBtn label="HTML" onClick={() => download(deckToHtml(deck), `${safe}.html`, 'text/html;charset=utf-8')} />
-          <ExportBtn label="Texto" onClick={() => download(deckToText(deck), `${safe}.txt`, 'text/plain;charset=utf-8')} />
-          <ExportBtn label="PowerPoint (.pptx)" onClick={() => deckToPptx(deck).then((b) => download(b, `${safe}.pptx`, 'application/vnd.openxmlformats-officedocument.presentationml.presentation'))} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ExportBtn({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/5"
-    >
-      <Download className="h-3.5 w-3.5" /> {label}
-    </button>
+        </>
+      }
+    />
   );
 }

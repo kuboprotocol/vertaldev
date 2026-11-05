@@ -12,7 +12,7 @@ interface AiPanelProps {
 }
 
 const FIELD =
-  'w-full rounded-xl border border-white/10 bg-slate-950/70 p-3 text-sm text-slate-100 placeholder:text-slate-500 transition focus:border-violet-400/50 focus:outline-none focus:ring-2 focus:ring-violet-400/30';
+  'w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm text-slate-800 placeholder:text-slate-400 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200';
 
 /** Bloco da IA: pedido, material opcional e botão com o custo visível. */
 export function AiPanel({ placeholder, creditsAvailable, busy, onRun, actionLabel }: AiPanelProps) {
@@ -22,30 +22,28 @@ export function AiPanel({ placeholder, creditsAvailable, busy, onRun, actionLabe
   const canRun = !busy && hasCredit && prompt.trim().length >= 3;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-violet-400/20 bg-gradient-to-br from-violet-500/10 via-slate-900/60 to-fuchsia-500/10 p-4 sm:p-5">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-md shadow-fuchsia-900/30">
-            <Sparkles className="h-3.5 w-3.5" aria-hidden />
-          </span>
-          <span className="text-sm font-semibold text-violet-100">Assistente de IA</span>
-        </div>
-        <span className="rounded-full border border-violet-300/20 bg-violet-400/10 px-2.5 py-0.5 text-[11px] font-medium text-violet-200">
-          {OFFICE_AI_CREDIT_COST} crédito por uso
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-sm">
+          <Sparkles className="h-3.5 w-3.5" aria-hidden />
         </span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-900">Assistente de IA</p>
+          <p className="text-[11px] text-slate-500">Escreve e organiza a partir do seu pedido</p>
+        </div>
       </div>
 
       <textarea
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         placeholder={placeholder}
-        rows={2}
+        rows={3}
         aria-label="Pedido para a IA"
         className={FIELD}
       />
 
-      <details className="group mt-2 text-xs text-slate-400">
-        <summary className="inline-flex cursor-pointer select-none items-center gap-1 rounded-md py-1 text-slate-400 hover:text-slate-200">
+      <details className="group text-xs text-slate-500">
+        <summary className="inline-flex cursor-pointer select-none items-center gap-1 rounded py-1 hover:text-slate-800">
           <ChevronDown className="h-3.5 w-3.5 transition group-open:rotate-180" aria-hidden />
           Colar dados ou texto de referência (opcional)
         </summary>
@@ -59,22 +57,22 @@ export function AiPanel({ placeholder, creditsAvailable, busy, onRun, actionLabe
         />
       </details>
 
-      <div className="mt-4 flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
-        <span className="text-xs text-slate-400">
+      <div className="flex flex-col gap-2 border-t border-slate-200 pt-3">
+        <span className="text-xs text-slate-500">
           Custa {OFFICE_AI_CREDIT_COST} crédito por uso · você tem {creditsAvailable}
         </span>
         <button
           type="button"
           disabled={!canRun}
           onClick={() => onRun(prompt.trim(), source.trim())}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-fuchsia-900/30 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Sparkles className="h-4 w-4" aria-hidden />}
           {busy ? 'Gerando…' : actionLabel}
         </button>
       </div>
       {!hasCredit && (
-        <p className="mt-3 rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
           Sem créditos. O editor continua funcionando normalmente.
         </p>
       )}

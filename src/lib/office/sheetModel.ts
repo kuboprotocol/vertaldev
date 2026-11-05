@@ -5,10 +5,31 @@ import { CellMap, columnLetters, evaluateAll, parseRef, toRef } from './formulas
 export const SHEET_MAX_ROWS = 200;
 export const SHEET_MAX_COLS = 26;
 
+export type CellAlign = 'left' | 'center' | 'right';
+
+/** Formatação opcional da célula. Ausente = padrão. */
+export interface CellStyle {
+  bold?: boolean;
+  italic?: boolean;
+  align?: CellAlign;
+  /** Cor de fundo em hexadecimal, ou null para remover. */
+  fill?: string | null;
+}
+
+export const CELL_FILLS: Array<{ label: string; color: string | null }> = [
+  { label: 'Sem preenchimento', color: null },
+  { label: 'Amarelo', color: '#fef3c7' },
+  { label: 'Verde', color: '#dcfce7' },
+  { label: 'Azul', color: '#dbeafe' },
+  { label: 'Rosa', color: '#fce7f3' },
+];
+
 export interface SheetData {
   id: string;
   title: string;
   cells: CellMap;
+  /** Formatação por célula (ex.: "A1"). Opcional: planilhas antigas não têm. */
+  styles?: Record<string, CellStyle>;
   updatedAt: string;
 }
 
@@ -101,4 +122,38 @@ export function sheetToXlsx(sheet: SheetData): ArrayBuffer {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, (sheet.title || 'Planilha').slice(0, 31));
   return XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+}
+
+/**
+ * Aplica formatação às células indicadas. Não muda o objeto original.
+ * Célula sem estilo após a mudança sai do mapa para não acumular lixo.
+ */
+export function styleCells(sheet: SheetData, refs: string[], patch: CellStyle): SheetData {
+  const styles = { ...(sheet.styles ?? {}) };
+  for (const ref of refs) {
+    const parsed = parseRef(ref);
+    if (!parsed) continue;
+    const key = toRef(parsed.col, parsed.row);
+    const next: CellStyle = { ...styles[key], ...patch };
+    if (next.fill === null) delete next.fill;
+    if (!next.bold) delete next.bold;
+    if (!next.italic) delete next.italic;
+    if (!next.align || next.align === 'left') delete next.align;
+    if (Object.keys(next).length === 0) delete styles[key];
+    else styles[key] = next;
+  }
+  return { ...sheet, styles, updatedAt: new Date().toISOString() };
+}
+
+export type SheetFunction = 'SUM' | 'AVERAGE' | 'COUNT';
+
+/**
+ * Sugere a fórmula da coluna da célula: soma/média/contagem de tudo que está
+ * acima dela, na mesma coluna. Na primeira linha não há nada acima.
+ */
+export function suggestFormula(fn: SheetFunction, ref: string): string {
+  const parsed = parseRef(ref);
+  if (!parsed || parsed.row <= 1) return `=${fn}()`;
+  const col = columnLetters(parsed.col);
+  return `=${fn}(${col}1:${col}${parsed.row - 1})`;
 }
