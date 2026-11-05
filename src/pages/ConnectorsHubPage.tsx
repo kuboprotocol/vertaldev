@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { connectors, categories, type ConnectorConfig } from '@/lib/connectorsConfig'
+import { ConnectorIcon } from '@/components/connectors/ConnectorIcon'
 import { ArrowLeft, Check, Search, Zap, ExternalLink, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { GlobalActivityPanel } from '@/components/connectors/GlobalActivityPanel'
@@ -274,7 +275,7 @@ export default function ConnectorsHubPage() {
                   className="flex items-center justify-center h-12 w-12 rounded-xl transition-transform group-hover:scale-110"
                   style={{ backgroundColor: `${connector.color}15` }}
                 >
-                  <connector.icon className="h-6 w-6" style={{ color: connector.color }} />
+                  <ConnectorIcon connector={connector} className="h-6 w-6" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">

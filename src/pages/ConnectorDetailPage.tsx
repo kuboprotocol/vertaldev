@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { getConnectorBySlug } from '@/lib/connectorsConfig'
+import { ConnectorIcon } from '@/components/connectors/ConnectorIcon'
 import { useGitHubConnection } from '@/hooks/useGitHubConnection'
 import { useAuth } from '@/hooks/useAuth'
 import {
@@ -808,7 +809,7 @@ export default function ConnectorDetailPage() {
             className="flex items-center justify-center h-10 w-10 rounded-xl"
             style={{ backgroundColor: `${connector.color}15` }}
           >
-            <connector.icon className="h-5 w-5" style={{ color: connector.color }} />
+            <ConnectorIcon connector={connector} className="h-5 w-5" />
           </div>
           <div className="flex-1">
             <h1 className="text-xl font-bold font-display">{connector.name}</h1>

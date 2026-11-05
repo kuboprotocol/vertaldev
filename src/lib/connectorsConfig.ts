@@ -10,6 +10,8 @@ export interface ConnectorConfig {
   name: string
   slug: string
   icon: LucideIcon
+  /** Logo oficial (em /public). Quando existe, aparece no lugar do ícone. */
+  logoUrl?: string
   color: string
   authType: 'oauth' | 'api_key' | 'webhook' | 'manual'
   category: 'ecosystem' | 'development' | 'payments' | 'design' | 'infrastructure' | 'communication' | 'analytics'
@@ -211,6 +213,7 @@ export const connectors: ConnectorConfig[] = [
     name: 'Slack',
     slug: 'slack',
     icon: MessageSquare,
+    logoUrl: '/connectors/slack.png',
     color: '#4A154B',
     authType: 'oauth',
     category: 'communication',
