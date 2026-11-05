@@ -1,5 +1,5 @@
 // Chaves de acesso do servidor MCP (formato vtl_mcp_<43 caracteres base64url>).
-// Usado pela função `mcp` (validação) e por `mcp-access-keys` (criação).
+// Usado pela função `mcp` (validação e rota /keys, em keys.ts).
 
 export const MCP_KEY_PREFIX = "vtl_mcp_";
 export const MCP_SCOPES = ["read", "write"] as const;
