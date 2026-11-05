@@ -6,6 +6,7 @@ import type { LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { connectors } from '@/lib/connectorsConfig'
 import {
   ECOSYSTEM,
   ECOSYSTEM_COMPARISON,
@@ -17,6 +18,14 @@ import {
 import { EcosystemEmbedDialog, EcosystemMcpDialog, ecosystemLink } from './EcosystemDialogs'
 
 const CURRENT: EcosystemProductId = 'vertal-dev'
+
+/** Logo oficial do produto (`logoUrl` do conector) ou, se não houver, o ícone padrão do produto. */
+export function ProductLogo({ product, className }: { product: EcosystemProduct; className?: string }) {
+  const logo = connectors.find(c => c.slug === product.id)?.logoUrl
+  if (logo) return <img src={logo} alt={product.name} className={cn(className, 'object-contain')} draggable={false} />
+  const Icon = PRODUCT_ICONS[product.id]
+  return <Icon className={className} style={{ color: product.color }} />
+}
 
 export const PRODUCT_ICONS: Record<EcosystemProductId, LucideIcon> = {
   'vertal-dev': Code2,
@@ -100,7 +109,7 @@ function ProductCard({
           className="flex h-12 w-12 items-center justify-center rounded-2xl"
           style={{ backgroundColor: `${product.color}1f` }}
         >
-          <Icon className="h-6 w-6" style={{ color: product.color }} />
+          <ProductLogo product={product} className="h-6 w-6" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: product.color }}>
