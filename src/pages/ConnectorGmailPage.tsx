@@ -391,7 +391,7 @@ export default function ConnectorGmailPage() {
           </Button>
           <div className="flex-1">
             <h1 className="text-xl font-bold font-['Orbitron'] flex items-center gap-2">
-              <Mail className="h-5 w-5 text-[#C9941A]" /> Gmail
+              <img src="/connectors/gmail.png" alt="" className="h-5 w-5 object-contain" draggable={false} /> Gmail
             </h1>
             <p className="text-sm text-muted-foreground">Conecte suas contas Gmail para leitura e envio via IA.</p>
           </div>

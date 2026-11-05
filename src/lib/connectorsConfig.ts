@@ -191,6 +191,7 @@ export const connectors: ConnectorConfig[] = [
     name: 'Gmail',
     slug: 'gmail',
     icon: Mail,
+    logoUrl: '/connectors/gmail.png',
     color: '#EA4335',
     authType: 'oauth',
     category: 'communication',
