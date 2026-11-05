@@ -11,6 +11,12 @@ describe('ConnectorIcon', () => {
     expect(img.getAttribute('src')).toBe('/connectors/slack.png')
   })
 
+  it('Supabase mostra o logo oficial', () => {
+    const sb = connectors.find((c) => c.slug === 'supabase')!
+    render(<ConnectorIcon connector={sb} className="h-6 w-6" />)
+    expect(screen.getByRole('img', { name: 'Supabase' }).getAttribute('src')).toBe('/connectors/supabase.png')
+  })
+
   it('Cloudflare mostra o logo oficial', () => {
     const cf = connectors.find((c) => c.slug === 'cloudflare')!
     render(<ConnectorIcon connector={cf} className="h-6 w-6" />)

@@ -148,6 +148,7 @@ export const connectors: ConnectorConfig[] = [
     name: 'Supabase',
     slug: 'supabase',
     icon: Database,
+    logoUrl: '/connectors/supabase.png',
     color: '#3ECF8E',
     authType: 'api_key',
     category: 'infrastructure',
