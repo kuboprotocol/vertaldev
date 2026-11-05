@@ -126,6 +126,7 @@ export const connectors: ConnectorConfig[] = [
     name: 'Figma',
     slug: 'figma',
     icon: Figma,
+    logoUrl: '/connectors/figma.png',
     color: '#F24E1E',
     authType: 'api_key',
     category: 'design',
