@@ -108,6 +108,12 @@ print(data)`,
               O Model Context Protocol (MCP) é um protocolo aberto para comunicação entre aplicações e modelos de IA.
               Use o MCP do Vertal para integrar inteligência artificial em seus projetos.
             </p>
+            <Button asChild>
+              <Link to="/mcp">
+                <Key className="mr-2 h-4 w-4" />
+                Gerar chave e conectar meu cliente
+              </Link>
+            </Button>
           </div>
 
           {/* Quick Start */}

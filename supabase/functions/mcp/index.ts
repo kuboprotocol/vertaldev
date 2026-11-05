@@ -2,9 +2,11 @@
 //   POST /functions/v1/mcp                                      → JSON-RPC (MCP)
 //   GET  /functions/v1/mcp/.well-known/oauth-protected-resource → metadados OAuth
 // verify_jwt = false: a função valida o token ela mesma, porque o 401 precisa
-// do cabeçalho WWW-Authenticate para o cliente MCP achar o login.
+// do cabeçalho WWW-Authenticate para o cliente MCP achar o login, e as chaves
+// vtl_mcp_ não são JWT (o gateway as rejeitaria antes de chegar aqui).
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { handleMessage, type JsonRpcRequest } from "./server.ts";
+import { handleMessage, type JsonRpcRequest, type Scope } from "./server.ts";
+import { hashMcpKey, hasValidMcpKeyShape, isKeyActive, isMcpAccessKey } from "../_shared/mcpKeys.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,6 +30,44 @@ function endpoints() {
     metadataUrl: `${resource}/.well-known/oauth-protected-resource`,
     issuer: `${base}/auth/v1`,
   };
+}
+
+type Auth = { userId: string; scopes: Scope[]; db: ReturnType<typeof createClient> };
+
+/**
+ * Chave vtl_mcp_: valida o hash no banco e usa service role, filtrando sempre
+ * pelo dono da chave (não há JWT para o RLS trabalhar). Retorna null se inválida.
+ */
+async function authFromAccessKey(token: string): Promise<Auth | null> {
+  if (!hasValidMcpKeyShape(token)) return null;
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data: row, error } = await admin
+    .from("mcp_access_keys")
+    .select("id,user_id,scopes,expires_at,revoked_at")
+    .eq("key_hash", await hashMcpKey(token))
+    .maybeSingle();
+  if (error || !row || !isKeyActive(row)) return null;
+
+  // Marca o uso sem bloquear a resposta em caso de falha.
+  try {
+    await admin.from("mcp_access_keys").update({ last_used_at: new Date().toISOString() }).eq("id", row.id);
+  } catch {
+    // ignorado: o uso é só informativo
+  }
+  return { userId: row.user_id, scopes: row.scopes as Scope[], db: admin };
+}
+
+/** Access token do Supabase Auth (OAuth): acesso total, como o próprio usuário, com RLS. */
+async function authFromJwt(token: string): Promise<Auth | null> {
+  const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data: userRes, error: userErr } = await db.auth.getUser(token);
+  if (userErr || !userRes?.user) return null;
+  return { userId: userRes.user.id, scopes: ["read", "write"], db };
 }
 
 Deno.serve(async (req) => {
@@ -56,15 +96,15 @@ Deno.serve(async (req) => {
     });
 
   const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
-  if (!token) return unauthorized("Login necessário");
+  if (!token) return unauthorized("Login ou chave de acesso necessária");
 
-  const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data: userRes, error: userErr } = await db.auth.getUser(token);
-  if (userErr || !userRes?.user) return unauthorized("Token inválido ou expirado");
-  const ctx = { db, userId: userRes.user.id };
+  const auth = isMcpAccessKey(token) ? await authFromAccessKey(token) : await authFromJwt(token);
+  if (!auth) {
+    return unauthorized(
+      isMcpAccessKey(token) ? "Chave inválida, revogada ou expirada" : "Token inválido ou expirado",
+    );
+  }
+  const ctx = { db: auth.db, userId: auth.userId, scopes: auth.scopes };
 
   let body: unknown;
   try {
