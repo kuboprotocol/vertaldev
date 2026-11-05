@@ -35,6 +35,7 @@ export const connectors: ConnectorConfig[] = [
     name: 'Vertal.app',
     slug: 'vertal-app',
     icon: Rocket,
+    logoUrl: '/connectors/vertal-app.png',
     color: '#8B5CF6',
     authType: 'oauth',
     category: 'ecosystem',
