@@ -238,6 +238,7 @@ export const connectors: ConnectorConfig[] = [
     name: 'Render',
     slug: 'render',
     icon: Server,
+    logoUrl: '/connectors/render.png',
     color: '#46E3B7',
     authType: 'api_key',
     category: 'infrastructure',
