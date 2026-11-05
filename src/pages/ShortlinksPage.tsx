@@ -10,6 +10,8 @@ import { useAuth } from '@/hooks/useAuth'
 import AnimatedLogo from '@/components/branding/AnimatedLogo'
 import ShortlinksUploader from '@/components/shortlinks/ShortlinksUploader'
 import ShortlinksList from '@/components/shortlinks/ShortlinksList'
+import RewardBanner from '@/components/rewards/RewardBanner'
+import VideoAdRewardCard from '@/components/rewards/VideoAdRewardCard'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 
@@ -102,13 +104,32 @@ export default function ShortlinksPage() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-10">
+      <div className="max-w-6xl mx-auto px-4 md:px-6 pt-6">
+        <RewardBanner slot="top" />
+      </div>
+
+      <main className="max-w-6xl mx-auto px-4 md:px-6 py-10">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[180px_minmax(0,1fr)_180px]">
+          <aside className="hidden lg:block lg:sticky lg:top-28 lg:self-start">
+            <RewardBanner slot="left" />
+          </aside>
+
+          <div className="min-w-0">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           className="space-y-8"
         >
+          {/* Recompensa por vídeo (1 por hora) */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.05 }}
+          >
+            <VideoAdRewardCard />
+          </motion.div>
+
           {/* Overview Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <motion.div
@@ -260,7 +281,17 @@ export default function ShortlinksPage() {
             />
           </motion.div>
         </motion.div>
+          </div>
+
+          <aside className="hidden lg:block lg:sticky lg:top-28 lg:self-start">
+            <RewardBanner slot="right" />
+          </aside>
+        </div>
       </main>
+
+      <div className="max-w-6xl mx-auto px-4 md:px-6 pb-10">
+        <RewardBanner slot="bottom" />
+      </div>
     </div>
   )
 }
