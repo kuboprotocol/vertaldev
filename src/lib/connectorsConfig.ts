@@ -105,6 +105,7 @@ export const connectors: ConnectorConfig[] = [
     name: 'Stripe',
     slug: 'stripe',
     icon: CreditCard,
+    logoUrl: '/connectors/stripe.png',
     color: '#635BFF',
     authType: 'api_key',
     category: 'payments',
