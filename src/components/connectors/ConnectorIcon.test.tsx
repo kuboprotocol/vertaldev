@@ -78,6 +78,12 @@ describe('ConnectorIcon', () => {
     expect(screen.getByRole('img', { name: 'Vertal.app' }).getAttribute('src')).toBe('/connectors/vertal-app.png')
   })
 
+  it('Vertal Run mostra o logo oficial', () => {
+    const run = connectors.find((c) => c.slug === 'vertal-run')!
+    render(<ConnectorIcon connector={run} className="h-6 w-6" />)
+    expect(screen.getByRole('img', { name: 'Vertal Run' }).getAttribute('src')).toBe('/connectors/vertal-run.png')
+  })
+
   it('conector sem logo continua com o ícone padrão', () => {
     const other = connectors.find((c) => !c.logoUrl)!
     const { container } = render(<ConnectorIcon connector={other} className="h-6 w-6" />)

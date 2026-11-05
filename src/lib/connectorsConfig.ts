@@ -59,6 +59,7 @@ export const connectors: ConnectorConfig[] = [
     name: 'Vertal Run',
     slug: 'vertal-run',
     icon: Terminal,
+    logoUrl: '/connectors/vertal-run.png',
     color: '#22D3EE',
     authType: 'api_key',
     category: 'ecosystem',
