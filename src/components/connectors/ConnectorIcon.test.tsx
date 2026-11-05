@@ -11,6 +11,12 @@ describe('ConnectorIcon', () => {
     expect(img.getAttribute('src')).toBe('/connectors/slack.png')
   })
 
+  it('Discord mostra o logo oficial', () => {
+    const dc = connectors.find((c) => c.slug === 'discord')!
+    render(<ConnectorIcon connector={dc} className="h-6 w-6" />)
+    expect(screen.getByRole('img', { name: 'Discord' }).getAttribute('src')).toBe('/connectors/discord.png')
+  })
+
   it('Alchemy mostra o logo oficial', () => {
     const al = connectors.find((c) => c.slug === 'alchemy')!
     render(<ConnectorIcon connector={al} className="h-6 w-6" />)

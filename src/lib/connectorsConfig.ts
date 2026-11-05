@@ -261,6 +261,7 @@ export const connectors: ConnectorConfig[] = [
     name: 'Discord',
     slug: 'discord',
     icon: MessageSquare,
+    logoUrl: '/connectors/discord.png',
     color: '#5865F2',
     authType: 'api_key',
     category: 'communication',
