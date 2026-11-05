@@ -19,6 +19,8 @@ project_id = "sccizjlpwezsgaxkclot"
     verify_jwt = false
   [functions.gmail-sync-accounts]
     verify_jwt = false
+  [functions.mcp]
+    verify_jwt = false
   [functions.rls-test-create-user]
     verify_jwt = false
   [functions.runtime-error-beacon]

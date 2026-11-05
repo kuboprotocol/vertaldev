@@ -1,31 +1,38 @@
 // Servidor MCP próprio do Vertal Vibe Dev (sem dependência do Lovable).
 //
 // Transporte: MCP "Streamable HTTP" sem estado, respondendo JSON (sem SSE).
-// Autenticação: Bearer = access token do Supabase Auth, emitido pelo OAuth
-// Server do Supabase (o cliente MCP descobre o servidor de autorização em
-// /.well-known/oauth-protected-resource). Toda ferramenta roda como o
-// usuário logado, com RLS.
+// Autenticação (index.ts):
+//   - Bearer vtl_mcp_… = chave de acesso gerada em /mcp, com escopos read/write.
+//   - Bearer <JWT> = access token do Supabase Auth (OAuth do cliente MCP), com acesso total.
+// Cada ferramenta declara o escopo que exige. Ferramentas fora do escopo da
+// chave nem aparecem em tools/list e são recusadas em tools/call.
+// Todas as consultas filtram pelo usuário dono da chave/sessão.
 // deno-lint-ignore-file no-explicit-any
 
 export const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
-export const SERVER_INFO = { name: "vertal-vibe-dev", title: "Vertal Vibe Dev", version: "1.0.0" };
+export const SERVER_INFO = { name: "vertal-vibe-dev", title: "Vertal Vibe Dev", version: "1.1.0" };
 export const INSTRUCTIONS =
   "Ferramentas do Vertal Vibe Dev, plataforma de IA para criar apps web e Web3. " +
-  "Use list_projects e get_project para ver os projetos do usuário, create_project para criar um, " +
+  "Use list_projects e get_project para ver os projetos do usuário, create_project para criar um " +
+  "e update_project para mudar título ou descrição (exige acesso de escrita), " +
   "list_agent_jobs para acompanhar execuções dos agentes e credit_summary para saldo e uso de créditos. " +
-  "Todas as ferramentas agem como o usuário logado.";
+  "Todas as ferramentas agem como o usuário dono da chave.";
+
+export type Scope = "read" | "write";
 
 type Db = { from: (table: string) => any };
 
 export interface ToolContext {
   db: Db;
   userId: string;
+  scopes: readonly Scope[];
 }
 
 interface ToolDef {
   name: string;
   title: string;
   description: string;
+  scope: Scope;
   inputSchema: Record<string, unknown>;
   annotations: Record<string, boolean>;
   run: (args: Record<string, any>, ctx: ToolContext) => Promise<unknown>;
@@ -56,6 +63,12 @@ function strArg(v: unknown, name: string, opts: { required?: boolean; max?: numb
   return t || undefined;
 }
 
+function uuidArg(v: unknown, name: string): string {
+  const id = strArg(v, name, { required: true })!;
+  if (!UUID_RE.test(id)) throw new ToolInputError(`${name} deve ser um UUID`);
+  return id;
+}
+
 async function rows(query: any) {
   const { data, error } = await query;
   if (error) throw new Error(error.message);
@@ -66,7 +79,8 @@ export const TOOLS: ToolDef[] = [
   {
     name: "list_projects",
     title: "Listar projetos",
-    description: "Lista os projetos do usuário logado, do mais recente para o mais antigo.",
+    description: "Lista os projetos do usuário dono da chave, do mais recente para o mais antigo.",
+    scope: "read",
     inputSchema: {
       type: "object",
       properties: {
@@ -76,9 +90,9 @@ export const TOOLS: ToolDef[] = [
       additionalProperties: false,
     },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-    run: async (args, { db }) => {
-      let q = db.from("projects").select(PROJECT_COLUMNS).order("updated_at", { ascending: false })
-        .limit(intArg(args.limit, 10, 1, 50));
+    run: async (args, { db, userId }) => {
+      let q = db.from("projects").select(PROJECT_COLUMNS).eq("user_id", userId)
+        .order("updated_at", { ascending: false }).limit(intArg(args.limit, 10, 1, 50));
       if (args.publishedOnly === true) q = q.eq("is_published", true);
       return { projects: (await rows(q)) ?? [] };
     },
@@ -87,6 +101,7 @@ export const TOOLS: ToolDef[] = [
     name: "get_project",
     title: "Ver projeto",
     description: "Busca um projeto do usuário pelo id, com o código gerado se pedido.",
+    scope: "read",
     inputSchema: {
       type: "object",
       properties: {
@@ -97,11 +112,10 @@ export const TOOLS: ToolDef[] = [
       additionalProperties: false,
     },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-    run: async (args, { db }) => {
-      const id = strArg(args.projectId, "projectId", { required: true })!;
-      if (!UUID_RE.test(id)) throw new ToolInputError("projectId deve ser um UUID");
+    run: async (args, { db, userId }) => {
+      const id = uuidArg(args.projectId, "projectId");
       const cols = args.includeCode === true ? `${PROJECT_COLUMNS},generated_code` : PROJECT_COLUMNS;
-      const project = await rows(db.from("projects").select(cols).eq("id", id).maybeSingle());
+      const project = await rows(db.from("projects").select(cols).eq("id", id).eq("user_id", userId).maybeSingle());
       if (!project) throw new ToolInputError("Projeto não encontrado");
       return { project };
     },
@@ -109,7 +123,8 @@ export const TOOLS: ToolDef[] = [
   {
     name: "create_project",
     title: "Criar projeto",
-    description: "Cria um novo projeto para o usuário logado.",
+    description: "Cria um novo projeto para o usuário dono da chave.",
+    scope: "write",
     inputSchema: {
       type: "object",
       properties: {
@@ -131,9 +146,42 @@ export const TOOLS: ToolDef[] = [
     },
   },
   {
+    name: "update_project",
+    title: "Editar projeto",
+    description:
+      "Altera o título e/ou a descrição de um projeto do usuário. Não altera o código gerado nem a publicação.",
+    scope: "write",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string", format: "uuid", description: "Id do projeto." },
+        title: { type: "string", minLength: 1, maxLength: 120, description: "Novo título (opcional)." },
+        description: { type: "string", maxLength: 500, description: "Nova descrição (opcional)." },
+      },
+      required: ["projectId"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    run: async (args, { db, userId }) => {
+      const id = uuidArg(args.projectId, "projectId");
+      const patch: Record<string, unknown> = {};
+      if (args.title !== undefined) patch.title = strArg(args.title, "title", { required: true, max: 120 });
+      if (args.description !== undefined) patch.description = strArg(args.description, "description", { max: 500 }) ?? null;
+      if (Object.keys(patch).length === 0) throw new ToolInputError("Informe title ou description");
+      patch.updated_at = new Date().toISOString();
+      const project = await rows(
+        db.from("projects").update(patch).eq("id", id).eq("user_id", userId).select("id,title,description,updated_at")
+          .maybeSingle(),
+      );
+      if (!project) throw new ToolInputError("Projeto não encontrado");
+      return { project };
+    },
+  },
+  {
     name: "list_agent_jobs",
     title: "Listar execuções de agentes",
     description: "Execuções recentes dos agentes de IA do usuário, com status, créditos e erros.",
+    scope: "read",
     inputSchema: {
       type: "object",
       properties: {
@@ -144,9 +192,10 @@ export const TOOLS: ToolDef[] = [
       additionalProperties: false,
     },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-    run: async (args, { db }) => {
+    run: async (args, { db, userId }) => {
       let q = db.from("agent_jobs")
         .select("id,agent_slug,status,credits_charged,duration_ms,error_message,created_at,completed_at")
+        .eq("user_id", userId)
         .order("created_at", { ascending: false }).limit(intArg(args.limit, 10, 1, 50));
       const status = strArg(args.status, "status", { max: 40 });
       const agent = strArg(args.agentSlug, "agentSlug", { max: 80 });
@@ -159,21 +208,28 @@ export const TOOLS: ToolDef[] = [
     name: "credit_summary",
     title: "Resumo de créditos",
     description: "Saldo de créditos do usuário e as transações mais recentes.",
+    scope: "read",
     inputSchema: {
       type: "object",
       properties: { limit: { type: "integer", minimum: 1, maximum: 50, default: 10 } },
       additionalProperties: false,
     },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-    run: async (args, { db }) => {
+    run: async (args, { db, userId }) => {
       const transactions = (await rows(
         db.from("credit_transactions").select("id,delta,balance_after,category,reason,created_at")
+          .eq("user_id", userId)
           .order("created_at", { ascending: false }).limit(intArg(args.limit, 10, 1, 50)),
       )) ?? [];
       return { balance: transactions[0]?.balance_after ?? null, transactions };
     },
   },
 ];
+
+/** Ferramentas que a chave pode usar. */
+export function toolsForScopes(scopes: readonly Scope[]): ToolDef[] {
+  return TOOLS.filter((t) => scopes.includes(t.scope));
+}
 
 export interface JsonRpcRequest {
   jsonrpc?: string;
@@ -212,13 +268,23 @@ export async function handleMessage(msg: JsonRpcRequest, ctx: ToolContext): Prom
       return ok(msg.id, {});
     case "tools/list":
       return ok(msg.id, {
-        tools: TOOLS.map(({ name, title, description, inputSchema, annotations }) => ({
+        tools: toolsForScopes(ctx.scopes).map(({ name, title, description, inputSchema, annotations }) => ({
           name, title, description, inputSchema, annotations,
         })),
       });
     case "tools/call": {
       const tool = TOOLS.find((t) => t.name === msg.params?.name);
       if (!tool) return err(msg.id, -32602, `Ferramenta desconhecida: ${msg.params?.name}`);
+      if (!ctx.scopes.includes(tool.scope)) {
+        // Erro de permissão vai no resultado (isError), para o modelo ver a causa.
+        return ok(msg.id, {
+          content: [{
+            type: "text",
+            text: `Esta chave não tem permissão de escrita (${tool.name}). Gere uma chave com "Leitura e escrita" em /mcp.`,
+          }],
+          isError: true,
+        });
+      }
       const args = msg.params?.arguments ?? {};
       if (typeof args !== "object" || Array.isArray(args)) return err(msg.id, -32602, "arguments deve ser um objeto");
       try {

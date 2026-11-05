@@ -87,6 +87,7 @@ const MobileAgentPage = lazy(() => import("./pages/MobileAgentPage"));
 const AnywherePage = lazy(() => import("./pages/AnywherePage"));
 const AffiliateProgramPage = lazy(() => import("./pages/AffiliateProgramPage"));
 const DocsMcpPage = lazy(() => import("./pages/DocsMcpPage"));
+const McpAccessPage = lazy(() => import("./pages/McpAccessPage"));
 const GameManagerPage = lazy(() => import("./pages/GameManagerPage"));
 const GameScenePage = lazy(() => import("./pages/GameScenePage"));
 const CreativeChatPage = lazy(() => import("./pages/CreativeChatPage"));
@@ -269,6 +270,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/vibe-code" element={<ProtectedRoute><VibeCodePage /></ProtectedRoute>} />
                 <Route path="/affiliate-program" element={<ProtectedRoute><AffiliateProgramPage /></ProtectedRoute>} />
                 <Route path="/docs/mcp" element={<DocsMcpPage />} />
+                <Route path="/mcp" element={<ProtectedRoute><McpAccessPage /></ProtectedRoute>} />
                 
                 <Route path="/creative" element={<ProtectedRoute><CreativeEconomyGate><CreativePage /></CreativeEconomyGate></ProtectedRoute>} />
                 <Route path="/creative/investigation" element={<ProtectedRoute><CreativeEconomyGate><ErrorBoundary resourceName="InvestigationPage"><InvestigationPage /></ErrorBoundary></CreativeEconomyGate></ProtectedRoute>} />
