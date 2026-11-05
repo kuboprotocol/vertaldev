@@ -34,6 +34,14 @@ function isSafeReturnUrl(ret: string): boolean {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  // Diagnóstico sem dados sensíveis: diz só se as credenciais do Google estão configuradas.
+  if (req.method === 'GET' && new URL(req.url).searchParams.get('health') === '1') {
+    return new Response(JSON.stringify({
+      client_id_configured: !!Deno.env.get('GMAIL_OAUTH_CLIENT_ID'),
+      client_secret_configured: !!Deno.env.get('GMAIL_OAUTH_CLIENT_SECRET'),
+      redirect_uri: `${Deno.env.get('SUPABASE_URL')}/functions/v1/gmail-oauth-callback`,
+    }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
   try {
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) return new Response(JSON.stringify({ error: 'missing auth' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -45,7 +53,10 @@ Deno.serve(async (req) => {
     if (error || !user) return new Response(JSON.stringify({ error: 'invalid token' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
     const clientId = Deno.env.get('GMAIL_OAUTH_CLIENT_ID')
-    if (!clientId) return new Response(JSON.stringify({ error: 'GMAIL_OAUTH_CLIENT_ID not configured' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    if (!clientId || !Deno.env.get('GMAIL_OAUTH_CLIENT_SECRET')) {
+      console.error('gmail-oauth-start: credenciais Google ausentes', { client_id: !!clientId, client_secret: !!Deno.env.get('GMAIL_OAUTH_CLIENT_SECRET') })
+      return new Response(JSON.stringify({ error: 'gmail_oauth_not_configured' }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
 
     const body = await req.json().catch(() => ({})) as { returnUrl?: string; origin?: string }
     const returnUrl = body.returnUrl && isSafeReturnUrl(body.returnUrl) ? body.returnUrl : '/connectors/gmail'
@@ -59,7 +70,10 @@ Deno.serve(async (req) => {
     const { error: insErr } = await admin.from('gmail_oauth_states').insert({
       nonce, user_id: user.id, origin, return_url: returnUrl,
     })
-    if (insErr) return new Response(JSON.stringify({ error: 'state_persist_failed' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    if (insErr) {
+      console.error('gmail-oauth-start: falha ao gravar state', insErr.message)
+      return new Response(JSON.stringify({ error: 'state_persist_failed' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
 
     const params = new URLSearchParams({
       client_id: clientId,
@@ -74,6 +88,7 @@ Deno.serve(async (req) => {
     const url = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
     return new Response(JSON.stringify({ url }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   } catch (e) {
+    console.error('gmail-oauth-start: erro inesperado', (e as Error).message)
     return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
 })
