@@ -4,19 +4,42 @@ import {
   VIBE_LIBRARIES,
   findLibrary,
   librariesByStatus,
+  pythonImportName,
 } from "@/config/vibeLibraries";
 import { sanitizePackages } from "@/config/vibeAgents";
 
 const SHELL_SAFE_PIP = /^[a-z0-9][a-z0-9._-]*$/;
 
+// Entradas que já existiam antes desta expansão: não podem sumir nem mudar de status.
+const ORIGINAL_PYTHON_READY = [
+  "pandas", "numpy", "scipy", "polars", "pyarrow", "duckdb", "scikit-learn", "statsmodels", "xgboost", "lightgbm",
+  "matplotlib", "seaborn", "plotly", "altair", "bokeh", "openpyxl", "xlsxwriter", "python-docx", "python-pptx",
+  "pypdf", "reportlab", "pyyaml", "tabulate", "markdown", "requests", "httpx", "aiohttp", "beautifulsoup4", "lxml",
+  "feedparser", "fastapi", "uvicorn", "flask", "pydantic", "sqlalchemy", "psycopg2-binary", "asyncpg", "pymongo",
+  "redis", "supabase", "pytest", "hypothesis", "ruff", "mypy", "openai", "anthropic", "tiktoken", "nltk", "sympy",
+  "networkx", "shapely", "web3", "eth-account", "cryptography", "python-dateutil", "pytz", "rich", "typer", "tqdm",
+  "orjson", "joblib", "pillow", "opencv-python-headless", "imageio", "pydub", "pefile", "pyelftools", "capstone",
+  "yara-python",
+];
+const ORIGINAL_IDS_NON_PYTHON = ["ghidra", "next", "react", "express", "github.com/gin-gonic/gin", "gorm.io/gorm"];
+
 describe("catálogo de bibliotecas do Vibe Dev", () => {
-  it("tem mais de 100 bibliotecas e ids únicos", () => {
-    expect(VIBE_LIBRARIES.length).toBeGreaterThanOrEqual(100);
+  it("é maior que a versão anterior e tem ids únicos", () => {
+    expect(VIBE_LIBRARIES.length).toBeGreaterThanOrEqual(260);
     const ids = VIBE_LIBRARIES.map((l) => l.id);
-    expect(new Set(ids).size).toBe(ids.length);
+    expect(new Set(ids).size, "ids duplicados").toBe(ids.length);
   });
 
-  it("toda entrada tem descrição e pacote preenchidos", () => {
+  it("nenhuma entrada original foi removida ou perdeu o status ready", () => {
+    for (const pkg of ORIGINAL_PYTHON_READY) {
+      const lib = findLibrary(pkg);
+      expect(lib, pkg).toBeDefined();
+      expect(lib?.status, pkg).toBe("ready");
+    }
+    for (const id of ORIGINAL_IDS_NON_PYTHON) expect(findLibrary(id), id).toBeDefined();
+  });
+
+  it("toda entrada tem descrição, pacote e nome preenchidos", () => {
     for (const lib of VIBE_LIBRARIES) {
       expect(lib.description.trim(), lib.id).not.toBe("");
       expect(lib.package.trim(), lib.id).not.toBe("");
@@ -40,6 +63,17 @@ describe("catálogo de bibliotecas do Vibe Dev", () => {
     expect(ghidra?.note).toContain("autorização");
     expect(ghidra?.note).toContain("não faz exploração automática");
   });
+
+  it("nome de import Python é conhecido para os pacotes que diferem do nome pip", () => {
+    expect(pythonImportName("beautifulsoup4")).toBe("bs4");
+    expect(pythonImportName("pillow")).toBe("PIL");
+    expect(pythonImportName("opencv-python-headless")).toBe("cv2");
+    expect(pythonImportName("scikit-learn")).toBe("sklearn");
+    expect(pythonImportName("pymupdf")).toBe("fitz");
+    expect(pythonImportName("pandas")).toBe("pandas");
+    expect(pythonImportName("torch")).toBe("torch");
+    expect(pythonImportName("next")).toBeUndefined();
+  });
 });
 
 describe("allowlist de pip da sandbox Python", () => {
@@ -48,13 +82,8 @@ describe("allowlist de pip da sandbox Python", () => {
     expect(PYTHON_PACKAGES).toEqual(expected);
   });
 
-  it("mantém todos os pacotes que já estavam permitidos antes", () => {
-    const previous = [
-      "pandas", "numpy", "scipy", "scikit-learn", "matplotlib", "seaborn", "plotly", "statsmodels",
-      "openpyxl", "xlsxwriter", "python-docx", "pypdf", "beautifulsoup4", "lxml", "requests", "httpx",
-      "pydantic", "tabulate", "networkx", "sympy",
-    ];
-    for (const pkg of previous) expect(PYTHON_PACKAGES, pkg).toContain(pkg);
+  it("contém todos os pacotes que já estavam permitidos antes", () => {
+    for (const pkg of ORIGINAL_PYTHON_READY) expect(PYTHON_PACKAGES, pkg).toContain(pkg);
   });
 
   it("nomes são únicos e seguros para o shell (vão num comando pip install)", () => {
@@ -63,7 +92,7 @@ describe("allowlist de pip da sandbox Python", () => {
   });
 
   it("não contém nada que exija template próprio", () => {
-    for (const pkg of ["torch", "tensorflow", "transformers", "spacy", "sentence-transformers", "pyghidra", "ghidra-bridge"]) {
+    for (const pkg of ["torch", "tensorflow", "transformers", "spacy", "sentence-transformers", "prophet", "mlflow", "geopandas", "pytesseract", "selenium", "pyghidra", "ghidra-bridge"]) {
       expect(PYTHON_PACKAGES).not.toContain(pkg);
     }
   });

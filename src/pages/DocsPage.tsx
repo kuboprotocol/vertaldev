@@ -414,7 +414,7 @@ testimonials and a waitlist form.`}</Pre>
         <UL>
           <li><strong>Read web pages</strong> — public https pages only; every redirect is re-validated.</li>
           <li><strong>Slack, e-mail (Gmail), GitHub</strong> — through the user&apos;s own connections, never a platform-wide key.</li>
-          <li><strong>Run Python</strong> — an E2B sandbox per run with Pandas, NumPy, scikit-learn and Matplotlib, plus 60+ installable libraries (Polars, DuckDB, Plotly, FastAPI, OpenAI and more).</li>
+          <li><strong>Run Python</strong> — an E2B sandbox per run with Pandas, NumPy, scikit-learn and Matplotlib, plus 140+ installable libraries (Polars, DuckDB, Plotly, FastAPI, OpenAI, Streamlit and more).</li>
           <li><strong>Create / run agents</strong> — a created agent never gets more tools than its creator.</li>
         </UL>
         <H3>Credits</H3>
