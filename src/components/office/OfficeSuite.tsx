@@ -19,6 +19,7 @@ import {
   Eraser,
   Sigma,
   Upload,
+  Youtube,
 } from 'lucide-react';
 import {
   BlockAlign,
@@ -63,6 +64,7 @@ import { RibbonButton, RibbonGroup, RibbonSelect, RibbonTab } from './Ribbon';
 import { docToDocx } from '@/lib/office/officeFiles';
 import { OFFICE_KEYS, importFile } from '@/lib/office/importers';
 import { SlidesTab } from './SlidesTab';
+import { MiniWindow } from './MiniWindow';
 
 const DOC_KEY = OFFICE_KEYS.doc;
 const SHEET_KEY = OFFICE_KEYS.sheet;
@@ -773,6 +775,7 @@ export function OfficeSuite({ creditsAvailable }: { creditsAvailable: number }) 
   const [assistantOpen, setAssistantOpen] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
   const [importing, setImporting] = useState(false);
+  const [miniOpen, setMiniOpen] = useState(false);
   const [importNote, setImportNote] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const hasCredit = creditsAvailable >= OFFICE_AI_CREDIT_COST;
@@ -830,6 +833,17 @@ export function OfficeSuite({ creditsAvailable }: { creditsAvailable: number }) 
             >
               {creditsAvailable} {creditsAvailable === 1 ? 'crédito disponível' : 'créditos disponíveis'}
             </span>
+            <button
+              type="button"
+              onClick={() => setMiniOpen((v) => !v)}
+              aria-pressed={miniOpen}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
+                miniOpen ? 'bg-white text-blue-800' : 'bg-white/15 hover:bg-white/25'
+              }`}
+            >
+              <Youtube className="h-3.5 w-3.5" aria-hidden />
+              Mini janela
+            </button>
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
@@ -899,6 +913,7 @@ export function OfficeSuite({ creditsAvailable }: { creditsAvailable: number }) 
           {app === 'slides' && <SlidesTab key={`slides-${reloadKey}`} creditsAvailable={creditsAvailable} assistantOpen={assistantOpen} />}
         </div>
       </div>
+      <MiniWindow open={miniOpen} onClose={() => setMiniOpen(false)} />
     </div>
   );
 }

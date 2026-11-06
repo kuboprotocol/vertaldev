@@ -51,6 +51,8 @@ export function AiPanel({ placeholder, creditsAvailable, busy, onRun, actionLabe
   const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState('');
   const [micError, setMicError] = useState<string | null>(null);
+  const [locked, setLocked] = useState(false);
+  const lockedRef = useRef(false);
   const recRef = useRef<RecognitionLike | null>(null);
   const onDictateRef = useRef(onDictate);
   onDictateRef.current = onDictate;
@@ -59,13 +61,13 @@ export function AiPanel({ placeholder, creditsAvailable, busy, onRun, actionLabe
   const canRun = !busy && hasCredit && prompt.trim().length >= 3;
   const micSupported = getRecognitionCtor() !== null;
 
-  useEffect(() => () => recRef.current?.stop(), []);
+  useEffect(() => () => {
+    lockedRef.current = false;
+    recRef.current?.stop();
+  }, []);
 
-  const toggleMic = () => {
-    if (listening) {
-      recRef.current?.stop();
-      return;
-    }
+  /** Cria e inicia uma sessão de ditado. Em modo ligado, reinicia sozinha quando o navegador para por silêncio. */
+  const startRecognition = () => {
     const Ctor = getRecognitionCtor();
     if (!Ctor) return;
     const rec = new Ctor();
@@ -87,18 +89,46 @@ export function AiPanel({ placeholder, creditsAvailable, busy, onRun, actionLabe
       else setPrompt((p) => (p ? `${p} ${clean}` : clean));
     };
     rec.onerror = (e) => {
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
       setMicError(e.error === 'not-allowed' ? 'Permissão do microfone negada. Libere o microfone no navegador.' : 'Não consegui ouvir. Tente de novo.');
-      setListening(false);
+      lockedRef.current = false;
+      setLocked(false);
     };
     rec.onend = () => {
-      setListening(false);
       setInterim('');
       recRef.current = null;
+      if (lockedRef.current) {
+        startRecognition();
+        return;
+      }
+      setListening(false);
     };
     recRef.current = rec;
     setMicError(null);
     setListening(true);
     rec.start();
+  };
+
+  /** Clique simples: liga por um trecho e desliga ao parar. Duplo clique: deixa ligado até o próximo duplo clique. */
+  const onMicClick = () => {
+    if (lockedRef.current) return;
+    if (recRef.current) {
+      recRef.current.stop();
+      return;
+    }
+    startRecognition();
+  };
+
+  const onMicDoubleClick = () => {
+    if (lockedRef.current) {
+      lockedRef.current = false;
+      setLocked(false);
+      recRef.current?.stop();
+      return;
+    }
+    lockedRef.current = true;
+    setLocked(true);
+    if (!recRef.current) startRecognition();
   };
 
   return (
@@ -124,15 +154,14 @@ export function AiPanel({ placeholder, creditsAvailable, busy, onRun, actionLabe
         />
         <button
           type="button"
-          onClick={toggleMic}
+          onClick={onMicClick}
+          onDoubleClick={onMicDoubleClick}
           disabled={!micSupported}
-          aria-label={listening ? 'Parar de ditar' : 'Ditar por voz'}
+          aria-label={locked ? 'Microfone ligado. Clique duas vezes para desligar' : 'Ditar por voz'}
           aria-pressed={listening}
           title={
             micSupported
-              ? listening
-                ? 'Parar de ditar'
-                : 'Ditar por voz (português)'
+              ? 'Clique para ditar. Clique duas vezes para deixar o microfone ligado'
               : 'Seu navegador não tem ditado por voz. Use Chrome ou Edge.'
           }
           className={`absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-40 ${
