@@ -28,6 +28,18 @@ O Vibe Dev conhece um catálogo único de bibliotecas em Python, npm (Next e o e
 
 As bibliotecas de engenharia reversa existem para análise **autorizada**: arquivos seus, CTFs, pesquisa e análise defensiva. A plataforma não faz exploração automática nem distribui nada malicioso. Os quatro parsers instaláveis (`pefile`, `pyelftools`, `capstone`, `yara-python`) só leem e descrevem arquivos. Ghidra, `pyghidra` e `ghidra-bridge` exigem um template com o Ghidra instalado.
 
+## Origem: REA (morluto/rea)
+
+Parte do catálogo veio do [REA](https://github.com/morluto/rea) (MIT), um MCP de engenharia reversa. Vieram duas listas:
+
+- **Dependências npm** do `package.json` do REA: runtime (MCP SDK, isomorphic-git, openpgp, ajv, pino, zod e outras) e ferramentas de desenvolvimento (Stryker, knip, oxlint, turbo, tsx e outras). Entradas com `Origem: REA`.
+- **Motores de código aberto** do `THIRD_PARTY_NOTICES.md` do REA: Ghidra, JADX, Apktool, Binwalk, Unblob, WABT, pwntools, pyelftools, Unicorn, pwndbg, GDB, LLDB, mitmproxy, adb, ILSpy. Ferramentas externas usam o runtime `ferramenta`: são binários ou apps instalados à parte, nunca pelo `pip`.
+
+Ficaram de fora do catálogo instalável, de propósito:
+
+- **IDA Pro, Hopper e JEB**: software proprietário, com licença própria e regras de uso e de divulgação. A plataforma não instala nem embute nenhum deles.
+- **Ferramentas de exploração** (pwntools, Unicorn e mitmproxy): só com restrição de uso explícita (CTF, laboratórios, pesquisa autorizada, tráfego próprio). Ficam como `template`, fora da allowlist.
+
 ## Limitações atuais
 
 - Go e Next estão no catálogo, mas a sandbox ainda não as executa. Para rodá-las, é preciso um template E2B com Go e Node, configurado em `VIBE_SANDBOX_TEMPLATE`.
@@ -36,11 +48,11 @@ As bibliotecas de engenharia reversa existem para análise **autorizada**: arqui
 
 ## Resumo
 
-- Total: **270** bibliotecas.
-- ✅ instalável agora (sandbox Python): **142**
-- 📘 conhecida para projetos gerados: **115**
-- 🧩 exige template próprio: **13**
-- Na allowlist de `pip` da sandbox: **142** pacotes.
+- Total: **326** bibliotecas.
+- ✅ instalável agora (sandbox Python): **144**
+- 📘 conhecida para projetos gerados: **155**
+- 🧩 exige template próprio: **27**
+- Na allowlist de `pip` da sandbox: **144** pacotes.
 
 ## Por categoria
 
@@ -49,20 +61,20 @@ As bibliotecas de engenharia reversa existem para análise **autorizada**: arqui
 | Dados | 7 | pip | instalável |
 | Machine learning | 10 | pip | instalável, template |
 | Visualização | 8 | pip | instalável |
-| Documentos e escritórios | 14 | pip | instalável |
-| Web e HTTP | 13 | pip, npm, Go | instalável, referência |
-| Backend e APIs | 46 | pip, npm, Go | instalável, referência |
+| Documentos e escritórios | 16 | pip | instalável |
+| Web e HTTP | 14 | pip, npm, Go | instalável, referência |
+| Backend e APIs | 50 | pip, npm, Go | instalável, referência |
 | Banco de dados | 26 | pip, npm, Go | instalável, referência |
-| Testes e qualidade | 16 | pip, npm, Go | instalável, template, referência |
-| IA e linguagem | 22 | pip, npm | instalável, template, referência |
+| Testes e qualidade | 18 | pip, npm, Go | instalável, template, referência |
+| IA e linguagem | 23 | pip, npm | instalável, template, referência |
 | Ciência | 8 | pip | instalável, template |
-| Web3 e criptografia | 8 | pip, npm, Go | instalável, referência |
-| Utilidades | 29 | pip, Go | instalável, referência |
-| Imagens, áudio e vídeo | 6 | pip, npm | instalável, template, referência |
+| Web3 e criptografia | 9 | pip, npm, Go | instalável, referência |
+| Utilidades | 45 | pip, Go, npm | instalável, referência |
+| Imagens, áudio e vídeo | 7 | pip, npm | instalável, template, referência |
 | Frontend (Next e React) | 38 | npm | referência |
-| Engenharia reversa | 7 | pip, Java | instalável, template |
-| Ferramentas de desenvolvimento | 3 | pip | instalável |
-| Segurança e criptografia | 6 | pip, Go | instalável, referência |
+| Engenharia reversa | 20 | pip, Java, ferramenta | instalável, template |
+| Ferramentas de desenvolvimento | 17 | pip, npm | instalável, referência |
+| Segurança e criptografia | 7 | pip, Go, npm | instalável, referência |
 | Finanças e cripto | 3 | pip | instalável |
 
 ## Dados
@@ -123,6 +135,8 @@ As bibliotecas de engenharia reversa existem para análise **autorizada**: arqui
 | tabulate | pip | `tabulate` | instalável | Tabelas formatadas em texto, Markdown e HTML |
 | markdown | pip | `markdown` | instalável | Converter Markdown em HTML |
 | jinja2 | pip | `jinja2` | instalável | Templates com lógica, para gerar HTML, e-mails e relatórios |
+| markdownify | pip | `markdownify` | instalável | Converter HTML em Markdown _Origem: REA (morluto/rea, MIT)._ |
+| polib | pip | `polib` | instalável | Ler e escrever catálogos de tradução gettext (.po e .pot) _Origem: REA (morluto/rea, MIT)._ |
 
 ## Web e HTTP
 
@@ -141,6 +155,7 @@ As bibliotecas de engenharia reversa existem para análise **autorizada**: arqui
 | axios | npm | `axios` | referência | Cliente HTTP com interceptadores |
 | resty | Go | `github.com/go-resty/resty/v2` | referência | Cliente HTTP com retentativas e JSON automático |
 | colly | Go | `github.com/gocolly/colly/v2` | referência | Coleta de dados da web em Go |
+| parse5 | npm | `parse5` | referência | Parser de HTML conforme o padrão WHATWG _Origem: REA (morluto/rea, MIT)._ |
 
 ## Backend e APIs
 
@@ -192,6 +207,10 @@ As bibliotecas de engenharia reversa existem para análise **autorizada**: arqui
 | amqp091-go | Go | `github.com/rabbitmq/amqp091-go` | referência | Cliente RabbitMQ (AMQP 0-9-1) |
 | asynq | Go | `github.com/hibiken/asynq` | referência | Filas de tarefas em Go com Redis |
 | cron | Go | `github.com/robfig/cron/v3` | referência | Agendamento de tarefas com sintaxe cron |
+| @modelcontextprotocol/server | npm | `@modelcontextprotocol/server` | referência | Servidor MCP oficial, para expor ferramentas a agentes de IA _Origem: REA (morluto/rea, MIT)._ |
+| @modelcontextprotocol/client | npm | `@modelcontextprotocol/client` | referência | Cliente MCP oficial, para conectar a servidores de ferramentas _Origem: REA (morluto/rea, MIT)._ |
+| ws | npm | `ws` | referência | WebSocket para Node _Origem: REA (morluto/rea, MIT)._ |
+| @bufbuild/protobuf | npm | `@bufbuild/protobuf` | referência | Protocol Buffers para TypeScript _Origem: REA (morluto/rea, MIT)._ |
 
 ## Banco de dados
 
@@ -244,6 +263,8 @@ As bibliotecas de engenharia reversa existem para análise **autorizada**: arqui
 | playwright | npm | `playwright` | referência | Testes e automação de navegadores reais |
 | puppeteer | npm | `puppeteer` | referência | Automação do Chrome via protocolo DevTools |
 | testify | Go | `github.com/stretchr/testify` | referência | Asserções e mocks para testes |
+| @stryker-mutator/core | npm | `@stryker-mutator/core` | referência | Teste de mutação: mede se os testes pegam bugs de verdade _Origem: REA (morluto/rea, MIT)._ |
+| @fast-check/vitest | npm | `@fast-check/vitest` | referência | Testes com propriedades (fast-check) integrados ao Vitest _Origem: REA (morluto/rea, MIT)._ |
 
 ## IA e linguagem
 
@@ -271,6 +292,7 @@ As bibliotecas de engenharia reversa existem para análise **autorizada**: arqui
 | @google/generative-ai | npm | `@google/generative-ai` | referência | SDK do Gemini do Google |
 | groq-sdk | npm | `groq-sdk` | referência | SDK da Groq para inferência rápida |
 | ai | npm | `ai` | referência | SDK da Vercel para streaming de chat e agentes com vários modelos |
+| tokenx | npm | `tokenx` | referência | Contagem aproximada de tokens de LLM, sem depender do tokenizer do modelo _Origem: REA (morluto/rea, MIT)._ |
 
 ## Ciência
 
@@ -297,6 +319,7 @@ As bibliotecas de engenharia reversa existem para análise **autorizada**: arqui
 | wagmi | npm | `wagmi` | referência | Hooks React para carteiras e contratos |
 | @solana/web3.js | npm | `@solana/web3.js` | referência | SDK oficial da Solana para JavaScript |
 | go-ethereum | Go | `github.com/ethereum/go-ethereum` | referência | Cliente Ethereum (geth) e bibliotecas para contratos |
+| evmole | npm | `evmole` | referência | Análise de bytecode EVM: detecta funções e seletores de contratos _Origem: REA (morluto/rea, MIT)._ |
 
 ## Utilidades
 
@@ -331,6 +354,22 @@ As bibliotecas de engenharia reversa existem para análise **autorizada**: arqui
 | validator | Go | `github.com/go-playground/validator/v10` | referência | Validação de structs por tags |
 | gjson | Go | `github.com/tidwall/gjson` | referência | Ler campos de JSON sem decodificar tudo |
 | backoff | Go | `github.com/cenkalti/backoff/v4` | referência | Retentativas com backoff exponencial |
+| pino | npm | `pino` | referência | Logs JSON de alto desempenho para Node _Origem: REA (morluto/rea, MIT)._ |
+| ajv | npm | `ajv` | referência | Validação de JSON Schema muito rápida _Origem: REA (morluto/rea, MIT)._ |
+| ajv-formats | npm | `ajv-formats` | referência | Formatos extras (e-mail, URI, data) para o Ajv _Origem: REA (morluto/rea, MIT)._ |
+| yaml | npm | `yaml` | referência | Ler e escrever YAML em JavaScript _Origem: REA (morluto/rea, MIT)._ |
+| semver | npm | `semver` | referência | Comparar e validar versões semânticas _Origem: REA (morluto/rea, MIT)._ |
+| @msgpack/msgpack | npm | `@msgpack/msgpack` | referência | Serialização binária compacta MessagePack _Origem: REA (morluto/rea, MIT)._ |
+| cborg | npm | `cborg` | referência | Serialização binária CBOR _Origem: REA (morluto/rea, MIT)._ |
+| @zip.js/zip.js | npm | `@zip.js/zip.js` | referência | Ler e criar arquivos ZIP no navegador e no Node _Origem: REA (morluto/rea, MIT)._ |
+| smol-toml | npm | `smol-toml` | referência | Ler e escrever TOML _Origem: REA (morluto/rea, MIT)._ |
+| stream-json | npm | `stream-json` | referência | Processar JSON grande em streaming, sem carregar tudo na memória _Origem: REA (morluto/rea, MIT)._ |
+| jsonc-parser | npm | `jsonc-parser` | referência | Ler JSON com comentários (JSONC) _Origem: REA (morluto/rea, MIT)._ |
+| canonicalize | npm | `canonicalize` | referência | JSON canônico (RFC 8785), para assinaturas e hashes estáveis _Origem: REA (morluto/rea, MIT)._ |
+| diff | npm | `diff` | referência | Diferenças entre textos: linhas, palavras e caracteres _Origem: REA (morluto/rea, MIT)._ |
+| cross-spawn | npm | `cross-spawn` | referência | Executar processos de forma consistente no Windows e no Unix _Origem: REA (morluto/rea, MIT)._ |
+| ignore | npm | `ignore` | referência | Regras de .gitignore em JavaScript _Origem: REA (morluto/rea, MIT)._ |
+| lossless-json | npm | `lossless-json` | referência | JSON que preserva números grandes sem perder precisão _Origem: REA (morluto/rea, MIT)._ |
 
 ## Imagens, áudio e vídeo
 
@@ -342,6 +381,7 @@ As bibliotecas de engenharia reversa existem para análise **autorizada**: arqui
 | pydub | pip | `pydub` | instalável | Manipulação de áudio: cortar, juntar e converter |
 | pytesseract | pip | `pytesseract` | template | OCR: reconhecer texto em imagens com Tesseract. *Precisa do binário Tesseract instalado no sistema.* |
 | sharp | npm | `sharp` | referência | Redimensionar e converter imagens com libvips |
+| cairosvg | pip | `cairosvg` | template | Converter SVG em PNG e PDF. *Precisa da biblioteca Cairo instalada no sistema; exige template próprio.* _Origem: REA (morluto/rea, MIT)._ |
 
 ## Frontend (Next e React)
 
@@ -397,6 +437,19 @@ As bibliotecas de engenharia reversa existem para análise **autorizada**: arqui
 | pyghidra | pip | `pyghidra` | template | Ghidra a partir do Python. *Precisa do Ghidra instalado no template. Análise de binários só em arquivos seus ou com autorização (CTF, pesquisa, análise defensiva). A plataforma não faz exploração automática.* |
 | ghidra-bridge | pip | `ghidra-bridge` | template | Ponte Python para o Ghidra. *Precisa do Ghidra instalado no template. Análise de binários só em arquivos seus ou com autorização (CTF, pesquisa, análise defensiva). A plataforma não faz exploração automática.* |
 | Ghidra | Java | `ghidra` | template | Framework de engenharia reversa da NSA, com decompilador e análise automática de binários. *Precisa de JDK e de um download grande; exige template próprio. Análise de binários só em arquivos seus ou com autorização (CTF, pesquisa, análise defensiva). A plataforma não faz exploração automática.* |
+| pwntools | pip | `pwntools` | template | Biblioteca para análise e desenvolvimento de exploits em binários (ELF, conexões, shellcode). *Biblioteca de desenvolvimento de exploits. Só para CTF, laboratórios e pesquisa autorizada. A plataforma não gera nem executa exploits contra alvos de terceiros.* _Origem: REA (morluto/rea, MIT)._ |
+| unicorn | pip | `unicorn` | template | Emulação de instruções de CPU, para analisar código sem executá-lo no sistema. *Licença GPL-2.0. Análise de binários só em arquivos seus ou com autorização (CTF, pesquisa, análise defensiva). A plataforma não faz exploração automática.* _Origem: REA (morluto/rea, MIT)._ |
+| binwalk | pip | `binwalk` | template | Análise e extração de firmware e arquivos embarcados. *Análise de binários só em arquivos seus ou com autorização (CTF, pesquisa, análise defensiva). A plataforma não faz exploração automática.* _Origem: REA (morluto/rea, MIT)._ |
+| unblob | pip | `unblob` | template | Extração recursiva de firmware e de arquivos aninhados. *Análise de binários só em arquivos seus ou com autorização (CTF, pesquisa, análise defensiva). A plataforma não faz exploração automática.* _Origem: REA (morluto/rea, MIT)._ |
+| mitmproxy | pip | `mitmproxy` | template | Proxy para inspecionar tráfego HTTP e HTTPS. *Intercepta comunicação: use só no próprio tráfego ou com autorização. Não use em terceiros.* _Origem: REA (morluto/rea, MIT)._ |
+| JADX | ferramenta | `JADX` | template | Decompilador de Android (APK e DEX) para código Java legível. *Apache-2.0; precisa do JAR do JADX instalado. Análise de binários só em arquivos seus ou com autorização (CTF, pesquisa, análise defensiva). A plataforma não faz exploração automática.* _Origem: REA (morluto/rea, MIT)._ |
+| Apktool | ferramenta | `Apktool` | template | Decodificar recursos e manifest de APKs Android. *Apache-2.0; ferramenta Java instalada à parte. Análise de binários só em arquivos seus ou com autorização (CTF, pesquisa, análise defensiva). A plataforma não faz exploração automática.* _Origem: REA (morluto/rea, MIT)._ |
+| WABT | ferramenta | `WABT` | template | Ferramentas WebAssembly: wat2wasm, wasm2wat e afins. *Apache-2.0; binários à parte.* _Origem: REA (morluto/rea, MIT)._ |
+| GDB | ferramenta | `GDB` | template | Depurador GNU para inspecionar programas em execução. *GPL-3.0-or-later; depurador instalado pelo usuário. Análise de binários só em arquivos seus ou com autorização (CTF, pesquisa, análise defensiva). A plataforma não faz exploração automática.* _Origem: REA (morluto/rea, MIT)._ |
+| LLDB | ferramenta | `LLDB` | template | Depurador do projeto LLVM. *Apache-2.0 com exceções LLVM; instalado pelo usuário. Análise de binários só em arquivos seus ou com autorização (CTF, pesquisa, análise defensiva). A plataforma não faz exploração automática.* _Origem: REA (morluto/rea, MIT)._ |
+| pwndbg | ferramenta | `pwndbg` | template | Extensão do GDB para análise de binários e core dumps. *MIT; extensão para o GDB. Análise de binários só em arquivos seus ou com autorização (CTF, pesquisa, análise defensiva). A plataforma não faz exploração automática.* _Origem: REA (morluto/rea, MIT)._ |
+| adb | ferramenta | `adb` | template | Android Debug Bridge, para falar com dispositivos Android seus. *Apache-2.0; sujeito aos termos do Android SDK quando instalado com ele.* _Origem: REA (morluto/rea, MIT)._ |
+| ILSpy | ferramenta | `ILSpy` | template | Decompilador de .NET (ICSharpCode.Decompiler). *MIT; instalado à parte. Análise de binários só em arquivos seus ou com autorização (CTF, pesquisa, análise defensiva). A plataforma não faz exploração automática.* _Origem: REA (morluto/rea, MIT)._ |
 
 ## Ferramentas de desenvolvimento
 
@@ -405,6 +458,20 @@ As bibliotecas de engenharia reversa existem para análise **autorizada**: arqui
 | ipython | pip | `ipython` | instalável | Shell interativo avançado |
 | pygithub | pip | `pygithub` | instalável | Cliente da API do GitHub: repositórios, issues e pull requests |
 | gitpython | pip | `gitpython` | instalável | Operar repositórios Git a partir do Python |
+| isomorphic-git | npm | `isomorphic-git` | referência | Git em JavaScript puro, para navegador e Node _Origem: REA (morluto/rea, MIT)._ |
+| @xterm/headless | npm | `@xterm/headless` | referência | Terminal virtual sem interface, para testes e servidores _Origem: REA (morluto/rea, MIT)._ |
+| @lydell/node-pty | npm | `@lydell/node-pty` | referência | Pseudo-terminal para rodar processos interativos no Node _Origem: REA (morluto/rea, MIT)._ |
+| @babel/parser | npm | `@babel/parser` | referência | Parser de JavaScript e TypeScript que gera AST _Origem: REA (morluto/rea, MIT)._ |
+| @babel/types | npm | `@babel/types` | referência | Tipos e construtores para ASTs do Babel _Origem: REA (morluto/rea, MIT)._ |
+| @electron/asar | npm | `@electron/asar` | referência | Empacotar e ler arquivos .asar do Electron _Origem: REA (morluto/rea, MIT)._ |
+| @clack/prompts | npm | `@clack/prompts` | referência | Prompts bonitos de terminal para CLIs _Origem: REA (morluto/rea, MIT)._ |
+| knip | npm | `knip` | referência | Encontra arquivos, exports e dependências sem uso _Origem: REA (morluto/rea, MIT)._ |
+| oxlint | npm | `oxlint` | referência | Linter muito rápido escrito em Rust _Origem: REA (morluto/rea, MIT)._ |
+| turbo | npm | `turbo` | referência | Orquestra builds e tarefas em monorepos, com cache _Origem: REA (morluto/rea, MIT)._ |
+| tsx | npm | `tsx` | referência | Executa TypeScript direto no Node _Origem: REA (morluto/rea, MIT)._ |
+| vitepress | npm | `vitepress` | referência | Documentação estática rápida sobre Vite _Origem: REA (morluto/rea, MIT)._ |
+| jscpd | npm | `jscpd` | referência | Detecta código duplicado no projeto _Origem: REA (morluto/rea, MIT)._ |
+| husky | npm | `husky` | referência | Git hooks versionados no projeto _Origem: REA (morluto/rea, MIT)._ |
 
 ## Segurança e criptografia
 
@@ -416,6 +483,7 @@ As bibliotecas de engenharia reversa existem para análise **autorizada**: arqui
 | passlib | pip | `passlib` | instalável | Hash de senhas com algoritmos seguros e migração entre eles |
 | bcrypt | pip | `bcrypt` | instalável | Hash de senhas com bcrypt |
 | casbin | Go | `github.com/casbin/casbin/v2` | referência | Controle de acesso (RBAC e ABAC) com políticas |
+| openpgp | npm | `openpgp` | referência | Criptografia e assinaturas OpenPGP em JavaScript _Origem: REA (morluto/rea, MIT)._ |
 
 ## Finanças e cripto
 

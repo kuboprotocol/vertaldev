@@ -101,3 +101,46 @@ describe("allowlist de pip da sandbox Python", () => {
     expect(sanitizePackages(["Pillow", "  PANDAS ", "torch", "pandas", "; rm -rf /"])).toEqual(["pillow", "pandas"]);
   });
 });
+
+describe("entradas vindas do REA (morluto/rea)", () => {
+  const rea = VIBE_LIBRARIES.filter((l) => l.source?.startsWith("REA"));
+
+  it("traz as duas listas: dependências npm e motores de código aberto", () => {
+    expect(rea.length).toBeGreaterThanOrEqual(50);
+    expect(rea.some((l) => l.runtime === "npm")).toBe(true);
+    expect(rea.some((l) => l.runtime === "tool")).toBe(true);
+  });
+
+  it("ferramentas de exploração e interceptação nunca entram na allowlist de pip", () => {
+    for (const pkg of ["pwntools", "unicorn", "binwalk", "unblob", "mitmproxy"]) {
+      expect(findLibrary(pkg)?.status, pkg).toBe("template");
+      expect(PYTHON_PACKAGES, pkg).not.toContain(pkg);
+    }
+  });
+
+  it("pwntools carrega a restrição de exploits", () => {
+    expect(findLibrary("pwntools")?.note).toContain("exploits");
+    expect(findLibrary("pwntools")?.note).toContain("não gera nem executa");
+  });
+
+  it("ferramentas externas são sempre template e nunca pip", () => {
+    const tools = VIBE_LIBRARIES.filter((l) => l.runtime === "tool");
+    expect(tools.length).toBeGreaterThanOrEqual(8);
+    for (const t of tools) {
+      expect(t.status, t.id).toBe("template");
+      expect(PYTHON_PACKAGES, t.id).not.toContain(t.package);
+    }
+  });
+
+  it("markdownify e polib são instaláveis, cairosvg não (depende do Cairo)", () => {
+    expect(PYTHON_PACKAGES).toContain("markdownify");
+    expect(PYTHON_PACKAGES).toContain("polib");
+    expect(PYTHON_PACKAGES).not.toContain("cairosvg");
+  });
+
+  it("produtos comerciais (IDA, Hopper, JEB) não viram entrada instalável", () => {
+    for (const name of ["ida", "ida-pro", "hopper", "jeb", "hex-rays"]) {
+      expect(findLibrary(name), name).toBeUndefined();
+    }
+  });
+});

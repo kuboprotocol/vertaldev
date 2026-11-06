@@ -15,7 +15,7 @@
 //  - Nomes foram verificados nos registros oficiais (PyPI, npm e proxy.golang.org).
 //  - `importName` (pip) é o nome usado no `import` do Python, quando difere do pacote.
 
-export type LibraryRuntime = "pip" | "npm" | "go" | "java";
+export type LibraryRuntime = "pip" | "npm" | "go" | "java" | "tool";
 export type LibraryStatus = "ready" | "reference" | "template";
 export type LibraryCategory =
   | "data"
@@ -53,6 +53,8 @@ export interface VibeLibrary {
   description: string;
   /** Restrição de uso ou requisito, quando houver. */
   note?: string;
+  /** Projeto de origem, quando a entrada veio de outro repositório (ex.: "REA"). */
+  source?: string;
 }
 
 const pip = (
@@ -94,6 +96,31 @@ const go = (module: string, category: LibraryCategory, description: string): Vib
 
 const REVERSE_NOTE =
   "Análise de binários só em arquivos seus ou com autorização (CTF, pesquisa, análise defensiva). A plataforma não faz exploração automática.";
+
+/** Origem das entradas que vieram do REA (morluto/rea, MIT). */
+const REA_SOURCE = "REA (morluto/rea, MIT)";
+
+/** Ferramenta externa (binário/app próprio), não uma biblioteca instalável pela plataforma. Sempre template. */
+const tool = (
+  name: string,
+  category: LibraryCategory,
+  description: string,
+  note?: string,
+  source?: string,
+): VibeLibrary => ({
+  id: name.toLowerCase(),
+  name,
+  runtime: "tool",
+  package: name,
+  category,
+  status: "template",
+  description,
+  note,
+  source,
+});
+
+const EXPLOIT_NOTE =
+  "Biblioteca de desenvolvimento de exploits. Só para CTF, laboratórios e pesquisa autorizada. A plataforma não gera nem executa exploits contra alvos de terceiros.";
 
 export const VIBE_LIBRARIES: VibeLibrary[] = [
   // ======================= Python: instaláveis na sandbox (ready) =======================
@@ -430,6 +457,72 @@ export const VIBE_LIBRARIES: VibeLibrary[] = [
   // Web3
   go("github.com/ethereum/go-ethereum", "web3", "Cliente Ethereum (geth) e bibliotecas para contratos"),
   // Ghidra não é Go: fica no bloco próprio acima.
+  // ======================= Vindas do REA (morluto/rea, MIT) =======================
+  // Bibliotecas Python (instaláveis: só as sem risco de uso ofensivo)
+  { ...pip("markdownify", "office", "Converter HTML em Markdown"), source: REA_SOURCE },
+  { ...pip("polib", "office", "Ler e escrever catálogos de tradução gettext (.po e .pot)"), source: REA_SOURCE },
+  { ...pip("cairosvg", "media", "Converter SVG em PNG e PDF", "template", "Precisa da biblioteca Cairo instalada no sistema; exige template próprio.") , source: REA_SOURCE },
+
+  // Engenharia reversa em Python: template, com restrição de uso
+  { ...pip("pwntools", "reverse-engineering", "Biblioteca para análise e desenvolvimento de exploits em binários (ELF, conexões, shellcode)", "template", EXPLOIT_NOTE), source: REA_SOURCE },
+  { ...pip("unicorn", "reverse-engineering", "Emulação de instruções de CPU, para analisar código sem executá-lo no sistema", "template", `Licença GPL-2.0. ${REVERSE_NOTE}`), source: REA_SOURCE },
+  { ...pip("binwalk", "reverse-engineering", "Análise e extração de firmware e arquivos embarcados", "template", REVERSE_NOTE), source: REA_SOURCE },
+  { ...pip("unblob", "reverse-engineering", "Extração recursiva de firmware e de arquivos aninhados", "template", REVERSE_NOTE), source: REA_SOURCE },
+  { ...pip("mitmproxy", "reverse-engineering", "Proxy para inspecionar tráfego HTTP e HTTPS", "template", "Intercepta comunicação: use só no próprio tráfego ou com autorização. Não use em terceiros."), source: REA_SOURCE },
+
+  // Ferramentas externas (binários e apps, fora da allowlist)
+  tool("JADX", "reverse-engineering", "Decompilador de Android (APK e DEX) para código Java legível", `Apache-2.0; precisa do JAR do JADX instalado. ${REVERSE_NOTE}`, REA_SOURCE),
+  tool("Apktool", "reverse-engineering", "Decodificar recursos e manifest de APKs Android", `Apache-2.0; ferramenta Java instalada à parte. ${REVERSE_NOTE}`, REA_SOURCE),
+  tool("WABT", "reverse-engineering", "Ferramentas WebAssembly: wat2wasm, wasm2wat e afins", "Apache-2.0; binários à parte.", REA_SOURCE),
+  tool("GDB", "reverse-engineering", "Depurador GNU para inspecionar programas em execução", `GPL-3.0-or-later; depurador instalado pelo usuário. ${REVERSE_NOTE}`, REA_SOURCE),
+  tool("LLDB", "reverse-engineering", "Depurador do projeto LLVM", `Apache-2.0 com exceções LLVM; instalado pelo usuário. ${REVERSE_NOTE}`, REA_SOURCE),
+  tool("pwndbg", "reverse-engineering", "Extensão do GDB para análise de binários e core dumps", `MIT; extensão para o GDB. ${REVERSE_NOTE}`, REA_SOURCE),
+  tool("adb", "reverse-engineering", "Android Debug Bridge, para falar com dispositivos Android seus", "Apache-2.0; sujeito aos termos do Android SDK quando instalado com ele.", REA_SOURCE),
+  tool("ILSpy", "reverse-engineering", "Decompilador de .NET (ICSharpCode.Decompiler)", `MIT; instalado à parte. ${REVERSE_NOTE}`, REA_SOURCE),
+
+  // npm: bibliotecas de runtime e de dev que o REA usa (referência para projetos gerados)
+  { ...npm("@modelcontextprotocol/server", "backend", "Servidor MCP oficial, para expor ferramentas a agentes de IA"), source: REA_SOURCE },
+  { ...npm("@modelcontextprotocol/client", "backend", "Cliente MCP oficial, para conectar a servidores de ferramentas"), source: REA_SOURCE },
+  { ...npm("isomorphic-git", "devtools", "Git em JavaScript puro, para navegador e Node"), source: REA_SOURCE },
+  { ...npm("openpgp", "security", "Criptografia e assinaturas OpenPGP em JavaScript"), source: REA_SOURCE },
+  { ...npm("pino", "utils", "Logs JSON de alto desempenho para Node"), source: REA_SOURCE },
+  { ...npm("ajv", "utils", "Validação de JSON Schema muito rápida"), source: REA_SOURCE },
+  { ...npm("ajv-formats", "utils", "Formatos extras (e-mail, URI, data) para o Ajv"), source: REA_SOURCE },
+  { ...npm("ws", "backend", "WebSocket para Node"), source: REA_SOURCE },
+  { ...npm("yaml", "utils", "Ler e escrever YAML em JavaScript"), source: REA_SOURCE },
+  { ...npm("semver", "utils", "Comparar e validar versões semânticas"), source: REA_SOURCE },
+  { ...npm("@msgpack/msgpack", "utils", "Serialização binária compacta MessagePack"), source: REA_SOURCE },
+  { ...npm("cborg", "utils", "Serialização binária CBOR"), source: REA_SOURCE },
+  { ...npm("@xterm/headless", "devtools", "Terminal virtual sem interface, para testes e servidores"), source: REA_SOURCE },
+  { ...npm("@lydell/node-pty", "devtools", "Pseudo-terminal para rodar processos interativos no Node"), source: REA_SOURCE },
+  { ...npm("@zip.js/zip.js", "utils", "Ler e criar arquivos ZIP no navegador e no Node"), source: REA_SOURCE },
+  { ...npm("evmole", "web3", "Análise de bytecode EVM: detecta funções e seletores de contratos"), source: REA_SOURCE },
+  { ...npm("parse5", "web", "Parser de HTML conforme o padrão WHATWG"), source: REA_SOURCE },
+  { ...npm("@bufbuild/protobuf", "backend", "Protocol Buffers para TypeScript"), source: REA_SOURCE },
+  { ...npm("@babel/parser", "devtools", "Parser de JavaScript e TypeScript que gera AST"), source: REA_SOURCE },
+  { ...npm("@babel/types", "devtools", "Tipos e construtores para ASTs do Babel"), source: REA_SOURCE },
+  { ...npm("smol-toml", "utils", "Ler e escrever TOML"), source: REA_SOURCE },
+  { ...npm("stream-json", "utils", "Processar JSON grande em streaming, sem carregar tudo na memória"), source: REA_SOURCE },
+  { ...npm("jsonc-parser", "utils", "Ler JSON com comentários (JSONC)"), source: REA_SOURCE },
+  { ...npm("canonicalize", "utils", "JSON canônico (RFC 8785), para assinaturas e hashes estáveis"), source: REA_SOURCE },
+  { ...npm("diff", "utils", "Diferenças entre textos: linhas, palavras e caracteres"), source: REA_SOURCE },
+  { ...npm("@electron/asar", "devtools", "Empacotar e ler arquivos .asar do Electron"), source: REA_SOURCE },
+  { ...npm("@clack/prompts", "devtools", "Prompts bonitos de terminal para CLIs"), source: REA_SOURCE },
+  { ...npm("cross-spawn", "utils", "Executar processos de forma consistente no Windows e no Unix"), source: REA_SOURCE },
+  { ...npm("ignore", "utils", "Regras de .gitignore em JavaScript"), source: REA_SOURCE },
+  { ...npm("tokenx", "ai", "Contagem aproximada de tokens de LLM, sem depender do tokenizer do modelo"), source: REA_SOURCE },
+  { ...npm("lossless-json", "utils", "JSON que preserva números grandes sem perder precisão"), source: REA_SOURCE },
+  // Ferramentas de desenvolvimento e teste do REA
+  { ...npm("@stryker-mutator/core", "testing", "Teste de mutação: mede se os testes pegam bugs de verdade"), source: REA_SOURCE },
+  { ...npm("@fast-check/vitest", "testing", "Testes com propriedades (fast-check) integrados ao Vitest"), source: REA_SOURCE },
+  { ...npm("knip", "devtools", "Encontra arquivos, exports e dependências sem uso"), source: REA_SOURCE },
+  { ...npm("oxlint", "devtools", "Linter muito rápido escrito em Rust"), source: REA_SOURCE },
+  { ...npm("turbo", "devtools", "Orquestra builds e tarefas em monorepos, com cache"), source: REA_SOURCE },
+  { ...npm("tsx", "devtools", "Executa TypeScript direto no Node"), source: REA_SOURCE },
+  { ...npm("vitepress", "devtools", "Documentação estática rápida sobre Vite"), source: REA_SOURCE },
+  { ...npm("jscpd", "devtools", "Detecta código duplicado no projeto"), source: REA_SOURCE },
+  { ...npm("husky", "devtools", "Git hooks versionados no projeto"), source: REA_SOURCE },
+
 ];
 
 /** Allowlist de `pip install` da sandbox Python: só bibliotecas pip com status "ready". */
