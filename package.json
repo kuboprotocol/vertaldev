@@ -114,6 +114,7 @@
     "next-themes": "^0.3.0",
     "oimo": "^1.0.9",
     "p2": "^0.7.1",
+    "pdfjs-dist": "6.4.299",
     "pixi.js": "^8.0.0",
     "pptxgenjs": "^4.0.1",
     "qrcode.react": "^4.2.0",
