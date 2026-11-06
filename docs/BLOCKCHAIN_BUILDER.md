@@ -118,7 +118,9 @@ Algumas ferramentas têm licenças ou condições específicas para uso comercia
 | Arquivo | Conteúdo |
 |---|---|
 | `supabase/functions/_shared/blockchainEngines.ts` | Camadas, catálogo de engines, componentes complementares, faixas de preço e funções de custo. |
+| `supabase/functions/_shared/blockchainRegistry.ts` | Planejador `planBlockchainBuild` e registro de adaptadores (vazio). |
 | `src/config/blockchainEngines.ts` | Reexportação para o front-end. |
+| `src/test/blockchain-registry.test.ts` | Testes do planejador: escolha de engines, validação, mainnet, avisos e custo. |
 | `src/test/blockchain-engines.test.ts` | Testes: ids únicos, repositórios, camadas 4 e 5 experimentais, nada verificado sem conferir, faixas de 10% a 30%. |
 | `src/pages/DocsPage.tsx` | Seção "Blockchain Builder" na documentação do app. |
 
@@ -130,12 +132,25 @@ Algumas ferramentas têm licenças ou condições específicas para uso comercia
 4. Rode `npx vitest run src/test/blockchain-engines.test.ts`.
 5. Atualize esta página se a lista de camadas ou de componentes mudar.
 
+## Blockchain Engine Registry (planejamento)
+
+Já existe o planejador em `supabase/functions/_shared/blockchainRegistry.ts`, função `planBlockchainBuild`. Ele recebe camadas, faixa, custo base, rede (testnet ou mainnet) e, opcionalmente, engines e componentes escolhidos pelo dev. Devolve um plano com:
+
+- os engines por camada (o padrão de cada camada se o dev não escolher: Hyperlane, Cosmos SDK, OP Stack e Arbitrum Nitro);
+- o custo em créditos (`blockchainCreditCost`);
+- os avisos: repositório não conferido, condição comercial, camada experimental, falta de adaptador;
+- `requiresHumanReview`, que é `true` em mainnet.
+
+O planejador recusa engine desconhecido, engine que não atende a camada pedida, pedido sem camada e custo base zero.
+
+**O que ainda não existe:** os adaptadores de geração. `ENGINE_ADAPTERS` está vazio, então nenhum plano gera código hoje. O planejador apenas lista quais engines estão sem adaptador.
+
 ## Pendências
 
-- Conferir no GitHub todos os repositórios do catálogo e trocar `verified` para `true` só depois.
+- Conferir no GitHub todos os repositórios do catálogo e trocar `verified` para `true` só depois. Bloqueado: o acesso ao GitHub não estava liberado para esses repositórios.
 - Confirmar a licença de cada engine (`license`).
 - Confirmar as condições comerciais do Sovereign SDK.
-- Definir o custo base de build de blockchain e ligar `blockchainCreditCost` à cobrança.
-- Implementar o Blockchain Engine Registry e o gerador de projetos.
+- Definir o custo base de build de blockchain e ligar `blockchainCreditCost` à cobrança. Depende de uma decisão de preço, que não foi tomada.
+- Implementar os adaptadores de geração (um por engine) e o gerador de projetos. O registro já aceita os adaptadores; falta escrevê-los.
 - Criar um template de sandbox com os toolchains (Rust, Go, Solidity, Node) para compilar os projetos gerados.
 - Validar a segurança de consenso, bridge e contratos antes de qualquer rede com ativo real.
