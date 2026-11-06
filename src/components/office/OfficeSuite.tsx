@@ -18,6 +18,8 @@ import {
   AlignRight,
   Eraser,
   Sigma,
+  Upload,
+  Youtube,
 } from 'lucide-react';
 import {
   BlockAlign,
@@ -32,6 +34,7 @@ import {
   docToText,
   formatBlock,
   insertBlockAfter,
+  makeBlock,
   removeBlockById,
   setBlockType,
   wordCount,
@@ -59,10 +62,13 @@ import { AiPanel } from './AiPanel';
 import { AppFrame } from './AppFrame';
 import { RibbonButton, RibbonGroup, RibbonSelect, RibbonTab } from './Ribbon';
 import { docToDocx } from '@/lib/office/officeFiles';
+import { OFFICE_KEYS, importFile } from '@/lib/office/importers';
 import { SlidesTab } from './SlidesTab';
+import { MiniWindow } from './MiniWindow';
 
-const DOC_KEY = 'kubo-office-doc-v1';
-const SHEET_KEY = 'kubo-office-sheet-v1';
+const DOC_KEY = OFFICE_KEYS.doc;
+const SHEET_KEY = OFFICE_KEYS.sheet;
+const DECK_KEY = OFFICE_KEYS.deck;
 
 /** Rascunho local (por navegador). Falha de armazenamento nunca quebra a tela. */
 function loadLocal<T>(key: string, fallback: () => T): T {
@@ -221,6 +227,16 @@ function DocumentTab({ creditsAvailable, assistantOpen }: { creditsAvailable: nu
     const added = next.blocks.find((b) => !before.has(b.id));
     if (added) setActiveId(added.id);
     update(next);
+  };
+
+  /** Ditado: preenche o último parágrafo vazio ou acrescenta um novo no fim do documento. */
+  const dictate = (text: string) => {
+    const last = doc.blocks[doc.blocks.length - 1];
+    if (last && last.type === 'paragraph' && last.text.trim() === '') {
+      update({ ...doc, blocks: doc.blocks.map((b) => (b.id === last.id ? { ...b, text } : b)) });
+      return;
+    }
+    update({ ...doc, blocks: [...doc.blocks, makeBlock('paragraph', text)] });
   };
 
   const exportAs = (kind: 'html' | 'md' | 'txt') => {
@@ -388,6 +404,7 @@ function DocumentTab({ creditsAvailable, assistantOpen }: { creditsAvailable: nu
               busy={busy}
               onRun={generate}
               actionLabel={`Escrever com IA · ${OFFICE_AI_CREDIT_COST} crédito`}
+              onDictate={dictate}
             />
           ) : null
         }
@@ -729,10 +746,66 @@ function SheetTab({ creditsAvailable, assistantOpen }: { creditsAvailable: numbe
   );
 }
 
+/** Há conteúdo salvo neste navegador para o aplicativo? Usado para pedir confirmação antes de substituir. */
+function storedHasContent(kind: 'doc' | 'sheet' | 'slides'): boolean {
+  try {
+    if (kind === 'doc') {
+      const d = JSON.parse(window.localStorage.getItem(DOC_KEY) ?? 'null') as DocData | null;
+      return !!d && d.blocks.some((b) => b.text.trim() !== '');
+    }
+    if (kind === 'sheet') {
+      const sh = JSON.parse(window.localStorage.getItem(SHEET_KEY) ?? 'null') as SheetData | null;
+      return !!sh && Object.keys(sh.cells).length > 0;
+    }
+    const dk = JSON.parse(window.localStorage.getItem(DECK_KEY) ?? 'null') as { slides: Array<{ title: string; bullets: string[] }> } | null;
+    return !!dk && dk.slides.some((s) => s.title.trim() !== '' || s.bullets.some((b) => b.trim() !== ''));
+  } catch {
+    return false;
+  }
+}
+
+const APP_LABEL: Record<'doc' | 'sheet' | 'slides', string> = {
+  doc: 'documento',
+  sheet: 'planilha',
+  slides: 'apresentação',
+};
+
 export function OfficeSuite({ creditsAvailable }: { creditsAvailable: number }) {
   const [app, setApp] = useState<AppId>('doc');
   const [assistantOpen, setAssistantOpen] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [importing, setImporting] = useState(false);
+  const [miniOpen, setMiniOpen] = useState(false);
+  const [importNote, setImportNote] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const hasCredit = creditsAvailable >= OFFICE_AI_CREDIT_COST;
+
+  /** Abre qualquer arquivo suportado no aplicativo certo, substituindo o rascunho após confirmação. */
+  const onPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setImporting(true);
+    setImportNote(null);
+    try {
+      const r = await importFile(file);
+      const target: 'doc' | 'sheet' | 'slides' = r.kind === 'doc' ? 'doc' : r.kind === 'sheet' ? 'sheet' : 'slides';
+      if (storedHasContent(target) && !window.confirm(`Substituir o conteúdo atual do ${APP_LABEL[target]} por "${file.name}"?`)) {
+        setImporting(false);
+        return;
+      }
+      if (r.kind === 'doc') window.localStorage.setItem(DOC_KEY, JSON.stringify(r.doc));
+      if (r.kind === 'sheet') window.localStorage.setItem(SHEET_KEY, JSON.stringify(r.sheet));
+      if (r.kind === 'deck') window.localStorage.setItem(DECK_KEY, JSON.stringify(r.deck));
+      setApp(target);
+      setReloadKey((k) => k + 1);
+      setImportNote({ kind: 'ok', text: r.note });
+    } catch (err) {
+      setImportNote({ kind: 'err', text: (err as Error).message });
+    } finally {
+      setImporting(false);
+    }
+  };
 
   return (
     <div className="mx-auto w-full max-w-7xl px-2 py-4 sm:px-4 sm:py-6">
@@ -762,6 +835,27 @@ export function OfficeSuite({ creditsAvailable }: { creditsAvailable: number }) 
             </span>
             <button
               type="button"
+              onClick={() => setMiniOpen((v) => !v)}
+              aria-pressed={miniOpen}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
+                miniOpen ? 'bg-white text-blue-800' : 'bg-white/15 hover:bg-white/25'
+              }`}
+            >
+              <Youtube className="h-3.5 w-3.5" aria-hidden />
+              Mini janela
+            </button>
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={importing}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-white/15 px-2.5 py-1.5 text-xs font-semibold transition hover:bg-white/25 disabled:opacity-50"
+            >
+              <Upload className="h-3.5 w-3.5" aria-hidden />
+              {importing ? 'Abrindo…' : 'Abrir arquivo'}
+            </button>
+            <input ref={fileRef} type="file" className="hidden" onChange={onPick} aria-label="Escolher arquivo para abrir" />
+            <button
+              type="button"
               aria-pressed={assistantOpen}
               onClick={() => setAssistantOpen((v) => !v)}
               className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
@@ -774,6 +868,16 @@ export function OfficeSuite({ creditsAvailable }: { creditsAvailable: number }) 
           </div>
         </header>
 
+        {importNote && (
+          <p
+            role="status"
+            className={`border-b px-4 py-2 text-sm ${
+              importNote.kind === 'ok' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-800'
+            }`}
+          >
+            {importNote.text}
+          </p>
+        )}
         <div className="flex flex-col sm:flex-row">
           {/* Navegação entre aplicativos: lateral no computador, linha no celular. */}
           <nav
@@ -804,11 +908,12 @@ export function OfficeSuite({ creditsAvailable }: { creditsAvailable: number }) 
             })}
           </nav>
 
-          {app === 'doc' && <DocumentTab creditsAvailable={creditsAvailable} assistantOpen={assistantOpen} />}
-          {app === 'sheet' && <SheetTab creditsAvailable={creditsAvailable} assistantOpen={assistantOpen} />}
-          {app === 'slides' && <SlidesTab creditsAvailable={creditsAvailable} assistantOpen={assistantOpen} />}
+          {app === 'doc' && <DocumentTab key={`doc-${reloadKey}`} creditsAvailable={creditsAvailable} assistantOpen={assistantOpen} />}
+          {app === 'sheet' && <SheetTab key={`sheet-${reloadKey}`} creditsAvailable={creditsAvailable} assistantOpen={assistantOpen} />}
+          {app === 'slides' && <SlidesTab key={`slides-${reloadKey}`} creditsAvailable={creditsAvailable} assistantOpen={assistantOpen} />}
         </div>
       </div>
+      <MiniWindow open={miniOpen} onClose={() => setMiniOpen(false)} />
     </div>
   );
 }
