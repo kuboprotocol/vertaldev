@@ -414,7 +414,7 @@ testimonials and a waitlist form.`}</Pre>
         <UL>
           <li><strong>Read web pages</strong> — public https pages only; every redirect is re-validated.</li>
           <li><strong>Slack, e-mail (Gmail), GitHub</strong> — through the user&apos;s own connections, never a platform-wide key.</li>
-          <li><strong>Run Python</strong> — an E2B sandbox per run with Pandas, NumPy, scikit-learn and Matplotlib.</li>
+          <li><strong>Run Python</strong> — an E2B sandbox per run with Pandas, NumPy, scikit-learn and Matplotlib, plus 60+ installable libraries (Polars, DuckDB, Plotly, FastAPI, OpenAI and more).</li>
           <li><strong>Create / run agents</strong> — a created agent never gets more tools than its creator.</li>
         </UL>
         <H3>Credits</H3>
@@ -427,7 +427,7 @@ testimonials and a waitlist form.`}</Pre>
         <H3>Guardrails</H3>
         <UL>
           <li>Per run, shared with sub-agents: 12 AI steps, 5 external actions (messages, e-mails, issues), nesting depth 2.</li>
-          <li>Python: code sent base64-encoded, 60 s per execution, pip installs only from an allowlist.</li>
+          <li>Python: code sent base64-encoded, 60 s per execution, pip installs only from an allowlist (the library catalog, with Next, React, Go and Ghidra, is in <Code>docs/VIBE_LIBRARIES.md</Code>).</li>
           <li>Agents and runs are private to their owner (RLS); writes go through the <Code>vibe-agents</Code> edge function.</li>
         </UL>
         <Callout type="info">

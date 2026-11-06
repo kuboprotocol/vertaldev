@@ -33,12 +33,9 @@ export interface VibeTool {
   parameters: Record<string, unknown>;
 }
 
-/** Extra pip packages an agent may install in the sandbox (the template already ships the data-science stack). */
-export const PYTHON_PACKAGES = [
-  "pandas", "numpy", "scipy", "scikit-learn", "matplotlib", "seaborn", "plotly", "statsmodels",
-  "openpyxl", "xlsxwriter", "python-docx", "pypdf", "beautifulsoup4", "lxml", "requests", "httpx",
-  "pydantic", "tabulate", "networkx", "sympy",
-] as const;
+// Allowlist de pip da sandbox: derivada do catálogo único (vibeLibraries.ts), sem lista paralela.
+export { PYTHON_PACKAGES } from "./vibeLibraries.ts";
+import { PYTHON_PACKAGES } from "./vibeLibraries.ts";
 
 const str = (description: string, maxLength = 2000) => ({ type: "string", description, maxLength });
 
