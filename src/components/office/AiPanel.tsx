@@ -51,6 +51,7 @@ export function AiPanel({ placeholder, creditsAvailable, busy, onRun, actionLabe
   const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState('');
   const [micError, setMicError] = useState<string | null>(null);
+  const [heard, setHeard] = useState<string>('');
   const [locked, setLocked] = useState(false);
   const lockedRef = useRef(false);
   const recRef = useRef<RecognitionLike | null>(null);
@@ -85,6 +86,7 @@ export function AiPanel({ placeholder, creditsAvailable, busy, onRun, actionLabe
       setInterim(pending);
       const clean = finalText.trim();
       if (!clean) return;
+      setHeard(clean);
       if (onDictateRef.current) onDictateRef.current(clean);
       else setPrompt((p) => (p ? `${p} ${clean}` : clean));
     };
@@ -173,6 +175,11 @@ export function AiPanel({ placeholder, creditsAvailable, busy, onRun, actionLabe
       {listening && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700" role="status">
           Ouvindo{interim ? `: ${interim}` : '…'} <span className="text-red-500">(toque no microfone para parar)</span>
+        </p>
+      )}
+      {heard && (
+        <p className="rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-800" role="status">
+          Ouvi: “{heard}” {onDictate ? '· foi para o documento' : '· foi para o pedido'}
         </p>
       )}
       {micError && <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">{micError}</p>}

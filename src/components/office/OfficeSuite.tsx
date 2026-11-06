@@ -229,14 +229,18 @@ function DocumentTab({ creditsAvailable, assistantOpen }: { creditsAvailable: nu
     update(next);
   };
 
-  /** Ditado: preenche o último parágrafo vazio ou acrescenta um novo no fim do documento. */
+  /** Ditado: preenche o último parágrafo vazio ou acrescenta um novo no fim do documento. Usa atualização funcional para não perder falas seguidas. */
   const dictate = (text: string) => {
-    const last = doc.blocks[doc.blocks.length - 1];
-    if (last && last.type === 'paragraph' && last.text.trim() === '') {
-      update({ ...doc, blocks: doc.blocks.map((b) => (b.id === last.id ? { ...b, text } : b)) });
-      return;
-    }
-    update({ ...doc, blocks: [...doc.blocks, makeBlock('paragraph', text)] });
+    setDoc((prev) => {
+      const last = prev.blocks[prev.blocks.length - 1];
+      const next: DocData =
+        last && last.type === 'paragraph' && last.text.trim() === ''
+          ? { ...prev, blocks: prev.blocks.map((b) => (b.id === last.id ? { ...b, text } : b)) }
+          : { ...prev, blocks: [...prev.blocks, makeBlock('paragraph', text)] };
+      const stamped = { ...next, updatedAt: new Date().toISOString() };
+      saveLocal(DOC_KEY, stamped);
+      return stamped;
+    });
   };
 
   const exportAs = (kind: 'html' | 'md' | 'txt') => {
