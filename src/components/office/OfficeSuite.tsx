@@ -229,14 +229,38 @@ function DocumentTab({ creditsAvailable, assistantOpen }: { creditsAvailable: nu
     update(next);
   };
 
-  /** Ditado: preenche o último parágrafo vazio ou acrescenta um novo no fim do documento. */
-  const dictate = (text: string) => {
-    const last = doc.blocks[doc.blocks.length - 1];
-    if (last && last.type === 'paragraph' && last.text.trim() === '') {
-      update({ ...doc, blocks: doc.blocks.map((b) => (b.id === last.id ? { ...b, text } : b)) });
+  /** Parágrafo que mostra a fala em andamento. Fica pendente até a fala ser confirmada. */
+  const pendingIdRef = useRef<string | null>(null);
+
+  const persist = (next: DocData): DocData => {
+    const stamped = { ...next, updatedAt: new Date().toISOString() };
+    saveLocal(DOC_KEY, stamped);
+    return stamped;
+  };
+
+  /** Texto ao vivo: escreve no parágrafo pendente (cria um se preciso). Vazio não cria nada. */
+  const dictateInterim = (text: string) => {
+    if (!pendingIdRef.current && !text) return;
+    if (!pendingIdRef.current) {
+      const block = makeBlock('paragraph', text);
+      pendingIdRef.current = block.id;
+      setDoc((prev) => persist({ ...prev, blocks: [...prev.blocks, block] }));
       return;
     }
-    update({ ...doc, blocks: [...doc.blocks, makeBlock('paragraph', text)] });
+    const id = pendingIdRef.current;
+    setDoc((prev) => persist({ ...prev, blocks: prev.blocks.map((b) => (b.id === id ? { ...b, text } : b)) }));
+  };
+
+  /** Fala confirmada: vira o texto final do parágrafo pendente (ou um parágrafo novo). */
+  const dictateFinal = (text: string) => {
+    const id = pendingIdRef.current;
+    pendingIdRef.current = null;
+    if (id) {
+      setDoc((prev) => persist({ ...prev, blocks: prev.blocks.map((b) => (b.id === id ? { ...b, text } : b)) }));
+      return;
+    }
+    const block = makeBlock('paragraph', text);
+    setDoc((prev) => persist({ ...prev, blocks: [...prev.blocks, block] }));
   };
 
   const exportAs = (kind: 'html' | 'md' | 'txt') => {
@@ -404,7 +428,8 @@ function DocumentTab({ creditsAvailable, assistantOpen }: { creditsAvailable: nu
               busy={busy}
               onRun={generate}
               actionLabel={`Escrever com IA · ${OFFICE_AI_CREDIT_COST} crédito`}
-              onDictate={dictate}
+              onDictate={dictateFinal}
+              onInterim={dictateInterim}
             />
           ) : null
         }
