@@ -109,16 +109,7 @@ export function AiPanel({ placeholder, creditsAvailable, busy, onRun, actionLabe
     rec.start();
   };
 
-  /** Clique simples: liga por um trecho e desliga ao parar. Duplo clique: deixa ligado até o próximo duplo clique. */
-  const onMicClick = () => {
-    if (lockedRef.current) return;
-    if (recRef.current) {
-      recRef.current.stop();
-      return;
-    }
-    startRecognition();
-  };
-
+  /** Duplo clique liga o microfone e deixa ligado. Outro duplo clique desliga. */
   const onMicDoubleClick = () => {
     if (lockedRef.current) {
       lockedRef.current = false;
@@ -154,14 +145,21 @@ export function AiPanel({ placeholder, creditsAvailable, busy, onRun, actionLabe
         />
         <button
           type="button"
-          onClick={onMicClick}
           onDoubleClick={onMicDoubleClick}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onMicDoubleClick();
+            }
+          }}
           disabled={!micSupported}
-          aria-label={locked ? 'Microfone ligado. Clique duas vezes para desligar' : 'Ditar por voz'}
+          aria-label={locked ? 'Microfone ligado. Clique duas vezes para desligar' : 'Ligar microfone (clique duas vezes)'}
           aria-pressed={listening}
           title={
             micSupported
-              ? 'Clique para ditar. Clique duas vezes para deixar o microfone ligado'
+              ? listening
+                ? 'Clique duas vezes para desligar o microfone'
+                : 'Clique duas vezes para ligar o microfone'
               : 'Seu navegador não tem ditado por voz. Use Chrome ou Edge.'
           }
           className={`absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-40 ${
