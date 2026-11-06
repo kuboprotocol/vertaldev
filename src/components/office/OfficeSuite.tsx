@@ -229,18 +229,38 @@ function DocumentTab({ creditsAvailable, assistantOpen }: { creditsAvailable: nu
     update(next);
   };
 
-  /** Ditado: preenche o último parágrafo vazio ou acrescenta um novo no fim do documento. Usa atualização funcional para não perder falas seguidas. */
-  const dictate = (text: string) => {
-    setDoc((prev) => {
-      const last = prev.blocks[prev.blocks.length - 1];
-      const next: DocData =
-        last && last.type === 'paragraph' && last.text.trim() === ''
-          ? { ...prev, blocks: prev.blocks.map((b) => (b.id === last.id ? { ...b, text } : b)) }
-          : { ...prev, blocks: [...prev.blocks, makeBlock('paragraph', text)] };
-      const stamped = { ...next, updatedAt: new Date().toISOString() };
-      saveLocal(DOC_KEY, stamped);
-      return stamped;
-    });
+  /** Parágrafo que mostra a fala em andamento. Fica pendente até a fala ser confirmada. */
+  const pendingIdRef = useRef<string | null>(null);
+
+  const persist = (next: DocData): DocData => {
+    const stamped = { ...next, updatedAt: new Date().toISOString() };
+    saveLocal(DOC_KEY, stamped);
+    return stamped;
+  };
+
+  /** Texto ao vivo: escreve no parágrafo pendente (cria um se preciso). Vazio não cria nada. */
+  const dictateInterim = (text: string) => {
+    if (!pendingIdRef.current && !text) return;
+    if (!pendingIdRef.current) {
+      const block = makeBlock('paragraph', text);
+      pendingIdRef.current = block.id;
+      setDoc((prev) => persist({ ...prev, blocks: [...prev.blocks, block] }));
+      return;
+    }
+    const id = pendingIdRef.current;
+    setDoc((prev) => persist({ ...prev, blocks: prev.blocks.map((b) => (b.id === id ? { ...b, text } : b)) }));
+  };
+
+  /** Fala confirmada: vira o texto final do parágrafo pendente (ou um parágrafo novo). */
+  const dictateFinal = (text: string) => {
+    const id = pendingIdRef.current;
+    pendingIdRef.current = null;
+    if (id) {
+      setDoc((prev) => persist({ ...prev, blocks: prev.blocks.map((b) => (b.id === id ? { ...b, text } : b)) }));
+      return;
+    }
+    const block = makeBlock('paragraph', text);
+    setDoc((prev) => persist({ ...prev, blocks: [...prev.blocks, block] }));
   };
 
   const exportAs = (kind: 'html' | 'md' | 'txt') => {
@@ -408,7 +428,8 @@ function DocumentTab({ creditsAvailable, assistantOpen }: { creditsAvailable: nu
               busy={busy}
               onRun={generate}
               actionLabel={`Escrever com IA · ${OFFICE_AI_CREDIT_COST} crédito`}
-              onDictate={dictate}
+              onDictate={dictateFinal}
+              onInterim={dictateInterim}
             />
           ) : null
         }
