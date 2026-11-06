@@ -6,7 +6,7 @@ import {
   type ReactNode,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
-import { ArrowDown, ArrowUp, Circle, Download, Image as ImageIcon, Square, Trash2, Type } from 'lucide-react';
+import { ArrowDown, ArrowUp, Circle, Download, Image as ImageIcon, Square, Trash2, Type, X } from 'lucide-react';
 import { DESIGN_FORMATS, DESIGN_FORMATS_INFO, type DesignFormat } from '@/config/designPricing';
 
 // Editor manual de design: monta a arte camada por camada, sem IA e sem créditos.
@@ -28,6 +28,11 @@ type FontKey = keyof typeof FONTS;
 
 const LINE_HEIGHT = 1.2;
 const PREVIEW_MAX = { width: 560, height: 640 };
+// Alças de redimensionar: tamanho visual e área de toque, em pixels do canvas.
+const HANDLE_SIZE = 28;
+const HANDLE_HIT = 56;
+// Menor tamanho de uma camada ao redimensionar (evita sumir com a camada).
+const MIN_SIZE = 24;
 
 interface Layer {
   id: string;
@@ -108,12 +113,21 @@ function drawScene(
   if (showSelection && selectedId) {
     const selected = layers.find((layer) => layer.id === selectedId);
     if (selected) {
-      const box = layerBounds(ctx, selected);
+      const frame = frameOf(layerBounds(ctx, selected));
       ctx.save();
       ctx.strokeStyle = '#fbbf24';
       ctx.lineWidth = 4;
       ctx.setLineDash([12, 8]);
-      ctx.strokeRect(box.x - 6, box.y - 6, box.w + 12, box.h + 12);
+      ctx.strokeRect(frame.x, frame.y, frame.w, frame.h);
+      // Alças nos cantos: tamanho fixo na tela, para puxar e redimensionar.
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#ffffff';
+      for (const point of Object.values(cornersOf(frame))) {
+        const x = point.x - HANDLE_SIZE / 2;
+        const y = point.y - HANDLE_SIZE / 2;
+        ctx.fillRect(x, y, HANDLE_SIZE, HANDLE_SIZE);
+        ctx.strokeRect(x, y, HANDLE_SIZE, HANDLE_SIZE);
+      }
       ctx.restore();
     }
   }
@@ -139,12 +153,60 @@ function fitLayerToSize(layer: Layer, from: Size, to: Size): Layer {
   return { ...layer, x, y, w: layer.w * sx, h: layer.h * sy };
 }
 
+type Point = { x: number; y: number };
+type Box = { x: number; y: number; w: number; h: number };
+type Corner = 'nw' | 'ne' | 'sw' | 'se';
+
+// Gesto em andamento: arrastar, puxar uma alça de canto ou pinçar com dois dedos.
+type Gesture =
+  | { type: 'drag'; id: string; dx: number; dy: number }
+  | { type: 'resize'; id: string; base: Layer; baseBox: Box; anchor: Point; grab: Point }
+  | { type: 'pinch'; id: string; base: Layer; baseBox: Box; startDist: number; startCenter: Point };
+
+const OPPOSITE: Record<Corner, Corner> = { nw: 'se', ne: 'sw', sw: 'ne', se: 'nw' };
+
+/** Moldura de seleção: a caixa da camada com a folga de 6px usada no traço tracejado. */
+function frameOf(box: Box): Box {
+  return { x: box.x - 6, y: box.y - 6, w: box.w + 12, h: box.h + 12 };
+}
+
+function cornersOf(box: Box): Record<Corner, Point> {
+  return {
+    nw: { x: box.x, y: box.y },
+    ne: { x: box.x + box.w, y: box.y },
+    sw: { x: box.x, y: box.y + box.h },
+    se: { x: box.x + box.w, y: box.y + box.h },
+  };
+}
+
+/** Qual alça de canto da moldura está sob o ponto, se alguma. */
+function cornerAt(box: Box, point: Point): Corner | null {
+  const corners = cornersOf(frameOf(box));
+  const keys = Object.keys(corners) as Corner[];
+  return keys.find((key) => Math.hypot(corners[key].x - point.x, corners[key].y - point.y) <= HANDLE_HIT) ?? null;
+}
+
+/** Escala de uma camada com a âncora parada: o canto oposto ao que foi puxado, ou o centro do pinça. */
+function scaleLayer(base: Layer, anchor: Point, sx: number, sy: number): Layer {
+  const x = anchor.x + (base.x - anchor.x) * sx;
+  const y = anchor.y + (base.y - anchor.y) * sy;
+  if (base.kind === 'text') return { ...base, x, y, fontSize: Math.max(8, (base.fontSize ?? 64) * sx) };
+  return { ...base, x, y, w: base.w * sx, h: base.h * sy };
+}
+
+/** Menor escala que ainda deixa a camada com MIN_SIZE no lado mais curto. */
+function minScaleFor(box: Box): number {
+  return MIN_SIZE / Math.max(1, Math.min(box.w, box.h));
+}
+
 export function ManualDesignEditor() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textFieldRef = useRef<HTMLTextAreaElement>(null);
   const focusTextOnAddRef = useRef(false);
-  const dragRef = useRef<{ id: string; dx: number; dy: number } | null>(null);
+  const gestureRef = useRef<Gesture | null>(null);
+  // Ponteiros ativos sobre o canvas, em coordenadas do design (um por dedo ou mouse).
+  const pointersRef = useRef(new Map<number, Point>());
 
   const [format, setFormat] = useState<DesignFormat>('post');
   const [background, setBackground] = useState('#0f172a');
@@ -258,37 +320,125 @@ export function ManualDesignEditor() {
     };
   };
 
+  const replaceLayer = (next: Layer) => {
+    setLayers((current) => current.map((layer) => (layer.id === next.id ? next : layer)));
+  };
+
   const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
-    const ctx = event.currentTarget.getContext('2d');
+    const canvas = event.currentTarget;
+    const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const point = pointFromEvent(event);
+    pointersRef.current.set(event.pointerId, point);
+    canvas.setPointerCapture(event.pointerId);
+    const selectedLayer = selectedId ? layers.find((layer) => layer.id === selectedId) : undefined;
+
+    // Dois dedos: pinça na camada selecionada (aumenta, diminui e move junto).
+    if (pointersRef.current.size === 2) {
+      if (selectedLayer) {
+        const [a, b] = [...pointersRef.current.values()];
+        gestureRef.current = {
+          type: 'pinch',
+          id: selectedLayer.id,
+          base: selectedLayer,
+          baseBox: layerBounds(ctx, selectedLayer),
+          startDist: Math.max(1, Math.hypot(b.x - a.x, b.y - a.y)),
+          startCenter: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+        };
+      } else {
+        gestureRef.current = null;
+      }
+      return;
+    }
+    if (pointersRef.current.size > 2) return;
+
+    // Alça de canto da camada selecionada: a âncora é o canto oposto, que fica parado.
+    if (selectedLayer) {
+      const baseBox = layerBounds(ctx, selectedLayer);
+      const corner = cornerAt(baseBox, point);
+      if (corner) {
+        const corners = cornersOf(baseBox);
+        gestureRef.current = {
+          type: 'resize',
+          id: selectedLayer.id,
+          base: selectedLayer,
+          baseBox,
+          anchor: corners[OPPOSITE[corner]],
+          grab: corners[corner],
+        };
+        return;
+      }
+    }
+
     // Do topo para o fundo: a camada mais alta é a primeira a ser atingida.
     const hit = [...layers].reverse().find((layer) => {
       const box = layerBounds(ctx, layer);
       return point.x >= box.x && point.x <= box.x + box.w && point.y >= box.y && point.y <= box.y + box.h;
     });
     if (!hit) {
+      gestureRef.current = null;
       setSelectedId(null);
       return;
     }
     setSelectedId(hit.id);
-    dragRef.current = { id: hit.id, dx: point.x - hit.x, dy: point.y - hit.y };
-    event.currentTarget.setPointerCapture(event.pointerId);
+    gestureRef.current = { type: 'drag', id: hit.id, dx: point.x - hit.x, dy: point.y - hit.y };
   };
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
-    const drag = dragRef.current;
-    if (!drag) return;
     const point = pointFromEvent(event);
-    setLayers((current) =>
-      current.map((layer) =>
-        layer.id === drag.id ? { ...layer, x: point.x - drag.dx, y: point.y - drag.dy } : layer,
-      ),
-    );
+    if (pointersRef.current.has(event.pointerId)) pointersRef.current.set(event.pointerId, point);
+    const gesture = gestureRef.current;
+    if (!gesture) return;
+
+    if (gesture.type === 'drag') {
+      setLayers((current) =>
+        current.map((layer) =>
+          layer.id === gesture.id ? { ...layer, x: point.x - gesture.dx, y: point.y - gesture.dy } : layer,
+        ),
+      );
+      return;
+    }
+
+    if (gesture.type === 'resize') {
+      const { base, baseBox, anchor, grab } = gesture;
+      // Quanto o ponteiro se afastou da âncora, em relação à distância original do canto puxado.
+      const rawX = (point.x - anchor.x) / (grab.x - anchor.x || 1);
+      const rawY = (point.y - anchor.y) / (grab.y - anchor.y || 1);
+      if (base.kind === 'shape') {
+        replaceLayer(
+          scaleLayer(
+            base,
+            anchor,
+            Math.max(rawX, MIN_SIZE / Math.max(1, baseBox.w)),
+            Math.max(rawY, MIN_SIZE / Math.max(1, baseBox.h)),
+          ),
+        );
+      } else {
+        // Imagem e texto mantêm a proporção: o maior dos dois eixos manda.
+        const s = Math.max(rawX, rawY, minScaleFor(baseBox));
+        replaceLayer(scaleLayer(base, anchor, s, s));
+      }
+      return;
+    }
+
+    // Pinça: o tamanho segue a distância entre os dedos; o meio dos dedos também arrasta a camada.
+    if (pointersRef.current.size < 2) return;
+    const [a, b] = [...pointersRef.current.values()];
+    const dist = Math.hypot(b.x - a.x, b.y - a.y);
+    const center = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const s = Math.max(dist / gesture.startDist, minScaleFor(gesture.baseBox));
+    const scaled = scaleLayer(gesture.base, gesture.startCenter, s, s);
+    replaceLayer({
+      ...scaled,
+      x: scaled.x + (center.x - gesture.startCenter.x),
+      y: scaled.y + (center.y - gesture.startCenter.y),
+    });
   };
 
-  const stopDrag = () => {
-    dragRef.current = null;
+  const handlePointerEnd = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    pointersRef.current.delete(event.pointerId);
+    // Ao soltar um dedo, o gesto termina: o dedo que sobrou não arrasta sozinho.
+    gestureRef.current = null;
   };
 
   const handleDownload = () => {
@@ -354,15 +504,15 @@ export function ManualDesignEditor() {
               aria-label="Área de edição do design"
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
-              onPointerUp={stopDrag}
-              onPointerCancel={stopDrag}
-              // pan-y: o dedo na arte ainda rola a página na vertical; arrastar camada segue funcionando na horizontal.
+              onPointerUp={handlePointerEnd}
+              onPointerCancel={handlePointerEnd}
+              // Com camada selecionada, o toque é do editor (alças e pinça). Sem seleção, o dedo rola a página.
               style={{
                 width: '100%',
                 maxWidth: size.width * scale,
                 height: 'auto',
                 aspectRatio: `${size.width} / ${size.height}`,
-                touchAction: 'pan-y',
+                touchAction: selectedId ? 'none' : 'pan-y',
               }}
               className="rounded-lg shadow-lg shadow-black/40"
             />
@@ -474,10 +624,16 @@ export function ManualDesignEditor() {
                   disabled={selectedIndex <= 0}
                   onClick={() => moveSelected(-1)}
                 />
+                <ToolButton icon={<X className="w-4 h-4" />} label="Desselecionar" onClick={() => setSelectedId(null)} />
                 <ToolButton icon={<Trash2 className="w-4 h-4" />} label="Excluir" onClick={deleteSelected} />
               </div>
             )}
             {!selected && <p className="text-xs text-slate-500">Clique em uma camada no canvas para editar. Arraste para mover.</p>}
+            {selected && (
+              <p className="text-xs text-slate-500">
+                Puxe uma alça de canto para redimensionar, ou use dois dedos para aumentar ou diminuir. Toque em Desselecionar para rolar a página.
+              </p>
+            )}
           </section>
 
           <button
