@@ -322,7 +322,7 @@ export function ManualDesignEditor() {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8">
-        <div className="space-y-4">
+        <div className="space-y-4 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             {DESIGN_FORMATS.map((f) => {
               const info = DESIGN_FORMATS_INFO[f];
@@ -346,6 +346,7 @@ export function ManualDesignEditor() {
           </div>
 
           <div className="flex justify-center rounded-2xl border border-slate-700/60 bg-slate-900/60 p-4">
+            {/* Largura flexível: no celular o canvas acompanha a tela em vez de estourar o cartão. */}
             <canvas
               ref={canvasRef}
               width={size.width}
@@ -355,7 +356,14 @@ export function ManualDesignEditor() {
               onPointerMove={handlePointerMove}
               onPointerUp={stopDrag}
               onPointerCancel={stopDrag}
-              style={{ width: size.width * scale, height: size.height * scale, touchAction: 'none' }}
+              // pan-y: o dedo na arte ainda rola a página na vertical; arrastar camada segue funcionando na horizontal.
+              style={{
+                width: '100%',
+                maxWidth: size.width * scale,
+                height: 'auto',
+                aspectRatio: `${size.width} / ${size.height}`,
+                touchAction: 'pan-y',
+              }}
               className="rounded-lg shadow-lg shadow-black/40"
             />
           </div>
