@@ -439,6 +439,55 @@ testimonials and a waitlist form.`}</Pre>
     ),
   },
   {
+    id: 'blockchain-builder',
+    title: 'Blockchain Builder',
+    icon: Layers,
+    group: 'Creative Suite',
+    content: (
+      <>
+        <H2>KUBO Blockchain Builder</H2>
+        <Callout type="info">
+          Concept and catalog. The automatic generation of projects, nodes and networks is not
+          implemented yet. Reference in <Code>docs/BLOCKCHAIN_BUILDER.md</Code>.
+        </Callout>
+        <P>
+          The idea: describe the network in plain language, choose its characteristics, and the AI
+          selects frameworks, generates the source, configures the modules, creates nodes, validators
+          and genesis, and delivers a project you own: download it, change it, compile it and host it
+          on your own infrastructure.
+        </P>
+        <H3>Layers</H3>
+        <UL>
+          <li><strong>Layer 0</strong> — interoperability and communication between networks (IBC, Hyperlane, LayerZero, Wormhole, Axelar, libp2p).</li>
+          <li><strong>Layer 1</strong> — independent blockchains with their own consensus, validators and token (Cosmos SDK, Polkadot SDK, AvalancheGo, Solana, Geth, Besu).</li>
+          <li><strong>Layer 2</strong> — rollups and scaling networks that settle on another chain (OP Stack, Arbitrum Nitro, ZK Stack, Polygon CDK, Sovereign SDK, Rollkit).</li>
+          <li><strong>Layer 3</strong> — specialized networks and apps on top of a Layer 2: games, DeFi, services.</li>
+          <li><strong>Layers 4 and 5</strong> — experimental Kubo architectures, not market standards.</li>
+        </UL>
+        <H3>Components</H3>
+        <P>
+          Every network also gets the parts it needs: REVM (EVM), Wasmtime (WASM), CometBFT (consensus),
+          RustCrypto, Foundry (contracts), RocksDB (state), libp2p (P2P), Graph Node (indexing) and
+          Plonky3 (ZK proofs).
+        </P>
+        <H3>Pricing</H3>
+        <P>
+          Creating a blockchain costs <strong>10% to 30% more credits</strong> than the base action.
+          Basic (one layer, one engine) is +10%; standard (validators, explorer, APIs) is +20%; advanced
+          (several layers, bridge, ZK or own consensus) is +30%. Example: a 10-credit base becomes 12
+          credits at the standard tier.
+        </P>
+        <H3>Rules</H3>
+        <UL>
+          <li>Official repositories, respecting each license; versions pinned.</li>
+          <li>Testnet is the default. Mainnet with real assets requires human review before deployment.</li>
+          <li>Security checks for consensus, bridges and contracts before any network goes live.</li>
+          <li>Some engines have commercial terms (for example, Sovereign SDK revenue share). These are checked before an engine is enabled.</li>
+        </UL>
+      </>
+    ),
+  },
+  {
     id: 'game-engine',
     title: 'Quantum Game Engine',
     icon: Gamepad2,
