@@ -22,6 +22,7 @@ import {
 import { download, safeName } from '@/lib/office/download';
 import {
   PDF_MAX_BYTES,
+  pdfTooBigMessage,
   PDF_THUMB_LIMIT,
   PdfOp,
   VisualPoint,
@@ -132,7 +133,7 @@ function PageThumb({ doc, pageNumber, active, onSelect }: { doc: PdfJsDocument; 
 }
 
 async function readBytes(file: File): Promise<Uint8Array> {
-  if (file.size > PDF_MAX_BYTES) throw new Error('PDF maior que 10 MB. Divida o arquivo e tente de novo.');
+  if (file.size > PDF_MAX_BYTES) throw new Error(pdfTooBigMessage());
   return new Uint8Array(await file.arrayBuffer());
 }
 
@@ -428,6 +429,14 @@ export function PdfTab({
   if (!bytes) {
     return (
       <section className="flex-1 bg-[#e9ecef] p-4 sm:p-8" aria-label="Aplicativo PDF">
+        {notice?.kind === 'err' && (
+          <div role="alert" className="mx-auto mb-4 flex max-w-4xl items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <span>{notice.text}</span>
+            <button type="button" onClick={() => setNotice(null)} aria-label="Fechar aviso" className="rounded p-0.5 text-red-700 hover:bg-red-100">
+              <X className="h-4 w-4" aria-hidden />
+            </button>
+          </div>
+        )}
         <div className="mx-auto grid max-w-4xl gap-5 md:grid-cols-2">
           <div
             onDragOver={(e) => {
@@ -444,7 +453,7 @@ export function PdfTab({
               <Upload className="h-5 w-5" aria-hidden />
             </span>
             <h3 className="font-semibold text-slate-900">Abrir um PDF</h3>
-            <p className="text-sm text-slate-600">Arraste um arquivo .pdf para cá ou escolha no seu aparelho. Até 10 MB.</p>
+            <p className="text-sm text-slate-600">Arraste um arquivo .pdf para cá ou escolha no seu aparelho. Até 50 MB.</p>
             <button
               type="button"
               disabled={busy}
@@ -504,8 +513,8 @@ export function PdfTab({
             </button>
           </div>
         </div>
-        {notice && (
-          <p role="status" className={`mx-auto mt-4 max-w-4xl text-sm ${notice.kind === 'ok' ? 'text-emerald-700' : 'text-red-700'}`}>
+        {notice?.kind === 'ok' && (
+          <p role="status" className="mx-auto mt-4 max-w-4xl text-sm text-emerald-700">
             {notice.text}
           </p>
         )}
@@ -570,6 +579,15 @@ export function PdfTab({
           <Download className="h-3.5 w-3.5" aria-hidden /> Baixar PDF editado
         </button>
       </div>
+
+      {notice?.kind === 'err' && (
+        <div role="alert" className="mx-auto mb-4 flex max-w-4xl items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <span>{notice.text}</span>
+          <button type="button" onClick={() => setNotice(null)} aria-label="Fechar aviso" className="rounded p-0.5 text-red-700 hover:bg-red-100">
+            <X className="h-4 w-4" aria-hidden />
+          </button>
+        </div>
+      )}
 
       {/* Ferramentas de edição e de página. */}
       <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-slate-50 px-3 py-2" role="toolbar" aria-label="Ferramentas do PDF">

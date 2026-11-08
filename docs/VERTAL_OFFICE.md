@@ -14,7 +14,7 @@ Suíte de escritório do Painel Criativo: documentos, planilhas, apresentações
 |------|----------|
 | Documento | Blocos de título, parágrafo e item de lista. Modelos prontos (carta, relatório, ata, proposta, contrato de serviços, currículo). Exporta HTML, Markdown, texto, Word e PDF (paginado, com número de página). |
 | Planilha | Grade de até 200 linhas × 26 colunas. Fórmulas: `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `ROUND`, `ABS`, operadores `+ - * / ^` e parênteses. Erros: `#DIV/0!`, `#REF!`, `#VALUE!`, `#NAME?`, `#CYCLE!`. Modelos: orçamento e controle financeiro, com totais calculados. Exporta CSV, `.xlsx` e PDF (paisagem, com a formatação das células). |
-| PDF | Abrir ou arrastar um PDF (até 10 MB). Editar: texto, destaque, cobrir área com branco, girar página, apagar página, página em branco, anexar outro PDF. Cada ação grava o PDF na hora e "Desfazer" volta uma ação (até 15). Criar: PDF em branco ou a partir de um texto colado. Baixa o PDF editado ou o original. |
+| PDF | Abrir ou arrastar um PDF (até 50 MB). Editar: texto, destaque, cobrir área com branco, girar página, apagar página, página em branco, anexar outro PDF. Cada ação grava o PDF na hora e "Desfazer" volta uma ação (até 15). Criar: PDF em branco ou a partir de um texto colado. Baixa o PDF editado ou o original. |
 | IA | Escreve documento, preenche planilha e gera slides a partir de um pedido e de material colado opcional. 1 crédito por uso. |
 | Apresentação | Slides com título e tópicos. A IA gera a apresentação inteira ou adiciona slides depois do atual (1 crédito por uso). Exporta PDF (paisagem), HTML, texto e PowerPoint (`.pptx`). |
 | Word | Exporta documento em `.docx`. |
@@ -80,5 +80,5 @@ A galeria guarda os documentos de cada usuário na conta (Supabase), não só no
 - **Salvar na galeria** (cabeçalho): guarda o item aberto. O indicador âmbar mostra alterações ainda não salvas.
 - **Abrir** reabre o item no editor certo. **Renomear**, **Duplicar**, **Baixar** (no formato nativo: .docx, .xlsx, .pptx ou .pdf) e **Excluir** (com confirmação).
 - Segurança: cada linha pertence a um usuário e as políticas RLS impedem acesso a itens de outras pessoas. PDFs ficam no bucket privado `office-files`, em uma pasta por usuário.
-- Limites: 1 MB por documento estruturado e 10 MB por PDF. A lista mostra os 500 itens mais recentes.
+- Limites: 1 MB por documento estruturado e 50 MB por PDF. A lista mostra os 500 itens mais recentes.
 - Migração: `supabase/migrations/20261108150000_office_documents.sql`. Os tipos em `src/integrations/supabase/types.ts` foram escritos à mão; regenere com `supabase gen types` depois de aplicar a migração.

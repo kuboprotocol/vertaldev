@@ -48,12 +48,12 @@ CREATE POLICY "office_documents_delete_own" ON public.office_documents
 REVOKE ALL ON public.office_documents FROM anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.office_documents TO authenticated;
 
--- Bucket privado para os PDFs (até 10 MB, só PDF).
+-- Bucket privado para os PDFs (até 50 MB, só PDF).
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES ('office-files', 'office-files', false, 10485760, ARRAY['application/pdf'])
+VALUES ('office-files', 'office-files', false, 52428800, ARRAY['application/pdf'])
 ON CONFLICT (id) DO UPDATE SET
   public = false,
-  file_size_limit = 10485760,
+  file_size_limit = 52428800,
   allowed_mime_types = ARRAY['application/pdf'];
 
 -- Cada arquivo fica em <user_id>/<arquivo>. Só o dono acessa a própria pasta.

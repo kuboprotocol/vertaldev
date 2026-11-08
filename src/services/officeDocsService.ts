@@ -3,6 +3,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
 import type { OfficeItem, OfficeKind } from '@/lib/office/galleryModel';
+import { PDF_MAX_BYTES } from '@/lib/office/pdfEdit';
 
 const TABLE = 'office_documents';
 const BUCKET = 'office-files';
@@ -113,7 +114,7 @@ export async function savePdfItem(input: {
   excerpt: string;
   bytes: Uint8Array;
 }): Promise<OfficeItem> {
-  if (input.bytes.byteLength > 10 * 1024 * 1024) fail('salvar o PDF', 'o arquivo passou de 10 MB.');
+  if (input.bytes.byteLength > PDF_MAX_BYTES) fail('salvar o PDF', 'o arquivo passou de 50 MB.');
   const path = `${input.userId}/${crypto.randomUUID()}.pdf`;
   const upload = await supabase.storage
     .from(BUCKET)
