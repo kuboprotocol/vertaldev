@@ -1,7 +1,7 @@
 // Galeria do Vertal Office: os documentos salvos do usuário, com busca, filtro e ações.
 // Componente de apresentação: quem chama cuida dos dados (ver OfficeGalleryPanel).
 import React, { useMemo, useState } from 'react';
-import { Copy, Download, FileSpreadsheet, FileText, FolderOpen, Pencil, Plus, Presentation, Search, Trash2, FileType, AlertTriangle, X } from 'lucide-react';
+import { Copy, Download, File as FileGeneric, FileSpreadsheet, FileText, FolderOpen, Pencil, Plus, Presentation, Search, Trash2, FileType, AlertTriangle, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -17,6 +17,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
+  CREATABLE_KINDS,
   KIND_META,
   OFFICE_KINDS,
   countByKind,
@@ -33,6 +34,7 @@ const KIND_ICON: Record<OfficeKind, React.ComponentType<{ className?: string }>>
   sheet: FileSpreadsheet,
   slides: Presentation,
   pdf: FileType,
+  file: FileGeneric,
 };
 
 export interface OfficeGalleryProps {
@@ -47,6 +49,8 @@ export interface OfficeGalleryProps {
   onDuplicate: (item: OfficeItem) => void;
   onDownload: (item: OfficeItem) => void;
   onDelete: (item: OfficeItem) => Promise<void> | void;
+  /** Arquivo escolhido para guardar na galeria (qualquer tipo; a validação é feita antes do envio). */
+  onUpload: (file: File) => void;
 }
 
 /** Miniatura de cada tipo: lembra a página, a planilha, o slide ou o PDF. */
@@ -75,6 +79,17 @@ function Preview({ item }: { item: OfficeItem }) {
       </div>
     );
   }
+  if (item.kind === 'file') {
+    return (
+      <div className="flex h-full w-full items-center justify-center p-6">
+        <div className="flex aspect-[3/4] w-[58%] flex-col items-center justify-center gap-2 overflow-hidden rounded-md bg-white shadow-lg">
+          <FileGeneric className="h-10 w-10 text-violet-500" aria-hidden />
+          <span className="line-clamp-2 px-3 text-center text-[11px] font-semibold text-slate-700">{item.title}</span>
+          <span className="text-[10px] text-slate-400">{formatSize(item.sizeBytes)}</span>
+        </div>
+      </div>
+    );
+  }
   if (item.kind === 'pdf') {
     return (
       <div className="flex h-full w-full items-center justify-center p-6">
@@ -97,6 +112,7 @@ function Preview({ item }: { item: OfficeItem }) {
 }
 
 const ACCENT_BG: Record<OfficeKind, string> = {
+  file: 'from-violet-500/30 via-fuchsia-500/10 to-transparent',
   doc: 'from-sky-500/30 via-indigo-500/10 to-transparent',
   sheet: 'from-emerald-500/30 via-teal-500/10 to-transparent',
   slides: 'from-amber-500/30 via-orange-500/10 to-transparent',
@@ -111,6 +127,7 @@ export function OfficeGallery(props: OfficeGalleryProps) {
   const [renaming, setRenaming] = useState<OfficeItem | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [deleting, setDeleting] = useState<OfficeItem | null>(null);
+  const fileInput = React.useRef<HTMLInputElement>(null);
 
   const counts = useMemo(() => countByKind(items), [items]);
   const visible = useMemo(() => filterAndSortItems(items, { query, kind, sort }), [items, query, kind, sort]);
@@ -144,7 +161,28 @@ export function OfficeGallery(props: OfficeGalleryProps) {
             </p>
           </div>
           <div className="flex flex-wrap gap-2" role="group" aria-label="Criar novo">
-            {OFFICE_KINDS.map((k) => {
+            <button
+              type="button"
+              onClick={() => fileInput.current?.click()}
+              className="inline-flex items-center gap-2 rounded-xl border border-violet-300/30 bg-violet-500/15 px-3.5 py-2 text-xs font-semibold text-violet-100 backdrop-blur transition hover:-translate-y-px hover:bg-violet-500/25 hover:text-white"
+            >
+              <Upload className="h-3.5 w-3.5" aria-hidden />
+              Enviar arquivo
+            </button>
+            <input
+              ref={fileInput}
+              type="file"
+              className="sr-only"
+              tabIndex={-1}
+              aria-label="Escolher arquivo para enviar"
+              data-testid="office-file-input"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (file) props.onUpload(file);
+              }}
+            />
+            {CREATABLE_KINDS.map((k) => {
               const Icon = KIND_ICON[k];
               return (
                 <button
@@ -250,10 +288,10 @@ export function OfficeGallery(props: OfficeGalleryProps) {
               </span>
               <h3 className="mt-6 font-['Unbounded'] text-lg font-bold text-white">Nenhum documento salvo ainda</h3>
               <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-400">
-                Crie um documento, uma planilha, uma apresentação ou um PDF e clique em <strong className="text-slate-200">Salvar na galeria</strong>. Ele aparece aqui para você abrir sempre que precisar.
+                Crie um documento, uma planilha, uma apresentação ou um PDF e clique em <strong className="text-slate-200">Salvar na galeria</strong>, ou envie qualquer arquivo com <strong className="text-slate-200">Enviar arquivo</strong>. Ele aparece aqui para você abrir sempre que precisar.
               </p>
               <div className="mt-6 flex flex-wrap justify-center gap-2">
-                {OFFICE_KINDS.map((k) => (
+                {CREATABLE_KINDS.map((k) => (
                   <Button key={k} onClick={() => props.onNew(k)} className="bg-white text-slate-900 hover:bg-slate-200">
                     <Plus className="mr-1.5 h-4 w-4" aria-hidden /> {KIND_META[k].singular}
                   </Button>
@@ -312,7 +350,7 @@ export function OfficeGallery(props: OfficeGalleryProps) {
                         </p>
                         <div className="mt-auto flex items-center gap-1 pt-4">
                           <Button size="sm" onClick={() => props.onOpen(item)} disabled={busy} className="h-8 bg-white text-slate-900 hover:bg-slate-200">
-                            Abrir
+                            {item.kind === 'file' ? 'Baixar' : 'Abrir'}
                           </Button>
                           <div className="ml-auto flex items-center gap-0.5 opacity-70 transition group-hover:opacity-100">
                             <IconAction label="Renomear" onClick={() => openRename(item)} disabled={busy}>

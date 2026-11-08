@@ -464,7 +464,7 @@ export function PdfTab({
               <Upload className="h-5 w-5" aria-hidden />
             </span>
             <h3 className="font-semibold text-slate-900">Abrir um PDF</h3>
-            <p className="text-sm text-slate-600">Arraste um arquivo .pdf para cá ou escolha no seu aparelho. Até 50 MB.</p>
+            <p className="text-sm text-slate-600">Arraste um arquivo .pdf para cá ou escolha no seu aparelho. Até 100 MB.</p>
             <button
               type="button"
               disabled={busy}

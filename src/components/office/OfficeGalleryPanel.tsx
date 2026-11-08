@@ -3,13 +3,15 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { OfficeGallery } from './OfficeGallery';
 import {
   deleteOfficeItem,
-  downloadPdfBytes,
+  downloadStoredBytes,
   duplicateOfficeItem,
   getOfficeRecord,
   listOfficeItems,
   renameOfficeItem,
+  saveUploadedFile,
   type OfficeRecord,
 } from '@/services/officeDocsService';
+import { downloadMimeType } from '@/lib/office/fileRules';
 import type { OfficeItem, OfficeKind } from '@/lib/office/galleryModel';
 import { safeTitle } from '@/lib/office/galleryModel';
 import { download } from '@/lib/office/download';
@@ -36,7 +38,13 @@ const errorText = (e: unknown) => (e instanceof Error ? e.message : 'Algo deu er
 async function downloadRecord(record: OfficeRecord): Promise<void> {
   const name = safeTitle(record.title);
   if (record.kind === 'pdf') {
-    download(await downloadPdfBytes(record.filePath ?? ''), `${name}.pdf`, 'application/pdf');
+    download(await downloadStoredBytes(record.filePath ?? ''), `${name}.pdf`, 'application/pdf');
+    return;
+  }
+  if (record.kind === 'file') {
+    // Arquivo enviado sai com o nome e o tipo originais, sempre como download (nunca abre no navegador).
+    const bytes = await downloadStoredBytes(record.filePath ?? '');
+    download(bytes, record.fileName || record.title, downloadMimeType(record.mimeType));
     return;
   }
   if (record.kind === 'doc') {
@@ -110,7 +118,28 @@ export function OfficeGalleryPanel(props: OfficeGalleryPanelProps) {
           setError(null);
           void load();
         }}
-        onOpen={(item) => void withRecord(item, async (r) => { await props.onOpenRecord(r); })}
+        onOpen={(item) =>
+          void withRecord(item, async (r) => {
+            // Arquivo enviado não tem editor: "Abrir" baixa o arquivo.
+            if (r.kind === 'file') return downloadRecord(r);
+            await props.onOpenRecord(r);
+          })
+        }
+        onUpload={(file) =>
+          void (async () => {
+            if (!userId) return;
+            setBusyId('upload');
+            setError(null);
+            try {
+              await saveUploadedFile({ userId, file });
+              await load();
+            } catch (e) {
+              setError(errorText(e));
+            } finally {
+              setBusyId(null);
+            }
+          })()
+        }
         onNew={props.onNew}
         onRename={(item, title) =>
           withRecord(item, async (r) => {

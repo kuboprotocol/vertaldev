@@ -35,6 +35,7 @@ import {
   listOfficeItems,
   renameOfficeItem,
   saveStructuredItem,
+  saveUploadedFile,
   savePdfItem,
   type OfficeRecord,
 } from './officeDocsService';
@@ -48,6 +49,12 @@ const row = {
   created_at: '2026-11-08T10:00:00Z',
   updated_at: '2026-11-08T11:00:00Z',
 };
+
+// jsdom não implementa File.arrayBuffer: o helper devolve um File com o método, como no navegador.
+function fakeFile(bytes: number[], name: string, type: string): File {
+  const file = new File([new Uint8Array(bytes)], name, { type });
+  return Object.assign(file, { arrayBuffer: async () => new Uint8Array(bytes).buffer });
+}
 
 describe('galeria do Vertal Office (Supabase)', () => {
   beforeEach(() => {
@@ -134,6 +141,8 @@ describe('galeria do Vertal Office (Supabase)', () => {
       updatedAt: '',
       content: { title: 'Carta', blocks: [{ id: 'b', type: 'paragraph', text: 'oi' }] },
       filePath: null,
+      fileName: null,
+      mimeType: null,
     };
     await renameOfficeItem(record, '  Nova carta  ');
     const update = state.calls.find((c) => c.op === 'update')?.args[0] as { title: string; content: { title: string } };
@@ -150,5 +159,37 @@ describe('galeria do Vertal Office (Supabase)', () => {
     state.results = [{ data: null, error: null }];
     await deleteOfficeItem({ id: 'p', kind: 'pdf', filePath: 'user-1/a.pdf' } as unknown as OfficeRecord);
     expect(state.storage.remove).toHaveBeenCalledWith(['user-1/a.pdf']);
+  });
+
+  it('arquivo enviado: executável é recusado antes de qualquer envio', async () => {
+    const file = fakeFile([1, 2], 'instalador.exe', 'application/x-msdownload');
+    await expect(saveUploadedFile({ userId: 'u', file })).rejects.toThrow(/não podem ser guardados/);
+    expect(state.storage.upload).not.toHaveBeenCalled();
+    expect(state.calls.length).toBe(0);
+  });
+
+  it('arquivo enviado: qualquer tipo permitido vai ao bucket com o nome original e vira kind "file"', async () => {
+    state.results = [{ data: { ...row, kind: 'file', file_path: 'x' }, error: null }];
+    const file = fakeFile([1, 2, 3], 'Foto de férias.JPG', 'image/jpeg');
+    await saveUploadedFile({ userId: 'user-7', file });
+    const uploadPath = state.storage.upload.mock.calls[0][0] as string;
+    expect(uploadPath.startsWith('user-7/')).toBe(true);
+    expect(uploadPath.endsWith('.jpg')).toBe(true);
+    expect(state.calls.find((c) => c.op === 'insert')?.args[0]).toMatchObject({
+      kind: 'file',
+      title: 'Foto de férias',
+      file_name: 'Foto de férias.JPG',
+      mime_type: 'image/jpeg',
+      file_path: uploadPath,
+      content: null,
+      size_bytes: 3,
+    });
+  });
+
+  it('arquivo enviado: HTML é aceito, mas o tipo guardado é o seguro para download', async () => {
+    state.results = [{ data: { ...row, kind: 'file' }, error: null }];
+    const file = fakeFile([60, 115], 'pagina.html', 'text/html');
+    await saveUploadedFile({ userId: 'u', file });
+    expect(state.storage.upload.mock.calls[0][2]).toMatchObject({ contentType: 'application/octet-stream' });
   });
 });

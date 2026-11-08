@@ -20,8 +20,10 @@ export type Database = {
           created_at: string
           excerpt: string
           file_path: string | null
+          file_name: string | null
+          mime_type: string | null
           id: string
-          kind: "doc" | "sheet" | "slides" | "pdf"
+          kind: "doc" | "sheet" | "slides" | "pdf" | "file"
           size_bytes: number
           title: string
           updated_at: string
@@ -32,8 +34,10 @@ export type Database = {
           created_at?: string
           excerpt?: string
           file_path?: string | null
+          file_name?: string | null
+          mime_type?: string | null
           id?: string
-          kind: "doc" | "sheet" | "slides" | "pdf"
+          kind: "doc" | "sheet" | "slides" | "pdf" | "file"
           size_bytes?: number
           title: string
           updated_at?: string
@@ -44,8 +48,10 @@ export type Database = {
           created_at?: string
           excerpt?: string
           file_path?: string | null
+          file_name?: string | null
+          mime_type?: string | null
           id?: string
-          kind?: "doc" | "sheet" | "slides" | "pdf"
+          kind?: "doc" | "sheet" | "slides" | "pdf" | "file"
           size_bytes?: number
           title?: string
           updated_at?: string

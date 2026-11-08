@@ -80,7 +80,7 @@ describe('filtro e ordenação', () => {
   });
 
   it('conta por tipo', () => {
-    expect(countByKind(items)).toEqual({ doc: 1, sheet: 1, slides: 0, pdf: 1 });
+    expect(countByKind(items)).toEqual({ doc: 1, sheet: 1, slides: 0, pdf: 1, file: 0 });
   });
 });
 
