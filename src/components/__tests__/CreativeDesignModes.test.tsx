@@ -158,8 +158,13 @@ describe('CreativeDesign worlds', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Abrir PhotoCraft' }));
     expect(pageButton('PhotoCraft')).toHaveAttribute('aria-current', 'page');
     expect(screen.getByTitle('PhotoCraft editor de imagens')).toBeInTheDocument();
+  });
 
+  it('opens VectorCraft from the free tools page', () => {
+    renderPanel();
+    fireEvent.click(modeButton('Estúdio Pro'));
     fireEvent.click(pageButton('Ferramentas grátis'));
+
     fireEvent.click(screen.getByRole('button', { name: 'Abrir VectorCraft' }));
     expect(pageButton('VectorCraft')).toHaveAttribute('aria-current', 'page');
     expect(screen.getByTitle('VectorCraft editor vetorial')).toBeInTheDocument();
