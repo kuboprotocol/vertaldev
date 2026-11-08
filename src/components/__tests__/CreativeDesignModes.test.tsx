@@ -23,7 +23,9 @@ const renderPanel = () =>
     </MemoryRouter>,
   );
 
-describe('CreativeDesign worlds', () => {
+// Each test mounts the whole Design Premium panel in jsdom: 0.5–2.2 s locally and about 2.5x that
+// on the CI runners, so the default 5 s left no headroom (the canvas test timed out on PR #128).
+describe('CreativeDesign worlds', { timeout: 15000 }, () => {
   let getContextSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
