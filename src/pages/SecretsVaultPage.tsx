@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -54,6 +54,26 @@ export default function SecretsVaultPage() {
   const [now, setNow] = useState(() => Date.now())
   const [audit, setAudit] = useState<AuditEntry[] | null>(null)
   const [auditLoading, setAuditLoading] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [prefill, setPrefill] = useState<{ name?: string; env_key?: string } | null>(null)
+
+  // /secrets?env_key=ACME_API_KEY&name=… (vindo do agente): abre "Novo segredo" preenchido.
+  useEffect(() => {
+    const envKey = searchParams.get('env_key')
+    const name = searchParams.get('name')
+    if (!envKey && !name) return
+    setPrefill({ env_key: envKey ?? undefined, name: name ?? undefined })
+    setEditing(null)
+    setFormOpen(true)
+    setSearchParams(
+      (prev) => {
+        prev.delete('env_key')
+        prev.delete('name')
+        return prev
+      },
+      { replace: true },
+    )
+  }, [searchParams, setSearchParams])
 
   // Página fora de qualquer menu: pede para não ser indexada.
   useEffect(() => {
@@ -366,8 +386,12 @@ export default function SecretsVaultPage() {
 
       <SecretFormDialog
         open={formOpen}
-        onOpenChange={setFormOpen}
+        onOpenChange={(open) => {
+          setFormOpen(open)
+          if (!open) setPrefill(null)
+        }}
         secret={editing}
+        initial={prefill}
         onCreate={vault.create}
         onUpdate={vault.update}
         onRotate={vault.rotate}

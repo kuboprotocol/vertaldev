@@ -22,14 +22,17 @@ describe("VibeRequirementsCard", () => {
     expect(screen.getByText("conectado")).toBeInTheDocument();
   });
 
-  it("API fora do catálogo vira 'Configurar' e leva ao hub de conectores", () => {
+  it("API fora do catálogo leva ao Cofre de segredos com a variável preenchida", () => {
     const reqs = detectRequirements("", { "a.ts": "const k = process.env.ACME_API_KEY;" });
     render(
       <MemoryRouter>
         <VibeRequirementsCard requirements={reqs} />
       </MemoryRouter>,
     );
-    expect(screen.getByRole("link", { name: /configurar/i })).toHaveAttribute("href", "/connectors");
+    const link = screen.getByRole("link", { name: /guardar chave/i });
+    const href = new URL(link.getAttribute("href")!, "http://x");
+    expect(href.pathname).toBe("/secrets");
+    expect(href.searchParams.get("env_key")).toBe("ACME_API_KEY");
     expect(screen.getByText("ACME_API_KEY")).toBeInTheDocument();
   });
 });

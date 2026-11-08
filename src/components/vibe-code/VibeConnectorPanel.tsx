@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import type { VibeConnectorState } from "@/lib/vibeCodeAgentTypes";
+import { fetchPlanForKeys } from "@/hooks/useKuboSecrets";
+import { newSecretPath, SECRETS_PATH } from "@/lib/secretsVaultLinks";
 
 const ICONS = {
   github: Github,
@@ -45,6 +47,27 @@ const REQUIREMENTS = "vibe_requirements" as never;
 export function VibeConnectorPanel({ projectId }: { projectId?: string }) {
   const [connectors, setConnectors] = useState<VibeConnectorState[]>(BASE);
   const [pending, setPending] = useState<PendingRequirement[]>([]);
+  // Chaves exigidas que já estão no Cofre de segredos (null = cofre não respondeu).
+  const [inVault, setInVault] = useState<Set<string> | null>(null);
+
+  useEffect(() => {
+    const keys = [...new Set(pending.flatMap((r) => r.secrets))].slice(0, 50);
+    if (keys.length === 0) {
+      setInVault(null);
+      return;
+    }
+    let active = true;
+    fetchPlanForKeys(keys)
+      .then((plan) => {
+        if (active) setInVault(new Set(plan.entries.filter((e) => e.status === "ready").map((e) => e.env_key)));
+      })
+      .catch(() => {
+        if (active) setInVault(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [pending]);
 
   // Conectores e APIs que o agente detectou como necessários para os apps do usuário.
   useEffect(() => {
@@ -111,12 +134,44 @@ export function VibeConnectorPanel({ projectId }: { projectId?: string }) {
               <span className="font-medium">{r.name}</span>
               {r.reason && <span className="text-muted-foreground"> — {r.reason}</span>}
               {r.secrets.length > 0 && (
-                <span className="ml-1 font-mono text-[10px] text-muted-foreground">({r.secrets.join(", ")})</span>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {r.secrets.map((s) =>
+                    inVault?.has(s) ? (
+                      <span
+                        key={s}
+                        className="inline-flex items-center gap-1 rounded border border-emerald-500/30 px-1.5 py-0.5 font-mono text-[10px] text-emerald-400"
+                      >
+                        <CheckCircle2 className="h-2.5 w-2.5" /> {s} no cofre
+                      </span>
+                    ) : (
+                      <Link
+                        key={s}
+                        to={newSecretPath(s, r.name)}
+                        className="inline-flex items-center gap-1 rounded border border-amber-500/30 px-1.5 py-0.5 font-mono text-[10px] text-amber-300 hover:bg-amber-500/10"
+                      >
+                        <KeyRound className="h-2.5 w-2.5" /> Guardar {s}
+                      </Link>
+                    ),
+                  )}
+                </div>
               )}
             </div>
           ))}
         </div>
       )}
+
+      <div className="flex items-start gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+        <KeyRound className="h-4 w-4 mt-0.5 text-primary shrink-0" />
+        <div className="min-w-0 flex-1">
+          <span className="text-sm font-medium">Cofre de segredos</span>
+          <p className="text-xs text-muted-foreground leading-snug">
+            Onde ficam as chaves de API, tokens e senhas do app. Separado dos conectores.
+          </p>
+        </div>
+        <Button asChild size="sm" variant="ghost" className="h-7 text-xs">
+          <Link to={SECRETS_PATH}>Abrir</Link>
+        </Button>
+      </div>
 
       <div className="space-y-2">
         {connectors.map((c) => {

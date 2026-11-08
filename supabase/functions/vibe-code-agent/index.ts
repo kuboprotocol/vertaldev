@@ -20,6 +20,7 @@ import { extractMemories, formatMemoriesForPrompt, loadMemories, saveMemories } 
 import {
   buildHistory,
   type ChatMsg,
+  composeAgentReply,
   filterRepoTree,
   formatObservations,
   isSafePath,
@@ -309,7 +310,8 @@ Você trabalha em voltas. A cada volta responda com UM objeto JSON ESTRITO (sem 
 Como trabalhar:
 1. Se precisar entender código existente, devolva só read_file e "final": false. Você receberá o conteúdo e continuará. Leia o necessário e nada além; não invente caminhos que não estão na árvore.
 2. Quando tiver o que precisa, entregue os edit_file com "final": true. Cada edit_file traz o arquivo FINAL COMPLETO: nunca diffs, nunca "..." ou "resto do código", zero TODO, zero catch vazio. Código pronto para produção, tipado, acessível, reaproveitando os padrões e design tokens do projeto.
-3. "requirements": liste os conectores e APIs que esta aplicação exige para funcionar, usando os slugs do catálogo quando existirem; para APIs fora do catálogo use "name" e os nomes exatos dos segredos. Nunca peça nem escreva chaves, tokens ou senhas no código: use variáveis de ambiente.
+3. "requirements": liste os conectores e APIs que esta aplicação exige para funcionar, usando os slugs do catálogo quando existirem; para APIs fora do catálogo use "name" e os nomes exatos dos segredos. Nunca peça nem escreva chaves, tokens ou senhas no código: use variáveis de ambiente. As chaves ficam guardadas no Cofre de segredos do Vertal (/secrets); quando faltar uma, diga em "message" o nome exato da variável que o usuário deve guardar lá.
+8. Você conversa com o usuário: "summary" é a sua resposta direta a ele, em português, em 1 a 3 frases. Se o pedido for só uma pergunta ou conversa, responda em "summary" (e em "message" se precisar de mais) sem editar arquivos.
 4. "memories": só fatos duráveis e úteis em conversas futuras (preferências, restrições, decisões de arquitetura). Nada de segredos, nada efêmero.
 5. Respeite a memória do Prime e o histórico: não refaça o que já foi feito, não contradiga decisões anteriores sem avisar.
 6. Pedido ambíguo e caro de errar: use ask_user (uma pergunta) em vez de chutar. Pedido claro: execute.
@@ -392,6 +394,8 @@ Deno.serve(async (req) => {
 
       let conversationId: string | null = null;
       let userPrompt: string | null = null;
+      // Resposta em texto do agente: vira o balão do chat e o content da mensagem guardada.
+      let replyText = "";
       let conversationPatch: Record<string, unknown> = {};
       let projectId: string | null = null;
 
@@ -479,6 +483,10 @@ Deno.serve(async (req) => {
               reverted_checkpoint_id: body.revertCheckpointId,
             });
           }
+          replyText = files.length
+            ? `Desfiz a alteração e voltei ${files.length} arquivo(s) ao estado anterior: ${files.slice(0, 6).map((p) => `\`${p}\``).join(", ")}.`
+            : "Desfiz a alteração.";
+          send({ kind: "reply", status: "success", title: "Resposta do agente", detail: replyText });
           send({ kind: "done", status: "success", title: "Revert concluído" });
           return;
         }
@@ -507,7 +515,16 @@ Deno.serve(async (req) => {
             const sha = await store.write(file.path, file.content, `vibe: update ${file.path}`);
             lastSha = sha ?? lastSha;
             committedFiles.push(file.path);
-            send({ kind: "commit", status: "success", title: `Commitado ${file.path}`, path: file.path, commitSha: sha });
+            const repoUrl = store.mode === "github" && sha ? `https://github.com/${store.label}/blob/${sha}/${file.path}` : undefined;
+            send({
+              kind: "commit",
+              status: "success",
+              title: `Commitado ${file.path}`,
+              path: file.path,
+              commitSha: sha,
+              proposedContent: file.content,
+              repoUrl,
+            });
           }
 
           if (lastSha) {
@@ -526,6 +543,15 @@ Deno.serve(async (req) => {
               .single();
             send({ kind: "checkpoint", status: "success", title: "Checkpoint salvo", checkpointId: checkpoint?.id, commitSha: lastSha });
           }
+          replyText = composeAgentReply({
+            notes: [],
+            questions: [],
+            files: committedFiles.map((path) => ({ path })),
+            mode: "apply",
+            rejected: [],
+            pendingRequirements: [],
+          });
+          send({ kind: "reply", status: "success", title: "Resposta do agente", detail: replyText });
           send({ kind: "done", status: "success", title: "Alterações aplicadas" });
           return;
         }
@@ -811,7 +837,19 @@ Deno.serve(async (req) => {
             const sha = await store.write(path, file.content, `vibe: ${file.reason ?? `update ${path}`}`);
             lastSha = sha ?? lastSha;
             committedFiles.push(path);
-            send({ kind: "commit", status: "success", title: `Commitado ${path}`, path, detail: file.reason, diff, commitSha: sha });
+            // proposedContent e repoUrl alimentam a caixinha de código: abrir o arquivo no app ou no GitHub.
+            const repoUrl = store.mode === "github" && sha ? `https://github.com/${store.label}/blob/${sha}/${path}` : undefined;
+            send({
+              kind: "commit",
+              status: "success",
+              title: `Commitado ${path}`,
+              path,
+              detail: file.reason,
+              diff,
+              commitSha: sha,
+              proposedContent: file.content,
+              repoUrl,
+            });
           }
         }
 
@@ -843,6 +881,7 @@ Deno.serve(async (req) => {
           mergeDeclaredRequirements(detectRequirements(prompt, files), finalTurn.requirements),
           connected,
         );
+        let pendingForReply: Array<{ label: string; secrets: string[]; kind?: string }> = [];
         if (requirements.length) {
           const scoped = (q: any) => (projectId ? q.eq("project_id", projectId) : q.is("project_id", null));
           const { data: existing } = await scoped(
@@ -870,6 +909,7 @@ Deno.serve(async (req) => {
             if (error) console.warn("[vibe-code-agent] requirement save:", error.message);
           }
           const pending = visible.filter((r) => r.status === "needed");
+          pendingForReply = pending.map((r) => ({ label: r.label, secrets: r.secrets, kind: r.kind }));
           send({
             kind: "requirements",
             status: "success",
@@ -889,6 +929,18 @@ Deno.serve(async (req) => {
           send({ kind: "conversation", status: "success", title: conversationPatch.title as string, conversationId, isNew: false });
         }
 
+        // O agente responde em texto, como numa conversa, além dos passos técnicos.
+        replyText = composeAgentReply({
+          summary: finalTurn.summary,
+          notes,
+          questions,
+          files: [...proposed].map(([path, f]) => ({ path, reason: f.reason })),
+          mode,
+          rejected,
+          pendingRequirements: pendingForReply,
+        });
+        send({ kind: "reply", status: "success", title: "Resposta do agente", detail: replyText });
+
         send({
           kind: "done",
           status: "success",
@@ -904,6 +956,10 @@ Deno.serve(async (req) => {
         const message = err instanceof Error ? err.message : "internal_error";
         console.error("[vibe-code-agent]", message);
         send({ kind: "error", status: "failed", title: "Agente parou", detail: message });
+        if (!replyText) {
+          replyText = "Não consegui terminar este pedido. Os detalhes estão em \"o que o agente fez\". Tente de novo ou reformule o pedido.";
+          send({ kind: "reply", status: "failed", title: "Resposta do agente", detail: replyText });
+        }
       } finally {
         // Persistência da conversa (não bloqueia o fim do stream em caso de falha).
         if (conversationId) {
@@ -924,7 +980,7 @@ Deno.serve(async (req) => {
               conversation_id: conversationId,
               user_id: userId,
               role: "assistant",
-              content: "",
+              content: replyText,
               steps: recorded,
               created_at: new Date(now + 1).toISOString(),
             });

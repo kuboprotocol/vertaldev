@@ -20,6 +20,8 @@ interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   secret: VaultSecret | null
+  /** Preenchimento inicial de um segredo novo (ex.: vindo do agente do Vibe Code). */
+  initial?: { name?: string; env_key?: string } | null
   onCreate: (input: SecretFormInput) => Promise<void>
   onUpdate: (id: string, fields: Partial<SecretFormInput>) => Promise<void>
   onRotate: (id: string, value: string) => Promise<void>
@@ -28,7 +30,7 @@ interface Props {
 const NO_TARGET = '__none__'
 
 /** Criação e edição. Na edição, trocar o valor é opcional e vai por um caminho separado. */
-export function SecretFormDialog({ open, onOpenChange, secret, onCreate, onUpdate, onRotate }: Props) {
+export function SecretFormDialog({ open, onOpenChange, secret, initial, onCreate, onUpdate, onRotate }: Props) {
   const editing = secret !== null
   const [name, setName] = useState('')
   const [envKey, setEnvKey] = useState('')
@@ -40,13 +42,13 @@ export function SecretFormDialog({ open, onOpenChange, secret, onCreate, onUpdat
 
   useEffect(() => {
     if (!open) return
-    setName(secret?.name ?? '')
-    setEnvKey(secret?.env_key ?? '')
+    setName(secret?.name ?? initial?.name ?? '')
+    setEnvKey(secret?.env_key ?? normalizeEnvKey(initial?.env_key ?? ''))
     setGroup(secret?.group_name ?? 'geral')
     setDescription(secret?.description ?? '')
     setBoundTo(secret?.bound_to ?? NO_TARGET)
     setValue('')
-  }, [open, secret])
+  }, [open, secret, initial])
 
   const submit = async () => {
     const keyError = validateEnvKey(envKey)

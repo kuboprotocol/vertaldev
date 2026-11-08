@@ -25,6 +25,8 @@ import { VibeCheckpointTimeline } from "./VibeCheckpointTimeline";
 import { VibeAgentActivityPanel } from "./VibeAgentActivityPanel";
 import { VibePrimeMemoryPanel } from "./VibePrimeMemoryPanel";
 import { VibeConversationList } from "./VibeConversationList";
+import { VibeCodeViewer } from "./VibeCodeViewer";
+import type { CodeFile } from "@/lib/vibeCodeFiles";
 import { useVibeConversations } from "@/hooks/useVibeConversations";
 import { useWorkspaceProject } from "@/hooks/useWorkspaceProject";
 import type { VibeConversationsApi } from "@/hooks/useVibeConversations";
@@ -36,6 +38,23 @@ export default function VibeCodeLayout() {
   const [isMobile, setIsMobile] = useState(false);
   const { projectId, loadProjects } = useWorkspaceProject();
   const conversations = useVibeConversations(projectId || undefined);
+  // Arquivo aberto a partir de uma caixinha de código do chat.
+  const [openedFile, setOpenedFile] = useState<CodeFile | null>(null);
+  const [centerTab, setCenterTab] = useState("preview");
+
+  // Trocar de conversa fecha o arquivo da conversa anterior.
+  useEffect(() => {
+    setOpenedFile(null);
+  }, [conversations.activeId]);
+
+  const openFile = (file: CodeFile) => {
+    setOpenedFile(file);
+    if (isMobile) setActiveTab("code");
+    else {
+      setActiveTab("agent");
+      setCenterTab("code");
+    }
+  };
 
   useEffect(() => {
     void loadProjects();
@@ -59,9 +78,25 @@ export default function VibeCodeLayout() {
         <main className="flex-1 overflow-auto p-4 pb-20 md:p-6 md:pb-6">
           <div className="mx-auto max-w-7xl">
             {isMobile ? (
-              <MobileView activeTab={activeTab} projectId={projectId} conversations={conversations} />
+              <MobileView
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                projectId={projectId}
+                conversations={conversations}
+                openedFile={openedFile}
+                onOpenFile={openFile}
+              />
             ) : (
-              <DesktopView activeTab={activeTab} setActiveTab={setActiveTab} projectId={projectId} conversations={conversations} />
+              <DesktopView
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                projectId={projectId}
+                conversations={conversations}
+                openedFile={openedFile}
+                onOpenFile={openFile}
+                centerTab={centerTab}
+                setCenterTab={setCenterTab}
+              />
             )}
           </div>
         </main>
@@ -116,23 +151,40 @@ function DesktopView({
   activeTab,
   projectId,
   conversations,
+  openedFile,
+  onOpenFile,
+  centerTab,
+  setCenterTab,
 }: {
   activeTab: string;
   setActiveTab: (t: string) => void;
   projectId: string;
   conversations: VibeConversationsApi;
+  openedFile: CodeFile | null;
+  onOpenFile: (file: CodeFile) => void;
+  centerTab: string;
+  setCenterTab: (t: string) => void;
 }) {
-  if (activeTab === 'agent' || activeTab === 'files') {
+  if (activeTab === 'agent' || activeTab === 'files' || activeTab === 'code') {
     return (
       <div className="grid h-[calc(100vh-8rem)] gap-6 lg:grid-cols-[400px_1fr_260px]">
-        <VibeCodeAgentChat projectId={projectId} conversations={conversations} />
+        <VibeCodeAgentChat
+          projectId={projectId}
+          conversations={conversations}
+          onOpenFile={onOpenFile}
+          openedPath={openedFile?.path ?? null}
+        />
         <div className="flex flex-col gap-6 min-w-0">
-          <Tabs defaultValue="preview" className="flex-1 flex flex-col">
+          <Tabs value={centerTab} onValueChange={setCenterTab} className="flex-1 flex flex-col min-h-0">
             <TabsList className="bg-white/5 border border-white/10">
+              <TabsTrigger value="code">Código</TabsTrigger>
               <TabsTrigger value="preview">Live Preview</TabsTrigger>
               <TabsTrigger value="console">Console</TabsTrigger>
               <TabsTrigger value="network">Network</TabsTrigger>
             </TabsList>
+            <TabsContent value="code" className="mt-4 min-h-0 flex-1 overflow-hidden rounded-2xl border border-border/40 bg-card/20">
+              <VibeCodeViewer file={openedFile} />
+            </TabsContent>
             <TabsContent value="preview" className="mt-4 flex-1 rounded-2xl border border-border/40 bg-card/20 backdrop-blur-sm relative overflow-hidden">
               <VibeLivePreview />
             </TabsContent>
@@ -189,12 +241,18 @@ function DesktopView({
 
 function MobileView({
   activeTab,
+  setActiveTab,
   projectId,
   conversations,
+  openedFile,
+  onOpenFile,
 }: {
   activeTab: string;
+  setActiveTab: (t: string) => void;
   projectId: string;
   conversations: VibeConversationsApi;
+  openedFile: CodeFile | null;
+  onOpenFile: (file: CodeFile) => void;
 }) {
   switch (activeTab) {
     case 'agent':
@@ -203,7 +261,19 @@ function MobileView({
       // the full transcript and the page is too heavy to scroll.
       return (
         <div className="flex h-[calc(100dvh-10rem)] min-h-[420px] min-w-0 flex-col">
-          <VibeCodeAgentChat projectId={projectId} conversations={conversations} />
+          <VibeCodeAgentChat
+            projectId={projectId}
+            conversations={conversations}
+            onOpenFile={onOpenFile}
+            openedPath={openedFile?.path ?? null}
+          />
+        </div>
+      );
+    case 'code':
+      // Aberto por uma caixinha de código do chat; "voltar" retorna à conversa.
+      return (
+        <div className="h-[calc(100dvh-10rem)] min-h-[420px] overflow-hidden rounded-2xl border border-border/40 bg-card/20">
+          <VibeCodeViewer file={openedFile} onBack={() => setActiveTab('agent')} />
         </div>
       );
     case 'domains':

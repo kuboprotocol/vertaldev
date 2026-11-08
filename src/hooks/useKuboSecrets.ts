@@ -205,3 +205,8 @@ export async function fetchOverview(): Promise<OverviewResponse> {
 export async function fetchPlan(target: string): Promise<PlanResponse> {
   return call<PlanResponse>(ORCH_FN, { action: 'plan', target })
 }
+
+/** Quais destas variáveis já estão no cofre (próprias ou compartilhadas). Nunca traz valores. */
+export async function fetchPlanForKeys(envKeys: string[]): Promise<PlanResponse> {
+  return call<PlanResponse>(ORCH_FN, { action: 'plan', env_keys: envKeys })
+}

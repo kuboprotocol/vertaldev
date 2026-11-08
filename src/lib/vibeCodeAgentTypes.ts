@@ -21,6 +21,8 @@ export type VibeStepKind =
   | "question"
   | "review"
   | "design"
+  /** Resposta em texto do agente ao usuário (o balão do chat). */
+  | "reply"
   | "error"
   | "done";
 
@@ -41,6 +43,8 @@ export interface VibeStep {
   proposedContent?: string;
   /** Commit SHA produced by this step — enables per-step undo. */
   commitSha?: string;
+  /** Endereço do arquivo no GitHub depois do commit (quando o projeto usa GitHub). */
+  repoUrl?: string;
   reverted?: boolean;
   /** Persisted checkpoint id (vibe_checkpoints), enables timeline rollback. */
   checkpointId?: string;

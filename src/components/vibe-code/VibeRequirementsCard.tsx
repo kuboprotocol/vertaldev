@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { VibeRequirement } from "@/lib/vibeCodeAgentTypes";
+import { newSecretPath } from "@/lib/secretsVaultLinks";
 
 /**
  * "O que esta aplicação precisa": os conectores e APIs que o agente detectou,
@@ -64,13 +65,21 @@ export function VibeRequirementsCard({ requirements }: { requirements: VibeRequi
                 )}
               </div>
 
-              {!connected && (
-                <Button asChild size="sm" variant="outline" className="h-7 shrink-0 gap-1 text-xs">
-                  <Link to={r.connectPath ?? "/connectors"}>
-                    <Plug className="h-3 w-3" /> {r.connectPath ? "Conectar" : "Configurar"}
-                  </Link>
-                </Button>
-              )}
+              {!connected &&
+                (r.connectPath ? (
+                  <Button asChild size="sm" variant="outline" className="h-7 shrink-0 gap-1 text-xs">
+                    <Link to={r.connectPath}>
+                      <Plug className="h-3 w-3" /> Conectar
+                    </Link>
+                  </Button>
+                ) : (
+                  // API sem página de conector: a chave vai para o Cofre de segredos, já preenchido.
+                  <Button asChild size="sm" variant="outline" className="h-7 shrink-0 gap-1 text-xs">
+                    <Link to={newSecretPath(r.secrets[0], r.label)}>
+                      <KeyRound className="h-3 w-3" /> Guardar chave
+                    </Link>
+                  </Button>
+                ))}
             </div>
           </li>
         );

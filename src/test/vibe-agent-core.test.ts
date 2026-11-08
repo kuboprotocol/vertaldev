@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildHistory,
+  composeAgentReply,
   filterRepoTree,
   formatObservations,
   isSafePath,
@@ -139,5 +140,51 @@ describe("contexto", () => {
     expect(titleFromPrompt("Crie uma landing page. Use azul.")).toBe("Crie uma landing page.");
     expect(titleFromPrompt("a".repeat(100))).toHaveLength(60);
     expect(titleFromPrompt("   ")).toBe("Nova conversa");
+  });
+});
+
+describe("composeAgentReply", () => {
+  const base = { notes: [], questions: [], files: [], mode: "preview" as const, rejected: [], pendingRequirements: [] };
+
+  it("responde como conversa quando o pedido é só uma pergunta", () => {
+    const text = composeAgentReply({ ...base, summary: "O projeto usa React com Vite." });
+    expect(text).toBe("O projeto usa React com Vite.");
+  });
+
+  it("não repete a nota igual ao resumo", () => {
+    const text = composeAgentReply({ ...base, summary: "Feito.", notes: ["Feito.", "Revise o tema escuro."] });
+    expect(text).toBe("Feito.\n\nRevise o tema escuro.");
+  });
+
+  it("aponta as caixinhas de código no preview e no commit", () => {
+    const preview = composeAgentReply({ ...base, files: [{ path: "src/App.tsx" }, { path: "src/App.tsx" }] });
+    expect(preview).toContain("Preparei 1 arquivo(s)");
+    expect(preview).toContain("`src/App.tsx`");
+    expect(preview).toMatch(/caixinha de código/);
+
+    const applied = composeAgentReply({ ...base, mode: "apply", files: [{ path: "a.ts" }] });
+    expect(applied).toContain("Commitei 1 arquivo(s)");
+  });
+
+  it("diz o que falta conectar e manda a chave da API para o cofre", () => {
+    const text = composeAgentReply({
+      ...base,
+      pendingRequirements: [
+        { label: "Stripe", secrets: ["STRIPE_SECRET_KEY"], kind: "connector" },
+        { label: "API de Frete", secrets: ["FRETE_API_KEY"], kind: "api" },
+      ],
+    });
+    expect(text).toContain("falta conectar: Stripe; API de Frete (guarde `FRETE_API_KEY` no Cofre de segredos)");
+  });
+
+  it("faz as perguntas no fim", () => {
+    expect(composeAgentReply({ ...base, questions: ["Qual a cor da marca?"] })).toBe(
+      "Antes de seguir, preciso saber: Qual a cor da marca?",
+    );
+    expect(composeAgentReply({ ...base, questions: ["A?", "B?"] })).toBe("Antes de seguir, preciso saber:\n- A?\n- B?");
+  });
+
+  it("nunca devolve resposta vazia", () => {
+    expect(composeAgentReply(base)).toBe("Pronto. Me diga o próximo passo.");
   });
 });

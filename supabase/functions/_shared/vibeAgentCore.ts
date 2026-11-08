@@ -285,3 +285,75 @@ export function titleFromPrompt(prompt: string): string {
   if (!clean) return "Nova conversa";
   return clean.length > 60 ? `${clean.slice(0, 57).trimEnd()}...` : clean;
 }
+
+// ---------------------------------------------------------------------------
+// Resposta conversacional
+// ---------------------------------------------------------------------------
+
+export interface ReplyInput {
+  summary?: string;
+  notes: string[];
+  questions: string[];
+  files: Array<{ path: string; reason?: string }>;
+  mode: "preview" | "apply";
+  rejected: string[];
+  pendingRequirements: Array<{ label: string; secrets: string[]; kind?: string }>;
+}
+
+const MAX_REPLY = 4000;
+
+function listPaths(paths: string[], max = 6): string {
+  const shown = paths.slice(0, max).map((p) => `\`${p}\``);
+  const rest = paths.length - shown.length;
+  return rest > 0 ? `${shown.join(", ")} e mais ${rest}` : shown.join(", ");
+}
+
+/**
+ * Texto que o agente "fala" no chat ao fim de um ciclo: o que entendeu, o que
+ * fez, o que ficou de fora, o que falta conectar e o que precisa perguntar.
+ * É o que fica guardado na conversa (vibe_messages.content) e reaparece no histórico.
+ */
+export function composeAgentReply(input: ReplyInput): string {
+  const parts: string[] = [];
+  const summary = input.summary?.trim();
+  if (summary) parts.push(summary);
+
+  const seen = new Set(summary ? [summary.toLowerCase()] : []);
+  for (const raw of input.notes) {
+    const note = raw.trim();
+    if (!note || seen.has(note.toLowerCase())) continue;
+    seen.add(note.toLowerCase());
+    parts.push(note);
+  }
+
+  const paths = [...new Set(input.files.map((f) => f.path))];
+  if (paths.length) {
+    parts.push(
+      input.mode === "preview"
+        ? `Preparei ${paths.length} arquivo(s) para você revisar: ${listPaths(paths)}. Toque numa caixinha de código para abrir o arquivo; quando estiver bom, aplique as alterações.`
+        : `Commitei ${paths.length} arquivo(s): ${listPaths(paths)}. Toque numa caixinha de código para ver onde ficou.`,
+    );
+  }
+
+  if (input.rejected.length) {
+    parts.push(
+      `${input.rejected.length} arquivo(s) ficaram de fora porque não passaram na auto-revisão. Peça de novo com mais detalhes se precisar deles.`,
+    );
+  }
+
+  if (input.pendingRequirements.length) {
+    const items = input.pendingRequirements.map((r) =>
+      r.secrets.length && r.kind !== "connector"
+        ? `${r.label} (guarde ${r.secrets.map((s) => `\`${s}\``).join(", ")} no Cofre de segredos)`
+        : r.label,
+    );
+    parts.push(`Para a aplicação funcionar, falta conectar: ${items.join("; ")}.`);
+  }
+
+  const questions = input.questions.map((q) => q.trim()).filter(Boolean);
+  if (questions.length === 1) parts.push(`Antes de seguir, preciso saber: ${questions[0]}`);
+  else if (questions.length > 1) parts.push(`Antes de seguir, preciso saber:\n${questions.map((q) => `- ${q}`).join("\n")}`);
+
+  const text = parts.length ? parts.join("\n\n") : "Pronto. Me diga o próximo passo.";
+  return text.length > MAX_REPLY ? `${text.slice(0, MAX_REPLY - 1).trimEnd()}…` : text;
+}
