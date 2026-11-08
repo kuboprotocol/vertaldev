@@ -2,12 +2,13 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import type { PlanEntry, PlanStatus } from '../../supabase/functions/_shared/kuboSecretsCore'
 
-// Painel secreto: o cliente nunca lê as tabelas. Tudo passa pelas Edge Functions
-// `kubo-secrets` (segredos) e `kubo-secrets-orchestrator` (prontidão e alertas).
+// Painel secreto: o cliente nunca lê as tabelas. Tudo passa pela Edge Function
+// `kubo-secrets` (segredos, prontidão e alertas).
 // Valores só chegam ao navegador em `reveal`, e não são guardados em lugar nenhum.
 
 const SECRETS_FN = 'kubo-secrets'
-const ORCH_FN = 'kubo-secrets-orchestrator'
+// O orquestrador mora na mesma função do cofre (o plano do Supabase limita o número de funções).
+const ORCH_FN = 'kubo-secrets'
 
 export type SecretRole = 'owner' | 'grant'
 

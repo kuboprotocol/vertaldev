@@ -8,19 +8,32 @@
 //   POST { action: "grant", id, email, can_reveal? }           (só o dono)
 //   POST { action: "revoke", id, grantee_id }                  (só o dono)
 //   POST { action: "audit", id?, limit? }                      (só o dono)
+// Orquestrador (antes era a função kubo-secrets-orchestrator; juntado aqui porque
+// o plano do Supabase limita o número de funções). Nunca devolve valores:
+//   POST { action: "targets" }
+//   POST { action: "plan", target?: slug, env_keys?: string[] }
+//   POST { action: "overview" }
 // Autenticação: JWT do usuário logado (getUser). Acesso aos dados: service role,
 // com as regras de dono e convidado aplicadas aqui. Nenhum cliente lê as tabelas.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, sanitizeError } from "../_shared/cors.ts";
 import { encryptSecret, decryptSecret } from "../_shared/connectorCrypto.ts";
 import {
-  parseSecretFields,
+  ENV_KEY_RE,
+  findTarget,
   maskSecret,
-  validateValue,
+  normalizeEnvKey,
+  ORCHESTRATION_TARGETS,
+  parseSecretFields,
+  type PlanEntry,
+  planReadiness,
+  type PlanStatus,
   REVEAL_WINDOW_LIMIT,
   revealWindowStartIso,
+  summarizePlan,
+  validateValue,
 } from "../_shared/kuboSecretsCore.ts";
-import { audit, SECRET_COLUMNS, type SecretRowRecord } from "../_shared/kuboSecrets.ts";
+import { audit, listVisibleSecrets, SECRET_COLUMNS, type SecretRowRecord } from "../_shared/kuboSecrets.ts";
 
 function json(body: unknown, status = 200, extra: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
@@ -49,6 +62,26 @@ async function grantOf(admin: SupabaseClient, secretId: string, userId: string) 
     .maybeSingle();
   if (error) throw new Error(error.message);
   return data as { can_reveal: boolean } | null;
+}
+
+/** O conector existe para este usuário? Só consulta: cofre e conectores não se misturam. */
+async function connectorConnected(admin: SupabaseClient, userId: string, slug: string): Promise<boolean> {
+  const { count, error } = await admin
+    .from("api_credentials")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("connector_slug", slug);
+  if (error) throw new Error(error.message);
+  return (count ?? 0) > 0;
+}
+
+function warningsFor(entries: PlanEntry[]): string[] {
+  const out: string[] = [];
+  for (const e of entries) {
+    if (e.status === "missing") out.push(`${e.env_key}: falta cadastrar ou receber acesso`);
+    else if (e.stale) out.push(`${e.env_key}: não é trocado há muito tempo`);
+  }
+  return out;
 }
 
 Deno.serve(async (req) => {
@@ -364,6 +397,80 @@ Deno.serve(async (req) => {
         const { data, error } = await query;
         if (error) throw new Error(error.message);
         return json({ entries: data ?? [] });
+      }
+
+      // ── Orquestrador ────────────────────────────────────────────────────
+      case "targets": {
+        return json({ targets: ORCHESTRATION_TARGETS });
+      }
+
+      case "plan": {
+        let label: string;
+        let requiredKeys: string[];
+        let connectorSlug: string | null = null;
+
+        if (typeof body.target === "string" && body.target) {
+          const target = findTarget(body.target);
+          if (!target) return fail("Destino desconhecido");
+          label = target.label;
+          requiredKeys = target.env_keys;
+          connectorSlug = target.connector_slug;
+        } else if (Array.isArray(body.env_keys) && body.env_keys.length > 0) {
+          if (body.env_keys.length > 50) return fail("No máximo 50 variáveis por plano");
+          label = "Plano personalizado";
+          requiredKeys = body.env_keys.map((k) => normalizeEnvKey(k));
+          const bad = requiredKeys.find((k) => !ENV_KEY_RE.test(k));
+          if (bad) return fail(`Nome de variável inválido: ${bad}`);
+        } else {
+          return fail("Informe um destino ou uma lista de variáveis");
+        }
+
+        const visible = await listVisibleSecrets(admin, userId);
+        const entries = planReadiness(requiredKeys, visible, new Date());
+        const status: PlanStatus = summarizePlan(entries);
+        const connector = connectorSlug
+          ? { slug: connectorSlug, connected: await connectorConnected(admin, userId, connectorSlug) }
+          : null;
+
+        return json({
+          target: typeof body.target === "string" ? body.target : null,
+          label,
+          status,
+          ready: status === "ready",
+          entries,
+          connector,
+          warnings: warningsFor(entries),
+        });
+      }
+
+      case "overview": {
+        const now = new Date();
+        const visible = await listVisibleSecrets(admin, userId);
+        const targets = [];
+        for (const target of ORCHESTRATION_TARGETS) {
+          const entries = planReadiness(target.env_keys, visible, now);
+          const status = summarizePlan(entries);
+          targets.push({
+            slug: target.slug,
+            label: target.label,
+            description: target.description,
+            status,
+            ready_count: entries.filter((e) => e.status === "ready").length,
+            total: entries.length,
+            warnings: warningsFor(entries),
+            connector: target.connector_slug
+              ? { slug: target.connector_slug, connected: await connectorConnected(admin, userId, target.connector_slug) }
+              : null,
+          });
+        }
+        return json({
+          secrets_total: visible.length,
+          owned: visible.filter((v) => v.role === "owner").length,
+          shared_with_me: visible.filter((v) => v.role === "grant").length,
+          targets,
+          needs_attention: targets.filter((t) => t.status !== "ready").length,
+          checked_at: now.toISOString(),
+        });
       }
 
       default:
