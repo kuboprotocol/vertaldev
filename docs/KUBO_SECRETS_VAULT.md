@@ -23,8 +23,8 @@ Nenhum valor sai do servidor fora de `reveal`. A página mostra só a dica masca
 src/pages/SecretsVaultPage.tsx       painel (Segredos · Orquestrador · Auditoria)
 src/hooks/useKuboSecrets.ts          único cliente; só chama Edge Functions
         │
-        ├─ kubo-secrets              CRUD, revelar, conceder, revogar, auditoria
-        └─ kubo-secrets-orchestrator prontidão por destino + alertas (sem valores)
+        └─ kubo-secrets              CRUD, revelar, conceder, revogar, auditoria
+                                     + orquestrador: targets, plan, overview (sem valores)
                     │
 supabase/functions/_shared/
   kuboSecretsCore.ts   regras puras (validação, máscara, plano) — testado no Vitest
@@ -66,9 +66,12 @@ servidor, e grava uma linha `inject` por segredo na auditoria do dono.
 - Respostas com valores têm `Cache-Control: no-store`.
 - Erros de infraestrutura passam por `sanitizeError`, que não devolve detalhes de banco.
 
+Cofre e orquestrador ficam numa função só (`kubo-secrets`) porque o plano do
+Supabase limita o número de Edge Functions do projeto.
+
 ## Pendências conhecidas
 
-- A migration precisa ser aplicada no banco de produção pelo fluxo de deploy.
+- A migration foi aplicada em produção (projeto kubovibe) pelo SQL Editor, sem registro em `supabase_migrations`; ela é idempotente, então um `supabase db push` futuro não quebra nada.
 - Nada chama `resolveEnvForRun` ainda. Ele está pronto para as funções que
   executam agentes ou deploys usarem.
 - `CONNECTOR_ENC_KEY` é compartilhada com os conectores. Trocar essa chave exige
