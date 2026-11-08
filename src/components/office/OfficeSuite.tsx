@@ -1,6 +1,6 @@
 // Vertal Office do Painel Criativo: Documento, Planilha e Apresentação.
 // Editor e exportação são grátis. Cada uso da IA custa 1 crédito.
-import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   FileText,
   Sheet as SheetIcon,
@@ -21,6 +21,8 @@ import {
   Upload,
   Youtube,
   FileType,
+  LayoutGrid,
+  Save,
 } from 'lucide-react';
 import {
   BlockAlign,
@@ -67,7 +69,11 @@ import { docToDocx } from '@/lib/office/officeFiles';
 import { OFFICE_KEYS, importFile } from '@/lib/office/importers';
 import { SlidesTab } from './SlidesTab';
 import { MiniWindow } from './MiniWindow';
-import { docToPdf, sheetToPdf } from '@/lib/office/pdfGenerate';
+import { OfficeGalleryPanel } from './OfficeGalleryPanel';
+import { savePdfItem, saveStructuredItem, downloadPdfBytes, type OfficeRecord } from '@/services/officeDocsService';
+import { describeDraft, type OfficeKind } from '@/lib/office/galleryModel';
+import { createEmptyDeck } from '@/lib/office/slidesModel';
+import { blankPdf, docToPdf, sheetToPdf } from '@/lib/office/pdfGenerate';
 import { inspectPdf } from '@/lib/office/pdfEdit';
 import { PdfTab, type PdfSeed } from './PdfTab';
 import { download, safeName } from '@/lib/office/download';
@@ -76,6 +82,17 @@ import { SHEET_TEMPLATES, DOC_TEMPLATES, docTemplateBlocks } from '@/lib/office/
 const DOC_KEY = OFFICE_KEYS.doc;
 const SHEET_KEY = OFFICE_KEYS.sheet;
 const DECK_KEY = OFFICE_KEYS.deck;
+
+const KIND_KEY: Record<'doc' | 'sheet' | 'slides', string> = { doc: DOC_KEY, sheet: SHEET_KEY, slides: DECK_KEY };
+
+/** Conteúdo bruto do rascunho no navegador ('' quando não há). */
+function readDraft(key: string): string {
+  try {
+    return window.localStorage.getItem(key) ?? '';
+  } catch {
+    return '';
+  }
+}
 
 /** Rascunho local (por navegador). Falha de armazenamento nunca quebra a tela. */
 function loadLocal<T>(key: string, fallback: () => T): T {
@@ -111,6 +128,7 @@ const SIZE_LABELS: Array<{ value: BlockSize; label: string }> = [
 const SIZE_PX: Record<BlockSize, string> = { sm: '13px', md: '15px', lg: '20px' };
 
 const APPS = [
+  { id: 'galeria', label: 'Galeria', icon: LayoutGrid, tile: 'from-sky-500 to-indigo-600' },
   { id: 'doc', label: 'Documento', icon: FileText, tile: 'from-blue-600 to-indigo-600' },
   { id: 'sheet', label: 'Planilha', icon: SheetIcon, tile: 'from-emerald-600 to-teal-600' },
   { id: 'slides', label: 'Apresentação', icon: Presentation, tile: 'from-orange-500 to-amber-500' },
@@ -815,7 +833,7 @@ const APP_LABEL: Record<'doc' | 'sheet' | 'slides', string> = {
   slides: 'apresentação',
 };
 
-export function OfficeSuite({ creditsAvailable }: { creditsAvailable: number }) {
+export function OfficeSuite({ creditsAvailable, userId }: { creditsAvailable: number; userId?: string }) {
   const [app, setApp] = useState<AppId>('doc');
   const [assistantOpen, setAssistantOpen] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
@@ -824,6 +842,162 @@ export function OfficeSuite({ creditsAvailable }: { creditsAvailable: number }) 
   const [importNote, setImportNote] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [pdfSeed, setPdfSeed] = useState<PdfSeed | null>(null);
   const [pdfKey, setPdfKey] = useState(0);
+  // Galeria: id de cada item aberto, cópia do último estado salvo e estado do PDF atual.
+  const [openIds, setOpenIds] = useState<Partial<Record<OfficeKind, string>>>({});
+  const [savedSnap, setSavedSnap] = useState<Partial<Record<'doc' | 'sheet' | 'slides', string>>>({});
+  const savedRef = useRef(savedSnap);
+  savedRef.current = savedSnap;
+  const [pdfState, setPdfState] = useState<{ name: string; bytes: Uint8Array | null }>({ name: '', bytes: null });
+  const [savedPdfBytes, setSavedPdfBytes] = useState<Uint8Array | null>(null);
+  const [dirtyMap, setDirtyMap] = useState({ doc: false, sheet: false, slides: false });
+  const [galleryRefresh, setGalleryRefresh] = useState(0);
+  const [saving, setSaving] = useState(false);
+
+  /** Compara o rascunho com o último salvo. Rascunho que nunca foi salvo conta como alterado. */
+  const refreshDirty = () => {
+    const next = {
+      doc: readDraft(DOC_KEY) !== (savedRef.current.doc ?? ''),
+      sheet: readDraft(SHEET_KEY) !== (savedRef.current.sheet ?? ''),
+      slides: readDraft(DECK_KEY) !== (savedRef.current.slides ?? ''),
+    };
+    setDirtyMap((prev) => (prev.doc === next.doc && prev.sheet === next.sheet && prev.slides === next.slides ? prev : next));
+  };
+  useEffect(() => {
+    refreshDirty();
+    const timer = window.setInterval(refreshDirty, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const isDirty = (k: OfficeKind): boolean =>
+    k === 'pdf' ? pdfState.bytes !== null && pdfState.bytes !== savedPdfBytes : dirtyMap[k];
+  const anyDirty = isDirty('doc') || isDirty('sheet') || isDirty('slides') || isDirty('pdf');
+
+  // Avisa antes de fechar a aba com alterações que ainda não estão na galeria.
+  useEffect(() => {
+    if (!anyDirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [anyDirty]);
+
+  const saveToGallery = async () => {
+    if (app === 'galeria') return;
+    if (!userId) {
+      setImportNote({ kind: 'err', text: 'Entre na sua conta para salvar na galeria.' });
+      return;
+    }
+    setSaving(true);
+    setImportNote(null);
+    try {
+      if (app === 'pdf') {
+        if (!pdfState.bytes) throw new Error('Abra ou crie um PDF antes de salvar.');
+        const item = await savePdfItem({
+          id: openIds.pdf,
+          userId,
+          title: pdfState.name || 'PDF sem título',
+          excerpt: '',
+          bytes: pdfState.bytes,
+        });
+        setOpenIds((o) => ({ ...o, pdf: item.id }));
+        setSavedPdfBytes(pdfState.bytes);
+      } else {
+        const raw = readDraft(KIND_KEY[app]);
+        if (!raw) throw new Error('Este aplicativo ainda está vazio. Escreva algo antes de salvar.');
+        const data = JSON.parse(raw);
+        const { title, excerpt } = describeDraft(app, data);
+        const item = await saveStructuredItem({ id: openIds[app], userId, kind: app, title, excerpt, content: data });
+        setOpenIds((o) => ({ ...o, [app]: item.id }));
+        setSavedSnap((s) => ({ ...s, [app]: raw }));
+      }
+      setGalleryRefresh((n) => n + 1);
+      refreshDirty();
+      setImportNote({ kind: 'ok', text: 'Salvo na galeria.' });
+    } catch (e) {
+      setImportNote({ kind: 'err', text: (e as Error).message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** Abre um item da galeria no editor certo. */
+  const openRecord = async (record: OfficeRecord) => {
+    if (isDirty(record.kind) && !window.confirm('Abrir este item substitui o que está aberto agora e ainda não foi salvo. Continuar?')) return;
+    if (record.kind === 'pdf') {
+      const bytes = await downloadPdfBytes(record.filePath ?? '');
+      setPdfState({ name: record.title, bytes });
+      setSavedPdfBytes(bytes);
+      setOpenIds((o) => ({ ...o, pdf: record.id }));
+      setPdfKey((k) => k + 1);
+      setApp('pdf');
+    } else {
+      const raw = JSON.stringify(record.content ?? null);
+      if (raw === 'null') throw new Error('Este item está sem conteúdo.');
+      try {
+        window.localStorage.setItem(KIND_KEY[record.kind], raw);
+      } catch {
+        throw new Error('Sem espaço no navegador para abrir este item.');
+      }
+      setSavedSnap((s) => ({ ...s, [record.kind]: raw }));
+      setOpenIds((o) => ({ ...o, [record.kind]: record.id }));
+      setReloadKey((k) => k + 1);
+      setApp(record.kind);
+    }
+    refreshDirty();
+    setImportNote({ kind: 'ok', text: `“${record.title}” aberto da galeria.` });
+  };
+
+  /** Começa um item em branco. Pede confirmação se houver alterações não salvas nesse aplicativo. */
+  const newFromGallery = async (kind: OfficeKind) => {
+    if (isDirty(kind) && !window.confirm('Começar um novo descarta as alterações não salvas deste aplicativo. Continuar?')) return;
+    if (kind === 'pdf') {
+      const bytes = await blankPdf();
+      setPdfState({ name: 'PDF em branco', bytes });
+      setSavedPdfBytes(null);
+      setOpenIds((o) => ({ ...o, pdf: undefined }));
+      setPdfKey((k) => k + 1);
+    } else {
+      const fresh = kind === 'doc' ? createEmptyDoc() : kind === 'sheet' ? createEmptySheet() : createEmptyDeck();
+      const raw = JSON.stringify(fresh);
+      window.localStorage.setItem(KIND_KEY[kind], raw);
+      setSavedSnap((s) => ({ ...s, [kind]: raw }));
+      setOpenIds((o) => ({ ...o, [kind]: undefined }));
+      setReloadKey((k) => k + 1);
+    }
+    setApp(kind);
+    refreshDirty();
+  };
+
+  /** Título mudou na galeria: atualiza o editor se for o item aberto. */
+  const onRenamed = (id: string, kind: OfficeKind, title: string) => {
+    if (openIds[kind] !== id) return;
+    if (kind === 'pdf') {
+      setPdfState((s) => ({ ...s, name: title }));
+      return;
+    }
+    const raw = readDraft(KIND_KEY[kind]);
+    if (!raw) return;
+    try {
+      const next = JSON.stringify({ ...JSON.parse(raw), title });
+      window.localStorage.setItem(KIND_KEY[kind], next);
+      setSavedSnap((s) => ({ ...s, [kind]: next }));
+      setReloadKey((k) => k + 1);
+    } catch {
+      /* rascunho ilegível: o nome segue o que está salvo */
+    }
+    refreshDirty();
+  };
+
+  /** Item apagado da galeria: o editor continua com o conteúdo, mas deixa de estar salvo. */
+  const onDeleted = (id: string, kind: OfficeKind) => {
+    if (openIds[kind] !== id) return;
+    setOpenIds((o) => ({ ...o, [kind]: undefined }));
+    if (kind === 'pdf') setSavedPdfBytes(null);
+    else setSavedSnap((s) => ({ ...s, [kind]: undefined }));
+    refreshDirty();
+  };
   const fileRef = useRef<HTMLInputElement>(null);
   const hasCredit = creditsAvailable >= OFFICE_AI_CREDIT_COST;
 
@@ -911,6 +1085,21 @@ export function OfficeSuite({ creditsAvailable }: { creditsAvailable: number }) 
               {importing ? 'Abrindo…' : 'Abrir arquivo'}
             </button>
             <input ref={fileRef} type="file" className="hidden" onChange={onPick} aria-label="Escolher arquivo para abrir" />
+            {app !== 'galeria' && (
+              <button
+                type="button"
+                onClick={() => void saveToGallery()}
+                disabled={saving || !userId}
+                title={userId ? 'Guardar este item na sua galeria' : 'Entre na sua conta para salvar na galeria'}
+                className="relative inline-flex items-center gap-1.5 rounded-lg bg-white px-2.5 py-1.5 text-xs font-semibold text-blue-800 shadow-sm transition hover:bg-blue-50 disabled:opacity-50"
+              >
+                <Save className="h-3.5 w-3.5" aria-hidden />
+                {saving ? 'Salvando…' : isDirty(app) || !openIds[app] ? 'Salvar na galeria' : 'Salvo na galeria'}
+                {isDirty(app) && (
+                  <span aria-label="Alterações não salvas" className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-blue-700" />
+                )}
+              </button>
+            )}
             <button
               type="button"
               aria-pressed={assistantOpen}
@@ -970,8 +1159,18 @@ export function OfficeSuite({ creditsAvailable }: { creditsAvailable: number }) 
           {app === 'slides' && <SlidesTab key={`slides-${reloadKey}`} creditsAvailable={creditsAvailable} assistantOpen={assistantOpen} />}
           {/* Fica montado ao trocar de aplicativo, para o PDF em edição não se perder. */}
           <div className={app === 'pdf' ? 'flex min-w-0 flex-1' : 'hidden'}>
-            <PdfTab key={`pdf-${pdfKey}`} seed={pdfSeed} />
+            <PdfTab key={`pdf-${pdfKey}`} seed={pdfSeed} onChange={setPdfState} />
           </div>
+          {app === 'galeria' && (
+            <OfficeGalleryPanel
+              userId={userId}
+              refreshKey={galleryRefresh}
+              onOpenRecord={openRecord}
+              onNew={(k) => void newFromGallery(k)}
+              onRenamed={onRenamed}
+              onDeleted={onDeleted}
+            />
+          )}
         </div>
       </div>
       <MiniWindow open={miniOpen} onClose={() => setMiniOpen(false)} />

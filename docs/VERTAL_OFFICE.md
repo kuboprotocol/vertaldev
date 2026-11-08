@@ -71,3 +71,14 @@ Os agentes poderão, no futuro, preparar um e-mail com anexo e pedir a confirma�
 - `supabase/functions/_shared/officeEmail.ts`: montagem MIME, nomes de anexo e cabeçalhos seguros.
 - `src/components/office/OfficeEmailDialog.tsx`: diálogo de envio com confirmação.
 - `supabase/functions/_shared/officeAi.ts`: prompts e validação da saída da IA.
+
+## Galeria
+
+A galeria guarda os documentos de cada usuário na conta (Supabase), não só no navegador.
+
+- Acesse pelo app **Galeria** (primeiro item da barra lateral). Busca por título e conteúdo, filtro por tipo e ordenação.
+- **Salvar na galeria** (cabeçalho): guarda o item aberto. O indicador âmbar mostra alterações ainda não salvas.
+- **Abrir** reabre o item no editor certo. **Renomear**, **Duplicar**, **Baixar** (no formato nativo: .docx, .xlsx, .pptx ou .pdf) e **Excluir** (com confirmação).
+- Segurança: cada linha pertence a um usuário e as políticas RLS impedem acesso a itens de outras pessoas. PDFs ficam no bucket privado `office-files`, em uma pasta por usuário.
+- Limites: 1 MB por documento estruturado e 10 MB por PDF. A lista mostra os 500 itens mais recentes.
+- Migração: `supabase/migrations/20261108150000_office_documents.sql`. Os tipos em `src/integrations/supabase/types.ts` foram escritos à mão; regenere com `supabase gen types` depois de aplicar a migração.

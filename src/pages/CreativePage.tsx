@@ -1266,7 +1266,7 @@ export default function CreativePage() {
               <Button variant="ghost" size="sm" onClick={() => { setActive("dashboard"); navigate("/creative"); }} className="mb-2">
                 <ArrowLeft className="h-4 w-4 mr-2" /> Voltar ao Painel
               </Button>
-              <OfficeSuite creditsAvailable={editsRemaining} />
+              <OfficeSuite creditsAvailable={editsRemaining} userId={user?.id} />
             </div>
           </TabsContent>
 

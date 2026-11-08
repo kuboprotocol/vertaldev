@@ -141,7 +141,14 @@ export interface PdfSeed {
   bytes: Uint8Array;
 }
 
-export function PdfTab({ seed }: { seed?: PdfSeed | null }) {
+export function PdfTab({
+  seed,
+  onChange,
+}: {
+  seed?: PdfSeed | null;
+  /** Avisa o aplicativo sempre que o PDF muda (para salvar na galeria). */
+  onChange?: (state: { name: string; bytes: Uint8Array | null }) => void;
+}) {
   const [name, setName] = useState(seed?.name.replace(/\.pdf$/i, '') ?? '');
   const [original, setOriginal] = useState<Uint8Array | null>(seed?.bytes ?? null);
   const [bytes, setBytes] = useState<Uint8Array | null>(seed?.bytes ?? null);
@@ -162,6 +169,11 @@ export function PdfTab({ seed }: { seed?: PdfSeed | null }) {
   const [dragOver, setDragOver] = useState(false);
 
   const lastTaskRef = useRef<{ destroy: () => Promise<void> } | null>(null);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  useEffect(() => {
+    onChangeRef.current?.({ name, bytes });
+  }, [name, bytes]);
   const stageRef = useRef<HTMLDivElement>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
