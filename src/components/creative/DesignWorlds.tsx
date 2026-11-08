@@ -7,6 +7,7 @@ import { FreeCreativeTools } from './FreeCreativeTools';
 import { ManualDesignEditor } from './ManualDesignEditor';
 import { PhotocraftEditor } from './PhotocraftEditor';
 import { SponsoredSlot } from './SponsoredSlot';
+import { VectorcraftEditor } from './VectorcraftEditor';
 
 // O canvas (tldraw) é pesado: só carrega quando o mundo Canvas é aberto.
 const CanvasDesignStudio = lazy(() =>
@@ -194,6 +195,11 @@ export function StudioWorld({ onExit, jumpTo }: WorldProps & { jumpTo?: { key: S
           key: 'photocraft',
           label: 'PhotoCraft',
           render: () => <PhotocraftEditor />,
+        },
+        {
+          key: 'vectorcraft',
+          label: 'VectorCraft',
+          render: () => <VectorcraftEditor />,
         },
         {
           key: 'nano_banana',

@@ -140,6 +140,16 @@ describe('CreativeDesign worlds', () => {
     expect(frame).toHaveAttribute('src', '/photocraft/');
   });
 
+  it('embeds the VectorCraft editor as a page of the Estúdio Pro world', () => {
+    renderPanel();
+    fireEvent.click(modeButton('Estúdio Pro'));
+    fireEvent.click(pageButton('VectorCraft'));
+
+    const frame = screen.getByTitle('VectorCraft editor vetorial');
+    expect(frame.tagName).toBe('IFRAME');
+    expect(frame).toHaveAttribute('src', '/vectorcraft/');
+  });
+
   it('opens the in-app editors from the free tools page', () => {
     renderPanel();
     fireEvent.click(modeButton('Estúdio Pro'));
@@ -148,6 +158,11 @@ describe('CreativeDesign worlds', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Abrir PhotoCraft' }));
     expect(pageButton('PhotoCraft')).toHaveAttribute('aria-current', 'page');
     expect(screen.getByTitle('PhotoCraft editor de imagens')).toBeInTheDocument();
+
+    fireEvent.click(pageButton('Ferramentas grátis'));
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir VectorCraft' }));
+    expect(pageButton('VectorCraft')).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByTitle('VectorCraft editor vetorial')).toBeInTheDocument();
   });
 
   it('links the open-source tools to GitHub in a new tab', () => {
@@ -155,11 +170,11 @@ describe('CreativeDesign worlds', () => {
     fireEvent.click(modeButton('Estúdio Pro'));
     fireEvent.click(pageButton('Ferramentas grátis'));
 
-    for (const name of ['VectorCraft', 'FilmCraft', 'WordCraft', 'GridCraft', 'DeckCraft']) {
+    for (const name of ['FilmCraft', 'WordCraft', 'GridCraft', 'DeckCraft']) {
       expect(screen.getByText(name)).toBeInTheDocument();
     }
     const links = screen.getAllByRole('link', { name: 'Ver no GitHub' });
-    expect(links).toHaveLength(5);
+    expect(links).toHaveLength(4);
     for (const link of links) {
       expect(link).toHaveAttribute('href', expect.stringMatching(/^https:\/\/github\.com\/storytold\//));
       expect(link).toHaveAttribute('target', '_blank');

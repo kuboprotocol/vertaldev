@@ -1,10 +1,10 @@
 import { ExternalLink } from 'lucide-react';
 
-// Ferramentas criativas gratuitas do Vertal. As duas primeiras rodam dentro do painel;
+// Ferramentas criativas gratuitas do Vertal. As três primeiras rodam dentro do painel;
 // as demais são projetos de código aberto (MIT ou Apache-2.0) da storytold, abertas no GitHub.
 
 type FreeTool =
-  | { id: string; name: string; summary: string; kind: 'mode'; mode: 'manual' | 'photocraft'; actionLabel: string }
+  | { id: string; name: string; summary: string; kind: 'mode'; mode: 'manual' | 'photocraft' | 'vectorcraft'; actionLabel: string }
   | { id: string; name: string; summary: string; kind: 'link'; href: string };
 
 const FREE_TOOLS: FreeTool[] = [
@@ -28,8 +28,9 @@ const FREE_TOOLS: FreeTool[] = [
     id: 'vectorcraft',
     name: 'VectorCraft',
     summary: 'Ilustração vetorial e logotipos.',
-    kind: 'link',
-    href: 'https://github.com/storytold/vectorcraft',
+    kind: 'mode',
+    mode: 'vectorcraft',
+    actionLabel: 'Abrir VectorCraft',
   },
   {
     id: 'filmcraft',
@@ -62,7 +63,7 @@ const FREE_TOOLS: FreeTool[] = [
 ];
 
 interface FreeCreativeToolsProps {
-  onOpenMode: (mode: 'manual' | 'photocraft') => void;
+  onOpenMode: (mode: 'manual' | 'photocraft' | 'vectorcraft') => void;
 }
 
 export function FreeCreativeTools({ onOpenMode }: FreeCreativeToolsProps) {
