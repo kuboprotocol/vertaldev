@@ -6,11 +6,16 @@
 // espaço do PDF, para o texto e as caixas ficarem certos em qualquer rotação.
 import type { PDFDocument as PdfDocumentType, PDFFont, PDFPage } from 'pdf-lib';
 
-export const PDF_MAX_BYTES = 10 * 1024 * 1024;
+/** Edição é local no navegador: o limite segue a memória, não o anexo de e-mail (10 MB). */
+export const PDF_MAX_BYTES = 50 * 1024 * 1024;
 /** Limite de páginas para gerar miniaturas. Acima disso a tela mostra só a página atual. */
 export const PDF_THUMB_LIMIT = 200;
 
 export type Rotation = 0 | 90 | 180 | 270;
+
+export function pdfTooBigMessage(): string {
+  return `PDF maior que ${PDF_MAX_BYTES / (1024 * 1024)} MB. Comprima o arquivo (ex.: exportar com qualidade menor) ou divida em partes.`;
+}
 
 /** Ponto (x, y) em 0..1, origem no canto superior esquerdo da página visível. */
 export interface VisualPoint {
@@ -122,7 +127,7 @@ export async function loadPdf(bytes: Uint8Array): Promise<PdfDocumentType> {
 
 /** Confere se os bytes são um PDF de verdade e se têm páginas. */
 export async function inspectPdf(bytes: Uint8Array): Promise<{ pages: number }> {
-  if (bytes.byteLength > PDF_MAX_BYTES) throw new Error('PDF maior que 10 MB. Divida o arquivo e tente de novo.');
+  if (bytes.byteLength > PDF_MAX_BYTES) throw new Error(pdfTooBigMessage());
   const head = new TextDecoder().decode(bytes.subarray(0, 8));
   if (!head.startsWith('%PDF')) throw new Error('Este arquivo não é um PDF.');
   const doc = await loadPdf(bytes);

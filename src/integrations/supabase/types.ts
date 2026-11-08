@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      office_documents: {
+        Row: {
+          content: Json | null
+          created_at: string
+          excerpt: string
+          file_path: string | null
+          id: string
+          kind: "doc" | "sheet" | "slides" | "pdf"
+          size_bytes: number
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content?: Json | null
+          created_at?: string
+          excerpt?: string
+          file_path?: string | null
+          id?: string
+          kind: "doc" | "sheet" | "slides" | "pdf"
+          size_bytes?: number
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: Json | null
+          created_at?: string
+          excerpt?: string
+          file_path?: string | null
+          id?: string
+          kind?: "doc" | "sheet" | "slides" | "pdf"
+          size_bytes?: number
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       creative_conversations: {
         Row: {
           archived: boolean | null

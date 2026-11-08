@@ -22,6 +22,7 @@ import {
 import { download, safeName } from '@/lib/office/download';
 import {
   PDF_MAX_BYTES,
+  pdfTooBigMessage,
   PDF_THUMB_LIMIT,
   PdfOp,
   VisualPoint,
@@ -61,6 +62,17 @@ type PdfJsPage = {
     cancel: () => void;
   };
 };
+
+/** Decodificadores e fontes do pdf.js servidos junto com o app (ver vite-plugins/pdfjs-assets.ts). */
+function pdfjsSupportUrls() {
+  const base = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+  return {
+    wasmUrl: `${base}pdfjs/wasm/`,
+    cMapUrl: `${base}pdfjs/cmaps/`,
+    cMapPacked: true,
+    standardFontDataUrl: `${base}pdfjs/standard_fonts/`,
+  };
+}
 
 let pdfjsPromise: Promise<typeof import('pdfjs-dist/build/pdf.mjs')> | null = null;
 /** pdf.js (leitura e miniaturas), carregado só quando a aba PDF é usada. */
@@ -132,7 +144,7 @@ function PageThumb({ doc, pageNumber, active, onSelect }: { doc: PdfJsDocument; 
 }
 
 async function readBytes(file: File): Promise<Uint8Array> {
-  if (file.size > PDF_MAX_BYTES) throw new Error('PDF maior que 10 MB. Divida o arquivo e tente de novo.');
+  if (file.size > PDF_MAX_BYTES) throw new Error(pdfTooBigMessage());
   return new Uint8Array(await file.arrayBuffer());
 }
 
@@ -141,7 +153,14 @@ export interface PdfSeed {
   bytes: Uint8Array;
 }
 
-export function PdfTab({ seed }: { seed?: PdfSeed | null }) {
+export function PdfTab({
+  seed,
+  onChange,
+}: {
+  seed?: PdfSeed | null;
+  /** Avisa o aplicativo sempre que o PDF muda (para salvar na galeria). */
+  onChange?: (state: { name: string; bytes: Uint8Array | null }) => void;
+}) {
   const [name, setName] = useState(seed?.name.replace(/\.pdf$/i, '') ?? '');
   const [original, setOriginal] = useState<Uint8Array | null>(seed?.bytes ?? null);
   const [bytes, setBytes] = useState<Uint8Array | null>(seed?.bytes ?? null);
@@ -162,6 +181,11 @@ export function PdfTab({ seed }: { seed?: PdfSeed | null }) {
   const [dragOver, setDragOver] = useState(false);
 
   const lastTaskRef = useRef<{ destroy: () => Promise<void> } | null>(null);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  useEffect(() => {
+    onChangeRef.current?.({ name, bytes });
+  }, [name, bytes]);
   const stageRef = useRef<HTMLDivElement>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -183,7 +207,7 @@ export function PdfTab({ seed }: { seed?: PdfSeed | null }) {
       try {
         const pdfjs = await loadPdfJs();
         // pdf.js pode transferir o buffer: entrega uma cópia para não invalidar os bytes da tela.
-        const task = pdfjs.getDocument({ data: bytes.slice() });
+        const task = pdfjs.getDocument({ data: bytes.slice(), ...pdfjsSupportUrls() });
         const loaded = (await task.promise) as unknown as PdfJsDocument;
         if (cancelled) {
           void task.destroy();
@@ -416,6 +440,14 @@ export function PdfTab({ seed }: { seed?: PdfSeed | null }) {
   if (!bytes) {
     return (
       <section className="flex-1 bg-[#e9ecef] p-4 sm:p-8" aria-label="Aplicativo PDF">
+        {notice?.kind === 'err' && (
+          <div role="alert" className="mx-auto mb-4 flex max-w-4xl items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <span>{notice.text}</span>
+            <button type="button" onClick={() => setNotice(null)} aria-label="Fechar aviso" className="rounded p-0.5 text-red-700 hover:bg-red-100">
+              <X className="h-4 w-4" aria-hidden />
+            </button>
+          </div>
+        )}
         <div className="mx-auto grid max-w-4xl gap-5 md:grid-cols-2">
           <div
             onDragOver={(e) => {
@@ -432,7 +464,7 @@ export function PdfTab({ seed }: { seed?: PdfSeed | null }) {
               <Upload className="h-5 w-5" aria-hidden />
             </span>
             <h3 className="font-semibold text-slate-900">Abrir um PDF</h3>
-            <p className="text-sm text-slate-600">Arraste um arquivo .pdf para cá ou escolha no seu aparelho. Até 10 MB.</p>
+            <p className="text-sm text-slate-600">Arraste um arquivo .pdf para cá ou escolha no seu aparelho. Até 50 MB.</p>
             <button
               type="button"
               disabled={busy}
@@ -492,8 +524,8 @@ export function PdfTab({ seed }: { seed?: PdfSeed | null }) {
             </button>
           </div>
         </div>
-        {notice && (
-          <p role="status" className={`mx-auto mt-4 max-w-4xl text-sm ${notice.kind === 'ok' ? 'text-emerald-700' : 'text-red-700'}`}>
+        {notice?.kind === 'ok' && (
+          <p role="status" className="mx-auto mt-4 max-w-4xl text-sm text-emerald-700">
             {notice.text}
           </p>
         )}
@@ -558,6 +590,15 @@ export function PdfTab({ seed }: { seed?: PdfSeed | null }) {
           <Download className="h-3.5 w-3.5" aria-hidden /> Baixar PDF editado
         </button>
       </div>
+
+      {notice?.kind === 'err' && (
+        <div role="alert" className="mx-auto mb-4 flex max-w-4xl items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <span>{notice.text}</span>
+          <button type="button" onClick={() => setNotice(null)} aria-label="Fechar aviso" className="rounded p-0.5 text-red-700 hover:bg-red-100">
+            <X className="h-4 w-4" aria-hidden />
+          </button>
+        </div>
+      )}
 
       {/* Ferramentas de edição e de página. */}
       <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-slate-50 px-3 py-2" role="toolbar" aria-label="Ferramentas do PDF">

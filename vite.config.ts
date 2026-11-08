@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react-swc';
 import { VitePWA } from 'vite-plugin-pwa';
 import { envCheckPlugin } from './vite-plugins/env-check';
 import { seoPlugin } from './vite-plugins/seo';
+import { pdfjsAssetsPlugin } from './vite-plugins/pdfjs-assets';
 import path from 'path';
 import { BRAND } from './src/config/brand';
 import { LOCALE_CODES } from './src/config/locales';
@@ -33,6 +34,7 @@ export default defineConfig(({ command, mode }) => {
       strictPort: false,
     },
     plugins: [
+      pdfjsAssetsPlugin(),
       envCheckPlugin(),
       seoPlugin(),
       react({ devTarget: 'es2020' }),
