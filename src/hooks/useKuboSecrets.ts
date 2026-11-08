@@ -206,6 +206,25 @@ export async function fetchPlan(target: string): Promise<PlanResponse> {
   return call<PlanResponse>(ORCH_FN, { action: 'plan', target })
 }
 
+/**
+ * Guarda uma chave no cofre direto do chat do agente. O valor vai cifrado para o
+ * servidor e não volta; a resposta só confirma a variável e a dica mascarada.
+ */
+export async function saveSecretValue(input: {
+  name: string
+  env_key: string
+  value: string
+  group_name?: string
+  description?: string | null
+}): Promise<{ env_key: string; masked_hint: string | null }> {
+  const res = await call<{ secret: { env_key: string; masked_hint: string | null } }>(SECRETS_FN, {
+    action: 'create',
+    group_name: 'apis',
+    ...input,
+  })
+  return { env_key: res.secret.env_key, masked_hint: res.secret.masked_hint }
+}
+
 /** Quais destas variáveis já estão no cofre (próprias ou compartilhadas). Nunca traz valores. */
 export async function fetchPlanForKeys(envKeys: string[]): Promise<PlanResponse> {
   return call<PlanResponse>(ORCH_FN, { action: 'plan', env_keys: envKeys })

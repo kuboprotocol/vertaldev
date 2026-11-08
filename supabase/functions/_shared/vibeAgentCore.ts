@@ -297,7 +297,32 @@ export interface ReplyInput {
   files: Array<{ path: string; reason?: string }>;
   mode: "preview" | "apply";
   rejected: string[];
-  pendingRequirements: Array<{ label: string; secrets: string[]; kind?: string }>;
+  pendingRequirements: PendingForReply[];
+}
+
+export interface PendingForReply {
+  label: string;
+  secrets: string[];
+  kind?: string;
+  connectPath?: string;
+  keyUrl?: string;
+  siteUrl?: string;
+  linkSource?: "catalog" | "agent";
+}
+
+/** Uma instrução por item que falta: conector → Conectar; API → conta, chave, campo, cofre. */
+export function requirementInstruction(r: PendingForReply): string {
+  const check = r.linkSource === "agent" ? " (link sugerido por mim; confira se é o site oficial)" : "";
+  if (r.connectPath) {
+    const key = r.keyUrl ? ` Se ele pedir uma chave, você gera em ${r.keyUrl}${check}.` : "";
+    return `- ${r.label}: toque em "Conectar" logo abaixo para ligar o conector.${key}`;
+  }
+  const keys = r.secrets.map((s) => `\`${s}\``).join(", ");
+  const signup = r.siteUrl ? `crie sua conta em ${r.siteUrl}, ` : "";
+  const where = r.keyUrl ? `gere a chave em ${r.keyUrl}${check}` : "gere a chave no painel do serviço";
+  return keys
+    ? `- ${r.label}: ${signup}${where} e cole em ${keys} no campo logo abaixo. Eu guardo no Cofre de segredos para você.`
+    : `- ${r.label}: ${signup}${where} e me diga quando estiver pronto.`;
 }
 
 const MAX_REPLY = 4000;
@@ -342,12 +367,11 @@ export function composeAgentReply(input: ReplyInput): string {
   }
 
   if (input.pendingRequirements.length) {
-    const items = input.pendingRequirements.map((r) =>
-      r.secrets.length && r.kind !== "connector"
-        ? `${r.label} (guarde ${r.secrets.map((s) => `\`${s}\``).join(", ")} no Cofre de segredos)`
-        : r.label,
+    const n = input.pendingRequirements.length;
+    parts.push(
+      `Para a aplicação funcionar, ${n === 1 ? "falta só uma coisa" : `faltam ${n} coisas`}:\n` +
+        input.pendingRequirements.map(requirementInstruction).join("\n"),
     );
-    parts.push(`Para a aplicação funcionar, falta conectar: ${items.join("; ")}.`);
   }
 
   const questions = input.questions.map((q) => q.trim()).filter(Boolean);

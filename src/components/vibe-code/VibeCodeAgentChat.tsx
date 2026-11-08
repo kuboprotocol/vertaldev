@@ -71,7 +71,29 @@ const STEP_ICON: Record<VibeStepKind, typeof Brain> = {
   done: CheckCircle2,
 };
 
-/** Texto da resposta com `código` destacado; quebras de linha preservadas. */
+/** Links https viram clicáveis; a pontuação final da frase fica fora do link. */
+function Linkified({ text }: { text: string }) {
+  const pieces = text.split(/(https:\/\/[^\s<>"'`]+)/g);
+  return (
+    <>
+      {pieces.map((p, i) => {
+        if (!p.startsWith("https://")) return <span key={i}>{p}</span>;
+        const trail = p.match(/[.,;:!?)]+$/)?.[0] ?? "";
+        const href = trail ? p.slice(0, -trail.length) : p;
+        return (
+          <span key={i}>
+            <a href={href} target="_blank" rel="noreferrer noopener" className="break-all text-primary underline-offset-2 hover:underline">
+              {href}
+            </a>
+            {trail}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+/** Texto da resposta com `código` destacado, links clicáveis e quebras de linha preservadas. */
 function ReplyText({ text }: { text: string }) {
   const parts = text.split(/(`[^`\n]+`)/g);
   return (
@@ -82,7 +104,7 @@ function ReplyText({ text }: { text: string }) {
             {p.slice(1, -1)}
           </code>
         ) : (
-          <span key={i}>{p}</span>
+          <Linkified key={i} text={p} />
         ),
       )}
     </p>

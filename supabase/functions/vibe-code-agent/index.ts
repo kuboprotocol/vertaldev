@@ -14,7 +14,17 @@
 // cofre versionado (vibe_project_files); sem GitHub o cofre é a fonte única.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { classifyComplexity } from "../_shared/deepseekRouter.ts";
-import { runGateway } from "../_shared/aiGateway.ts";
+import { inferTaskKind, providersFromProfiles, runGateway, type Provider } from "../_shared/aiGateway.ts";
+import {
+  applyOverrides,
+  creditsFor,
+  healthFromRuns,
+  MODEL_CATALOG,
+  type ModelProfile,
+  parsePolicy,
+  rankModels,
+} from "../_shared/modelRouter.ts";
+import { listVisibleSecrets } from "../_shared/kuboSecrets.ts";
 import { recordGatewayFailure, recordGatewayRun, supabaseGatewayCache } from "../_shared/aiGatewayStore.ts";
 import { extractMemories, formatMemoriesForPrompt, loadMemories, saveMemories } from "../_shared/primeMemory.ts";
 import {
@@ -31,6 +41,7 @@ import {
   titleFromPrompt,
 } from "../_shared/vibeAgentCore.ts";
 import {
+  applyVaultStatus,
   applyConnectionStatus,
   detectRequirements,
   formatConnectorsForPrompt,
@@ -311,11 +322,38 @@ Como trabalhar:
 1. Se precisar entender código existente, devolva só read_file e "final": false. Você receberá o conteúdo e continuará. Leia o necessário e nada além; não invente caminhos que não estão na árvore.
 2. Quando tiver o que precisa, entregue os edit_file com "final": true. Cada edit_file traz o arquivo FINAL COMPLETO: nunca diffs, nunca "..." ou "resto do código", zero TODO, zero catch vazio. Código pronto para produção, tipado, acessível, reaproveitando os padrões e design tokens do projeto.
 3. "requirements": liste os conectores e APIs que esta aplicação exige para funcionar, usando os slugs do catálogo quando existirem; para APIs fora do catálogo use "name" e os nomes exatos dos segredos. Nunca peça nem escreva chaves, tokens ou senhas no código: use variáveis de ambiente. As chaves ficam guardadas no Cofre de segredos do Vertal (/secrets); quando faltar uma, diga em "message" o nome exato da variável que o usuário deve guardar lá.
-8. Você conversa com o usuário: "summary" é a sua resposta direta a ele, em português, em 1 a 3 frases. Se o pedido for só uma pergunta ou conversa, responda em "summary" (e em "message" se precisar de mais) sem editar arquivos.
 4. "memories": só fatos duráveis e úteis em conversas futuras (preferências, restrições, decisões de arquitetura). Nada de segredos, nada efêmero.
 5. Respeite a memória do Prime e o histórico: não refaça o que já foi feito, não contradiga decisões anteriores sem avisar.
 6. Pedido ambíguo e caro de errar: use ask_user (uma pergunta) em vez de chutar. Pedido claro: execute.
-7. Você não executa comandos nem acessa a internet; diga em "message" o que depender do usuário (credencial, decisão, deploy).`;
+7. Você não executa comandos nem acessa a internet; diga em "message" o que depender do usuário (credencial, decisão, deploy).
+8. Você conversa com o usuário: "summary" é a sua resposta direta a ele, em português, em 1 a 3 frases. Se o pedido for só uma pergunta ou conversa, responda em "summary" (e em "message" se precisar de mais) sem editar arquivos.
+9. Para APIs fora do catálogo, inclua em "requirements" "key_url" (página oficial onde se gera a chave) e "site_url" (página oficial de cadastro), só https e só sites oficiais. Nunca invente um link que você não tem certeza que é oficial: deixe sem.
+10. Seja educado, claro e direto, como um engenheiro sênior gentil: diga o que fez, o que falta e o próximo passo.`;
+
+/** Saúde recente dos modelos (todas as execuções da plataforma, últimos 7 dias). */
+async function loadModelHealth(admin: any) {
+  const since = new Date(Date.now() - 7 * 24 * 3_600_000).toISOString();
+  const { data } = await admin
+    .from("ai_gateway_runs")
+    .select("status, model, attempts")
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(400);
+  return healthFromRuns(data ?? []);
+}
+
+/** Até 2 lições curtas a partir dos problemas que a auto-revisão encontrou. */
+function lessonsFromProblems(problems: string[]): string[] {
+  const out: string[] = [];
+  for (const raw of problems) {
+    const text = raw.replace(/\s+/g, " ").trim();
+    if (!text) continue;
+    const lesson = `Lição aprendida: ao gerar código, evite repetir este problema — ${text}`.slice(0, 220);
+    if (!out.includes(lesson)) out.push(lesson);
+    if (out.length >= 2) break;
+  }
+  return out;
+}
 
 // ---------------------------------------------------------------------------
 // Handler
@@ -620,11 +658,41 @@ Deno.serve(async (req) => {
           (conv?.summary ? `\n\nResumo da conversa até aqui:\n${conv.summary}` : "");
 
         const tier = classifyComplexity(prompt);
-        const estimatedCost = CREDIT_COST[tier];
+
+        // Orquestrador de modelos: o mais adequado (custo x qualidade x saúde) para este pedido.
+        // VIBE_AGENT_MODEL_POLICY=deepseek_only volta ao comportamento antigo sem deploy.
+        const policy = parsePolicy(Deno.env.get("VIBE_AGENT_MODEL_POLICY"));
+        let routedProviders: Provider[] | undefined;
+        let chosen: ModelProfile | null = null;
+        let chosenReason = "";
+        if (policy !== "deepseek_only") {
+          const catalog = applyOverrides(MODEL_CATALOG, Deno.env.get("VIBE_MODEL_OVERRIDES"));
+          const availableKeys = new Set(catalog.map((p) => p.keyEnv).filter((k) => !!Deno.env.get(k)));
+          const health = await loadModelHealth(admin).catch(() => ({}));
+          const routingKind = inferTaskKind(prompt);
+          const ranked = rankModels({
+            kind: routingKind === "chat" || routingKind === "marketing" || routingKind === "classify" ? "code" : routingKind,
+            tier,
+            policy,
+            availableKeys,
+            health,
+            needJson: true,
+            catalog,
+          });
+          if (ranked.length) {
+            chosen = ranked[0].profile;
+            chosenReason = ranked[0].reason;
+            routedProviders = providersFromProfiles(ranked.slice(0, 3).map((r) => r.profile), tier);
+          }
+        }
+        const estimatedCost = creditsFor(CREDIT_COST[tier], chosen);
         send({
           kind: "estimate",
           status: "success",
-          title: `Estimativa: ${estimatedCost} crédito(s) (modelo ${tier})`,
+          title: chosen
+            ? `Modelo escolhido: ${chosen.label} · ${estimatedCost} crédito(s)`
+            : `Estimativa: ${estimatedCost} crédito(s) (modelo ${tier})`,
+          detail: chosen ? `Escolhi ${chosen.label} porque é ${chosenReason}.` : undefined,
           tier,
           estimatedCost,
         });
@@ -647,6 +715,9 @@ Deno.serve(async (req) => {
         let reviewProblems: Record<string, string[]> = {};
         let designProblems: Record<string, string[]> = {};
         const readCache = new Map<string, Observation>();
+        let switchedNotice = false;
+        // Primeiros problemas que a auto-revisão achou: viram lição para os próximos pedidos.
+        let firstProblems: string[] = [];
 
         for (let turn = 1; turn <= MAX_TURNS; turn++) {
           send({ kind: "thinking", status: "running", title: turn === 1 ? "Analisando o pedido" : `Raciocinando (volta ${turn})` });
@@ -656,7 +727,7 @@ Deno.serve(async (req) => {
               {
                 kind: "code",
                 tier,
-                deepseekOnly: true,
+                ...(routedProviders?.length ? { providers: routedProviders } : { deepseekOnly: true }),
                 json: true,
                 maxTokens: 6000,
                 temperature: 0.2,
@@ -670,6 +741,15 @@ Deno.serve(async (req) => {
             throw err;
           }
           await recordGatewayRun(admin, userId, projectId, llm).catch(() => null);
+          if (chosen && llm.provider !== chosen.id && !switchedNotice) {
+            switchedNotice = true;
+            send({
+              kind: "estimate",
+              status: "success",
+              title: `Troquei de modelo: ${chosen.label} não respondeu, segui com ${llm.model}`,
+              detail: llm.attempts.join(" · "),
+            });
+          }
 
           let parsed: ReturnType<typeof parseAgentTurn>;
           try {
@@ -768,6 +848,9 @@ Deno.serve(async (req) => {
             }
           }
           const failing = [...new Set([...Object.keys(reviewProblems), ...Object.keys(designProblems)])];
+          if (failing.length && !firstProblems.length) {
+            firstProblems = failing.flatMap((p) => [...(reviewProblems[p] ?? []), ...(designProblems[p] ?? [])]);
+          }
           if (failing.length && repairsLeft > 0 && turn < MAX_TURNS) {
             repairsLeft--;
             repaired = true;
@@ -874,14 +957,29 @@ Deno.serve(async (req) => {
         const learned = await saveMemories(admin, userId, projectId, sanitizeMemories(finalTurn.memories, !!projectId)).catch(() => []);
         for (const m of learned) send({ kind: "memory", status: "success", title: "Aprendi algo novo", detail: m.content });
 
+        // Aprende com os erros: o que a auto-revisão precisou corrigir vira regra para a próxima vez.
+        const known = new Set(memories.map((m) => m.content.trim().toLowerCase()));
+        const lessons = lessonsFromProblems(firstProblems)
+          .filter((content) => !known.has(content.toLowerCase()))
+          .map((content) => ({ scope: (projectId ? "project" : "user") as "project" | "user", kind: "constraint" as const, content }));
+        const savedLessons = lessons.length ? await saveMemories(admin, userId, projectId, lessons).catch(() => []) : [];
+        for (const m of savedLessons) send({ kind: "memory", status: "success", title: "Aprendi com um erro", detail: m.content });
+
         // Conectores e APIs que esta aplicação precisa.
         const files: Record<string, string> = {};
         for (const [path, f] of proposed) files[path] = f.content;
-        const requirements = applyConnectionStatus(
-          mergeDeclaredRequirements(detectRequirements(prompt, files), finalTurn.requirements),
-          connected,
+        // Chaves que já estão no Cofre de segredos contam como API pronta.
+        const vaultKeys = await listVisibleSecrets(admin as unknown as Parameters<typeof listVisibleSecrets>[0], userId)
+          .then((v) => v.map((s) => s.env_key))
+          .catch(() => [] as string[]);
+        const requirements = applyVaultStatus(
+          applyConnectionStatus(
+            mergeDeclaredRequirements(detectRequirements(prompt, files), finalTurn.requirements),
+            connected,
+          ),
+          vaultKeys,
         );
-        let pendingForReply: Array<{ label: string; secrets: string[]; kind?: string }> = [];
+        let pendingForReply: Parameters<typeof composeAgentReply>[0]["pendingRequirements"] = [];
         if (requirements.length) {
           const scoped = (q: any) => (projectId ? q.eq("project_id", projectId) : q.is("project_id", null));
           const { data: existing } = await scoped(
@@ -909,7 +1007,15 @@ Deno.serve(async (req) => {
             if (error) console.warn("[vibe-code-agent] requirement save:", error.message);
           }
           const pending = visible.filter((r) => r.status === "needed");
-          pendingForReply = pending.map((r) => ({ label: r.label, secrets: r.secrets, kind: r.kind }));
+          pendingForReply = pending.map((r) => ({
+            label: r.label,
+            secrets: r.secrets.filter((s) => !(r.inVault ?? []).includes(s)),
+            kind: r.kind,
+            connectPath: r.connectPath,
+            keyUrl: r.keyUrl,
+            siteUrl: r.siteUrl,
+            linkSource: r.linkSource,
+          }));
           send({
             kind: "requirements",
             status: "success",

@@ -26,6 +26,10 @@ export interface CatalogEntry {
   connectPath?: string;
   /** A plataforma já fornece (nada para o usuário configurar). */
   builtin?: boolean;
+  /** Página oficial onde o dev gera a chave de API. */
+  keyUrl?: string;
+  /** Página oficial para criar a conta, quando o dev ainda não tem. */
+  siteUrl?: string;
 }
 
 export interface DetectedRequirement {
@@ -38,6 +42,14 @@ export interface DetectedRequirement {
   connectPath?: string;
   builtin: boolean;
   status: RequirementStatus;
+  /** Onde gerar a chave (página oficial do serviço). */
+  keyUrl?: string;
+  /** Onde criar a conta no serviço. */
+  siteUrl?: string;
+  /** "catalog": link conhecido; "agent": sugerido pelo modelo, mostrar como sugestão. */
+  linkSource?: "catalog" | "agent";
+  /** Chaves deste requisito que já estão no Cofre de segredos. */
+  inVault?: string[];
 }
 
 export const CONNECTOR_CATALOG: CatalogEntry[] = [
@@ -57,6 +69,8 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
   },
   {
     slug: "github",
+    keyUrl: "https://github.com/settings/tokens",
+    siteUrl: "https://github.com/signup",
     label: "GitHub",
     kind: "connector",
     description: "Guarda cada edição do agente num repositório seu.",
@@ -66,6 +80,8 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
   },
   {
     slug: "stripe",
+    keyUrl: "https://dashboard.stripe.com/apikeys",
+    siteUrl: "https://dashboard.stripe.com/register",
     label: "Stripe (pagamentos)",
     kind: "connector",
     description: "Cobrança, assinaturas e checkout.",
@@ -75,6 +91,8 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
   },
   {
     slug: "mercadopago",
+    keyUrl: "https://www.mercadopago.com.br/developers/panel/app",
+    siteUrl: "https://www.mercadopago.com.br/developers",
     label: "Mercado Pago / Pix",
     kind: "api",
     description: "Pix, cartão e boleto no Brasil.",
@@ -92,6 +110,8 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
   },
   {
     slug: "slack",
+    keyUrl: "https://api.slack.com/apps",
+    siteUrl: "https://slack.com/get-started",
     label: "Slack",
     kind: "connector",
     description: "Enviar e ler mensagens em canais do Slack.",
@@ -119,6 +139,8 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
   },
   {
     slug: "render",
+    keyUrl: "https://dashboard.render.com/",
+    siteUrl: "https://dashboard.render.com/register",
     label: "Render (hospedagem)",
     kind: "connector",
     description: "Publicar backends e sites no Render.",
@@ -137,6 +159,8 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
   },
   {
     slug: "resend",
+    keyUrl: "https://resend.com/api-keys",
+    siteUrl: "https://resend.com/signup",
     label: "Resend (e-mail transacional)",
     kind: "api",
     description: "Enviar e-mails de boas-vindas, recibos e avisos.",
@@ -145,6 +169,8 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
   },
   {
     slug: "twilio",
+    keyUrl: "https://console.twilio.com/",
+    siteUrl: "https://www.twilio.com/try-twilio",
     label: "Twilio (SMS / WhatsApp)",
     kind: "api",
     description: "SMS, WhatsApp e ligações.",
@@ -153,6 +179,8 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
   },
   {
     slug: "google-maps",
+    keyUrl: "https://console.cloud.google.com/google/maps-apis/credentials",
+    siteUrl: "https://console.cloud.google.com/",
     label: "Google Maps",
     kind: "api",
     description: "Mapas, geocodificação e rotas.",
@@ -161,6 +189,8 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
   },
   {
     slug: "cloudflare",
+    keyUrl: "https://dash.cloudflare.com/profile/api-tokens",
+    siteUrl: "https://dash.cloudflare.com/sign-up",
     label: "Cloudflare",
     kind: "api",
     description: "DNS, CDN, Workers e proteção.",
@@ -170,6 +200,8 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
   },
   {
     slug: "firecrawl",
+    keyUrl: "https://www.firecrawl.dev/app/api-keys",
+    siteUrl: "https://www.firecrawl.dev/",
     label: "Firecrawl (coleta de sites)",
     kind: "api",
     description: "Ler e extrair conteúdo de páginas da web.",
@@ -227,7 +259,46 @@ function toDetected(entry: CatalogEntry, reason: string, secrets?: string[]): De
     connectPath: entry.connectPath,
     builtin: !!entry.builtin,
     status: entry.builtin ? "connected" : "needed",
+    ...(entry.keyUrl ? { keyUrl: entry.keyUrl, linkSource: "catalog" as const } : {}),
+    ...(entry.siteUrl ? { siteUrl: entry.siteUrl } : {}),
   };
+}
+
+/**
+ * Onde pegar chaves de serviços comuns que não têm conector próprio no catálogo.
+ * Só páginas oficiais; o agente usa isto antes de qualquer link sugerido pelo modelo.
+ */
+export const KEY_SOURCES: Record<string, { label: string; keyUrl: string; siteUrl: string }> = {
+  OPENAI_API_KEY: { label: "OpenAI", keyUrl: "https://platform.openai.com/api-keys", siteUrl: "https://platform.openai.com/signup" },
+  ANTHROPIC_API_KEY: { label: "Anthropic (Claude)", keyUrl: "https://platform.claude.com/settings/keys", siteUrl: "https://platform.claude.com/" },
+  GOOGLE_AI_API_KEY: { label: "Google AI Studio (Gemini)", keyUrl: "https://aistudio.google.com/app/apikey", siteUrl: "https://aistudio.google.com/" },
+  GEMINI_API_KEY: { label: "Google AI Studio (Gemini)", keyUrl: "https://aistudio.google.com/app/apikey", siteUrl: "https://aistudio.google.com/" },
+  DEEPSEEK_API_KEY: { label: "DeepSeek", keyUrl: "https://platform.deepseek.com/api_keys", siteUrl: "https://platform.deepseek.com/" },
+  GROQ_API_KEY: { label: "Groq", keyUrl: "https://console.groq.com/keys", siteUrl: "https://console.groq.com/" },
+  OPENROUTER_API_KEY: { label: "OpenRouter", keyUrl: "https://openrouter.ai/keys", siteUrl: "https://openrouter.ai/" },
+  RESEND_API_KEY: { label: "Resend", keyUrl: "https://resend.com/api-keys", siteUrl: "https://resend.com/signup" },
+  STRIPE_SECRET_KEY: { label: "Stripe", keyUrl: "https://dashboard.stripe.com/apikeys", siteUrl: "https://dashboard.stripe.com/register" },
+};
+
+/** Só aceita link https com host de verdade (sem IP, sem credencial embutida). */
+export function safeExternalUrl(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  try {
+    const u = new URL(raw.trim());
+    if (u.protocol !== "https:" || u.username || u.password) return undefined;
+    if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(u.hostname) || /^[\d.]+$/.test(u.hostname)) return undefined;
+    return u.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function knownSourceFor(secrets: string[]) {
+  for (const s of secrets) {
+    const hit = KEY_SOURCES[s];
+    if (hit) return hit;
+  }
+  return undefined;
 }
 
 /**
@@ -271,6 +342,7 @@ export function detectRequirements(
           secrets: orphan.slice(0, 6),
           builtin: false,
           status: "needed",
+          ...linksFromKnown(orphan),
         });
       }
     }
@@ -284,6 +356,15 @@ export interface DeclaredRequirement {
   name?: unknown;
   reason?: unknown;
   secrets?: unknown;
+  /** Página oficial onde gerar a chave (sugestão do modelo; só https). */
+  key_url?: unknown;
+  /** Página oficial para criar a conta (sugestão do modelo; só https). */
+  site_url?: unknown;
+}
+
+function linksFromKnown(secrets: string[]): Partial<DetectedRequirement> {
+  const known = knownSourceFor(secrets);
+  return known ? { keyUrl: known.keyUrl, siteUrl: known.siteUrl, linkSource: "catalog" } : {};
 }
 
 /** Junta o que o modelo declarou com o detectado, validando tudo. */
@@ -317,6 +398,15 @@ export function mergeDeclaredRequirements(
       .slice(0, 6);
     const slug = `custom:${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40)}`;
     if (slug === "custom:" || out.has(slug)) continue;
+    // Link conhecido vence; o sugerido pelo modelo entra marcado como sugestão.
+    const known = linksFromKnown(secrets);
+    const agentKeyUrl = safeExternalUrl(raw.key_url);
+    const agentSiteUrl = safeExternalUrl(raw.site_url);
+    const links: Partial<DetectedRequirement> = known.keyUrl
+      ? known
+      : agentKeyUrl || agentSiteUrl
+        ? { keyUrl: agentKeyUrl, siteUrl: agentSiteUrl, linkSource: "agent" }
+        : {};
     out.set(slug, {
       slug,
       label: name,
@@ -326,6 +416,7 @@ export function mergeDeclaredRequirements(
       secrets,
       builtin: false,
       status: "needed",
+      ...links,
     });
   }
 
@@ -342,6 +433,27 @@ export function applyConnectionStatus(
     ...r,
     status: r.builtin || connected.has(r.slug) ? "connected" : "needed",
   }));
+}
+
+/**
+ * Uma API (sem conector) está pronta quando todas as chaves dela estão no
+ * Cofre de segredos. Conectores continuam valendo pela conexão, não pelo cofre.
+ */
+export function applyVaultStatus(
+  requirements: DetectedRequirement[],
+  vaultKeys: Iterable<string>,
+): DetectedRequirement[] {
+  const vault = new Set(vaultKeys);
+  return requirements.map((r) => {
+    const inVault = r.secrets.filter((s) => vault.has(s));
+    const allInVault = r.secrets.length > 0 && inVault.length === r.secrets.length;
+    const usesVault = r.kind === "api" && !r.connectPath;
+    return {
+      ...r,
+      inVault,
+      status: r.status === "needed" && usesVault && allInVault ? "connected" : r.status,
+    };
+  });
 }
 
 /** Resumo curto para o prompt do agente: o que já está conectado e o que não. */

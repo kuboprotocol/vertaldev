@@ -170,3 +170,65 @@ Deno.test("runGateway: deepseekOnly não cai para outro provedor", async () => {
   assertEquals(err.attempts, ["deepseek_official:503", "deepseek_official:503"]);
   assert(calls.every((u) => u.includes("api.deepseek.com")));
 });
+
+// ─── Cadeia escolhida pelo roteador + Claude ────────────────────────────
+
+function claudeResponse(text: string, stop = "end_turn") {
+  return new Response(
+    JSON.stringify({
+      id: "msg_1",
+      type: "message",
+      role: "assistant",
+      model: "claude-haiku-5-5",
+      content: [{ type: "text", text }],
+      stop_reason: stop,
+      stop_sequence: null,
+      usage: { input_tokens: 1000, output_tokens: 200 },
+    }),
+    { status: 200, headers: { "content-type": "application/json", "request-id": "req_1" } },
+  );
+}
+
+const ROUTED = [
+  { name: "claude-haiku-5-5", url: "https://api.anthropic.com/v1/messages", key: "ak", model: "claude-haiku-5-5", api: "anthropic" as const, effort: "medium" as const },
+  { name: "deepseek-chat", url: "https://api.deepseek.com/chat/completions", key: "ds", model: "deepseek-chat" },
+];
+
+Deno.test("cadeia do roteador: chama o Claude pela Messages API, sem temperature", async () => {
+  const seen: Array<{ url: string; body: Record<string, unknown> }> = [];
+  const fakeFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    seen.push({ url, body: JSON.parse(String(init?.body ?? "{}")) });
+    return claudeResponse('{"ok":true}');
+  }) as typeof fetch;
+
+  const r = await runGateway(
+    { kind: "code", messages: [{ role: "system", content: "S" }, { role: "user", content: "faça" }], json: true, providers: ROUTED },
+    { fetch: fakeFetch, env, sleep: noSleep },
+  );
+  assertEquals(r.provider, "claude-haiku-5-5");
+  assertEquals(r.content, '{"ok":true}');
+  assertEquals(r.costUsd, estimateCostUsd("claude-haiku-5-5", { prompt_tokens: 1000, completion_tokens: 200 }));
+  assert(seen[0].url.endsWith("/v1/messages"));
+  assertEquals(seen[0].body.temperature, undefined);
+  assertEquals((seen[0].body.output_config as { effort: string }).effort, "medium");
+  assert(String(seen[0].body.system).includes("JSON"));
+});
+
+Deno.test("cadeia do roteador: recusa do Claude cai para a reserva e fica registrada", async () => {
+  let calls = 0;
+  const fakeFetch = (async (input: RequestInfo | URL) => {
+    calls++;
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    return url.includes("anthropic") ? claudeResponse("", "refusal") : okResponse("da reserva");
+  }) as typeof fetch;
+
+  const r = await runGateway(
+    { kind: "chat", messages: [{ role: "user", content: "oi" }], providers: ROUTED },
+    { fetch: fakeFetch, env, sleep: noSleep },
+  );
+  assertEquals(r.provider, "deepseek-chat");
+  assertEquals(r.content, "da reserva");
+  assertEquals(r.attempts, ["claude-haiku-5-5:refusal", "deepseek-chat:ok"]);
+  assertEquals(calls, 2);
+});

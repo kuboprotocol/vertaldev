@@ -93,6 +93,20 @@ describe("VibeCodeAgentChat", () => {
     expect(screen.getByText("Usando 2 memória(s) do Prime")).toBeTruthy();
   });
 
+  it("transforma os links da resposta em links clicáveis, sem a pontuação final", () => {
+    const withLink: VibeChatMessage[] = [
+      { id: "a2", role: "assistant", content: "Gere a chave em https://resend.com/api-keys.", createdAt: 2, steps: [] },
+    ];
+    render(
+      <MemoryRouter>
+        <VibeCodeAgentChat conversations={{ ...fakeApi(), messages: withLink } as VibeConversationsApi} />
+      </MemoryRouter>,
+    );
+    const link = screen.getByRole("link", { name: "https://resend.com/api-keys" });
+    expect(link.getAttribute("href")).toBe("https://resend.com/api-keys");
+    expect(link.getAttribute("rel")).toContain("noopener");
+  });
+
   it("oferece conectores e o cofre de chaves a partir do chat", () => {
     renderChat();
     fireEvent.click(screen.getByRole("button", { name: "Conectores e chaves" }));
