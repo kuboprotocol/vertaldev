@@ -3,6 +3,7 @@ import { Layers, LayoutGrid, Loader2, Plus, SlidersHorizontal, Sparkles, User, W
 import { useNavigate } from 'react-router-dom';
 import { DesignWorld, PendingPage, StartCard } from './DesignWorld';
 import { DesignGalleryFeed, MyPublishedDesigns, type DesignCopy } from './DesignGallery';
+import { FilmcraftEditor } from './FilmcraftEditor';
 import { FreeCreativeTools } from './FreeCreativeTools';
 import { ManualDesignEditor } from './ManualDesignEditor';
 import { PhotocraftEditor } from './PhotocraftEditor';
@@ -200,6 +201,11 @@ export function StudioWorld({ onExit, jumpTo }: WorldProps & { jumpTo?: { key: S
           key: 'vectorcraft',
           label: 'VectorCraft',
           render: () => <VectorcraftEditor />,
+        },
+        {
+          key: 'filmcraft',
+          label: 'FilmCraft',
+          render: () => <FilmcraftEditor />,
         },
         {
           key: 'nano_banana',
