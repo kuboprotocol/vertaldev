@@ -9,6 +9,7 @@ import { ManualDesignEditor } from './ManualDesignEditor';
 import { PhotocraftEditor } from './PhotocraftEditor';
 import { SponsoredSlot } from './SponsoredSlot';
 import { VectorcraftEditor } from './VectorcraftEditor';
+import { WordcraftEditor } from './WordcraftEditor';
 
 // O canvas (tldraw) é pesado: só carrega quando o mundo Canvas é aberto.
 const CanvasDesignStudio = lazy(() =>
@@ -206,6 +207,11 @@ export function StudioWorld({ onExit, jumpTo }: WorldProps & { jumpTo?: { key: S
           key: 'filmcraft',
           label: 'FilmCraft',
           render: () => <FilmcraftEditor />,
+        },
+        {
+          key: 'wordcraft',
+          label: 'WordCraft',
+          render: () => <WordcraftEditor />,
         },
         {
           key: 'nano_banana',
