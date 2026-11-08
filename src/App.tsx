@@ -79,6 +79,7 @@ const AgentDetailPage = lazy(() => import("./pages/AgentDetailPage"));
 const AdminPage = lazy(() => import("./pages/AdminPage"));
 const AdminDeployPage = lazy(() => import("./pages/AdminDeployPage"));
 const OrchestratorPage = lazy(() => import("./pages/OrchestratorPage"));
+const SecretsVaultPage = lazy(() => import("./pages/SecretsVaultPage"));
 const PwaTelemetryPage = lazy(() => import("./pages/PwaTelemetry"));
 const PwaExportJobDetailsPage = lazy(() => import("./pages/PwaExportJobDetails"));
 const DocsPage = lazy(() => import("./pages/DocsPage"));
@@ -271,6 +272,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/affiliate-program" element={<ProtectedRoute><AffiliateProgramPage /></ProtectedRoute>} />
                 <Route path="/docs/mcp" element={<DocsMcpPage />} />
                 <Route path="/mcp" element={<ProtectedRoute><McpAccessPage /></ProtectedRoute>} />
+                <Route path="/secrets" element={<ProtectedRoute><SecretsVaultPage /></ProtectedRoute>} />
                 
                 <Route path="/creative" element={<ProtectedRoute><CreativeEconomyGate><CreativePage /></CreativeEconomyGate></ProtectedRoute>} />
                 <Route path="/creative/investigation" element={<ProtectedRoute><CreativeEconomyGate><ErrorBoundary resourceName="InvestigationPage"><InvestigationPage /></ErrorBoundary></CreativeEconomyGate></ProtectedRoute>} />
