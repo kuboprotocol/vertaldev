@@ -63,6 +63,17 @@ type PdfJsPage = {
   };
 };
 
+/** Decodificadores e fontes do pdf.js servidos junto com o app (ver vite-plugins/pdfjs-assets.ts). */
+function pdfjsSupportUrls() {
+  const base = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+  return {
+    wasmUrl: `${base}pdfjs/wasm/`,
+    cMapUrl: `${base}pdfjs/cmaps/`,
+    cMapPacked: true,
+    standardFontDataUrl: `${base}pdfjs/standard_fonts/`,
+  };
+}
+
 let pdfjsPromise: Promise<typeof import('pdfjs-dist/build/pdf.mjs')> | null = null;
 /** pdf.js (leitura e miniaturas), carregado só quando a aba PDF é usada. */
 function loadPdfJs() {
@@ -196,7 +207,7 @@ export function PdfTab({
       try {
         const pdfjs = await loadPdfJs();
         // pdf.js pode transferir o buffer: entrega uma cópia para não invalidar os bytes da tela.
-        const task = pdfjs.getDocument({ data: bytes.slice() });
+        const task = pdfjs.getDocument({ data: bytes.slice(), ...pdfjsSupportUrls() });
         const loaded = (await task.promise) as unknown as PdfJsDocument;
         if (cancelled) {
           void task.destroy();
