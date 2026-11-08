@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildHistory,
+  composeAgentReply,
   filterRepoTree,
   formatObservations,
   isSafePath,
@@ -139,5 +140,82 @@ describe("contexto", () => {
     expect(titleFromPrompt("Crie uma landing page. Use azul.")).toBe("Crie uma landing page.");
     expect(titleFromPrompt("a".repeat(100))).toHaveLength(60);
     expect(titleFromPrompt("   ")).toBe("Nova conversa");
+  });
+});
+
+describe("composeAgentReply", () => {
+  const base = { notes: [], questions: [], files: [], mode: "preview" as const, rejected: [], pendingRequirements: [] };
+
+  it("responde como conversa quando o pedido é só uma pergunta", () => {
+    const text = composeAgentReply({ ...base, summary: "O projeto usa React com Vite." });
+    expect(text).toBe("O projeto usa React com Vite.");
+  });
+
+  it("não repete a nota igual ao resumo", () => {
+    const text = composeAgentReply({ ...base, summary: "Feito.", notes: ["Feito.", "Revise o tema escuro."] });
+    expect(text).toBe("Feito.\n\nRevise o tema escuro.");
+  });
+
+  it("aponta as caixinhas de código no preview e no commit", () => {
+    const preview = composeAgentReply({ ...base, files: [{ path: "src/App.tsx" }, { path: "src/App.tsx" }] });
+    expect(preview).toContain("Preparei 1 arquivo(s)");
+    expect(preview).toContain("`src/App.tsx`");
+    expect(preview).toMatch(/caixinha de código/);
+
+    const applied = composeAgentReply({ ...base, mode: "apply", files: [{ path: "a.ts" }] });
+    expect(applied).toContain("Commitei 1 arquivo(s)");
+  });
+
+  it("diz o que falta, com o caminho certo para conector e para chave de API", () => {
+    const text = composeAgentReply({
+      ...base,
+      pendingRequirements: [
+        {
+          label: "Stripe",
+          secrets: ["STRIPE_SECRET_KEY"],
+          kind: "connector",
+          connectPath: "/connect",
+          keyUrl: "https://dashboard.stripe.com/apikeys",
+          linkSource: "catalog",
+        },
+        {
+          label: "Resend",
+          secrets: ["RESEND_API_KEY"],
+          kind: "api",
+          keyUrl: "https://resend.com/api-keys",
+          siteUrl: "https://resend.com/signup",
+          linkSource: "catalog",
+        },
+      ],
+    });
+    expect(text).toContain("faltam 2 coisas");
+    // Conector: manda conectar e diz onde gerar a chave.
+    expect(text).toContain('- Stripe: toque em "Conectar" logo abaixo para ligar o conector. Se ele pedir uma chave, você gera em https://dashboard.stripe.com/apikeys.');
+    // API sem conector: conta, chave, campo e cofre.
+    expect(text).toContain(
+      "- Resend: crie sua conta em https://resend.com/signup, gere a chave em https://resend.com/api-keys e cole em `RESEND_API_KEY` no campo logo abaixo. Eu guardo no Cofre de segredos para você.",
+    );
+  });
+
+  it("avisa quando o link foi sugerido pelo modelo", () => {
+    const text = composeAgentReply({
+      ...base,
+      pendingRequirements: [
+        { label: "API de Frete", secrets: ["FRETE_API_KEY"], kind: "api", keyUrl: "https://frete.example.com/keys", linkSource: "agent" },
+      ],
+    });
+    expect(text).toContain("falta só uma coisa");
+    expect(text).toContain("confira se é o site oficial");
+  });
+
+  it("faz as perguntas no fim", () => {
+    expect(composeAgentReply({ ...base, questions: ["Qual a cor da marca?"] })).toBe(
+      "Antes de seguir, preciso saber: Qual a cor da marca?",
+    );
+    expect(composeAgentReply({ ...base, questions: ["A?", "B?"] })).toBe("Antes de seguir, preciso saber:\n- A?\n- B?");
+  });
+
+  it("nunca devolve resposta vazia", () => {
+    expect(composeAgentReply(base)).toBe("Pronto. Me diga o próximo passo.");
   });
 });

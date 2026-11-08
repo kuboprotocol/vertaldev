@@ -23,7 +23,14 @@ import {
   ShieldCheck,
   MessagesSquare,
   Palette,
+  ChevronDown,
+  KeyRound,
 } from "lucide-react";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Link } from "react-router-dom";
+import { activitySteps, collectCodeFiles, replyOf, type CodeFile } from "@/lib/vibeCodeFiles";
+import { VibeCodeBox } from "./VibeCodeBox";
+import { VibeConnectorPanel } from "./VibeConnectorPanel";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -59,38 +66,72 @@ const STEP_ICON: Record<VibeStepKind, typeof Brain> = {
   question: HelpCircle,
   review: ShieldCheck,
   design: Palette,
+  reply: MessageSquare,
   error: AlertCircle,
   done: CheckCircle2,
 };
 
-function DiffView({ diff }: { diff: string }) {
+/** Links https viram clicáveis; a pontuação final da frase fica fora do link. */
+function Linkified({ text }: { text: string }) {
+  const pieces = text.split(/(https:\/\/[^\s<>"'`]+)/g);
   return (
-    <pre className="mt-2 max-h-56 overflow-auto rounded-md border border-border/60 bg-background/70 p-2 text-[11px] leading-relaxed font-mono">
-      {diff.split("\n").map((line, i) => (
-        <div
-          key={i}
-          className={
-            line.startsWith("+")
-              ? "text-emerald-400"
-              : line.startsWith("-")
-              ? "text-rose-400"
-              : "text-muted-foreground"
-          }
-        >
-          {line}
-        </div>
-      ))}
-    </pre>
+    <>
+      {pieces.map((p, i) => {
+        if (!p.startsWith("https://")) return <span key={i}>{p}</span>;
+        const trail = p.match(/[.,;:!?)]+$/)?.[0] ?? "";
+        const href = trail ? p.slice(0, -trail.length) : p;
+        return (
+          <span key={i}>
+            <a href={href} target="_blank" rel="noreferrer noopener" className="break-all text-primary underline-offset-2 hover:underline">
+              {href}
+            </a>
+            {trail}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+/** Texto da resposta com `código` destacado, links clicáveis e quebras de linha preservadas. */
+function ReplyText({ text }: { text: string }) {
+  const parts = text.split(/(`[^`\n]+`)/g);
+  return (
+    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/90">
+      {parts.map((p, i) =>
+        p.startsWith("`") && p.endsWith("`") && p.length > 2 ? (
+          <code key={i} className="rounded bg-white/10 px-1 py-0.5 font-mono text-[12px] text-primary">
+            {p.slice(1, -1)}
+          </code>
+        ) : (
+          <Linkified key={i} text={p} />
+        ),
+      )}
+    </p>
   );
 }
 
 export function VibeCodeAgentChat({
   projectId,
   conversations,
+  onOpenFile,
+  openedPath,
 }: {
   projectId?: string;
   conversations: VibeConversationsApi;
+  /** Leva o usuário ao local do código quando ele toca numa caixinha. */
+  onOpenFile?: (file: CodeFile) => void;
+  openedPath?: string | null;
 }) {
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const [connectorsOpen, setConnectorsOpen] = useState(false);
+  const toggleExpanded = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const { messages, setMessages, setActiveId, refresh, open, startNew } = conversations;
   const activeIdRef = useRef<string | null>(conversations.activeId);
   activeIdRef.current = conversations.activeId;
@@ -288,7 +329,17 @@ export function VibeCodeAgentChat({
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 border-border/30 px-2 text-[10px]"
+            onClick={() => setConnectorsOpen(true)}
+            aria-label="Conectores e chaves"
+          >
+            <Plug className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Conectores</span>
+          </Button>
           <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="h-7 max-w-[150px] gap-1.5 border-border/30 px-2 text-[10px]">
@@ -312,32 +363,95 @@ export function VibeCodeAgentChat({
       {/* Radix sets the viewport content to display:table, which lets long lines widen the
           whole transcript past the card; force block so the content keeps the viewport width. */}
       <ScrollArea className="min-h-0 flex-1 px-4 py-6 [&_[data-radix-scroll-area-viewport]>div]:!block">
-        <div className="relative ml-4 space-y-6 border-l border-border/10 pl-6">
+        <div className="relative space-y-6">
           {messages.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              Descreva o que quer construir. O agente lê o projeto, raciocina, revisa o próprio código, guarda tudo
-              nesta conversa e avisa de quais conectores e APIs a aplicação precisa.
+              Converse com o agente: descreva o que quer construir ou pergunte algo. Ele responde aqui, guarda tudo nesta
+              conversa, entrega o código em caixinhas que você toca para abrir o arquivo e avisa de quais conectores e
+              chaves de API a aplicação precisa.
             </p>
           )}
 
-          {messages.map((m) =>
-            m.role === "user" ? (
-              <div key={m.id} className="flex justify-end pb-4">
-                <div className="max-w-[85%] rounded-2xl bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-foreground shadow-lg shadow-primary/5">
-                  {m.content}
+          {messages.map((m, index) => {
+            if (m.role === "user") {
+              return (
+                <div key={m.id} className="flex justify-end pb-4">
+                  <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-foreground shadow-lg shadow-primary/5">
+                    {m.content}
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div key={m.id} className="space-y-6">
-                {(m.steps ?? []).filter((step) => step.kind !== "conversation").map((step) => {
+              );
+            }
+
+            const reply = replyOf(m);
+            const files = collectCodeFiles(m.steps);
+            const activity = activitySteps(m.steps);
+            const requirementsStep = activity.find((s) => s.kind === "requirements" && s.requirements?.length);
+            const live = running && index === messages.length - 1;
+            const showActivity = live || expanded.has(m.id);
+
+            return (
+              <div key={m.id} className="space-y-3" data-testid="vibe-assistant-message">
+                <div className="flex items-start gap-2">
+                  <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <Bot className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="min-w-0 flex-1 rounded-2xl rounded-tl-sm border border-border/40 bg-card/50 px-4 py-3">
+                    {reply ? (
+                      <ReplyText text={reply} />
+                    ) : live ? (
+                      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" /> Trabalhando no seu pedido…
+                      </p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        {files.length ? "Alterações prontas." : "Sem resposta em texto nesta mensagem."}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {files.length > 0 && (
+                  <div className="space-y-2 pl-8" data-testid="vibe-code-boxes">
+                    {files.map((f) => (
+                      <VibeCodeBox key={f.path} file={f} active={openedPath === f.path} onOpen={(file) => onOpenFile?.(file)} />
+                    ))}
+                  </div>
+                )}
+
+                {requirementsStep?.requirements && (
+                  <div className="pl-8">
+                    <p className="flex items-center gap-1.5 text-xs font-medium text-amber-400">
+                      <KeyRound className="h-3.5 w-3.5" /> {requirementsStep.title}
+                    </p>
+                    <VibeRequirementsCard requirements={requirementsStep.requirements} />
+                  </div>
+                )}
+
+                {activity.length > 0 && (
+                  <div className="pl-8">
+                    <button
+                      type="button"
+                      onClick={() => toggleExpanded(m.id)}
+                      disabled={live}
+                      className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-80"
+                      aria-expanded={showActivity}
+                    >
+                      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showActivity ? "" : "-rotate-90"}`} />
+                      {showActivity ? "Ocultar" : "Ver"} o que o agente fez ({activity.length} passo{activity.length > 1 ? "s" : ""})
+                    </button>
+                  </div>
+                )}
+
+                {showActivity && (
+              <div className="space-y-3 pl-8">
+                {activity.filter((step) => step.kind !== "requirements").map((step) => {
                   const Icon = STEP_ICON[step.kind] ?? Brain;
                   return (
                     <div
                       key={step.id}
                       className="group relative rounded-xl border border-border/40 bg-card/40 px-3 py-3 transition-all hover:bg-card/60"
                     >
-                      <div className="absolute -left-[31px] top-4 h-2.5 w-2.5 rounded-full border-2 border-primary bg-background shadow-[0_0_8px_rgba(201,148,26,0.4)]" />
-
                       <div className="flex items-center gap-2">
                         {step.status === "running" ? (
                           <div className="relative">
@@ -400,21 +514,14 @@ export function VibeCodeAgentChat({
                         </div>
                       )}
                       
-                      {step.diff && (
-                        <div className="mt-3">
-                          <DiffView diff={step.diff} />
-                        </div>
-                      )}
-
-                      {step.kind === "requirements" && step.requirements && step.requirements.length > 0 && (
-                        <VibeRequirementsCard requirements={step.requirements} />
-                      )}
                     </div>
                   );
                 })}
               </div>
-            ),
-          )}
+                )}
+              </div>
+            );
+          })}
         </div>
       </ScrollArea>
 
@@ -467,6 +574,25 @@ export function VibeCodeAgentChat({
           Cada conversa guarda memória e código · commits reais via GitHub quando conectado
         </p>
       </div>
+
+      <Sheet open={connectorsOpen} onOpenChange={setConnectorsOpen}>
+        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Conectores e chaves</SheetTitle>
+            <SheetDescription>
+              Conectores ligam o app a serviços. As chaves de API ficam guardadas no Cofre de segredos.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-4 space-y-4">
+            <VibeConnectorPanel projectId={projectId || undefined} />
+            <Button asChild variant="outline" className="w-full justify-start gap-2">
+              <Link to="/connectors">
+                <Plug className="h-4 w-4" /> Todos os conectores
+              </Link>
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </Card>
   );
 }

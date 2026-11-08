@@ -21,6 +21,8 @@
 // frequência; os valores padrão são os atuais da API oficial da DeepSeek.
 
 import { classifyComplexity } from "./deepseekRouter.ts";
+import { callAnthropic, ProviderCallError, type Effort } from "./anthropicProvider.ts";
+import type { ModelProfile } from "./modelRouter.ts";
 
 export type Msg = { role: "system" | "user" | "assistant"; content: string };
 
@@ -143,6 +145,9 @@ const DEFAULT_PRICES: Record<string, { input: number; output: number }> = {
   "deepseek/deepseek-chat": { input: 0.3, output: 1.2 },
   "deepseek/deepseek-r1": { input: 0.6, output: 2.4 },
   "llama-3.3-70b-versatile": { input: 0.59, output: 0.79 },
+  "claude-haiku-5-5": { input: 0.1, output: 0.5 },
+  "claude-sonnet-5-5": { input: 2, output: 10 },
+  "claude-opus-5-5": { input: 4, output: 20 },
 };
 
 export function priceTable(): Record<string, { input: number; output: number }> {
@@ -174,6 +179,31 @@ export interface Provider {
   url: string;
   key: string;
   model: string;
+  /** Formato da API. Ausente = chat completions (OpenAI-compatível). */
+  api?: "openai" | "anthropic";
+  /** Profundidade de raciocínio (só Claude). */
+  effort?: Effort;
+}
+
+/**
+ * Cadeia de provedores na ordem escolhida pelo roteador de modelos.
+ * Modelos sem chave configurada ficam de fora.
+ */
+export function providersFromProfiles(profiles: ModelProfile[], tier: Tier, env: Env = (k) => Deno.env.get(k)): Provider[] {
+  const out: Provider[] = [];
+  for (const p of profiles) {
+    const key = env(p.keyEnv);
+    if (!key) continue;
+    out.push({
+      name: p.id,
+      url: p.url,
+      key,
+      model: (p.modelEnv && env(p.modelEnv)) || p.model,
+      api: p.api,
+      effort: tier === "pro" ? "high" : "medium",
+    });
+  }
+  return out;
 }
 
 type Env = (k: string) => string | undefined;
@@ -247,6 +277,8 @@ export interface GatewayRequest {
    * Vibe Code: não trocar de "cérebro" no meio de uma tarefa sem o dev ver.
    */
   deepseekOnly?: boolean;
+  /** Cadeia já escolhida pelo roteador de modelos; substitui a cadeia padrão. */
+  providers?: Provider[];
 }
 
 export interface GatewayResult {
@@ -292,7 +324,9 @@ export async function runGateway(req: GatewayRequest, deps: GatewayDeps = {}): P
   const temperature = req.temperature ?? route.temperature;
   const json = !!req.json;
 
-  const chain = providerChain(tier, env).filter((p) => !req.deepseekOnly || p.name === "deepseek_official");
+  const chain = req.providers?.length
+    ? req.providers
+    : providerChain(tier, env).filter((p) => !req.deepseekOnly || p.name === "deepseek_official");
   if (chain.length === 0) throw new GatewayError("missing_secret:DEEPSEEK_API_KEY", 503, []);
 
   const useCache = route.cacheable && !req.noCache && temperature <= 0.3 && !!deps.cache;
@@ -311,6 +345,38 @@ export async function runGateway(req: GatewayRequest, deps: GatewayDeps = {}): P
   const attempts: string[] = [];
   for (const p of chain) {
     for (let attempt = 0; attempt < 2; attempt++) {
+      if (p.api === "anthropic") {
+        try {
+          const out = await callAnthropic({
+            key: p.key,
+            model: p.model,
+            messages,
+            maxTokens: req.maxTokens ?? route.maxTokens,
+            json,
+            effort: p.effort ?? "medium",
+            fetch: deps.fetch,
+          });
+          attempts.push(`${p.name}:ok`);
+          if (key && deps.cache && out.content) {
+            await deps.cache.set(key, out.content, { kind, model: p.model }).catch(() => {});
+          }
+          return {
+            content: out.content, kind, tier, provider: p.name, model: p.model, cached: false, usage: out.usage,
+            costUsd: estimateCostUsd(p.model, out.usage), durationMs: Date.now() - started,
+            attempts, droppedMessages: dropped,
+          };
+        } catch (err) {
+          if (!(err instanceof ProviderCallError)) throw err;
+          attempts.push(`${p.name}:${err.status}`);
+          // Recusa, chave inválida ou sem saldo: a reserva pode resolver; não insiste aqui.
+          if (err.status === "refusal" || err.status === 401 || err.status === 402 || err.status === 403) break;
+          if (err.status === "network" || RETRYABLE.has(err.status)) {
+            if (attempt === 0) { await sleep(err.status === 429 ? 1000 : 400); continue; }
+            break;
+          }
+          throw new GatewayError(`provider_rejected:${p.name}:${err.status}`, 502, attempts);
+        }
+      }
       const body: Record<string, unknown> = {
         model: p.model,
         messages,

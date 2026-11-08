@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   applyConnectionStatus,
+  applyVaultStatus,
+  safeExternalUrl,
   detectRequirements,
   extractEnvVarNames,
   formatConnectorsForPrompt,
@@ -105,5 +107,51 @@ describe("applyConnectionStatus / formatConnectorsForPrompt", () => {
     expect(text).toContain("- github (GitHub): conectado");
     expect(text).toContain("- stripe (Stripe (pagamentos)): não conectado");
     expect(text).toContain("- supabase (Cloud (banco, login e arquivos)): da plataforma");
+  });
+});
+
+describe("links de chave e status pelo cofre", () => {
+  it("leva para a página oficial de chaves do serviço do catálogo", () => {
+    const [stripe] = detectRequirements("cobrar com Stripe");
+    expect(stripe.keyUrl).toBe("https://dashboard.stripe.com/apikeys");
+    expect(stripe.siteUrl).toContain("stripe.com");
+    expect(stripe.linkSource).toBe("catalog");
+  });
+
+  it("usa link conhecido para chave de provedor comum lida no código", () => {
+    const [req] = detectRequirements("", { "a.ts": "const k = process.env.OPENAI_API_KEY;" });
+    expect(req.keyUrl).toBe("https://platform.openai.com/api-keys");
+  });
+
+  it("aceita link sugerido pelo modelo só se for https, e marca como sugestão", () => {
+    const merged = mergeDeclaredRequirements([], [
+      { name: "API de Frete", secrets: ["FRETE_API_KEY"], key_url: "https://frete.example.com/keys" },
+      { name: "API Ruim", secrets: ["RUIM_API_KEY"], key_url: "http://ruim.example.com" },
+      { name: "API IP", secrets: ["IP_API_KEY"], key_url: "https://10.0.0.1/keys" },
+    ]);
+    expect(merged[0]).toMatchObject({ keyUrl: "https://frete.example.com/keys", linkSource: "agent" });
+    expect(merged[1].keyUrl).toBeUndefined();
+    expect(merged[2].keyUrl).toBeUndefined();
+  });
+
+  it("safeExternalUrl recusa credencial embutida e esquemas perigosos", () => {
+    expect(safeExternalUrl("https://user:pw@x.com")).toBeUndefined();
+    expect(safeExternalUrl("javascript:alert(1)")).toBeUndefined();
+    expect(safeExternalUrl("https://resend.com/api-keys")).toBe("https://resend.com/api-keys");
+  });
+
+  it("API sem conector fica pronta quando todas as chaves estão no cofre", () => {
+    const reqs = detectRequirements("enviar e-mail com Resend");
+    const [partial] = applyVaultStatus(reqs, []);
+    expect(partial.status).toBe("needed");
+    const [ready] = applyVaultStatus(reqs, ["RESEND_API_KEY"]);
+    expect(ready.status).toBe("connected");
+    expect(ready.inVault).toEqual(["RESEND_API_KEY"]);
+  });
+
+  it("conector continua valendo pela conexão, não pelo cofre", () => {
+    const reqs = detectRequirements("cobrar com Stripe");
+    const [stripe] = applyVaultStatus(reqs, ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"]);
+    expect(stripe.status).toBe("needed");
   });
 });

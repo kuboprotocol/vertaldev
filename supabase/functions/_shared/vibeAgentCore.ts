@@ -285,3 +285,99 @@ export function titleFromPrompt(prompt: string): string {
   if (!clean) return "Nova conversa";
   return clean.length > 60 ? `${clean.slice(0, 57).trimEnd()}...` : clean;
 }
+
+// ---------------------------------------------------------------------------
+// Resposta conversacional
+// ---------------------------------------------------------------------------
+
+export interface ReplyInput {
+  summary?: string;
+  notes: string[];
+  questions: string[];
+  files: Array<{ path: string; reason?: string }>;
+  mode: "preview" | "apply";
+  rejected: string[];
+  pendingRequirements: PendingForReply[];
+}
+
+export interface PendingForReply {
+  label: string;
+  secrets: string[];
+  kind?: string;
+  connectPath?: string;
+  keyUrl?: string;
+  siteUrl?: string;
+  linkSource?: "catalog" | "agent";
+}
+
+/** Uma instrução por item que falta: conector → Conectar; API → conta, chave, campo, cofre. */
+export function requirementInstruction(r: PendingForReply): string {
+  const check = r.linkSource === "agent" ? " (link sugerido por mim; confira se é o site oficial)" : "";
+  if (r.connectPath) {
+    const key = r.keyUrl ? ` Se ele pedir uma chave, você gera em ${r.keyUrl}${check}.` : "";
+    return `- ${r.label}: toque em "Conectar" logo abaixo para ligar o conector.${key}`;
+  }
+  const keys = r.secrets.map((s) => `\`${s}\``).join(", ");
+  const signup = r.siteUrl ? `crie sua conta em ${r.siteUrl}, ` : "";
+  const where = r.keyUrl ? `gere a chave em ${r.keyUrl}${check}` : "gere a chave no painel do serviço";
+  return keys
+    ? `- ${r.label}: ${signup}${where} e cole em ${keys} no campo logo abaixo. Eu guardo no Cofre de segredos para você.`
+    : `- ${r.label}: ${signup}${where} e me diga quando estiver pronto.`;
+}
+
+const MAX_REPLY = 4000;
+
+function listPaths(paths: string[], max = 6): string {
+  const shown = paths.slice(0, max).map((p) => `\`${p}\``);
+  const rest = paths.length - shown.length;
+  return rest > 0 ? `${shown.join(", ")} e mais ${rest}` : shown.join(", ");
+}
+
+/**
+ * Texto que o agente "fala" no chat ao fim de um ciclo: o que entendeu, o que
+ * fez, o que ficou de fora, o que falta conectar e o que precisa perguntar.
+ * É o que fica guardado na conversa (vibe_messages.content) e reaparece no histórico.
+ */
+export function composeAgentReply(input: ReplyInput): string {
+  const parts: string[] = [];
+  const summary = input.summary?.trim();
+  if (summary) parts.push(summary);
+
+  const seen = new Set(summary ? [summary.toLowerCase()] : []);
+  for (const raw of input.notes) {
+    const note = raw.trim();
+    if (!note || seen.has(note.toLowerCase())) continue;
+    seen.add(note.toLowerCase());
+    parts.push(note);
+  }
+
+  const paths = [...new Set(input.files.map((f) => f.path))];
+  if (paths.length) {
+    parts.push(
+      input.mode === "preview"
+        ? `Preparei ${paths.length} arquivo(s) para você revisar: ${listPaths(paths)}. Toque numa caixinha de código para abrir o arquivo; quando estiver bom, aplique as alterações.`
+        : `Commitei ${paths.length} arquivo(s): ${listPaths(paths)}. Toque numa caixinha de código para ver onde ficou.`,
+    );
+  }
+
+  if (input.rejected.length) {
+    parts.push(
+      `${input.rejected.length} arquivo(s) ficaram de fora porque não passaram na auto-revisão. Peça de novo com mais detalhes se precisar deles.`,
+    );
+  }
+
+  if (input.pendingRequirements.length) {
+    const n = input.pendingRequirements.length;
+    parts.push(
+      `Para a aplicação funcionar, ${n === 1 ? "falta só uma coisa" : `faltam ${n} coisas`}:\n` +
+        input.pendingRequirements.map(requirementInstruction).join("\n"),
+    );
+  }
+
+  const questions = input.questions.map((q) => q.trim()).filter(Boolean);
+  if (questions.length === 1) parts.push(`Antes de seguir, preciso saber: ${questions[0]}`);
+  else if (questions.length > 1) parts.push(`Antes de seguir, preciso saber:\n${questions.map((q) => `- ${q}`).join("\n")}`);
+
+  const text = parts.length ? parts.join("\n\n") : "Pronto. Me diga o próximo passo.";
+  return text.length > MAX_REPLY ? `${text.slice(0, MAX_REPLY - 1).trimEnd()}…` : text;
+}
