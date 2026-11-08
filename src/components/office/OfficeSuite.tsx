@@ -20,6 +20,7 @@ import {
   Sigma,
   Upload,
   Youtube,
+  FileType,
 } from 'lucide-react';
 import {
   BlockAlign,
@@ -27,6 +28,7 @@ import {
   BlockType,
   DocBlock,
   DocData,
+  DOC_MAX_BLOCKS,
   createEmptyDoc,
   docFromAi,
   docToHtml,
@@ -65,6 +67,11 @@ import { docToDocx } from '@/lib/office/officeFiles';
 import { OFFICE_KEYS, importFile } from '@/lib/office/importers';
 import { SlidesTab } from './SlidesTab';
 import { MiniWindow } from './MiniWindow';
+import { docToPdf, sheetToPdf } from '@/lib/office/pdfGenerate';
+import { inspectPdf } from '@/lib/office/pdfEdit';
+import { PdfTab, type PdfSeed } from './PdfTab';
+import { download, safeName } from '@/lib/office/download';
+import { SHEET_TEMPLATES, DOC_TEMPLATES, docTemplateBlocks } from '@/lib/office/templates';
 
 const DOC_KEY = OFFICE_KEYS.doc;
 const SHEET_KEY = OFFICE_KEYS.sheet;
@@ -88,21 +95,6 @@ function saveLocal(key: string, value: unknown) {
   }
 }
 
-export function download(data: BlobPart, filename: string, type: string) {
-  const url = URL.createObjectURL(new Blob([data], { type }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-export function safeName(title: string): string {
-  return (title || 'arquivo').replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'arquivo';
-}
-
 type Notice = { kind: 'ok' | 'err'; text: string } | null;
 
 const BLOCK_LABELS: Record<BlockType, string> = {
@@ -122,6 +114,7 @@ const APPS = [
   { id: 'doc', label: 'Documento', icon: FileText, tile: 'from-blue-600 to-indigo-600' },
   { id: 'sheet', label: 'Planilha', icon: SheetIcon, tile: 'from-emerald-600 to-teal-600' },
   { id: 'slides', label: 'Apresentação', icon: Presentation, tile: 'from-orange-500 to-amber-500' },
+  { id: 'pdf', label: 'PDF', icon: FileType, tile: 'from-rose-500 to-red-600' },
 ] as const;
 
 type AppId = (typeof APPS)[number]['id'];
@@ -239,6 +232,19 @@ function DocumentTab({ creditsAvailable, assistantOpen }: { creditsAvailable: nu
     update({ ...doc, blocks: [...doc.blocks, makeBlock('paragraph', text)] });
   };
 
+  /** Modelo: preenche um documento vazio ou insere o modelo depois do bloco atual. */
+  const applyDocTemplate = (id: string) => {
+    const tpl = DOC_TEMPLATES.find((t) => t.id === id);
+    const blocks = docTemplateBlocks(id);
+    if (!tpl || blocks.length === 0) return;
+    if (doc.blocks.every((b) => b.text.trim() === '')) {
+      update({ ...doc, title: doc.title.startsWith('Documento sem') ? tpl.label : doc.title, blocks: blocks.slice(0, DOC_MAX_BLOCKS) });
+      return;
+    }
+    const at = active ? doc.blocks.findIndex((b) => b.id === active.id) : doc.blocks.length - 1;
+    update({ ...doc, blocks: [...doc.blocks.slice(0, at + 1), ...blocks, ...doc.blocks.slice(at + 1)].slice(0, DOC_MAX_BLOCKS) });
+  };
+
   const exportAs = (kind: 'html' | 'md' | 'txt') => {
     const name = safeName(doc.title);
     if (kind === 'html') download(docToHtml(doc), `${name}.html`, 'text/html;charset=utf-8');
@@ -299,6 +305,15 @@ function DocumentTab({ creditsAvailable, assistantOpen }: { creditsAvailable: nu
           <RibbonButton wide icon={<AlignLeft className="h-4 w-4" />} label="Parágrafo" onClick={() => insert('paragraph')} />
           <RibbonButton wide icon={<List className="h-4 w-4" />} label="Item de lista" onClick={() => insert('bullet')} />
         </RibbonGroup>
+        <RibbonGroup label="Modelos">
+          <RibbonSelect
+            label="Modelo de documento"
+            width="w-44"
+            value=""
+            options={[{ value: '', label: 'Escolher modelo…' }, ...DOC_TEMPLATES.map((t) => ({ value: t.id, label: t.label }))]}
+            onChange={(v) => v && applyDocTemplate(v)}
+          />
+        </RibbonGroup>
       </>
     ),
     share: (
@@ -316,6 +331,12 @@ function DocumentTab({ creditsAvailable, assistantOpen }: { creditsAvailable: nu
                 download(b, `${safeName(doc.title)}.docx`, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
               )
             }
+          />
+          <RibbonButton
+            wide
+            icon={<span className="text-[10px] font-bold">PDF</span>}
+            label="PDF"
+            onClick={() => void docToPdf(doc).then((b) => download(b, `${safeName(doc.title)}.pdf`, 'application/pdf'))}
           />
         </RibbonGroup>
         <RibbonGroup label="Enviar">
@@ -503,6 +524,15 @@ function SheetTab({ creditsAvailable, assistantOpen }: { creditsAvailable: numbe
     requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`[data-cell="${ref}"]`)?.focus());
   };
 
+  /** Modelo de planilha: ocupa a grade toda, então pede confirmação quando já há conteúdo. */
+  const applySheetTemplate = (id: string) => {
+    const tpl = SHEET_TEMPLATES.find((t) => t.id === id);
+    if (!tpl) return;
+    if (Object.keys(sheet.cells).length > 0 && !window.confirm(`Substituir o conteúdo atual da planilha pelo modelo "${tpl.label}"?`)) return;
+    const title = sheet.title.startsWith('Planilha sem') ? tpl.label : sheet.title;
+    commit(tpl.build(title));
+  };
+
   const addFormula = (fn: SheetFunction) => {
     commit(setCell(sheet, selected, suggestFormula(fn, selected)));
   };
@@ -566,6 +596,15 @@ function SheetTab({ creditsAvailable, assistantOpen }: { creditsAvailable: numbe
           <RibbonButton wide icon={<span className="text-[13px] font-bold">x̄</span>} label="Média" onClick={() => addFormula('AVERAGE')} />
           <RibbonButton wide icon={<span className="text-[11px] font-bold">#</span>} label="Contar" onClick={() => addFormula('COUNT')} />
         </RibbonGroup>
+        <RibbonGroup label="Modelos">
+          <RibbonSelect
+            label="Modelo de planilha"
+            width="w-44"
+            value=""
+            options={[{ value: '', label: 'Escolher modelo…' }, ...SHEET_TEMPLATES.map((t) => ({ value: t.id, label: t.label }))]}
+            onChange={(v) => v && applySheetTemplate(v)}
+          />
+        </RibbonGroup>
       </>
     ),
     share: (
@@ -579,6 +618,12 @@ function SheetTab({ creditsAvailable, assistantOpen }: { creditsAvailable: numbe
             onClick={() =>
               download(sheetToXlsx(sheet), `${exportName}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
             }
+          />
+          <RibbonButton
+            wide
+            icon={<span className="text-[10px] font-bold">PDF</span>}
+            label="PDF"
+            onClick={() => void sheetToPdf(sheet).then((b) => download(b, `${exportName}.pdf`, 'application/pdf'))}
           />
         </RibbonGroup>
         <RibbonGroup label="Enviar">
@@ -777,6 +822,8 @@ export function OfficeSuite({ creditsAvailable }: { creditsAvailable: number }) 
   const [importing, setImporting] = useState(false);
   const [miniOpen, setMiniOpen] = useState(false);
   const [importNote, setImportNote] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [pdfSeed, setPdfSeed] = useState<PdfSeed | null>(null);
+  const [pdfKey, setPdfKey] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const hasCredit = creditsAvailable >= OFFICE_AI_CREDIT_COST;
 
@@ -788,6 +835,16 @@ export function OfficeSuite({ creditsAvailable }: { creditsAvailable: number }) 
     setImporting(true);
     setImportNote(null);
     try {
+      if (/\.pdf$/i.test(file.name)) {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        await inspectPdf(bytes);
+        if (pdfSeed && !window.confirm('Abrir este PDF substitui o que está no editor de PDF. Continuar?')) return;
+        setPdfSeed({ name: file.name, bytes });
+        setPdfKey((k) => k + 1);
+        setApp('pdf');
+        setImportNote({ kind: 'ok', text: `${file.name} aberto no editor de PDF.` });
+        return;
+      }
       const r = await importFile(file);
       const target: 'doc' | 'sheet' | 'slides' = r.kind === 'doc' ? 'doc' : r.kind === 'sheet' ? 'sheet' : 'slides';
       if (storedHasContent(target) && !window.confirm(`Substituir o conteúdo atual do ${APP_LABEL[target]} por "${file.name}"?`)) {
@@ -820,7 +877,7 @@ export function OfficeSuite({ creditsAvailable }: { creditsAvailable: number }) 
           </span>
           <div className="min-w-0 flex-1">
             <h2 className="font-['Unbounded'] text-sm font-bold leading-tight">Vertal Office</h2>
-            <p className="truncate text-[11px] text-blue-100">Documentos, planilhas e apresentações. Grátis para usar.</p>
+            <p className="truncate text-[11px] text-blue-100">Documentos, planilhas, apresentações e PDF. Grátis para usar.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-medium">
@@ -911,6 +968,10 @@ export function OfficeSuite({ creditsAvailable }: { creditsAvailable: number }) 
           {app === 'doc' && <DocumentTab key={`doc-${reloadKey}`} creditsAvailable={creditsAvailable} assistantOpen={assistantOpen} />}
           {app === 'sheet' && <SheetTab key={`sheet-${reloadKey}`} creditsAvailable={creditsAvailable} assistantOpen={assistantOpen} />}
           {app === 'slides' && <SlidesTab key={`slides-${reloadKey}`} creditsAvailable={creditsAvailable} assistantOpen={assistantOpen} />}
+          {/* Fica montado ao trocar de aplicativo, para o PDF em edição não se perder. */}
+          <div className={app === 'pdf' ? 'flex min-w-0 flex-1' : 'hidden'}>
+            <PdfTab key={`pdf-${pdfKey}`} seed={pdfSeed} />
+          </div>
         </div>
       </div>
       <MiniWindow open={miniOpen} onClose={() => setMiniOpen(false)} />

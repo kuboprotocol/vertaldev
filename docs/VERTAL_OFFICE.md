@@ -1,10 +1,10 @@
 # Vertal Office
 
-Suíte de escritório do Painel Criativo: documentos, planilhas e (em evolução) apresentações, com a IA do Vertal como ajuda opcional.
+Suíte de escritório do Painel Criativo: documentos, planilhas, apresentações e PDF, com a IA do Vertal como ajuda opcional.
 
 ## Modelo de cobrança
 
-- **Grátis para usar:** editores de documento, planilha e apresentação, exportação (HTML, Markdown, texto, CSV, Excel `.xlsx`, Word `.docx`, PowerPoint `.pptx`, PDF) e rascunhos salvos no navegador. Não há cobrança por abrir, editar ou exportar.
+- **Grátis para usar:** editores de documento, planilha, apresentação e PDF, exportação (HTML, Markdown, texto, CSV, Excel `.xlsx`, Word `.docx`, PowerPoint `.pptx`, PDF) e rascunhos salvos no navegador. Não há cobrança por abrir, editar ou exportar.
 - **Pago só o uso da IA:** cada ação de IA (escrever documento, preencher planilha) custa **1 crédito por uso**. Se a IA falhar ou devolver um resultado inválido, o crédito é devolvido automaticamente.
 - **Nada é obrigatório:** o usuário pode usar o Vertal Office inteiro sem nunca tocar na IA.
 
@@ -12,17 +12,21 @@ Suíte de escritório do Painel Criativo: documentos, planilhas e (em evolução
 
 | Área | Situação |
 |------|----------|
-| Documento | Blocos de título, parágrafo e item de lista. Exporta HTML, Markdown e texto. |
-| Planilha | Grade de até 200 linhas × 26 colunas. Fórmulas: `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `ROUND`, `ABS`, operadores `+ - * / ^` e parênteses. Erros: `#DIV/0!`, `#REF!`, `#VALUE!`, `#NAME?`, `#CYCLE!`. Exporta CSV e `.xlsx`. |
+| Documento | Blocos de título, parágrafo e item de lista. Modelos prontos (carta, relatório, ata, proposta, contrato de serviços, currículo). Exporta HTML, Markdown, texto, Word e PDF (paginado, com número de página). |
+| Planilha | Grade de até 200 linhas × 26 colunas. Fórmulas: `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `ROUND`, `ABS`, operadores `+ - * / ^` e parênteses. Erros: `#DIV/0!`, `#REF!`, `#VALUE!`, `#NAME?`, `#CYCLE!`. Modelos: orçamento e controle financeiro, com totais calculados. Exporta CSV, `.xlsx` e PDF (paisagem, com a formatação das células). |
+| PDF | Abrir ou arrastar um PDF (até 10 MB). Editar: texto, destaque, cobrir área com branco, girar página, apagar página, página em branco, anexar outro PDF. Cada ação grava o PDF na hora e "Desfazer" volta uma ação (até 15). Criar: PDF em branco ou a partir de um texto colado. Baixa o PDF editado ou o original. |
 | IA | Escreve documento, preenche planilha e gera slides a partir de um pedido e de material colado opcional. 1 crédito por uso. |
 | Apresentação | Slides com título e tópicos. A IA gera a apresentação inteira ou adiciona slides depois do atual (1 crédito por uso). Exporta PDF (paisagem), HTML, texto e PowerPoint (`.pptx`). |
 | Word | Exporta documento em `.docx`. |
-| Armazenamento | Rascunho local no navegador (um documento, uma planilha e uma apresentação por vez). |
+| Armazenamento | Rascunho local no navegador (um documento, uma planilha e uma apresentação por vez). O PDF em edição fica na memória da aba: some ao recarregar a página. |
 
 ## O que ainda não funciona
 
 - Várias abas ou vários documentos por conta. Hoje há um documento e uma planilha por navegador.
 - Busca na web ao vivo pela IA. A IA organiza o pedido e o material que o usuário colar.
+- PDF: a fonte padrão (Helvetica) aceita o alfabeto latino com acentos. Outros caracteres (ex.: chinês, emoji) viram `?` no texto inserido.
+- PDF: "Cobrir" põe uma área branca por cima e não apaga o texto que já estava na página. Não há remoção de texto nem edição de texto existente.
+- PDF: não há assinatura digital, formulários preenchíveis nem OCR de PDF escaneado.
 
 ## Enviar por e-mail
 
@@ -56,6 +60,11 @@ Os agentes poderão, no futuro, preparar um e-mail com anexo e pedir a confirma�
 ## Arquitetura (resumo)
 
 - `src/lib/office/`: motor de fórmulas, modelos de documento e planilha, exportação.
+- `src/lib/office/pdfEdit.ts`: edição de PDF existente (pdf-lib). Converte cliques da tela para o espaço do PDF, considerando a rotação da página.
+- `src/lib/office/pdfGenerate.ts`: geração de PDF de documento, planilha e texto livre (pdf-lib, com paginação).
+- `src/lib/office/templates.ts`: modelos de documento e de planilha.
+- `src/lib/office/download.ts`: download de arquivos gerados no navegador.
+- `src/components/office/PdfTab.tsx`: aba PDF (abrir, anexar, editar, criar e baixar). Usa pdf.js para exibir as páginas.
 - `src/components/office/OfficeSuite.tsx`: interface do Vertal Office.
 - `supabase/functions/office-ai/`: edge function da IA (ações `sheet`, `doc` e `email`), com cobrança de 1 crédito, idempotência e reembolso em falha.
 - `supabase/functions/office-email-send/`: envio pelo Gmail com anexo. Exige `confirmed: true`.
