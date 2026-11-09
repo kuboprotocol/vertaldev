@@ -380,7 +380,7 @@ const DESIGN_STARTS: DesignStart[] = [
   {
     key: 'studio',
     title: 'Estúdio Pro',
-    description: 'Editar imagem com IA, editor de imagens, PhotoCraft, VectorCraft, FilmCraft, WordCraft e mais',
+    description: 'Editar imagem com IA, editor de imagens, PhotoCraft, VectorCraft, FilmCraft, WordCraft, GridCraft, DeckCraft e mais',
     icon: <Layers className="h-5 w-5" />,
     gradient: 'from-violet-500 to-blue-500',
   },
