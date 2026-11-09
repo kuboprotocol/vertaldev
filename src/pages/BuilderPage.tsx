@@ -2,14 +2,13 @@ import AnimatedLogo from '@/components/branding/AnimatedLogo'
 import { useState, useRef, useEffect, useCallback, useMemo, forwardRef } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { Send, Eye, Loader2, Copy, Check, Code, Film } from 'lucide-react'
+import { ArrowUp, Eye, Loader2, Copy, Check, Code, Film, MessageSquare } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { streamChat, streamClone, type Msg } from '@/lib/streamChat'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useSubscription } from '@/hooks/useSubscription'
 import { toast } from 'sonner'
-import ReactMarkdown from 'react-markdown'
 import TemplateGallery, { type Template } from '@/components/builder/TemplateGallery'
 import PromptAttachMenu from '@/components/landing/PromptAttachMenu'
 import BuilderToolbar, { type DeviceFrame } from '@/components/builder/BuilderToolbar'
@@ -23,6 +22,8 @@ import { subscribePreviewLogs, type PreviewLogEntry } from '@/lib/iframePreview'
 import PreviewAuditPanel from '@/components/builder/PreviewAuditPanel'
 import PreviewFrame from '@/components/builder/PreviewFrame'
 import RunwayDialog from '@/components/runway/RunwayDialog'
+import BuilderChat from '@/components/builder/chat/BuilderChat'
+import { splitProseAndCode } from '@/lib/builderTurn'
 
 
 
@@ -56,6 +57,19 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
   // lado) continua igual, sem nenhuma mudança de comportamento acima do
   // breakpoint md.
   const [mobileView, setMobileView] = useState<'chat' | 'preview'>('chat')
+  // Versão nova pronta enquanto a pessoa está na conversa (ponto na aba Preview).
+  const [previewUnseen, setPreviewUnseen] = useState(false)
+  // Falha da última geração, mostrada dentro da conversa.
+  const [turnError, setTurnError] = useState<string | null>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    if (mobileView === 'preview' && activeTab === 'preview') setPreviewUnseen(false)
+  }, [mobileView, activeTab, generatedCode])
+  const openPanel = useCallback((tab: 'preview' | 'code') => {
+    setActiveTab(tab)
+    setMobileView('preview')
+    if (tab === 'preview') setPreviewUnseen(false)
+  }, [])
   const [copied, setCopied] = useState(false)
   const [projectTitle, setProjectTitle] = useState('Untitled Project')
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(projectId || null)
@@ -162,6 +176,7 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
     const nextHtml = pendingPreviewHtmlRef.current
     if (!nextHtml || nextHtml === generatedCode) return
     setGeneratedCode(nextHtml)
+    setPreviewUnseen(true)
   }, [generatedCode])
 
   // Detect chat language from user messages
@@ -202,8 +217,6 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
     }
   }, [flushPreviewHtml, isLoading, showLoading])
 
-  const chatEndRef = useRef<HTMLDivElement>(null)
-
   useEffect(() => {
     if (projectId) loadProject(projectId)
   }, [projectId])
@@ -243,7 +256,7 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
           mode: detectedMode,
           onDelta: (chunk) => upsertAssistant(chunk),
           onDone: () => { const html = extractHtml(assistantSoFar); queuePreviewHtml(html); setIsLoading(false); if (html.includes('<')) saveProject(html, finalMessages) },
-          onError: (error) => { toast.error(error); setIsLoading(false) },
+          onError: (error) => { toast.error(error); setTurnError(error); setIsLoading(false) },
         }).catch((e) => { console.error(e); toast.error('Failed to generate'); setIsLoading(false) })
 
         setInput('')
@@ -262,14 +275,18 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
     setPublishedUrl((data as any).published_url || null)
   }
 
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  // A caixa de mensagem cresce com o texto, até o limite do CSS (max-h).
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [input])
 
   const extractHtml = useCallback((text: string): string => {
-    const fenceMatch = text.match(/```html?\s*\n?([\s\S]*?)```/)
-    if (fenceMatch) return fenceMatch[1].trim()
-    const htmlMatch = text.match(/(<!DOCTYPE[\s\S]*<\/html>)/i)
-    if (htmlMatch) return htmlMatch[1]
-    return text
+    // Mesmo recorte que o chat usa para montar as caixinhas: só o documento,
+    // sem a conversa em volta. Resposta só de conversa não vira preview.
+    return splitProseAndCode(text).code
   }, [])
 
   const saveProject = async (code: string, msgs: Msg[]): Promise<string | null> => {
@@ -320,7 +337,7 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
     }
     const userMsg: Msg = { role: 'user', content }
     const newMessages = [...messages, userMsg]
-    setMessages(newMessages); setInput(''); setAttachedFiles([]); setIsLoading(true)
+    setMessages(newMessages); setInput(''); setAttachedFiles([]); setTurnError(null); setIsLoading(true)
     let assistantSoFar = ''
     let finalMessages = newMessages
 
@@ -345,7 +362,7 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
         mode: flowMode,
         onDelta: (chunk) => upsertAssistant(chunk),
         onDone: () => { const html = extractHtml(assistantSoFar); queuePreviewHtml(html); setIsLoading(false); if (html.includes('<')) saveProject(html, finalMessages) },
-        onError: (error) => { toast.error(error); setIsLoading(false) },
+        onError: (error) => { toast.error(error); setTurnError(error); setIsLoading(false) },
       })
     } catch (e) { console.error(e); toast.error('Failed to generate'); setIsLoading(false) }
   }
@@ -356,6 +373,17 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
     const blob = new Blob([generatedCode], { type: 'text/html' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a'); a.href = url; a.download = `${projectTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.html`; a.click(); URL.revokeObjectURL(url)
+  }
+
+  // Volta o preview para o código de uma versão anterior da conversa.
+  const handleRestore = (code: string) => {
+    pendingPreviewHtmlRef.current = code
+    setGeneratedCode(code)
+    setPreviewKey(k => k + 1)
+    openPanel('preview')
+    toast.success('Versão restaurada no preview', {
+      action: { label: 'Salvar', onClick: () => saveProject(code, messages) },
+    })
   }
 
   const handleTemplateSelect = (template: Template) => { setShowTemplates(false); setInput(template.prompt) }
@@ -380,6 +408,7 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
     const cloneMsg: Msg = { role: 'user', content: `🔗 Clone: ${url}` }
     const newMessages = [...messages, cloneMsg]
     setMessages(newMessages)
+    setTurnError(null)
     setIsLoading(true)
 
     let assistantSoFar = ''
@@ -414,6 +443,7 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
         },
         onError: (error) => {
           toast.error(error)
+          setTurnError(error)
           setIsLoading(false)
           setIsCloning(false)
         },
@@ -445,13 +475,6 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
     return data.url
   }
 
-  const suggestions = [
-    'A task management app with drag & drop',
-    'A weather dashboard with live data',
-    'A landing page for a SaaS product',
-    'A calculator app with modern UI',
-  ]
-
   return (
     <div ref={ref} className="h-screen w-screen flex flex-col bg-background overflow-hidden">
       {/* Toolbar */}
@@ -482,7 +505,7 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col md:flex-row">
         {/* Chat panel */}
         <div
-          className={`relative w-full min-w-0 shrink-0 flex-col border-r border-border/50 bg-card/50 backdrop-blur-sm transition-colors md:flex md:w-[min(380px,42vw)] md:min-w-[300px] ${isDragging ? 'bg-primary/5' : ''} ${mobileView === 'chat' ? 'flex' : 'hidden'}`}
+          className={`relative min-h-0 w-full min-w-0 flex-1 flex-col border-r border-border/50 bg-card/50 backdrop-blur-sm transition-colors md:flex md:flex-none md:w-[min(400px,44vw)] md:min-w-[300px] xl:w-[440px] ${isDragging ? 'bg-primary/5' : ''} ${mobileView === 'chat' ? 'flex' : 'hidden'}`}
           onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true) }}
           onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false) }}
           onDrop={(e) => {
@@ -499,79 +522,22 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
               </div>
             </div>
           )}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.length === 0 && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center text-center pt-12 px-4">
-                <AnimatedLogo size={28} variant="stacked" className="mb-4" />
-                <h3 className="font-display font-bold text-foreground text-lg mb-2">What do you want to build?</h3>
-                <p className="text-sm text-muted-foreground mb-6">Describe your app and I'll generate it instantly.</p>
-                <div className="w-full space-y-2">
-                  {suggestions.map((s) => (
-                    <button key={s} onClick={() => setInput(s)} className="w-full text-left text-xs px-3 py-2.5 rounded-xl bg-secondary text-secondary-foreground hover:bg-accent hover:text-accent-foreground transition-colors border border-border/30">
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </motion.div>
-            )}
+          <BuilderChat
+            messages={messages}
+            isLoading={isLoading}
+            mode={flowMode}
+            currentCode={generatedCode}
+            error={turnError}
+            onPickSuggestion={setInput}
+            onOpenPreview={() => openPanel('preview')}
+            onOpenCode={() => openPanel('code')}
+            onRestore={handleRestore}
+          />
 
-            {messages.map((msg, i) => (
-              <motion.div key={i} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[90%] rounded-2xl px-4 py-2.5 text-sm ${msg.role === 'user' ? 'gradient-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}>
-                  {msg.role === 'assistant' ? (
-                    <div className="prose prose-sm max-w-none text-secondary-foreground [&_pre]:hidden [&_code]:hidden">
-                      <ReactMarkdown>{msg.content.replace(/```[\s\S]*?```/g, '').replace(/<[^>]*>/g, '').trim() || 'Generating your app...'}</ReactMarkdown>
-                    </div>
-                  ) : (
-                    <div>
-                      <p>{msg.content.replace(/\n\nAttached files:\n[\s\S]*$/, '')}</p>
-                      {msg.content.includes('Attached files:') && (
-                        <div className="mt-2 space-y-1">
-                          {msg.content
-                            .match(/\[(\w+): ([^\]]+)\]\(([^)]+)\)/g)
-                            ?.map((match, j) => {
-                              const parts = match.match(/\[(\w+): ([^\]]+)\]\(([^)]+)\)/)
-                              if (!parts) return null
-                              const [, category, name, url] = parts
-                              return (
-                                <FilePreview
-                                  key={j}
-                                  file={{
-                                    url,
-                                    name,
-                                    size: 0,
-                                    originalSize: 0,
-                                    mimeType: '',
-                                    category: category as any,
-                                    path: '',
-                                  }}
-                                  compact
-                                />
-                              )
-                            })}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            ))}
-
-            {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
-                <div className="bg-secondary text-secondary-foreground rounded-2xl px-4 py-3 flex items-center gap-2 text-sm">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating...
-                </div>
-              </motion.div>
-            )}
-            <div ref={chatEndRef} />
-          </div>
-
-          <div className="p-3 border-t border-border space-y-2">
-            {/* KUBO FLOW AI Mode Selector */}
-            <div className="flex items-center justify-between px-1">
+          <div className="space-y-2 border-t border-border/60 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:pb-3">
+            <div className="flex items-center justify-between gap-2 px-0.5">
               <KuboFlowSelector mode={flowMode} onChange={handleModeChange} autoDetected={autoDetectedMode} userPlan={userPlan} />
-              <span className="text-[10px] text-muted-foreground font-display tracking-widest">VERTAL FLOW AI</span>
+              <span className="hidden text-[10px] text-muted-foreground font-display tracking-widest min-[360px]:inline">VERTAL FLOW AI</span>
             </div>
             {uploadProgress !== null && (
               <div className="flex items-center gap-2 px-1">
@@ -586,39 +552,56 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
                 ))}
               </div>
             )}
-            <div className="flex items-end gap-2">
-              <PromptAttachMenu
-                onAttachFile={handleFileUpload}
-                onScreenshot={() => toast.info('Screenshot functionality coming soon')}
-                onAddReference={(url) => {
-                  setInput(prev => prev + `\n[Reference: ${url}]`)
-                  toast.success('Reference added')
+            {/* Caixa de mensagem: texto em cima, ações embaixo */}
+            <div className="rounded-2xl border border-border/70 bg-background/70 transition-colors focus-within:border-primary/50 focus-within:shadow-[0_0_0_3px_hsl(var(--primary)/0.08)]">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                aria-label="Mensagem para o Vertal"
+                placeholder="Descreva o que quer criar ou mudar…"
+                rows={1}
+                className="block max-h-40 min-h-[44px] w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-base text-foreground placeholder:text-muted-foreground focus:outline-none md:text-sm"
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() } }}
+                onPaste={(e) => {
+                  const items = Array.from(e.clipboardData.items)
+                  const imageItem = items.find(item => item.type.startsWith('image/'))
+                  if (imageItem) {
+                    e.preventDefault()
+                    const file = imageItem.getAsFile()
+                    if (file) handleFileUpload(file)
+                  }
                 }}
               />
-              <div className="relative flex-1">
-                <textarea value={input} onChange={(e) => setInput(e.target.value)} placeholder="Describe what you want to build. E.g., 'delivery app with Pix and crypto payment'" rows={2}
-                  className="w-full resize-none bg-secondary rounded-xl px-4 py-3 pr-12 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-                  onPaste={(e) => {
-                    const items = Array.from(e.clipboardData.items)
-                    const imageItem = items.find(item => item.type.startsWith('image/'))
-                    if (imageItem) {
-                      e.preventDefault()
-                      const file = imageItem.getAsFile()
-                      if (file) handleFileUpload(file)
-                    }
-                  }} />
+              <div className="flex items-center gap-1.5 px-2 pb-2 pt-1">
+                <PromptAttachMenu
+                  onAttachFile={handleFileUpload}
+                  onScreenshot={() => toast.info('Screenshot functionality coming soon')}
+                  onAddReference={(url) => {
+                    setInput(prev => prev + `\n[Reference: ${url}]`)
+                    toast.success('Reference added')
+                  }}
+                />
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="absolute right-12 bottom-2 h-8 w-8 rounded-lg text-primary hover:text-primary"
+                  className="h-9 w-9 rounded-xl text-muted-foreground hover:text-primary"
                   onClick={() => setShowRunway(true)}
                   title="RunwayML — Generate video/image (28 credits)"
+                  aria-label="Gerar vídeo ou imagem com RunwayML"
                 >
-                  <Film className="h-3.5 w-3.5" />
+                  <Film className="h-4 w-4" />
                 </Button>
-                <Button size="icon" variant="hero" className="absolute right-2 bottom-2 h-8 w-8 rounded-lg" onClick={send} disabled={isLoading || !input.trim()}>
-                  {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                <span className="ml-auto hidden text-[10px] text-muted-foreground lg:inline">Enter envia · Shift+Enter quebra linha</span>
+                <Button
+                  size="icon"
+                  variant="hero"
+                  className="ml-auto h-9 w-9 shrink-0 rounded-xl lg:ml-0"
+                  onClick={send}
+                  disabled={isLoading || !input.trim()}
+                  aria-label={isLoading ? 'Gerando' : 'Enviar'}
+                >
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
                 </Button>
               </div>
             </div>
@@ -700,22 +683,33 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
       </div>
 
       {/* Barra de abas mobile — some no desktop (md:hidden) */}
-      <div className="flex shrink-0 border-t border-border/50 bg-card/80 backdrop-blur-sm md:hidden">
-        <button
-          type="button"
-          onClick={() => setMobileView('chat')}
-          className={`flex-1 py-3 text-sm font-medium transition-colors ${mobileView === 'chat' ? 'text-primary border-t-2 border-primary' : 'text-muted-foreground'}`}
-        >
-          Chat
-        </button>
-        <button
-          type="button"
-          onClick={() => setMobileView('preview')}
-          className={`flex-1 py-3 text-sm font-medium transition-colors ${mobileView === 'preview' ? 'text-primary border-t-2 border-primary' : 'text-muted-foreground'}`}
-        >
-          Preview
-        </button>
-      </div>
+      <nav aria-label="Áreas do Builder" className="flex shrink-0 border-t border-border/50 bg-card/80 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm md:hidden">
+        {([
+          { id: 'chat', label: 'Conversa', icon: MessageSquare },
+          { id: 'preview', label: 'Preview', icon: Eye },
+          { id: 'code', label: 'Código', icon: Code },
+        ] as const).map(({ id, label, icon: Icon }) => {
+          const active = id === 'chat' ? mobileView === 'chat' : mobileView === 'preview' && activeTab === id
+          return (
+            <button
+              key={id}
+              type="button"
+              aria-current={active ? 'page' : undefined}
+              onClick={() => (id === 'chat' ? setMobileView('chat') : openPanel(id))}
+              className={`relative flex min-h-[52px] flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors ${active ? 'text-primary' : 'text-muted-foreground'}`}
+            >
+              {active && <span className="absolute inset-x-6 top-0 h-0.5 rounded-full bg-primary" />}
+              <span className="relative">
+                <Icon className="h-[18px] w-[18px]" />
+                {id === 'preview' && previewUnseen && !active && (
+                  <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-primary" aria-label="Nova versão pronta" />
+                )}
+              </span>
+              {label}
+            </button>
+          )
+        })}
+      </nav>
 
       <AnimatePresence>
         {showTemplates && <TemplateGallery onSelect={handleTemplateSelect} onClose={() => setShowTemplates(false)} />}
