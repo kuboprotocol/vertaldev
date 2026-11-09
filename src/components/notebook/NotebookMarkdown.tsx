@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import { citationsToLinks, citeHrefToId } from '@/lib/notebook/model';
 import { cn } from '@/lib/utils';
@@ -14,6 +14,13 @@ interface Props {
 /** Markdown do Notebook: citações [source:id] viram selos numerados clicáveis. */
 export const NotebookMarkdown = memo(function NotebookMarkdown({ text, titles, onCite, className }: Props) {
   const { markdown } = useMemo(() => citationsToLinks(text), [text]);
+  // onCite costuma ser uma função nova a cada render do pai. Guardá-la num ref
+  // mantém `components` estável; senão o react-markdown remonta os selos de
+  // citação a cada render e um clique pode cair num botão já desmontado.
+  const onCiteRef = useRef(onCite);
+  useEffect(() => {
+    onCiteRef.current = onCite;
+  }, [onCite]);
 
   const components = useMemo<Components>(
     () => ({
@@ -34,7 +41,7 @@ export const NotebookMarkdown = memo(function NotebookMarkdown({ text, titles, o
           return (
             <button
               type="button"
-              onClick={() => onCite?.(id)}
+              onClick={() => onCiteRef.current?.(id)}
               title={titles?.[id] ?? id}
               aria-label={`Citação ${String(children)}: ${titles?.[id] ?? id}`}
               className="mx-0.5 inline-flex h-[1.15rem] min-w-[1.15rem] -translate-y-px items-center justify-center rounded-full bg-amber-400/15 px-1 align-middle text-[0.65rem] font-semibold text-amber-200 ring-1 ring-amber-300/40 transition hover:bg-amber-400/30 hover:text-white"
@@ -50,7 +57,7 @@ export const NotebookMarkdown = memo(function NotebookMarkdown({ text, titles, o
         );
       },
     }),
-    [onCite, titles],
+    [titles],
   );
 
   return (
