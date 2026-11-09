@@ -1,10 +1,13 @@
-// Downloader Universal — usa a API pública do cobalt.tools.
+// Downloader Universal — usa uma instância própria do cobalt (API v10+).
+// Configuração: COBALT_API_URL (ex.: https://cobalt.seudominio.com/) e,
+// se a instância exigir, COBALT_API_KEY. Ver docs/COBALT_DOWNLOADER.md.
 import { corsHeaders } from "../_shared/cors.ts";
 import { getUser, deductCredits, recordAsset, sanitizeError, withRefundOnFailure } from "../_shared/creative.ts";
 import { validatePublicUrl } from "../_shared/security.ts";
+import { buildCobaltRequest, parseCobaltResponse, resolveCobaltConfig } from "../_shared/cobalt.ts";
 
 const COST = 2;
-const COBALT = Deno.env.get("COBALT_API_URL") ?? "https://api.cobalt.tools/api/json";
+const TIMEOUT_MS = 45_000;
 
 Deno.serve(withRefundOnFailure(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -17,36 +20,44 @@ Deno.serve(withRefundOnFailure(async (req) => {
     if (!rawUrl) return j(400, { error: "url required" });
     const url = validatePublicUrl(rawUrl).toString();
 
+    // Sem instância configurada não há o que cobrar: falha antes de debitar.
+    const cfg = resolveCobaltConfig(Deno.env.get("COBALT_API_URL"), Deno.env.get("COBALT_API_KEY"));
+    if (!cfg) {
+      console.error("[creative-download] COBALT_API_URL ausente ou aponta para a instância pública (desativada para terceiros).");
+      return j(503, { error: "downloader_not_configured" });
+    }
+
     const ded = await deductCredits(user.id, COST, "creative_download", { url, format }, user.email, idempotencyKey);
     if (!ded.ok) return j((ded as any).status ?? 402, { error: ded.error });
 
-    const r = await fetch(COBALT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({
-        url,
-        isAudioOnly: format === "mp3",
-        aFormat: "mp3",
-        vQuality: "720",
-      }),
-    });
-    const data = await r.json().catch(() => ({}));
-    const downloadUrl: string | null = data?.url ?? data?.data?.url ?? null;
+    const call = buildCobaltRequest(cfg, url, format);
+    let httpStatus = 0;
+    let data: unknown = {};
+    try {
+      const r = await fetch(call.url, { ...call.init, signal: AbortSignal.timeout(TIMEOUT_MS) });
+      httpStatus = r.status;
+      data = await r.json().catch(() => ({}));
+    } catch (e) {
+      console.error("[creative-download] cobalt indisponível:", e);
+      return j(504, { error: "downloader_unavailable" });
+    }
+    const result = parseCobaltResponse(httpStatus, data);
 
     const assetId = await recordAsset(user.id, {
       tool: "downloader",
       prompt: url,
-      output_url: downloadUrl ?? undefined,
-      credits_spent: COST,
-      metadata: { format, raw: data },
-      status: downloadUrl ? "completed" : "failed",
+      output_url: result.ok ? result.url : undefined,
+      credits_spent: result.ok ? COST : 0,
+      metadata: { format, ...(result.ok ? { filename: result.filename } : { error: result.code, raw: data }) },
+      status: result.ok ? "completed" : "failed",
     });
 
-    if (!downloadUrl) {
-      return j(502, { error: "Não foi possível obter o link de download.", details: data, asset_id: assetId });
+    if (!result.ok) {
+      console.error("[creative-download] falha:", httpStatus, JSON.stringify(data));
+      return j(result.status, { error: result.code, asset_id: assetId });
     }
 
-    return j(200, { ok: true, download_url: downloadUrl, asset_id: assetId });
+    return j(200, { ok: true, download_url: result.url, filename: result.filename, asset_id: assetId });
   } catch (e) {
     console.error("[creative-download] error:", e);
     return j(500, { error: sanitizeError(e) });

@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { PUTER_MODELS, creativeInvoke } from "@/lib/puterAI";
 import { AVATAR_LIMITS, quoteAvatar } from "@/config/avatarPricing";
 import { functionErrorCode } from "@/lib/functionError";
+import { downloaderErrorMessage } from "./downloaderErrors";
 
 // supabase.functions.invoke hides the body of non-2xx responses; these map the codes creative-video returns.
 function avatarErrorMessage(code: string | null): string {
@@ -417,7 +418,10 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
 
       const { data, error } = await supabase.functions.invoke(fn, { body });
 
-      if (error) throw error;
+      if (error) {
+        if (fn === "creative-download") throw new Error(downloaderErrorMessage(await functionErrorCode(error)));
+        throw error;
+      }
 
       const result = summarizeResult(data);
       setSessionHistory(prev => [{
