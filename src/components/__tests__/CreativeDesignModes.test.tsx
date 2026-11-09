@@ -23,7 +23,9 @@ const renderPanel = () =>
     </MemoryRouter>,
   );
 
-describe('CreativeDesign worlds', () => {
+// Each test mounts the whole Design Premium panel in jsdom: 0.5–2.2 s locally and about 2.5x that
+// on the CI runners, so the default 5 s left no headroom (the canvas test timed out on PR #128).
+describe('CreativeDesign worlds', { timeout: 15000 }, () => {
   let getContextSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
@@ -170,6 +172,26 @@ describe('CreativeDesign worlds', () => {
     expect(screen.getByTitle('FilmCraft editor de vídeo')).toBeInTheDocument();
   });
 
+  it('embeds the WordCraft editor as a page of the Estúdio Pro world', () => {
+    renderPanel();
+    fireEvent.click(modeButton('Estúdio Pro'));
+    fireEvent.click(pageButton('WordCraft'));
+
+    const frame = screen.getByTitle('WordCraft editor de documentos');
+    expect(frame.tagName).toBe('IFRAME');
+    expect(frame).toHaveAttribute('src', '/wordcraft/');
+  });
+
+  it('opens WordCraft from the free tools page', () => {
+    renderPanel();
+    fireEvent.click(modeButton('Estúdio Pro'));
+    fireEvent.click(pageButton('Ferramentas grátis'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir WordCraft' }));
+    expect(pageButton('WordCraft')).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByTitle('WordCraft editor de documentos')).toBeInTheDocument();
+  });
+
   it('opens the in-app editors from the free tools page', () => {
     renderPanel();
     fireEvent.click(modeButton('Estúdio Pro'));
@@ -195,11 +217,11 @@ describe('CreativeDesign worlds', () => {
     fireEvent.click(modeButton('Estúdio Pro'));
     fireEvent.click(pageButton('Ferramentas grátis'));
 
-    for (const name of ['WordCraft', 'GridCraft', 'DeckCraft']) {
+    for (const name of ['GridCraft', 'DeckCraft']) {
       expect(screen.getByText(name)).toBeInTheDocument();
     }
     const links = screen.getAllByRole('link', { name: 'Ver no GitHub' });
-    expect(links).toHaveLength(3);
+    expect(links).toHaveLength(2);
     for (const link of links) {
       expect(link).toHaveAttribute('href', expect.stringMatching(/^https:\/\/github\.com\/storytold\//));
       expect(link).toHaveAttribute('target', '_blank');
