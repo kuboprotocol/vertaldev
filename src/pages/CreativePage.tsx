@@ -15,7 +15,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
   MessageSquare, Download, Scissors, User2,
   Video, Music, BookOpen, Sparkles, Loader2, Coins, ArrowLeft, RotateCw, AlertTriangle, Upload,
-  FileDown, History, Search, ArrowRight, X, AlertCircle, ListTodo, Clapperboard, FileText } from "lucide-react";
+  FileDown, History, Search, ArrowRight, X, AlertCircle, ListTodo, Clapperboard, FileText, NotebookPen } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { ManusLauncher } from "@/components/creative/ManusLauncher";
 import { CreativeToolInterface } from "@/components/creative/CreativeToolInterface";
@@ -24,11 +24,13 @@ import { SkillExecutionsList } from "@/components/creative/SkillExecutionsList";
 import { ApiStatusPanel } from "@/components/creative/ApiStatusPanel";
 import { CreativeSheets } from "@/components/CreativeSheets";
 import { OfficeSuite } from "@/components/office/OfficeSuite";
+// O Notebook (pdf.js, leitor de fontes, estúdio) só carrega quando é aberto.
+const VertalNotebook = React.lazy(() => import("@/components/notebook/VertalNotebook").then((m) => ({ default: m.VertalNotebook })));
 import { CreativeDesign } from "@/components/CreativeDesign";
 import { SponsoredSlot } from "@/components/creative/SponsoredSlot";
 import { CreativeAdFrame } from "@/components/creative/AdBanner";
 
-type ToolKey = "dashboard" | "chat" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "video_studio" | "unified_history" | "sheet" | "design" | "office";
+type ToolKey = "dashboard" | "chat" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "video_studio" | "unified_history" | "sheet" | "design" | "office" | "notebook";
 
 /**
  * Criar imagem, editar imagem e criar slides saíram do painel criativo: ficam só no Design Premium.
@@ -45,6 +47,7 @@ type DesignOpen = NonNullable<React.ComponentProps<typeof CreativeDesign>["open"
 const LEGACY_TOOL_TITLES: Record<string, string> = { nano_banana: "Nano Banana", image_editor: "Editor de Imagens" };
 
 const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: string }[] = [
+  { key: "notebook", title: "Vertal Notebook", desc: "Converse com PDFs, links e vídeos, com citações. Podcast, quiz e mapa mental com IA", icon: NotebookPen, cost: "Grátis (IA: a partir de 1 crédito)" },
   { key: "office", title: "Vertal Office", desc: "Documentos e planilhas grátis. Só a IA é paga", icon: FileText, cost: "Grátis (IA: 1 crédito)" },
   { key: "video_studio", title: "Vertal Video Studio", desc: "1 a 10 fotos viram clipe musical, meme ou anúncio com IA realista", icon: Clapperboard, cost: "a partir de 2 créditos" },
   { key: "chat", title: "Vertal Chat", desc: "Conversas, resumos, traduções, geração de textos", icon: MessageSquare, cost: "1 crédito/msg" },
@@ -1279,8 +1282,19 @@ export default function CreativePage() {
             </div>
           </TabsContent>
 
-          {/* "office" tem aba própria abaixo; a genérica não tem configuração e quebraria. */}
-          {TOOLS.filter((t) => t.key !== "office").map((t) => (
+          <TabsContent value="notebook">
+            <div className="space-y-6">
+              <Button variant="ghost" size="sm" onClick={() => { setActive("dashboard"); navigate("/creative"); }} className="mb-2">
+                <ArrowLeft className="h-4 w-4 mr-2" /> Voltar ao Painel
+              </Button>
+              <React.Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin" aria-label="Carregando" /></div>}>
+                <VertalNotebook />
+              </React.Suspense>
+            </div>
+          </TabsContent>
+
+          {/* "office" e "notebook" têm aba própria; a genérica não tem configuração e quebraria. */}
+          {TOOLS.filter((t) => t.key !== "office" && t.key !== "notebook").map((t) => (
             <TabsContent key={t.key} value={t.key}>
               <div className="space-y-6">
                 <Button variant="ghost" size="sm" onClick={() => { setActive("dashboard"); navigate("/creative"); }} className="mb-2">

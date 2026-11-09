@@ -279,6 +279,8 @@ export interface GatewayRequest {
   deepseekOnly?: boolean;
   /** Cadeia já escolhida pelo roteador de modelos; substitui a cadeia padrão. */
   providers?: Provider[];
+  /** Orçamento de contexto (caracteres) desta chamada; substitui o da rota. */
+  contextChars?: number;
 }
 
 export interface GatewayResult {
@@ -320,7 +322,7 @@ export async function runGateway(req: GatewayRequest, deps: GatewayDeps = {}): P
   const kind = req.kind ?? inferTaskKind(lastUser);
   const route = ROUTES[kind];
   const tier = req.tier ?? resolveTier(kind, lastUser);
-  const { messages, dropped } = compressContext(req.messages, route.contextChars);
+  const { messages, dropped } = compressContext(req.messages, req.contextChars ?? route.contextChars);
   const temperature = req.temperature ?? route.temperature;
   const json = !!req.json;
 
