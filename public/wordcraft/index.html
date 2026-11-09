@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>WordCraft</title>
+  <link rel="icon" href="./wordcraft-fa59e09a3f921e03.ico" integrity="sha384-99DzWb82rFgkdw7hjKziyDQaHbMTklb9MWeLKF7LcVUnq80H4nDrc/pjHJtAj/AA"/>
+  
+<script type="module">
+// Vertal: the Cloudflare host serves files up to 25 MiB, so the wasm ships in parts
+// (app/*.part-*, cut with `split -b 20000000`). They are fetched in parallel, joined, checked
+// against the original size and SHA-256, and handed to wasm-bindgen as bytes.
+import init, * as bindings from './wordcraft-web-16a04cfc5cf5ec37.js';
+const WASM = 'app/wordcraft-web-924362952707a448_bg.wasm.part-';
+const PARTS = ['aa','ab','ac'];
+const SIZE = 50890964;
+const SHA256 = '23f357dc809dd4e934db127ad6b0573bae06afc2bffd6fb7eaae58166c0b503b';
+async function loadWasm() {
+  const chunks = await Promise.all(PARTS.map(async (p) => {
+    const res = await fetch(WASM + p);
+    if (!res.ok) throw new Error(`${WASM}${p}: HTTP ${res.status}`);
+    return new Uint8Array(await res.arrayBuffer());
+  }));
+  const bytes = new Uint8Array(SIZE);
+  let offset = 0;
+  for (const c of chunks) {
+    if (offset + c.length > SIZE) throw new Error('wasm parts are larger than expected');
+    bytes.set(c, offset);
+    offset += c.length;
+  }
+  if (offset !== SIZE) throw new Error(`wasm parts total ${offset} bytes, expected ${SIZE}`);
+  if (crypto.subtle) {
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+    const hex = Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('');
+    if (hex !== SHA256) throw new Error('wasm parts do not match this page (SHA-256 mismatch)');
+  }
+  return bytes;
+}
+try {
+  const wasm = await init({ module_or_path: await loadWasm() });
+  window.wasmBindings = bindings;
+  dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+} catch (err) {
+  console.error('WordCraft failed to start', err);
+  const el = document.getElementById('wordcraft_loading');
+  if (el) el.textContent = 'WordCraft could not start: ' + err.message + '. Reload to try again.';
+}
+</script>
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #e6e6e6; }
+    #wordcraft_canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    #wordcraft_loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: #555; font: 14px system-ui, sans-serif; pointer-events: none; }
+  </style>
+<link rel="modulepreload" href="./wordcraft-web-16a04cfc5cf5ec37.js" crossorigin="anonymous" integrity="sha384-P61Q9tLc04mD7hOfdyW9Fdm58RjyzhQ0TCAU2vlx3GzFxhLqvYmUx+eKUGOBnu1A"><link rel="modulepreload" href="./snippets/eframe-d31a8450ea12dfc1/inline0.js" crossorigin="anonymous" integrity="sha384-uPZQ72BwgZ4v7Km6+UIFbkDDlt7ShGEsAVEHVN/+wZSGFhItJZB83iKMFQXauTSs"></head>
+<body>
+  <canvas id="wordcraft_canvas"></canvas>
+  <div id="wordcraft_loading">Loading WordCraft&hellip;</div>
+</body>
+</html>
