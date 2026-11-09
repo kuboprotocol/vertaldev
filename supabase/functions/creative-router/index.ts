@@ -10,6 +10,16 @@ import {
   parseOfficeOutput,
 } from "../_shared/officeAi.ts";
 import {
+  NOTEBOOK_AI_COSTS,
+  NOTEBOOK_GATEWAY_CONTEXT_CHARS,
+  NOTEBOOK_LIMITS,
+  NotebookAiOutputError,
+  buildNotebookMessages,
+  gatewayParams,
+  parseNotebookOutput,
+  type NotebookAiAction,
+} from "../_shared/notebookAi.ts";
+import {
   ATTACHMENT_MAX_BYTES,
   OfficeEmailError,
   base64DecodedSize,
@@ -25,13 +35,15 @@ const InputSchema = z.object({
     content: z.string().min(1),
   })).optional(),
   prompt: z.string().optional(),
-  tool: z.enum(["chat", "image", "video", "music", "pdf", "docs", "slide", "edit_image", "edit_video", "office_ai", "office_email", "chat_json"]),
+  tool: z.enum(["chat", "image", "video", "music", "pdf", "docs", "slide", "edit_image", "edit_video", "office_ai", "office_email", "chat_json", "notebook_ai"]),
   model: z.string().optional(),
   temperature: z.number().optional(),
   max_tokens: z.number().optional(),
   metadata: z.record(z.any()).optional(),
   // Entrada das ações do Vertal Office (validada em cada handler).
   office: z.record(z.any()).optional(),
+  // Entrada do Vertal Notebook (validada em handleNotebookAi).
+  notebook: z.record(z.any()).optional(),
 });
 
 // Credit costs based on prompt instructions
@@ -49,6 +61,7 @@ const COSTS: Record<string, number> = {
   office_ai: 1,    // Vertal Office: preparar/gerar com IA (1 crédito por uso)
   office_email: 0, // Vertal Office: envio de e-mail não é cobrado
   chat_json: 0,    // Modo de conversa: custo real vem de chatJsonCost (grátis até 5/dia, depois 1)
+  notebook_ai: 1,  // Vertal Notebook: custo real vem de NOTEBOOK_AI_COSTS[action]
 };
 
 Deno.serve(withRefundOnFailure(async (req) => {
@@ -72,7 +85,7 @@ Deno.serve(withRefundOnFailure(async (req) => {
       });
     }
 
-    const { tool, messages, prompt, model, temperature, max_tokens, metadata, office } = parsed.data;
+    const { tool, messages, prompt, model, temperature, max_tokens, metadata, office, notebook } = parsed.data;
     
     // Determine cost
     let cost = COSTS[tool] ?? 1;
@@ -82,6 +95,12 @@ Deno.serve(withRefundOnFailure(async (req) => {
     // Modo de conversa: 5 grátis por dia (UTC), a partir da sexta 1 crédito.
     if (tool === "chat_json") {
       cost = await chatJsonCost(user.id);
+    }
+    // Vertal Notebook: cada ação tem seu preço (chat 1, podcast 3...).
+    if (tool === "notebook_ai") {
+      const action = (notebook as { action?: string } | undefined)?.action as NotebookAiAction | undefined;
+      if (!action || !(action in NOTEBOOK_AI_COSTS)) return jsonResponse(400, { error: "invalid_input" });
+      cost = NOTEBOOK_AI_COSTS[action];
     }
 
     // Deduct credits
@@ -101,6 +120,8 @@ Deno.serve(withRefundOnFailure(async (req) => {
       return await handleOfficeAi(office ?? {}, cost);
     } else if (tool === "office_email") {
       return await handleOfficeEmail(user, office ?? {});
+    } else if (tool === "notebook_ai") {
+      return await handleNotebookAi(notebook ?? {}, cost);
     } else if (tool === "chat_json") {
       return await handleChatJson(user, messages ?? [], temperature, max_tokens, cost === 0);
     }
@@ -272,6 +293,61 @@ async function handleOfficeAi(raw: unknown, cost: number): Promise<Response> {
     });
   } catch (err) {
     if (err instanceof OfficeAiOutputError) return jsonResponse(502, { error: "invalid_model_output" });
+    if (err instanceof GatewayError) return jsonResponse(503, { error: "ai_unavailable" });
+    throw err;
+  }
+}
+
+const L = NOTEBOOK_LIMITS;
+const NotebookContextItem = z.object({
+  id: z.string().regex(/^(source|note):[A-Za-z0-9_-]{1,64}$/),
+  title: z.string().max(L.maxItemTitleChars * 2),
+  content: z.string().max(L.contextMaxChars * 2),
+});
+const NotebookAiInput = z.object({
+  action: z.enum(["chat", "transform", "guide", "study", "podcast"]),
+  notebook: z.object({ name: z.string().max(200), description: z.string().max(2_000).optional() }).optional(),
+  context: z.array(NotebookContextItem).max(L.maxContextItems),
+  language: z.string().max(60).optional(),
+  messages: z.array(z.object({
+    role: z.enum(["user", "assistant"]),
+    content: z.string().max(L.maxMessageChars * 2),
+  })).max(60).optional(),
+  transformation: z.object({ title: z.string().max(200), prompt: z.string().min(3).max(L.maxPromptChars) }).optional(),
+  study: z.enum(["flashcards", "quiz", "mindmap", "timeline"]).optional(),
+  podcast: z.object({
+    briefing: z.string().max(L.maxPromptChars).optional(),
+    speakers: z.array(z.object({
+      name: z.string().min(1).max(60),
+      backstory: z.string().max(600).optional(),
+      personality: z.string().max(400).optional(),
+    })).min(1).max(L.maxSpeakers),
+    length: z.enum(["short", "medium", "long"]).optional(),
+  }).optional(),
+}).refine((v) => JSON.stringify(v.context).length <= L.contextMaxChars * 3, { message: "context_too_large" });
+
+/** Vertal Notebook: chat com fontes, transformações, guia, estudo e podcast. Cobrança já feita antes do despacho. */
+async function handleNotebookAi(raw: unknown, cost: number): Promise<Response> {
+  const parsed = NotebookAiInput.safeParse(raw);
+  if (!parsed.success) return jsonResponse(400, { error: "invalid_input" });
+  const req = parsed.data;
+  try {
+    const params = gatewayParams(req);
+    const gw = await runGateway({
+      messages: buildNotebookMessages(req),
+      kind: params.kind,
+      tier: "flash",
+      json: params.json,
+      temperature: params.temperature,
+      maxTokens: params.maxTokens,
+      contextChars: NOTEBOOK_GATEWAY_CONTEXT_CHARS,
+    });
+    const output = parseNotebookOutput(req, gw.content);
+    return jsonResponse(200, {
+      action: req.action, output, provider: gw.provider, model: gw.model, creditsCharged: cost,
+    });
+  } catch (err) {
+    if (err instanceof NotebookAiOutputError) return jsonResponse(502, { error: "invalid_model_output" });
     if (err instanceof GatewayError) return jsonResponse(503, { error: "ai_unavailable" });
     throw err;
   }
