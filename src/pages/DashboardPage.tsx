@@ -15,7 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Progress } from '@/components/ui/progress'
 import { PromoCards } from '@/components/dashboard/PromoCards'
 import CreditLedger from '@/components/CreditLedger'
-import { Gamepad2, Sparkles, Palette, Bot } from 'lucide-react'
+import { Gamepad2, Sparkles, Palette, Bot, NotebookPen, Mic2 } from 'lucide-react'
 import { useCreativeEconomyEntry } from '@/components/creative/CreativeEconomyComingSoon'
 
 interface Project {
@@ -241,6 +241,72 @@ const DashboardPage = forwardRef<HTMLDivElement, any>((props, ref) => {
             </div>
           </div>
           {user && <CreditLedger userId={user.id} />}
+        </motion.div>
+
+        {/* Banner de publicidade: Vertal Notebook (Painel Criativo) */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.042 }} className="mb-8">
+          <div
+            onClick={() => navigate('/creative/notebook')}
+            role="link"
+            tabIndex={0}
+            aria-label="Abrir o Vertal Notebook"
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/creative/notebook') } }}
+            className="glass-premium hover-glow rounded-2xl p-6 md:p-8 cursor-pointer relative overflow-hidden group border border-amber-300/20 bg-gradient-to-br from-orange-500/20 via-background to-violet-600/20"
+          >
+            <div className="absolute inset-0 dot-pattern opacity-20 pointer-events-none" />
+            <div className="pointer-events-none absolute -top-24 -right-16 h-64 w-64 rounded-full bg-orange-500/25 blur-3xl transition-opacity group-hover:opacity-80" />
+            <div className="pointer-events-none absolute -bottom-28 left-1/3 h-56 w-56 rounded-full bg-violet-600/25 blur-3xl" />
+            <div className="relative z-10 grid gap-6 md:grid-cols-[1fr_minmax(240px,320px)] md:items-center">
+              <div>
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <NotebookPen className="w-5 h-5 text-amber-300" />
+                  <span className="text-xs tracking-[0.3em] text-muted-foreground">VERTAL NOTEBOOK</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-200 border border-rose-300/40 font-mono animate-pulse">LANÇAMENTO</span>
+                </div>
+                <h3 className="text-2xl md:text-3xl font-display font-bold mb-2">
+                  Seus PDFs agora <span className="neon-text">conversam com você</span>
+                </h3>
+                <p className="text-sm text-muted-foreground max-w-xl mb-4">
+                  Jogue PDFs, links, vídeos do YouTube e anotações. A KUBO IA responde citando a fonte de cada frase,
+                  transforma tudo em podcast com até 4 vozes e cria flashcards, quiz e mapa mental. Criar cadernos é grátis.
+                </p>
+                <div className="flex flex-wrap gap-1.5 mb-5">
+                  {['Chat com citações', 'Podcast IA', 'Flashcards', 'Quiz', 'Mapa mental', 'PDF · Word · YouTube'].map((t) => (
+                    <span key={t} className="text-[10px] px-2 py-0.5 rounded-md bg-amber-400/10 text-amber-100 border border-amber-300/20 font-mono">{t}</span>
+                  ))}
+                </div>
+                <Button className="rounded-xl gap-2 bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500 text-white hover:opacity-90 font-semibold shadow-lg shadow-orange-500/30">
+                  <Sparkles className="w-4 h-4" /> Criar meu caderno grátis
+                </Button>
+              </div>
+              {/* Prévia do produto: pergunta, resposta com citações e podcast */}
+              <div aria-hidden className="rounded-2xl border border-white/10 bg-black/40 p-4 backdrop-blur-md shadow-2xl transition-transform duration-500 group-hover:-translate-y-1 group-hover:rotate-[-1deg]">
+                <div className="ml-auto mb-3 w-fit max-w-[85%] rounded-2xl rounded-br-md bg-gradient-to-br from-amber-400 to-orange-500 px-3 py-1.5 text-xs font-medium text-slate-950">
+                  Resuma o whitepaper em 3 pontos
+                </div>
+                <div className="rounded-2xl rounded-bl-md border border-white/10 bg-white/5 px-3 py-2 text-[11px] leading-relaxed text-slate-200">
+                  Emissão decrescente por épocas <span className="mx-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-amber-400/20 text-[9px] text-amber-200 ring-1 ring-amber-300/40">1</span>,
+                  queima de taxas do marketplace <span className="mx-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-amber-400/20 text-[9px] text-amber-200 ring-1 ring-amber-300/40">2</span>
+                  e vesting de 12 meses <span className="mx-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-amber-400/20 text-[9px] text-amber-200 ring-1 ring-amber-300/40">3</span>.
+                </div>
+                <div className="mt-3 flex items-center gap-3 rounded-xl bg-white/5 px-3 py-2">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-slate-950">
+                    <Mic2 className="h-4 w-4" />
+                  </span>
+                  <div className="flex h-6 flex-1 items-end gap-[3px]">
+                    {[40, 75, 55, 90, 35, 65, 85, 50, 70, 30, 60, 80, 45, 95, 55, 40].map((h, i) => (
+                      <span
+                        key={i}
+                        className="w-full rounded-full bg-gradient-to-t from-orange-500 to-amber-200 animate-pulse"
+                        style={{ height: `${h}%`, animationDelay: `${i * 90}ms` }}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-[10px] text-slate-400">Lia · Rafa</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </motion.div>
 
         {/* Banner de publicidade: Design Premium (Painel Criativo) */}
