@@ -17,7 +17,7 @@ export type NotebookAiAction = 'chat' | 'transform' | 'guide' | 'study' | 'podca
 export type StudyKind = 'flashcards' | 'quiz' | 'mindmap' | 'timeline';
 export type PodcastLength = 'short' | 'medium' | 'long';
 
-/** Preço de cada uso da IA em créditos. */
+/** Preço base de cada uso da IA em créditos (podcast: episódio curto). */
 export const NOTEBOOK_AI_COSTS: Record<NotebookAiAction, number> = {
   chat: 1,
   transform: 1,
@@ -25,6 +25,51 @@ export const NOTEBOOK_AI_COSTS: Record<NotebookAiAction, number> = {
   study: 2,
   podcast: 3,
 };
+
+/** Podcast cobra pelo tamanho do episódio: mais falas, mais texto gerado. */
+export const NOTEBOOK_PODCAST_COSTS: Record<PodcastLength, number> = { short: 3, medium: 4, long: 5 };
+
+/** Acima disto (fontes + histórico, em caracteres) o uso custa +1 crédito. */
+export const NOTEBOOK_LARGE_CONTEXT_CHARS = 40_000;
+export const NOTEBOOK_LARGE_CONTEXT_SURCHARGE = 1;
+
+/**
+ * Economia da cobrança, usada pelo teste de margem.
+ * Receita mínima por crédito: o pacote mais barato por crédito (500 por R$ 150)
+ * convertido com câmbio conservador. Custo: o pior preço da cadeia de
+ * provedores (entrada do Groq, saída do OpenRouter) e 3,5 caracteres por token.
+ */
+export const NOTEBOOK_PRICING = {
+  creditValueUsdMin: 0.3 / 5.6,
+  worstInputUsdPerMTok: 0.59,
+  worstOutputUsdPerMTok: 1.2,
+  charsPerToken: 3.5,
+  /** Prompt de sistema e instruções de cada ação, fora as fontes. */
+  systemChars: 6_000,
+  /** Margem bruta mínima no pior caso. */
+  minMargin: 0.7,
+} as const;
+
+/** Caracteres que vão para o modelo (já com os cortes do servidor). */
+export function notebookBilledChars(req: Pick<NotebookAiRequest, 'action' | 'context' | 'messages'>): number {
+  const context = Math.min(
+    (req.context ?? []).reduce((n, i) => n + (i.content?.length ?? 0) + (i.title?.length ?? 0), 0),
+    NOTEBOOK_LIMITS.contextMaxChars,
+  );
+  const history = req.action === 'chat'
+    ? Math.min((req.messages ?? []).reduce((n, m) => n + (m.content?.length ?? 0), 0), NOTEBOOK_LIMITS.historyMaxChars)
+    : 0;
+  return context + history;
+}
+
+/** Preço de um uso em créditos: base da ação (ou do tamanho do podcast) + adicional de contexto grande. */
+export function notebookAiCost(req: Pick<NotebookAiRequest, 'action' | 'context' | 'messages' | 'podcast'>): number {
+  const base = req.action === 'podcast'
+    ? NOTEBOOK_PODCAST_COSTS[req.podcast?.length ?? 'medium']
+    : NOTEBOOK_AI_COSTS[req.action];
+  const surcharge = notebookBilledChars(req) > NOTEBOOK_LARGE_CONTEXT_CHARS ? NOTEBOOK_LARGE_CONTEXT_SURCHARGE : 0;
+  return base + surcharge;
+}
 
 export const NOTEBOOK_LIMITS = {
   /** Soma do material de todas as fontes e notas enviadas (caracteres). */

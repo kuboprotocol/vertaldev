@@ -17,7 +17,7 @@ import {
   type PodcastLength,
   type SpeakerProfile,
 } from '@/lib/notebook/model';
-import { NOTEBOOK_AI_COSTS, runNotebookAi } from '@/services/notebookAiService';
+import { creditsLabel, notebookAiCost, runNotebookAi } from '@/services/notebookAiService';
 import { downloadText, safeFileName } from '@/lib/notebook/download';
 import type { UpdateWorkspace } from './useNotebookWorkspace';
 
@@ -63,6 +63,7 @@ export function GeneratePodcastDialog({
   const [speakers, setSpeakers] = useState<SpeakerProfile[]>(PODCAST_PROFILES[0].speakers.map((s) => ({ ...s })));
   const [briefing, setBriefing] = useState(PODCAST_PROFILES[0].briefing);
   const [length, setLength] = useState<PodcastLength>(PODCAST_PROFILES[0].length);
+  const cost = notebookAiCost({ action: 'podcast', context, podcast: { speakers: [], length } });
   const [loading, setLoading] = useState(false);
 
   const pick = (id: string) => {
@@ -107,7 +108,7 @@ export function GeneratePodcastDialog({
             <Mic2 className="h-5 w-5 text-amber-300" /> Gerar podcast
           </DialogTitle>
           <DialogDescription className="text-slate-400">
-            De 1 a 4 locutores conversam sobre as {context.length} fonte(s) e nota(s) do contexto. {NOTEBOOK_AI_COSTS.podcast} créditos por episódio; a narração roda grátis no seu navegador.
+            De 1 a 4 locutores conversam sobre as {context.length} fonte(s) e nota(s) do contexto. O preço vai de 3 a 5 créditos conforme a duração (+1 com muito material); a narração roda grátis no seu navegador.
           </DialogDescription>
         </DialogHeader>
 
@@ -196,7 +197,7 @@ export function GeneratePodcastDialog({
           </div>
           <Button onClick={generate} disabled={loading} className="bg-gradient-to-r from-amber-400 to-rose-500 text-white hover:opacity-90">
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mic2 className="mr-2 h-4 w-4" />}
-            {loading ? 'Escrevendo o roteiro…' : `Gerar · ${NOTEBOOK_AI_COSTS.podcast} créditos`}
+            {loading ? 'Escrevendo o roteiro…' : `Gerar · ${creditsLabel(cost)}`}
           </Button>
         </div>
       </DialogContent>

@@ -3,6 +3,9 @@
 import { supabase } from '@/integrations/supabase/client';
 import {
   NOTEBOOK_AI_COSTS,
+  NOTEBOOK_LARGE_CONTEXT_CHARS,
+  NOTEBOOK_PODCAST_COSTS,
+  notebookAiCost,
   type ChatOutput,
   type GuideOutput,
   type NotebookAiRequest,
@@ -11,7 +14,9 @@ import {
   type TransformOutput,
 } from '../../supabase/functions/_shared/notebookAi';
 
-export { NOTEBOOK_AI_COSTS };
+export { NOTEBOOK_AI_COSTS, NOTEBOOK_LARGE_CONTEXT_CHARS, NOTEBOOK_PODCAST_COSTS, notebookAiCost };
+
+export const creditsLabel = (n: number) => `${n} ${n === 1 ? 'crédito' : 'créditos'}`;
 
 type OutputFor<A extends NotebookAiRequest['action']> = A extends 'chat'
   ? ChatOutput

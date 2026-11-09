@@ -3,8 +3,8 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import type { NotebookAiRequest } from '../../../supabase/functions/_shared/notebookAi';
 
 const runNotebookAi = vi.fn();
-vi.mock('@/services/notebookAiService', () => ({
-  NOTEBOOK_AI_COSTS: { chat: 1, transform: 1, guide: 1, study: 2, podcast: 3 },
+vi.mock('@/services/notebookAiService', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/services/notebookAiService')>()),
   runNotebookAi: (req: NotebookAiRequest) => runNotebookAi(req),
 }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));

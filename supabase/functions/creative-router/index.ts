@@ -10,14 +10,14 @@ import {
   parseOfficeOutput,
 } from "../_shared/officeAi.ts";
 import {
-  NOTEBOOK_AI_COSTS,
   NOTEBOOK_GATEWAY_CONTEXT_CHARS,
   NOTEBOOK_LIMITS,
   NotebookAiOutputError,
   buildNotebookMessages,
   gatewayParams,
+  notebookAiCost,
   parseNotebookOutput,
-  type NotebookAiAction,
+  type NotebookAiRequest,
 } from "../_shared/notebookAi.ts";
 import {
   ATTACHMENT_MAX_BYTES,
@@ -61,7 +61,7 @@ const COSTS: Record<string, number> = {
   office_ai: 1,    // Vertal Office: preparar/gerar com IA (1 crédito por uso)
   office_email: 0, // Vertal Office: envio de e-mail não é cobrado
   chat_json: 0,    // Modo de conversa: custo real vem de chatJsonCost (grátis até 5/dia, depois 1)
-  notebook_ai: 1,  // Vertal Notebook: custo real vem de NOTEBOOK_AI_COSTS[action]
+  notebook_ai: 1,  // Vertal Notebook: custo real vem de notebookAiCost(pedido)
 };
 
 Deno.serve(withRefundOnFailure(async (req) => {
@@ -96,11 +96,13 @@ Deno.serve(withRefundOnFailure(async (req) => {
     if (tool === "chat_json") {
       cost = await chatJsonCost(user.id);
     }
-    // Vertal Notebook: cada ação tem seu preço (chat 1, podcast 3...).
+    // Vertal Notebook: preço pela ação, pelo tamanho do podcast e pelo volume de contexto.
+    let notebookReq: NotebookAiRequest | null = null;
     if (tool === "notebook_ai") {
-      const action = (notebook as { action?: string } | undefined)?.action as NotebookAiAction | undefined;
-      if (!action || !(action in NOTEBOOK_AI_COSTS)) return jsonResponse(400, { error: "invalid_input" });
-      cost = NOTEBOOK_AI_COSTS[action];
+      const nb = NotebookAiInput.safeParse(notebook ?? {});
+      if (!nb.success) return jsonResponse(400, { error: "invalid_input" });
+      notebookReq = nb.data as NotebookAiRequest;
+      cost = notebookAiCost(notebookReq);
     }
 
     // Deduct credits
@@ -121,7 +123,7 @@ Deno.serve(withRefundOnFailure(async (req) => {
     } else if (tool === "office_email") {
       return await handleOfficeEmail(user, office ?? {});
     } else if (tool === "notebook_ai") {
-      return await handleNotebookAi(notebook ?? {}, cost);
+      return await handleNotebookAi(notebookReq!, cost);
     } else if (tool === "chat_json") {
       return await handleChatJson(user, messages ?? [], temperature, max_tokens, cost === 0);
     }
@@ -327,10 +329,7 @@ const NotebookAiInput = z.object({
 }).refine((v) => JSON.stringify(v.context).length <= L.contextMaxChars * 3, { message: "context_too_large" });
 
 /** Vertal Notebook: chat com fontes, transformações, guia, estudo e podcast. Cobrança já feita antes do despacho. */
-async function handleNotebookAi(raw: unknown, cost: number): Promise<Response> {
-  const parsed = NotebookAiInput.safeParse(raw);
-  if (!parsed.success) return jsonResponse(400, { error: "invalid_input" });
-  const req = parsed.data;
+async function handleNotebookAi(req: NotebookAiRequest, cost: number): Promise<Response> {
   try {
     const params = gatewayParams(req);
     const gw = await runGateway({
