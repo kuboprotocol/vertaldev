@@ -212,21 +212,55 @@ describe('CreativeDesign worlds', { timeout: 15000 }, () => {
     expect(screen.getByTitle('VectorCraft editor vetorial')).toBeInTheDocument();
   });
 
-  it('links the open-source tools to GitHub in a new tab', () => {
+  it('embeds the GridCraft editor as a page of the Estúdio Pro world', () => {
+    renderPanel();
+    fireEvent.click(modeButton('Estúdio Pro'));
+    fireEvent.click(pageButton('GridCraft'));
+
+    const frame = screen.getByTitle('GridCraft editor de planilhas');
+    expect(frame.tagName).toBe('IFRAME');
+    expect(frame).toHaveAttribute('src', '/gridcraft/');
+  });
+
+  it('opens GridCraft from the free tools page', () => {
     renderPanel();
     fireEvent.click(modeButton('Estúdio Pro'));
     fireEvent.click(pageButton('Ferramentas grátis'));
 
-    for (const name of ['GridCraft', 'DeckCraft']) {
-      expect(screen.getByText(name)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir GridCraft' }));
+    expect(pageButton('GridCraft')).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByTitle('GridCraft editor de planilhas')).toBeInTheDocument();
+  });
+
+  it('embeds the DeckCraft editor as a page of the Estúdio Pro world', () => {
+    renderPanel();
+    fireEvent.click(modeButton('Estúdio Pro'));
+    fireEvent.click(pageButton('DeckCraft'));
+
+    const frame = screen.getByTitle('DeckCraft editor de apresentações');
+    expect(frame.tagName).toBe('IFRAME');
+    expect(frame).toHaveAttribute('src', '/deckcraft/');
+  });
+
+  it('opens DeckCraft from the free tools page', () => {
+    renderPanel();
+    fireEvent.click(modeButton('Estúdio Pro'));
+    fireEvent.click(pageButton('Ferramentas grátis'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir DeckCraft' }));
+    expect(pageButton('DeckCraft')).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByTitle('DeckCraft editor de apresentações')).toBeInTheDocument();
+  });
+
+  it('opens every free tool inside Vertal, with no links out to GitHub', () => {
+    renderPanel();
+    fireEvent.click(modeButton('Estúdio Pro'));
+    fireEvent.click(pageButton('Ferramentas grátis'));
+
+    for (const name of ['PhotoCraft', 'VectorCraft', 'FilmCraft', 'WordCraft', 'GridCraft', 'DeckCraft']) {
+      expect(screen.getByRole('button', { name: `Abrir ${name}` })).toBeInTheDocument();
     }
-    const links = screen.getAllByRole('link', { name: 'Ver no GitHub' });
-    expect(links).toHaveLength(2);
-    for (const link of links) {
-      expect(link).toHaveAttribute('href', expect.stringMatching(/^https:\/\/github\.com\/storytold\//));
-      expect(link).toHaveAttribute('target', '_blank');
-      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
-    }
+    expect(screen.queryByRole('link', { name: 'Ver no GitHub' })).not.toBeInTheDocument();
   });
 
   it('shows the Galeria feed and asks for an account when nobody is signed in', async () => {

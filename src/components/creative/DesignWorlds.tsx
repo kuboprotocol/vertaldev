@@ -3,8 +3,10 @@ import { Layers, LayoutGrid, Loader2, Plus, SlidersHorizontal, Sparkles, User, W
 import { useNavigate } from 'react-router-dom';
 import { DesignWorld, PendingPage, StartCard } from './DesignWorld';
 import { DesignGalleryFeed, MyPublishedDesigns, type DesignCopy } from './DesignGallery';
+import { DeckcraftEditor } from './DeckcraftEditor';
 import { FilmcraftEditor } from './FilmcraftEditor';
 import { FreeCreativeTools } from './FreeCreativeTools';
+import { GridcraftEditor } from './GridcraftEditor';
 import { ManualDesignEditor } from './ManualDesignEditor';
 import { PhotocraftEditor } from './PhotocraftEditor';
 import { SponsoredSlot } from './SponsoredSlot';
@@ -212,6 +214,16 @@ export function StudioWorld({ onExit, jumpTo }: WorldProps & { jumpTo?: { key: S
           key: 'wordcraft',
           label: 'WordCraft',
           render: () => <WordcraftEditor />,
+        },
+        {
+          key: 'gridcraft',
+          label: 'GridCraft',
+          render: () => <GridcraftEditor />,
+        },
+        {
+          key: 'deckcraft',
+          label: 'DeckCraft',
+          render: () => <DeckcraftEditor />,
         },
         {
           key: 'nano_banana',
