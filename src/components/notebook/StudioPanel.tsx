@@ -37,7 +37,7 @@ import {
   type StudyItem,
   type StudyKind,
 } from '@/lib/notebook/model';
-import { NOTEBOOK_AI_COSTS, runNotebookAi } from '@/services/notebookAiService';
+import { creditsLabel, notebookAiCost, runNotebookAi } from '@/services/notebookAiService';
 import { NotebookMarkdown } from './NotebookMarkdown';
 import { downloadText, safeFileName } from '@/lib/notebook/download';
 import { GeneratePodcastDialog, PodcastPlayer } from './PodcastStudio';
@@ -139,7 +139,7 @@ export function StudioPanel({ notebook, notes, studies, episodes, context, title
             </p>
             <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs text-amber-100" onClick={generateGuide} disabled={busy === 'guide'}>
               {busy === 'guide' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : guide ? <RefreshCw className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
-              {guide ? 'Atualizar' : `Gerar · ${NOTEBOOK_AI_COSTS.guide}`}
+              {guide ? 'Atualizar' : `Gerar · ${notebookAiCost({ action: 'guide', context })}`}
             </Button>
           </div>
           {guide ? (
@@ -173,7 +173,7 @@ export function StudioPanel({ notebook, notes, studies, episodes, context, title
             </span>
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-semibold text-white">Podcast com IA</span>
-              <span className="block text-xs text-slate-400">1 a 4 vozes · {NOTEBOOK_AI_COSTS.podcast} créditos</span>
+              <span className="block text-xs text-slate-400">1 a 4 vozes · a partir de {creditsLabel(notebookAiCost({ action: 'podcast', context, podcast: { speakers: [], length: 'short' } }))}</span>
             </span>
           </button>
           <div className="grid grid-cols-2 gap-2">
@@ -191,7 +191,7 @@ export function StudioPanel({ notebook, notes, studies, episodes, context, title
                 <span>
                   <span className="block text-sm font-medium text-white">{STUDY_LABELS[t.kind]}</span>
                   <span className="block text-[11px] text-slate-500">
-                    {t.hint} · {NOTEBOOK_AI_COSTS.study}
+                    {t.hint} · {notebookAiCost({ action: 'study', context })}
                   </span>
                 </span>
               </button>

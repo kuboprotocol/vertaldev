@@ -43,7 +43,7 @@ import {
 } from '@/lib/notebook/model';
 import { FILE_ACCEPT, importSourceFile, importSourceText, importSourceUrl, isYoutubeUrl } from '@/lib/notebook/sourceImport';
 import { runTransformation } from '@/lib/notebook/transform';
-import { NOTEBOOK_AI_COSTS } from '@/services/notebookAiService';
+import { NOTEBOOK_AI_COSTS, creditsLabel, notebookAiCost } from '@/services/notebookAiService';
 import { NotebookMarkdown } from './NotebookMarkdown';
 import type { UpdateWorkspace } from './useNotebookWorkspace';
 
@@ -182,7 +182,7 @@ export function SourcesPanel({ notebook, sources, transformations, update, onOpe
                       <Eye className="mr-2 h-4 w-4" /> Abrir fonte
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuLabel className="text-xs">Transformar · {NOTEBOOK_AI_COSTS.transform} crédito</DropdownMenuLabel>
+                    <DropdownMenuLabel className="text-xs">Transformar · {creditsLabel(notebookAiCost({ action: 'transform', context: [{ id: `source:${s.id}`, title: s.title, content: s.content }] }))}</DropdownMenuLabel>
                     {transformations.map((t) => (
                       <DropdownMenuItem key={t.id} onClick={() => apply(s, t)} disabled={!!busy[s.id]}>
                         <Wand2 className="mr-2 h-4 w-4" /> {t.name}
@@ -426,7 +426,7 @@ function AddSourceDialog({
             <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} className="mt-0.5 accent-amber-400" />
             <span>
               Gerar insights automáticos: <strong className="text-white">{autoTransformations.map((t) => t.name).join(', ')}</strong>{' '}
-              <span className="text-amber-200">· {autoCost} crédito{autoCost > 1 ? 's' : ''} por fonte</span>
+              <span className="text-amber-200">· a partir de {autoCost} crédito{autoCost > 1 ? 's' : ''} por fonte</span>
             </span>
           </label>
         )}
@@ -525,7 +525,7 @@ export function SourceViewer({
               </div>
               {source.insights.length === 0 && !running && (
                 <p className="rounded-xl bg-white/5 p-4 text-sm text-slate-400">
-                  Nenhum insight ainda. Escolha uma transformação acima ({NOTEBOOK_AI_COSTS.transform} crédito cada). Fontes no modo <strong>Insights</strong> mandam só isso para a IA.
+                  Nenhum insight ainda. Escolha uma transformação acima ({creditsLabel(notebookAiCost({ action: 'transform', context: [{ id: `source:${source.id}`, title: source.title, content: source.content }] }))} cada). Fontes no modo <strong>Insights</strong> mandam só isso para a IA.
                 </p>
               )}
               {source.insights.map((i) => (

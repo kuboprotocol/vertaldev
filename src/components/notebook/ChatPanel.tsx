@@ -24,7 +24,7 @@ import {
   type ContextItem,
   type Notebook,
 } from '@/lib/notebook/model';
-import { NOTEBOOK_AI_COSTS, runNotebookAi } from '@/services/notebookAiService';
+import { NOTEBOOK_AI_COSTS, creditsLabel, notebookAiCost, runNotebookAi } from '@/services/notebookAiService';
 import { NOTEBOOK_LIMITS } from '../../../supabase/functions/_shared/notebookAi';
 import { NotebookMarkdown } from './NotebookMarkdown';
 import type { UpdateWorkspace } from './useNotebookWorkspace';
@@ -56,6 +56,11 @@ export function ChatPanel({ notebook, chats, context, titles, update, onCite }: 
   const session = chats.find((c) => c.id === activeId) ?? null;
   const tokens = useMemo(() => estimateTokens(context), [context]);
   const overBudget = tokens * 4 > NOTEBOOK_LIMITS.contextMaxChars;
+  const chatCost = notebookAiCost({
+    action: 'chat',
+    context,
+    messages: [...(session?.messages ?? []), { role: 'user', content: input }],
+  });
   const suggestions = notebook.guide?.questions?.length ? notebook.guide.questions.slice(0, 4) : STARTERS;
 
   useEffect(() => {
@@ -290,7 +295,8 @@ export function ChatPanel({ notebook, chats, context, titles, update, onCite }: 
           <p className={cn('mt-1.5 px-1 text-[11px]', overBudget ? 'text-amber-300' : 'text-slate-500')}>
             {context.length} {context.length === 1 ? 'item' : 'itens'} no contexto · ~{formatTokens(tokens)} tokens
             {overBudget ? ' · acima do limite: cada fonte será cortada proporcionalmente (use o modo Insights)' : ''} ·{' '}
-            {NOTEBOOK_AI_COSTS.chat} crédito por pergunta
+            {creditsLabel(chatCost)} por pergunta
+            {chatCost > NOTEBOOK_AI_COSTS.chat ? ' (contexto grande: +1)' : ''}
           </p>
         </div>
       </form>
