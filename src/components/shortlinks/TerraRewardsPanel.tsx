@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Coins, ExternalLink, Loader2, Timer } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Coins, Loader2, Timer } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { supabase } from '@/integrations/supabase/client'
-import { openTerraSmartlink } from '@/lib/terraAds'
+import { TERRA_ADS_NATIVE_BANNER_ID, TERRA_ADS_NATIVE_BANNER_SRC } from '@/lib/terraAds'
+
+/** Segundos que o anúncio precisa ficar visível na tela antes de liberar o crédito. */
+export const WATCH_SECONDS = 10
 
 /** Resposta da função `shortlinks` (ações ad-status, ad-click e ad-withdraw). */
 interface AdRewardStatus {
@@ -41,10 +44,84 @@ async function callAdReward(action: 'ad-status' | 'ad-click' | 'ad-withdraw'): P
   return data as AdRewardStatus
 }
 
+/**
+ * Anúncio TERRA ADS embutido no próprio painel: aparece no layout da página, o usuário
+ * assiste, e se quiser clicar ele leva ao anunciante na mesma aba do link do anúncio.
+ * Conta o tempo só enquanto o anúncio está preenchido, visível na tela e a aba em primeiro plano.
+ */
+function WatchableAd({ onReady }: { onReady: (ready: boolean) => void }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [filled, setFilled] = useState(false)
+  const [watched, setWatched] = useState(0)
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const script = document.createElement('script')
+    script.async = true
+    script.dataset.cfasync = 'false'
+    script.src = TERRA_ADS_NATIVE_BANNER_SRC
+    container.appendChild(script)
+
+    const checkFilled = () => {
+      const hasAd = Array.from(container.children).some((el) => el.tagName !== 'SCRIPT')
+      if (hasAd) setFilled(true)
+    }
+    const fillObserver = new MutationObserver(checkFilled)
+    fillObserver.observe(container, { childList: true, subtree: true })
+
+    // Sem IntersectionObserver (navegador antigo ou ambiente de teste), considera visível: o
+    // tempo ainda depende de o anúncio estar preenchido e da aba estar em primeiro plano.
+    let visible = typeof IntersectionObserver === 'undefined'
+    const io =
+      typeof IntersectionObserver === 'undefined'
+        ? null
+        : new IntersectionObserver(
+            ([entry]) => {
+              visible = entry.isIntersecting && entry.intersectionRatio >= 0.5
+            },
+            { threshold: [0, 0.5, 1] },
+          )
+    io?.observe(container)
+
+    const timer = setInterval(() => {
+      if (visible && document.visibilityState === 'visible' && container.children.length > 0) {
+        setWatched((s) => Math.min(WATCH_SECONDS, s + 1))
+      }
+    }, 1000)
+
+    return () => {
+      clearInterval(timer)
+      fillObserver.disconnect()
+      io?.disconnect()
+      script.remove()
+    }
+  }, [])
+
+  const ready = filled && watched >= WATCH_SECONDS
+  useEffect(() => {
+    onReady(ready)
+  }, [ready, onReady])
+
+  const left = Math.max(0, WATCH_SECONDS - watched)
+  return (
+    <div className="space-y-2 rounded-xl border border-border/60 bg-background/40 p-3" data-testid="terra-watch-ad">
+      <div className="flex items-center justify-between text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        <span>Patrocinado</span>
+        <span>{!filled ? 'Carregando anúncio…' : ready ? 'Pronto para receber' : `Assista ${left}s`}</span>
+      </div>
+      <div ref={containerRef} id={TERRA_ADS_NATIVE_BANNER_ID} className="w-full min-h-[90px]" />
+      <Progress value={(watched / WATCH_SECONDS) * 100} className="h-1" />
+    </div>
+  )
+}
+
 export default function TerraRewardsPanel({ onWithdrawn }: { onWithdrawn?: () => void }) {
   const [status, setStatus] = useState<AdRewardStatus | null>(null)
   const [failed, setFailed] = useState(false)
   const [busy, setBusy] = useState<'click' | 'withdraw' | null>(null)
+  const [adReady, setAdReady] = useState(false)
   const [now, setNow] = useState(() => Date.now())
 
   const refresh = useCallback(async () => {
@@ -69,14 +146,13 @@ export default function TerraRewardsPanel({ onWithdrawn }: { onWithdrawn?: () =>
     return () => clearInterval(timer)
   }, [nextClickMs])
 
-  const handleClick = async () => {
-    // Abrir o anúncio vem primeiro e no mesmo gesto do clique, senão o navegador bloqueia a aba.
-    openTerraSmartlink()
+  const handleReceive = async () => {
     setBusy('click')
     try {
       const next = await callAdReward('ad-click')
       setStatus(next)
       setNow(Date.now())
+      setAdReady(false)
       if (next.success) {
         toast.success(`+${credits(next.reward_per_click)} crédito`)
       } else {
@@ -144,8 +220,8 @@ export default function TerraRewardsPanel({ onWithdrawn }: { onWithdrawn?: () =>
           <span className="text-xs text-muted-foreground">TERRA ADS</span>
         </div>
         <CardDescription>
-          Abra um anúncio e ganhe {credits(status.reward_per_click)} crédito. Um anúncio por hora. Retirada a partir de{' '}
-          {status.min_withdraw} créditos.
+          Assista ao anúncio por {WATCH_SECONDS} segundos e ganhe {credits(status.reward_per_click)} crédito. Um por
+          hora. Retirada a partir de {status.min_withdraw} créditos.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -159,27 +235,30 @@ export default function TerraRewardsPanel({ onWithdrawn }: { onWithdrawn?: () =>
           <Progress value={progress} className="mt-2 h-2" />
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Button className="flex-1 gap-2" onClick={handleClick} disabled={waiting || busy !== null}>
-            {busy === 'click' ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : waiting ? (
-              <Timer className="h-4 w-4" />
-            ) : (
-              <ExternalLink className="h-4 w-4" />
-            )}
-            {waiting ? `Próximo anúncio em ${countdown(waitMs)}` : 'Abrir anúncio'}
+        {status.can_click ? (
+          <>
+            <WatchableAd onReady={setAdReady} />
+            <Button className="w-full" onClick={handleReceive} disabled={!adReady || busy !== null}>
+              {busy === 'click' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {adReady ? `Receber ${credits(status.reward_per_click)} crédito` : 'Assista ao anúncio para receber'}
+            </Button>
+          </>
+        ) : (
+          <Button className="w-full gap-2" disabled>
+            <Timer className="h-4 w-4" />
+            {waiting ? `Próximo anúncio em ${countdown(waitMs)}` : 'Aguarde'}
           </Button>
-          <Button
-            variant="outline"
-            className="flex-1"
-            onClick={handleWithdraw}
-            disabled={!status.can_withdraw || busy !== null}
-          >
-            {busy === 'withdraw' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {status.can_withdraw ? `Retirar ${status.withdrawable} créditos` : 'Retirar'}
-          </Button>
-        </div>
+        )}
+
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={handleWithdraw}
+          disabled={!status.can_withdraw || busy !== null}
+        >
+          {busy === 'withdraw' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          {status.can_withdraw ? `Retirar ${status.withdrawable} créditos` : 'Retirar'}
+        </Button>
       </CardContent>
     </Card>
   )
