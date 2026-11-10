@@ -70,7 +70,7 @@ import { OFFICE_KEYS, importFile } from '@/lib/office/importers';
 import { SlidesTab } from './SlidesTab';
 import { MiniWindow } from './MiniWindow';
 import { OfficeGalleryPanel } from './OfficeGalleryPanel';
-import { savePdfItem, saveStructuredItem, downloadPdfBytes, type OfficeRecord } from '@/services/officeDocsService';
+import { getOfficeRecord, savePdfItem, saveStructuredItem, downloadPdfBytes, type OfficeRecord } from '@/services/officeDocsService';
 import { describeDraft, type OfficeKind } from '@/lib/office/galleryModel';
 import { createEmptyDeck } from '@/lib/office/slidesModel';
 import { blankPdf, docToPdf, sheetToPdf } from '@/lib/office/pdfGenerate';
@@ -833,8 +833,20 @@ const APP_LABEL: Record<'doc' | 'sheet' | 'slides', string> = {
   slides: 'apresentação',
 };
 
-export function OfficeSuite({ creditsAvailable, userId }: { creditsAvailable: number; userId?: string }) {
-  const [app, setApp] = useState<AppId>('doc');
+export function OfficeSuite({
+  creditsAvailable,
+  userId,
+  initialApp = 'doc',
+  initialRecordId,
+}: {
+  creditsAvailable: number;
+  userId?: string;
+  /** Aplicativo aberto ao entrar (o Vertal Chat abre direto no que acabou de criar). */
+  initialApp?: 'doc' | 'sheet' | 'slides';
+  /** Item da galeria aberto ao entrar (o que o Vertal Chat salvou). */
+  initialRecordId?: string;
+}) {
+  const [app, setApp] = useState<AppId>(initialApp);
   const [assistantOpen, setAssistantOpen] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
   const [importing, setImporting] = useState(false);
@@ -948,6 +960,30 @@ export function OfficeSuite({ creditsAvailable, userId }: { creditsAvailable: nu
     refreshDirty();
     setImportNote({ kind: 'ok', text: `“${record.title}” aberto da galeria.` });
   };
+
+  // Aberto pelo Vertal Chat: carrega o item que o chat salvou na galeria.
+  const openedInitialRef = useRef(false);
+  useEffect(() => {
+    if (!initialRecordId || openedInitialRef.current) return;
+    openedInitialRef.current = true;
+    getOfficeRecord(initialRecordId)
+      .then((record) => {
+        // Rascunho deste navegador que não é o próprio item: pergunta antes de substituir.
+        if (
+          record.kind !== 'pdf' &&
+          storedHasContent(record.kind) &&
+          readDraft(KIND_KEY[record.kind]) !== JSON.stringify(record.content ?? null) &&
+          !window.confirm(`Abrir “${record.title}” substitui o rascunho de ${APP_LABEL[record.kind]} que está no Office. Continuar?`)
+        ) {
+          setApp(record.kind);
+          return;
+        }
+        return openRecord(record);
+      })
+      .catch((e: Error) => setImportNote({ kind: 'err', text: e.message }));
+    // Só na montagem: `openRecord` muda a cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialRecordId]);
 
   /** Começa um item em branco. Pede confirmação se houver alterações não salvas nesse aplicativo. */
   const newFromGallery = async (kind: OfficeKind) => {

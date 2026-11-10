@@ -3,11 +3,14 @@ import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { DESIGN_REUSE_REWARD_CREDITS } from '@/config/designLibraryPricing';
+import type { CanvasSpec } from '@/lib/chatAgent/contract';
 
 /** Cópia de um design publicado, pronta para abrir no editor. O original não muda. */
 export interface DesignCopy {
   name: string;
   snapshot: unknown;
+  /** Layout desenhado pelo Vertal Chat: é montado no editor em vez de um snapshot. */
+  spec?: CanvasSpec;
 }
 
 interface GalleryItem {

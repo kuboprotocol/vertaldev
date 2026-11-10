@@ -22,7 +22,7 @@ import {
 interface CreativeDesignProps {
   creditsAvailable: number;
   /** Abre direto num modo (e numa página do Estúdio Pro). Um objeto novo a cada pedido. */
-  open?: { mode: Exclude<DesignMode, 'home'>; studioPage?: StudioPage };
+  open?: { mode: Exclude<DesignMode, 'home'>; studioPage?: StudioPage; canvasCopy?: DesignCopy };
 }
 
 interface DesignImage {
@@ -88,6 +88,10 @@ export function CreativeDesign({ creditsAvailable, open }: CreativeDesignProps) 
     selectMode('canvas');
   };
   const consumeCopy = useCallback(() => setPendingCopy(null), []);
+  // Design criado pelo Vertal Chat: abre direto no editor do Canvas.
+  useEffect(() => {
+    if (open?.canvasCopy) setPendingCopy(open.canvasCopy);
+  }, [open]);
 
   return (
     <div className="md:flex md:items-start">

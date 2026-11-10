@@ -28,6 +28,16 @@ import {
   toGmailRaw,
 } from "../_shared/officeEmail.ts";
 import { getFreshAccessToken, loadAccount } from "../_shared/gmailToken.ts";
+import {
+  AGENT_LIMITS,
+  API_METHODS,
+  buildAgentSystemPrompt,
+  formatToolResults,
+  parseAgentTurn,
+  secretPlaceholders,
+} from "../_shared/chatAgent.ts";
+import { listVisibleSecrets, resolveEnvForRun } from "../_shared/kuboSecrets.ts";
+import { validatePublicUrl } from "../_shared/security.ts";
 
 const InputSchema = z.object({
   messages: z.array(z.object({
@@ -35,7 +45,7 @@ const InputSchema = z.object({
     content: z.string().min(1),
   })).optional(),
   prompt: z.string().optional(),
-  tool: z.enum(["chat", "image", "video", "music", "pdf", "docs", "slide", "edit_image", "edit_video", "office_ai", "office_email", "chat_json", "notebook_ai"]),
+  tool: z.enum(["chat", "image", "video", "music", "pdf", "docs", "slide", "edit_image", "edit_video", "office_ai", "office_email", "chat_json", "notebook_ai", "agent_chat", "api_request"]),
   model: z.string().optional(),
   temperature: z.number().optional(),
   max_tokens: z.number().optional(),
@@ -44,6 +54,10 @@ const InputSchema = z.object({
   office: z.record(z.any()).optional(),
   // Entrada do Vertal Notebook (validada em handleNotebookAi).
   notebook: z.record(z.any()).optional(),
+  // Vertal Chat: resultados das ferramentas da rodada anterior (validados em handleAgentChat).
+  agent: z.record(z.any()).optional(),
+  // Vertal Chat: chamada de API externa aprovada pelo usuário (validada em handleApiRequest).
+  api: z.record(z.any()).optional(),
 });
 
 // Credit costs based on prompt instructions
@@ -62,6 +76,8 @@ const COSTS: Record<string, number> = {
   office_email: 0, // Vertal Office: envio de e-mail não é cobrado
   chat_json: 0,    // Modo de conversa: custo real vem de chatJsonCost (grátis até 5/dia, depois 1)
   notebook_ai: 1,  // Vertal Notebook: custo real vem de notebookAiCost(pedido)
+  agent_chat: 0,   // Vertal Chat: custo real vem de chatJsonCost (mesma cota do modo de conversa)
+  api_request: 0,  // Vertal Chat: chamada de API externa não é cobrada (tem limite de requisições)
 };
 
 Deno.serve(withRefundOnFailure(async (req) => {
@@ -85,7 +101,7 @@ Deno.serve(withRefundOnFailure(async (req) => {
       });
     }
 
-    const { tool, messages, prompt, model, temperature, max_tokens, metadata, office, notebook } = parsed.data;
+    const { tool, messages, prompt, model, temperature, max_tokens, metadata, office, notebook, agent, api } = parsed.data;
     
     // Determine cost
     let cost = COSTS[tool] ?? 1;
@@ -93,7 +109,7 @@ Deno.serve(withRefundOnFailure(async (req) => {
       cost = COSTS.chat_premium;
     }
     // Modo de conversa: 5 grátis por dia (UTC), a partir da sexta 1 crédito.
-    if (tool === "chat_json") {
+    if (tool === "chat_json" || tool === "agent_chat") {
       cost = await chatJsonCost(user.id);
     }
     // Vertal Notebook: preço pela ação, pelo tamanho do podcast e pelo volume de contexto.
@@ -126,6 +142,10 @@ Deno.serve(withRefundOnFailure(async (req) => {
       return await handleNotebookAi(notebookReq!, cost);
     } else if (tool === "chat_json") {
       return await handleChatJson(user, messages ?? [], temperature, max_tokens, cost === 0);
+    } else if (tool === "agent_chat") {
+      return await handleAgentChat(user, messages ?? [], agent ?? {}, cost);
+    } else if (tool === "api_request") {
+      return await handleApiRequest(user, api ?? {});
     }
 
     return new Response(JSON.stringify({ error: "tool_not_implemented_in_router" }), {
@@ -492,3 +512,208 @@ async function handleChatJson(
   return jsonResponse(200, data);
 }
 
+
+// ─── Vertal Chat: agente que usa as ferramentas do painel ────────────────
+
+const AgentInput = z.object({
+  tool_results: z.array(z.object({
+    tool: z.string().max(40),
+    ok: z.boolean(),
+    summary: z.string().max(AGENT_LIMITS.maxToolResultChars * 2),
+  })).max(8).optional(),
+});
+
+/**
+ * Uma rodada do agente: devolve a resposta e as ações que o navegador vai executar.
+ * As ações rodam pelas funções de cada ferramenta, com a cobrança e os limites delas.
+ */
+async function handleAgentChat(
+  user: { id: string; email?: string | null },
+  messages: Array<{ role: string; content: string }>,
+  rawAgent: unknown,
+  cost: number,
+): Promise<Response> {
+  const freeSlot = cost === 0;
+  const fail = async (status: number, error: string) => {
+    if (freeSlot) await releaseChatSlot(user.id);
+    return jsonResponse(status, { error });
+  };
+
+  const limit = await enforceRateLimit(user.id, "agent_chat", { max: 30, windowSeconds: 60, userEmail: user.email ?? null });
+  if (!limit.ok) return fail(429, limit.error);
+
+  const agent = AgentInput.safeParse(rawAgent);
+  if (!agent.success) return fail(400, "invalid_input");
+
+  const trimmed = messages
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .slice(-CHAT_JSON_MAX_MESSAGES)
+    .map((m) => ({ role: m.role as "user" | "assistant", content: String(m.content).slice(0, CHAT_JSON_MAX_CHARS) }));
+  const results = agent.data.tool_results ?? [];
+  if (trimmed.length === 0 || (results.length === 0 && trimmed[trimmed.length - 1].role !== "user")) {
+    return fail(400, "invalid_messages");
+  }
+
+  // Só os NOMES dos segredos vão para o modelo; os valores ficam no cofre.
+  let secretNames: string[] = [];
+  try {
+    secretNames = (await listVisibleSecrets(supaAdmin(), user.id)).map((s) => s.env_key);
+  } catch (e) {
+    console.error("[creative-router] agent_chat secrets list failed:", sanitizeError(e));
+  }
+
+  const system = buildAgentSystemPrompt({ secretNames, today: new Date().toISOString().slice(0, 10) });
+  const convo = results.length
+    ? [...trimmed, { role: "user" as const, content: formatToolResults(results) }]
+    : trimmed;
+
+  try {
+    const gw = await runGateway({
+      messages: [{ role: "system", content: system }, ...convo],
+      kind: "chat",
+      tier: "flash",
+      json: true,
+      temperature: 0.4,
+      maxTokens: 3500,
+      contextChars: 48_000,
+      noCache: true,
+    });
+    const turn = parseAgentTurn(gw.content);
+    if (!turn.reply && turn.actions.length === 0) return fail(502, "invalid_model_output");
+    return jsonResponse(200, {
+      reply: turn.reply, actions: turn.actions, provider: gw.provider, model: gw.model, creditsCharged: cost,
+    });
+  } catch (err) {
+    if (err instanceof GatewayError) return fail(503, "ai_unavailable");
+    if (freeSlot) await releaseChatSlot(user.id);
+    throw err;
+  }
+}
+
+// ─── Vertal Chat: chamada de API externa ─────────────────────────────────
+
+const API_TIMEOUT_MS = 20_000;
+const API_RESPONSE_MAX_BYTES = 200_000;
+const API_RESPONSE_MAX_CHARS = 12_000;
+const BLOCKED_REQUEST_HEADERS = new Set(["host", "content-length", "connection", "transfer-encoding", "cookie"]);
+
+const ApiRequestInput = z.object({
+  method: z.enum(API_METHODS),
+  url: z.string().min(10).max(2000),
+  headers: z.record(z.string().max(4000)).optional(),
+  body: z.string().max(AGENT_LIMITS.maxApiBodyChars).optional(),
+  // Sem a aprovação explícita do usuário na tela a chamada não sai.
+  confirmed: z.literal(true),
+});
+
+/** Troca {{NOME}} pelo valor do segredo. */
+function fillSecrets(text: string, env: Record<string, string>): string {
+  return text.replace(/\{\{\s*([A-Z][A-Z0-9_]{1,63})\s*\}\}/g, (whole, name: string) => env[name] ?? whole);
+}
+
+/**
+ * Faz uma requisição HTTPS para uma API pública em nome do usuário.
+ * Proteções: só https, sem IPs/hosts internos, sem seguir redirecionamentos,
+ * tempo e tamanho limitados, e os valores dos segredos nunca voltam na resposta.
+ */
+async function handleApiRequest(user: { id: string; email?: string | null }, raw: unknown): Promise<Response> {
+  const limit = await enforceRateLimit(user.id, "api_request", { max: 20, windowSeconds: 60, userEmail: user.email ?? null });
+  if (!limit.ok) return jsonResponse(429, { error: limit.error });
+
+  const parsed = ApiRequestInput.safeParse(raw);
+  if (!parsed.success) return jsonResponse(400, { error: "invalid_input" });
+  const { method, url, headers = {}, body } = parsed.data;
+  if (Object.keys(headers).length > AGENT_LIMITS.maxHeaders) return jsonResponse(400, { error: "too_many_headers" });
+
+  // O destino é fixado antes de qualquer segredo entrar: um segredo não pode mudar o host.
+  let template: URL;
+  try {
+    template = validatePublicUrl(url.replace(/\{\{[^}]*\}\}/g, "x"));
+  } catch {
+    return jsonResponse(400, { error: "url_not_allowed" });
+  }
+  const ownHost = new URL(Deno.env.get("SUPABASE_URL")!).host;
+  if (template.protocol !== "https:" || template.host === ownHost) return jsonResponse(400, { error: "url_not_allowed" });
+
+  const needed = secretPlaceholders([url, body ?? "", ...Object.values(headers)].join("\n"));
+  let env: Record<string, string> = {};
+  if (needed.length > 0) {
+    const resolved = await resolveEnvForRun(supaAdmin(), user.id, needed, { target: `chat_api:${template.host}` });
+    if (resolved.missing.length > 0) return jsonResponse(400, { error: "missing_secrets", missing: resolved.missing });
+    env = resolved.env;
+  }
+
+  let target: URL;
+  try {
+    target = validatePublicUrl(fillSecrets(url, Object.fromEntries(Object.entries(env).map(([k, v]) => [k, encodeURIComponent(v)]))));
+  } catch {
+    return jsonResponse(400, { error: "url_not_allowed" });
+  }
+  if (target.host !== template.host || target.protocol !== "https:") return jsonResponse(400, { error: "url_not_allowed" });
+
+  const outHeaders = new Headers();
+  for (const [name, value] of Object.entries(headers)) {
+    if (!/^[A-Za-z0-9-]{1,64}$/.test(name) || BLOCKED_REQUEST_HEADERS.has(name.toLowerCase())) continue;
+    outHeaders.set(name, fillSecrets(value, env));
+  }
+  const sendBody = body !== undefined && method !== "GET" ? fillSecrets(body, env) : undefined;
+  if (sendBody !== undefined && !outHeaders.has("content-type")) outHeaders.set("content-type", "application/json");
+
+  let res: Response;
+  try {
+    res = await fetch(target, {
+      method, headers: outHeaders, body: sendBody, redirect: "manual", signal: AbortSignal.timeout(API_TIMEOUT_MS),
+    });
+  } catch (e) {
+    const timedOut = e instanceof DOMException && e.name === "TimeoutError";
+    return jsonResponse(200, { ok: false, status: 0, error: timedOut ? "timeout" : "network_error", body: "" });
+  }
+
+  // Lê só até o limite: uma resposta gigante não derruba a função.
+  const reader = res.body?.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  let truncated = false;
+  if (reader) {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > API_RESPONSE_MAX_BYTES) {
+        truncated = true;
+        await reader.cancel().catch(() => {});
+        break;
+      }
+      chunks.push(value);
+    }
+  }
+  const bytes = new Uint8Array(chunks.reduce((n, c) => n + c.byteLength, 0));
+  let offset = 0;
+  for (const c of chunks) { bytes.set(c, offset); offset += c.byteLength; }
+  let text = new TextDecoder().decode(bytes);
+  for (const value of Object.values(env)) {
+    if (value.length >= 6) text = text.split(value).join("[segredo]");
+  }
+  if (text.length > API_RESPONSE_MAX_CHARS) {
+    text = text.slice(0, API_RESPONSE_MAX_CHARS);
+    truncated = true;
+  }
+
+  await supaAdmin().from("connector_activity_logs").insert({
+    user_id: user.id,
+    connector_slug: "chat_api",
+    event_type: "api_request",
+    message: `${method} ${target.host}${target.pathname}`.slice(0, 300),
+    status: res.ok ? "success" : "error",
+    metadata: { host: target.host, method, http_status: res.status, secrets: needed },
+  }).then(({ error }) => { if (error) console.error("[creative-router] api_request log failed:", error.message); });
+
+  return jsonResponse(200, {
+    ok: res.ok,
+    status: res.status,
+    contentType: res.headers.get("content-type") ?? "",
+    location: res.status >= 300 && res.status < 400 ? res.headers.get("location") ?? "" : "",
+    body: text,
+    truncated,
+  });
+}

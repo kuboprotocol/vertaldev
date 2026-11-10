@@ -255,7 +255,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/game/ai" element={<ProtectedRoute><GameAiPage /></ProtectedRoute>} />
                 <Route path="/game/scene" element={<ProtectedRoute><GameScenePage /></ProtectedRoute>} />
                 <Route path="/games" element={<ProtectedRoute><GameManagerPage /></ProtectedRoute>} />
-                <Route path="/creative/chat" element={<ProtectedRoute><CreativeChatPage /></ProtectedRoute>} />
+                <Route path="/creative/chat" element={<ProtectedRoute><CreativeEconomyGate><ErrorBoundary resourceName="VertalChat"><CreativeChatPage /></ErrorBoundary></CreativeEconomyGate></ProtectedRoute>} />
                 <Route path="/admin/cloud" element={<ProtectedRoute requireRoles={["admin"]}><AdminCloudPage /></ProtectedRoute>} />
                 <Route path="/admin/anywhere" element={<ProtectedRoute requireRoles={["admin"]}><AdminAnywherePage /></ProtectedRoute>} />
                 <Route path="/admin/projects" element={<ProtectedRoute requireRoles={["admin"]}><AdminProjectsPage /></ProtectedRoute>} />

@@ -1064,6 +1064,20 @@ export default function CreativePage() {
 
           <TabsContent value="dashboard">
              <div className="space-y-6">
+               <button
+                 type="button"
+                 onClick={() => navigate("/creative/chat")}
+                 className="group flex w-full items-center gap-4 rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/15 via-card to-card p-4 text-left transition hover:border-primary/60 sm:p-5"
+               >
+                 <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                   <MessageSquare className="h-6 w-6" aria-hidden />
+                 </span>
+                 <span className="min-w-0 flex-1">
+                   <span className="block text-base font-bold">Vertal Chat</span>
+                   <span className="block text-sm text-muted-foreground">Peça em uma frase e o chat cria no Office, no Design Premium, no Canvas e no Dev Code. Todos os painéis abrem dentro dele.</span>
+                 </span>
+                 <ArrowRight className="h-5 w-5 shrink-0 text-primary transition group-hover:translate-x-0.5" aria-hidden />
+               </button>
                <ApiStatusPanel />
                <ManusLauncher setActive={(k) => { setActive(k); navigate(k === "dashboard" ? "/creative" : `/creative/${MOVED_TO_DESIGN[k] ? "design" : k}`); }} />
                
