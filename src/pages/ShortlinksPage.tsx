@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import AnimatedLogo from '@/components/branding/AnimatedLogo'
-import ShortlinksUploader from '@/components/shortlinks/ShortlinksUploader'
 import ShortlinksList from '@/components/shortlinks/ShortlinksList'
 import TerraRewardsPanel from '@/components/shortlinks/TerraRewardsPanel'
 import { toast } from 'sonner'
@@ -242,19 +241,6 @@ export default function ShortlinksPage() {
                 <p>Recompensas recalculadas <span className="font-semibold text-foreground">diariamente</span> (sem acumular)</p>
               </div>
             </div>
-          </motion.div>
-
-          {/* Upload Section */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.35 }}
-          >
-            <ShortlinksUploader
-              onSuccess={loadData}
-              canCreateMore={limits?.can_create_more || false}
-              activeCount={limits?.active_count || 0}
-            />
           </motion.div>
 
           {/* Shortlinks List */}
