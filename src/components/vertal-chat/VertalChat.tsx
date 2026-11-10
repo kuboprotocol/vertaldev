@@ -282,6 +282,16 @@ export function VertalChat() {
         <header className="flex h-14 shrink-0 items-center gap-2 px-3 sm:px-4">
           <button
             type="button"
+            onClick={() => navigate('/creative')}
+            aria-label="Voltar ao Painel Criativo"
+            title="Voltar ao Painel Criativo"
+            className="inline-flex items-center gap-1.5 rounded-lg p-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground"
+          >
+            <ArrowLeft className="h-5 w-5" aria-hidden />
+            <span className="hidden sm:inline">Painel Criativo</span>
+          </button>
+          <button
+            type="button"
             aria-label="Abrir menu"
             onClick={() => setDrawerOpen(true)}
             className="rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground md:hidden"
