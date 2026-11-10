@@ -44,6 +44,11 @@ create table public.shortlink_views (
 create index shortlink_views_shortlink_id_idx on public.shortlink_views(shortlink_id);
 create index shortlink_views_created_at_idx on public.shortlink_views(created_at);
 
+grant select, insert, update, delete on public.shortlinks to authenticated;
+grant all on public.shortlinks to service_role;
+grant select, insert on public.shortlink_views to authenticated;
+grant all on public.shortlink_views to service_role;
+
 alter table public.shortlinks enable row level security;
 alter table public.shortlink_views enable row level security;
 
