@@ -34,6 +34,7 @@ import {
   buildAgentSystemPrompt,
   formatToolResults,
   parseAgentTurn,
+  parseConnections,
   secretPlaceholders,
 } from "../_shared/chatAgent.ts";
 import { listVisibleSecrets, resolveEnvForRun } from "../_shared/kuboSecrets.ts";
@@ -521,7 +522,24 @@ const AgentInput = z.object({
     ok: z.boolean(),
     summary: z.string().max(AGENT_LIMITS.maxToolResultChars * 2),
   })).max(8).optional(),
+  // Fuso do aparelho e conexões que o cliente adicionou no chat (validadas em parseConnections).
+  context: z.object({
+    timezone: z.string().max(64).optional(),
+    connections: z.array(z.record(z.any())).max(20).optional(),
+  }).optional(),
 });
+
+/** Data e hora no fuso do usuário, por extenso. Fuso inválido cai para UTC. */
+function localNow(timezone?: string): { text: string; timezone: string } {
+  const format = (tz: string) =>
+    new Intl.DateTimeFormat("pt-BR", { timeZone: tz, dateStyle: "full", timeStyle: "short" }).format(new Date());
+  try {
+    if (timezone) return { text: format(timezone), timezone };
+  } catch {
+    // fuso desconhecido
+  }
+  return { text: format("UTC"), timezone: "UTC" };
+}
 
 /**
  * Uma rodada do agente: devolve a resposta e as ações que o navegador vai executar.
@@ -562,7 +580,14 @@ async function handleAgentChat(
     console.error("[creative-router] agent_chat secrets list failed:", sanitizeError(e));
   }
 
-  const system = buildAgentSystemPrompt({ secretNames, today: new Date().toISOString().slice(0, 10) });
+  const now = localNow(agent.data.context?.timezone);
+  const system = buildAgentSystemPrompt({
+    secretNames,
+    today: new Date().toISOString().slice(0, 10),
+    localNow: now.text,
+    timezone: now.timezone,
+    connections: parseConnections(agent.data.context?.connections),
+  });
   const convo = results.length
     ? [...trimmed, { role: "user" as const, content: formatToolResults(results) }]
     : trimmed;
@@ -713,6 +738,8 @@ async function handleApiRequest(user: { id: string; email?: string | null }, raw
     status: res.status,
     contentType: res.headers.get("content-type") ?? "",
     location: res.status >= 300 && res.status < 400 ? res.headers.get("location") ?? "" : "",
+    // Servidores MCP devolvem o id da sessão neste cabeçalho.
+    sessionId: res.headers.get("mcp-session-id") ?? "",
     body: text,
     truncated,
   });

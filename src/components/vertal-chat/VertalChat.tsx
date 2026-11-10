@@ -5,7 +5,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle, ArrowLeft, ArrowUp, Check, ChevronDown, Coins, Columns2, ExternalLink, LayoutGrid, Loader2,
-  Maximize2, MessageSquarePlus, MoreHorizontal, PanelLeft, Pencil, Pin, PinOff, Plus, ShieldCheck, Trash2, X,
+  Maximize2, MessageSquare, MessageSquarePlus, Cable, MoreHorizontal, PanelLeft, Pencil, Pin, PinOff, Plus, ShieldCheck, Trash2, X,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useVertalChat, type VertalMessage } from '@/hooks/useVertalChat';
@@ -19,9 +19,11 @@ import { KIND_LABEL, type Artifact } from '@/lib/chatAgent/artifacts';
 import { ArtifactCard, ArtifactViewer, ChatMarkdown, type ViewerActions } from './ArtifactViews';
 import { PANEL_BY_KEY, PANEL_LIST, type PanelRequest } from './panelList';
 import { PanelHost } from './PanelHost';
+import { ConnectionsDialog } from './ConnectionsDialog';
 import { previewHtml } from '@/lib/chatAgent/previewHtml';
 
 const SIDEBAR_KEY = 'vertal-chat-sidebar';
+const CHAT_ONLY_KEY = 'vertal-chat-only';
 
 const STARTERS: Array<{ label: string; text: string }> = [
   { label: 'Imagem', text: 'Crie uma imagem de ' },
@@ -33,6 +35,8 @@ const STARTERS: Array<{ label: string; text: string }> = [
   { label: 'Site ou aplicativo', text: 'Construa um aplicativo que ' },
   { label: 'Música', text: 'Componha uma música ' },
   { label: 'Ebook', text: 'Escreva um ebook sobre ' },
+  { label: 'Clima agora', text: 'Como está o tempo aqui agora?' },
+  { label: 'Ler meus e-mails', text: 'Resuma meus e-mails não lidos de hoje.' },
   { label: 'Chamar uma API', text: 'Use a API ' },
 ];
 
@@ -70,6 +74,17 @@ export function VertalChat() {
     }
   });
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // "Só no chat": nada abre ao lado sozinho; o que o agente cria fica na conversa.
+  const [chatOnly, setChatOnlyState] = useState(() => {
+    try {
+      return window.localStorage.getItem(CHAT_ONLY_KEY) === 'on';
+    } catch {
+      return false;
+    }
+  });
+  const chatOnlyRef = useRef(chatOnly);
+  chatOnlyRef.current = chatOnly;
+  const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [side, setSide] = useState<Side>(null);
   const [panel, setPanel] = useState<PanelRequest | null>(null);
   const [focus, setFocus] = useState(false);
@@ -94,13 +109,27 @@ export function VertalChat() {
     [navigate],
   );
 
+  const setChatOnly = useCallback((value: boolean) => {
+    setChatOnlyState(value);
+    try {
+      window.localStorage.setItem(CHAT_ONLY_KEY, value ? 'on' : 'off');
+    } catch {
+      /* vale só nesta visita */
+    }
+    if (value) {
+      setSide(null);
+      setFocus(false);
+    }
+  }, []);
+
   const chat = useVertalChat({
+    onChatOnly: setChatOnly,
     // Painéis com rota própria viram um botão na mensagem: o agente não tira o usuário do chat.
     onOpenPanel: (key) => {
-      if (!PANEL_BY_KEY[key].route) openPanel(key);
+      if (!PANEL_BY_KEY[key].route && !chatOnlyRef.current) openPanel(key);
     },
     onArtifact: (artifact) => {
-      if (AUTO_OPEN.includes(artifact.kind) && window.matchMedia('(min-width: 1024px)').matches) {
+      if (!chatOnlyRef.current && AUTO_OPEN.includes(artifact.kind) && window.matchMedia('(min-width: 1024px)').matches) {
         setSide({ type: 'artifact', id: artifact.id });
         setFocus(false);
       }
@@ -112,7 +141,7 @@ export function VertalChat() {
 
   // App em construção: a prévia aparece ao lado enquanto o código chega.
   useEffect(() => {
-    if (chat.livePreview && window.matchMedia('(min-width: 1024px)').matches) {
+    if (chat.livePreview && !chatOnlyRef.current && window.matchMedia('(min-width: 1024px)').matches) {
       setSide((s) => (s?.type === 'live' ? s : { type: 'live' }));
       setFocus(false);
     } else if (!chat.livePreview) {
@@ -202,6 +231,10 @@ export function VertalChat() {
       onOpenPanel={(key) => openPanel(key)}
       onCollapse={() => (drawerOpen ? setDrawerOpen(false) : setSidebarOpen(false))}
       onBackToPanel={() => navigate('/creative')}
+      onConnections={() => {
+        setDrawerOpen(false);
+        setConnectionsOpen(true);
+      }}
     />
   );
 
@@ -266,6 +299,19 @@ export function VertalChat() {
             </button>
           )}
           <h1 className="min-w-0 flex-1 truncate text-sm font-medium text-foreground/80">{currentTitle ?? 'Vertal Chat'}</h1>
+          <button
+            type="button"
+            onClick={() => setChatOnly(!chatOnly)}
+            aria-pressed={chatOnly}
+            title={chatOnly ? 'Tudo fica na conversa. Clique para voltar a abrir ao lado.' : 'Manter tudo só na tela do chat'}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition',
+              chatOnly ? 'border-primary/60 bg-primary/15 text-primary' : 'border-border/60 text-foreground/80 hover:border-primary/50',
+            )}
+          >
+            <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+            Só no chat
+          </button>
           <button
             type="button"
             onClick={() => navigate('/pricing')}
@@ -420,6 +466,7 @@ export function VertalChat() {
       )}
 
       <ApiApprovalDialog approval={chat.approval} />
+      <ConnectionsDialog open={connectionsOpen} onOpenChange={setConnectionsOpen} onOpenVault={() => navigate('/secrets')} />
     </div>
   );
 }
@@ -427,8 +474,9 @@ export function VertalChat() {
 // ─── Barra lateral ───────────────────────────────────────────────────────
 
 function SidebarContent({
-  chat, activePanel, onNew, onOpenConversation, onOpenPanel, onCollapse, onBackToPanel,
+  chat, activePanel, onNew, onOpenConversation, onOpenPanel, onCollapse, onBackToPanel, onConnections,
 }: {
+  onConnections: () => void;
   chat: ReturnType<typeof useVertalChat>;
   activePanel?: PanelKey;
   onNew: () => void;
@@ -474,6 +522,19 @@ function SidebarContent({
             <div key={group.id} className="mb-1">
               <p className="px-3 pb-0.5 pt-2 text-[11px] text-muted-foreground/70">{group.label}</p>
               <ul>
+                {group.id === 'conectar' && (
+                  <li>
+                    <button
+                      type="button"
+                      onClick={onConnections}
+                      title="APIs e servidores MCP que você liga ao chat"
+                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-left text-foreground/85 transition hover:bg-secondary"
+                    >
+                      <Cable className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="flex-1 truncate">Minhas conexões</span>
+                    </button>
+                  </li>
+                )}
                 {PANEL_LIST.filter((p) => p.group === group.id).map((p) => (
                   <li key={p.key}>
                     <button
@@ -742,9 +803,9 @@ function ApiApprovalDialog({ approval }: { approval: ReturnType<typeof useVertal
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-primary" aria-hidden /> Permitir esta chamada de API?
+            <ShieldCheck className="h-5 w-5 text-primary" aria-hidden /> Permitir esta ação?
           </DialogTitle>
-          <DialogDescription>O chat quer se conectar a um serviço externo para concluir o seu pedido.</DialogDescription>
+          <DialogDescription>O chat precisa da sua permissão para agir fora dele e concluir o seu pedido.</DialogDescription>
         </DialogHeader>
         {approval && (
           <dl className="space-y-3 text-sm">

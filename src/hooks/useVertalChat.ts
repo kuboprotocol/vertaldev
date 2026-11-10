@@ -21,6 +21,7 @@ import {
   type MessageExtras,
 } from '@/lib/chatAgent/artifacts';
 import { actionLabel, runAction, type ApiApprovalRequest } from '@/lib/chatAgent/runAction';
+import { loadConnections } from '@/lib/chatAgent/connections';
 
 export interface ChatStep {
   label: string;
@@ -62,7 +63,14 @@ async function callAgent(
   toolResults: ToolResult[],
 ): Promise<AgentResponse> {
   const { data, error } = await supabase.functions.invoke<AgentResponse>('creative-router', {
-    body: { tool: 'agent_chat', messages: history, agent: toolResults.length ? { tool_results: toolResults } : undefined },
+    body: {
+      tool: 'agent_chat',
+      messages: history,
+      agent: {
+        ...(toolResults.length ? { tool_results: toolResults } : {}),
+        context: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, connections: loadConnections() },
+      },
+    },
   });
   if (error) {
     const code = await functionErrorCode(error);
@@ -78,7 +86,11 @@ const titleOf = (text: string) => {
   return clean.length > 48 ? `${clean.slice(0, 47)}…` : clean || 'Nova conversa';
 };
 
-export function useVertalChat(options: { onOpenPanel: (panel: PanelKey) => void; onArtifact: (artifact: Artifact) => void }) {
+export function useVertalChat(options: {
+  onOpenPanel: (panel: PanelKey) => void;
+  onArtifact: (artifact: Artifact) => void;
+  onChatOnly: (chatOnly: boolean) => void;
+}) {
   const { user } = useAuth();
   const { subscription, canEdit, editsRemaining, incrementEdit, refetch: refetchCredits } = useSubscription();
   const [messages, setMessages] = useState<VertalMessage[]>([]);
@@ -248,6 +260,7 @@ export function useVertalChat(options: { onOpenPanel: (panel: PanelKey) => void;
               return null;
             },
             chargeAppEdit: () => planRef.current.incrementEdit(),
+            setChatOnly: (value) => optionsRef.current.onChatOnly(value),
           });
           if (action.tool === 'app') setLivePreview(null);
           toolResults.push(outcome.result);

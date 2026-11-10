@@ -8,6 +8,7 @@ import { splitProseAndCode } from '@/lib/builderTurn';
 import type { AgentAction, PanelKey, ToolResult } from './contract';
 import { secretPlaceholders } from './contract';
 import { artifactSourceText, type Artifact, type StoredImage } from './artifacts';
+import { loadConnections, parseMcpBody, weatherText } from './connections';
 
 export interface ApiApprovalRequest {
   method: string;
@@ -32,6 +33,8 @@ export interface ActionContext {
   appBlockedReason: () => string | null;
   /** Conta 1 edição do plano (igual ao Dev Code). */
   chargeAppEdit: () => Promise<unknown>;
+  /** O usuário pediu para ficar só no chat (ou voltar a abrir ao lado). */
+  setChatOnly: (chatOnly: boolean) => void;
 }
 
 export interface ActionOutcome {
@@ -288,6 +291,163 @@ async function runApi(action: Extract<AgentAction, { tool: 'api_request' }>, ctx
   };
 }
 
+// ─── Clima, conectores e MCP ─────────────────────────────────────────────
+
+const followUp = (tool: string, ok: boolean, summary: string, error?: string): ActionOutcome => ({
+  result: { tool, ok, summary },
+  needsFollowUp: true,
+  ...(error ? { error } : {}),
+});
+
+function devicePosition(): Promise<{ latitude: number; longitude: number } | null> {
+  return new Promise((resolve) => {
+    if (!('geolocation' in navigator)) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+      () => resolve(null),
+      { timeout: 10_000, maximumAge: 10 * 60_000 },
+    );
+  });
+}
+
+/** Clima pela Open-Meteo (gratuita, sem chave). Com lugar: geocodifica. Sem lugar: localização do aparelho. */
+async function runWeather(action: Extract<AgentAction, { tool: 'weather' }>): Promise<ActionOutcome> {
+  let where: { latitude: number; longitude: number; label: string } | null = null;
+  if (action.place) {
+    // "Grajaú, São Paulo" → tenta o texto inteiro e depois só a primeira parte.
+    for (const name of [action.place, action.place.split(',')[0]]) {
+      const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name.trim())}&count=1&language=pt`);
+      const hit = r.ok ? (await r.json())?.results?.[0] : null;
+      if (hit) {
+        where = { latitude: hit.latitude, longitude: hit.longitude, label: [hit.name, hit.admin1, hit.country].filter(Boolean).join(', ') };
+        break;
+      }
+    }
+    if (!where) return followUp('weather', false, `Lugar não encontrado: ${action.place}. Peça a cidade ao usuário.`);
+  } else {
+    const pos = await devicePosition();
+    if (!pos) return followUp('weather', false, 'O usuário não liberou a localização do aparelho. Pergunte o bairro ou a cidade.');
+    where = { ...pos, label: 'localização do aparelho' };
+  }
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${where.latitude}&longitude=${where.longitude}` +
+    '&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m' +
+    '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=3&timezone=auto';
+  const r = await fetch(url);
+  if (!r.ok) return followUp('weather', false, 'O serviço de clima não respondeu agora.');
+  const d = await r.json();
+  const c = d.current;
+  const days = (d.daily?.time ?? []).map((day: string, i: number) =>
+    `${day}: ${weatherText(d.daily.weather_code[i])}, ${d.daily.temperature_2m_min[i]}–${d.daily.temperature_2m_max[i]} °C, chuva ${d.daily.precipitation_probability_max[i] ?? 0}%`);
+  return followUp('weather', true, [
+    `Local: ${where.label} (fuso ${d.timezone}).`,
+    `Agora: ${weatherText(c.weather_code)}, ${c.temperature_2m} °C (sensação ${c.apparent_temperature} °C), umidade ${c.relative_humidity_2m}%, vento ${c.wind_speed_10m} km/h, chuva ${c.precipitation} mm.`,
+    ...days,
+    'Fonte: Open-Meteo.',
+  ].join('\n'));
+}
+
+const NOT_CONNECTED = (name: string) => `${name} não está conectado. O usuário conecta em Conectores.`;
+
+async function gmailAccount(): Promise<{ id: string; email: string } | null> {
+  const { data } = await supabase.from('gmail_accounts').select('id,email').limit(1);
+  return (data?.[0] as { id: string; email: string } | undefined) ?? null;
+}
+
+async function runGmailSearch(action: Extract<AgentAction, { tool: 'gmail_search' }>): Promise<ActionOutcome> {
+  const account = await gmailAccount();
+  if (!account) return { ...followUp('gmail_search', false, NOT_CONNECTED('O Gmail')), panel: 'connectors' };
+  const { data, error } = await supabase.functions.invoke('gmail-list-messages', {
+    body: { accountId: account.id, q: action.query || undefined, maxResults: action.max },
+  });
+  if (error) return followUp('gmail_search', false, 'Não foi possível ler o Gmail agora.');
+  const messages = ((data?.messages ?? []) as Array<{ from?: string; subject?: string; date?: string; snippet?: string }>);
+  const lines = messages.map((m, i) => `${i + 1}. De: ${m.from ?? '?'} | Assunto: ${m.subject ?? '(sem assunto)'} | ${m.date ?? ''}\n   ${m.snippet ?? ''}`);
+  return followUp('gmail_search', true, `Conta ${account.email}. ${messages.length} e-mail(s):\n${lines.join('\n') || '(nenhum)'}`);
+}
+
+async function runGmailSend(action: Extract<AgentAction, { tool: 'gmail_send' }>, ctx: ActionContext): Promise<ActionOutcome> {
+  const account = await gmailAccount();
+  if (!account) return { ...followUp('gmail_send', false, NOT_CONNECTED('O Gmail')), panel: 'connectors' };
+  const ok = await ctx.approveApi({
+    method: 'ENVIAR E-MAIL', url: `Para ${action.to} — "${action.subject}"`, host: `Gmail (${account.email})`,
+    reason: action.body.length > 400 ? `${action.body.slice(0, 400)}…` : action.body, secrets: [], hasBody: true,
+  });
+  if (!ok) return followUp('gmail_send', false, 'O usuário não autorizou o envio.', 'E-mail não enviado.');
+  const { error } = await supabase.functions.invoke('gmail-send-message', {
+    body: { accountId: account.id, to: action.to, subject: action.subject, body: action.body },
+  });
+  if (error) return followUp('gmail_send', false, 'O Gmail recusou o envio.', 'Não foi possível enviar o e-mail.');
+  return followUp('gmail_send', true, `E-mail enviado para ${action.to} pela conta ${account.email}.`);
+}
+
+async function runSlackSend(action: Extract<AgentAction, { tool: 'slack_send' }>, ctx: ActionContext): Promise<ActionOutcome> {
+  const ok = await ctx.approveApi({
+    method: 'ENVIAR MENSAGEM', url: `Canal ${action.channel}`, host: 'Slack',
+    reason: action.text.length > 400 ? `${action.text.slice(0, 400)}…` : action.text, secrets: [], hasBody: true,
+  });
+  if (!ok) return followUp('slack_send', false, 'O usuário não autorizou o envio.', 'Mensagem não enviada.');
+  const { error } = await supabase.functions.invoke('slack-send-message', { body: { channel: action.channel, text: action.text } });
+  if (error) return { ...followUp('slack_send', false, `${NOT_CONNECTED('O Slack')} (ou o canal não existe).`, 'Não foi possível enviar no Slack.'), panel: 'connectors' };
+  return followUp('slack_send', true, `Mensagem enviada em ${action.channel}.`);
+}
+
+/** Chama um servidor MCP (HTTP) que o cliente adicionou, passando pelo api_request do servidor. */
+async function runMcp(action: Extract<AgentAction, { tool: 'mcp_call' }>, ctx: ActionContext): Promise<ActionOutcome> {
+  const conn = loadConnections().find((c) => c.kind === 'mcp' && c.name.toLowerCase() === action.server.toLowerCase());
+  if (!conn) return followUp('mcp_call', false, `Não há conexão MCP chamada "${action.server}". O usuário adiciona em Minhas conexões.`);
+  const host = new URL(conn.url).host;
+  const what = action.method === 'call_tool' ? `usar a ferramenta "${action.name}"` : 'listar as ferramentas';
+  const ok = await ctx.approveApi({
+    method: 'MCP', url: conn.url, host: `${conn.name} (${host})`, reason: `O chat quer ${what} neste servidor.`,
+    secrets: conn.secret ? [conn.secret] : [], hasBody: action.method === 'call_tool',
+  });
+  if (!ok) return followUp('mcp_call', false, 'O usuário não autorizou.', `Uso de ${conn.name} não autorizado.`);
+
+  const headers: Record<string, string> = { Accept: 'application/json, text/event-stream', 'Content-Type': 'application/json' };
+  if (conn.secret) headers.Authorization = `Bearer {{${conn.secret}}}`;
+  const rpc = async (payload: Record<string, unknown>, session?: string) => {
+    const { data, error } = await supabase.functions.invoke('creative-router', {
+      body: {
+        tool: 'api_request',
+        api: {
+          method: 'POST', url: conn.url, confirmed: true,
+          headers: session ? { ...headers, 'Mcp-Session-Id': session } : headers,
+          body: JSON.stringify({ jsonrpc: '2.0', ...payload }),
+        },
+      },
+    });
+    if (error) throw new Error((await functionErrorCode(error)) ?? 'api_error');
+    return data as { ok: boolean; status: number; body: string; sessionId?: string };
+  };
+
+  try {
+    const init = await rpc({
+      id: 1, method: 'initialize',
+      params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'vertal-chat', version: '1.0' } },
+    });
+    if (!init.ok) return followUp('mcp_call', false, `O servidor ${conn.name} respondeu HTTP ${init.status} na conexão.`, `Não foi possível conectar a ${conn.name}.`);
+    const session = init.sessionId || undefined;
+    await rpc({ method: 'notifications/initialized' }, session).catch(() => undefined);
+    const res = await rpc(
+      action.method === 'call_tool'
+        ? { id: 2, method: 'tools/call', params: { name: action.name, arguments: action.arguments ?? {} } }
+        : { id: 2, method: 'tools/list' },
+      session,
+    );
+    const parsed = parseMcpBody(res.body);
+    if (!res.ok || !parsed || parsed.error) {
+      return followUp('mcp_call', false, `Erro do servidor ${conn.name}: ${parsed?.error?.message ?? `HTTP ${res.status}`}`);
+    }
+    return followUp('mcp_call', true, JSON.stringify(parsed.result).slice(0, 5_500));
+  } catch (e) {
+    const code = e instanceof Error ? e.message : '';
+    const message = code === 'missing_secrets'
+      ? `Falta salvar no Cofre de segredos: ${conn.secret}.`
+      : `Não foi possível falar com ${conn.name}.`;
+    return { ...followUp('mcp_call', false, message, message), ...(code === 'missing_secrets' ? { panel: 'secrets' as const } : {}) };
+  }
+}
+
 /** Executa uma ação. Nunca lança: falhas voltam em `error`. */
 export async function runAction(action: AgentAction, ctx: ActionContext): Promise<ActionOutcome> {
   try {
@@ -357,6 +517,19 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
       }
       case 'api_request':
         return await runApi(action, ctx);
+      case 'weather':
+        return await runWeather(action);
+      case 'gmail_search':
+        return await runGmailSearch(action);
+      case 'gmail_send':
+        return await runGmailSend(action, ctx);
+      case 'slack_send':
+        return await runSlackSend(action, ctx);
+      case 'mcp_call':
+        return await runMcp(action, ctx);
+      case 'set_layout':
+        ctx.setChatOnly(action.mode === 'chat_only');
+        return { result: { tool: 'set_layout', ok: true, summary: action.mode === 'chat_only' ? 'Agora tudo fica só na tela do chat.' : 'Criações voltam a abrir ao lado.' } };
       case 'open_panel':
         return { panel: action.panel, result: { tool: 'open_panel', ok: true, summary: `Painel ${action.panel} aberto para o usuário.` } };
     }
@@ -381,5 +554,11 @@ export function actionLabel(action: AgentAction): string {
     case 'download': return 'Buscando link de download';
     case 'api_request': return 'Chamando API externa';
     case 'open_panel': return 'Abrindo painel';
+    case 'weather': return 'Consultando o clima';
+    case 'gmail_search': return 'Lendo o Gmail';
+    case 'gmail_send': return 'Enviando e-mail pelo Gmail';
+    case 'slack_send': return 'Enviando mensagem no Slack';
+    case 'mcp_call': return 'Usando conexão MCP';
+    case 'set_layout': return 'Ajustando a tela';
   }
 }
