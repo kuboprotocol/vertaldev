@@ -8,6 +8,8 @@ import type { Json } from '@/integrations/supabase/types';
 import TLDrawEditor from '@/components/canvas/TLDrawEditor';
 import type { DesignCopy } from './DesignGallery';
 import CanvasInfoPanel from '@/components/canvas/CanvasInfoPanel';
+import type { CanvasSpec } from '@/lib/chatAgent/contract';
+import { applyCanvasSpec } from './canvasFromChat';
 import {
   DESIGN_REFERRAL_DAILY_CREDITS,
   DESIGN_REUSE_REWARD_CREDITS,
@@ -91,11 +93,14 @@ export function CanvasDesignStudio({ initialCopy, onCopyConsumed }: CanvasDesign
   }, [loadLibrary]);
 
   // Cópia aberta pela Galeria: vira um design novo (sem id), e o original não muda.
+  // Layout vindo do Vertal Chat: espera o editor novo montar e desenha as formas nele.
+  const pendingSpecRef = useRef<CanvasSpec | null>(null);
   useEffect(() => {
     if (!initialCopy) return;
     setName(initialCopy.name);
     setCurrentId(null);
-    setInitialSnapshot(initialCopy.snapshot);
+    pendingSpecRef.current = initialCopy.spec ?? null;
+    setInitialSnapshot(initialCopy.spec ? undefined : initialCopy.snapshot);
     setEditorKey((key) => key + 1);
     onCopyConsumed?.();
   }, [initialCopy, onCopyConsumed]);
@@ -333,6 +338,15 @@ export function CanvasDesignStudio({ initialCopy, onCopyConsumed }: CanvasDesign
             initialSnapshot={initialSnapshot}
             onEditorReady={(editor) => {
               editorRef.current = editor;
+              const spec = pendingSpecRef.current;
+              if (!spec) return;
+              pendingSpecRef.current = null;
+              try {
+                applyCanvasSpec(editor, spec);
+              } catch (err) {
+                console.error('[Canvas] não foi possível montar o design do chat:', err);
+                toast.error('Não foi possível montar o design do chat no Canvas.');
+              }
             }}
             onSave={() => saveRef.current()}
           />
