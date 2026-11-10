@@ -81,9 +81,34 @@ admin e planos pagos, em:
 ### Shortlinks (opcional, todos os planos)
 
 A página `/shortlinks` não é anúncio empurrado: o próprio usuário decide abrir
-os shortlinks TERRA ADS para ganhar créditos extras (+0,5 cada, +5 no 10º,
-até 10 por dia). Por isso ela continua disponível em todos os planos, inclusive
-nos pagos.
+o anúncio TERRA ADS para ganhar créditos extras. Por isso ela continua
+disponível em todos os planos, inclusive nos pagos.
+
+Regra da recompensa por anúncio (decisão do dono do produto, 2026-11-10):
+
+- **0,0020 crédito** por anúncio aberto;
+- **um anúncio por hora** por usuário;
+- o valor fica como saldo pendente e só pode ser **retirado a partir de 5 créditos**
+  (saem os créditos inteiros; a fração continua pendente).
+
+Onde está:
+
+- **Tela:** `src/components/shortlinks/TerraRewardsPanel.tsx`, dentro de `/shortlinks`.
+- **Servidor:** ações `ad-status`, `ad-click` e `ad-withdraw` da função `shortlinks`
+  (`supabase/functions/shortlinks/index.ts`). A regra fica em
+  `supabase/functions/_shared/adRewardsCore.ts` e é o servidor que decide a espera
+  de 1 hora e o mínimo de retirada; a tela só mostra.
+- **Banco:** tabela `ad_rewards`, tipos `terra_click` (+0,0020) e `terra_withdrawal`
+  (negativo). A retirada entra no saldo por `execute_atomic_credit_topup`.
+- **Testes:** `src/test/ad-rewards-core.test.ts` e
+  `src/components/shortlinks/TerraRewardsPanel.test.tsx`.
+
+O servidor não tem como confirmar que o anúncio foi visto: ele credita quando o
+usuário abre o anúncio. O limite de um por hora segura o abuso em 0,048 crédito
+por dia por conta.
+
+A função `terra-ad-reward` (regra antiga: +0,5 por anúncio, +5 no 10º, até 10 por
+dia) não está publicada e nenhuma tela a chama.
 
 ## Banco de dados (Supabase)
 

@@ -10,6 +10,7 @@ import { useAuth } from '@/hooks/useAuth'
 import AnimatedLogo from '@/components/branding/AnimatedLogo'
 import ShortlinksUploader from '@/components/shortlinks/ShortlinksUploader'
 import ShortlinksList from '@/components/shortlinks/ShortlinksList'
+import TerraRewardsPanel from '@/components/shortlinks/TerraRewardsPanel'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 
@@ -201,6 +202,15 @@ export default function ShortlinksPage() {
               </Alert>
             </motion.div>
           )}
+
+          {/* Recompensa por anúncio TERRA ADS */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.28 }}
+          >
+            <TerraRewardsPanel onWithdrawn={loadData} />
+          </motion.div>
 
           {/* Info Card */}
           <motion.div
