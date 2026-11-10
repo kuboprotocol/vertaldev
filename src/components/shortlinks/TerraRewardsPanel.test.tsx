@@ -53,8 +53,12 @@ describe('TerraRewardsPanel', () => {
     const { container } = render(<TerraRewardsPanel />)
 
     await screen.findByTestId('terra-watch-ad')
-    const script = container.querySelector('script[src="https://ads.example.test/invoke.js"]')
-    expect(script).not.toBeNull()
+    // O script entra num efeito depois da pintura: espera ele aparecer em vez de checar na hora.
+    const script = await waitFor(() => {
+      const found = container.querySelector('script[src="https://ads.example.test/invoke.js"]')
+      expect(found).not.toBeNull()
+      return found as HTMLScriptElement
+    })
     expect(script?.closest('[data-testid="terra-watch-ad"]')).not.toBeNull()
     expect(openSpy).not.toHaveBeenCalled()
   })
