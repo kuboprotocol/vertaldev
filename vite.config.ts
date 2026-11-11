@@ -4,6 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { envCheckPlugin } from './vite-plugins/env-check';
 import { seoPlugin } from './vite-plugins/seo';
 import { pdfjsAssetsPlugin } from './vite-plugins/pdfjs-assets';
+// import clockEmbedPlugin from './vite-plugins/clock-embed'; // TODO: add esbuild to package.json
 import path from 'path';
 import { BRAND } from './src/config/brand';
 import { LOCALE_CODES } from './src/config/locales';
@@ -38,6 +39,7 @@ export default defineConfig(({ command, mode }) => {
       envCheckPlugin(),
       seoPlugin(),
       react({ devTarget: 'es2020' }),
+      // clockEmbedPlugin(), // TODO: enable after esbuild added
       VitePWA({
         registerType: 'autoUpdate',
         includeAssets: [
