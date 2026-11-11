@@ -513,6 +513,14 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
           result: { tool: 'notebook', ok: true, summary: `Notebook "${title}" criado e aberto para começar.` },
         };
       }
+      case 'video_studio': {
+        const title = action.description ? titleFrom(action.description, 50) : `Vídeo ${action.tier}`;
+        return {
+          artifact: { id: ctx.newId(), kind: 'video_studio', title, description: action.description, tier: action.tier, style: action.style, aspect: action.aspect },
+          panel: 'video_studio',
+          result: { tool: 'video_studio', ok: true, summary: `Estúdio de Vídeo ${action.tier} aberto (${action.aspect}, ${action.style}).` },
+        };
+      }
       case 'download': {
         const { data, error } = await supabase.functions.invoke('creative-download', {
           body: { url: action.url, format: action.format },
@@ -561,6 +569,7 @@ export function actionLabel(action: AgentAction): string {
     case 'music': return 'Compondo música (1 a 3 min)';
     case 'ebook': return 'Escrevendo ebook (pode levar alguns minutos)';
     case 'notebook': return 'Criando notebook';
+    case 'video_studio': return 'Abrindo Estúdio de Vídeo';
     case 'download': return 'Buscando link de download';
     case 'api_request': return 'Chamando API externa';
     case 'open_panel': return 'Abrindo painel';

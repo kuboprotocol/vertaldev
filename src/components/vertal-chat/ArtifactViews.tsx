@@ -2,7 +2,7 @@
 import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import {
-  AppWindow, BookMarked, BookOpen, Check, Code2, Copy, Download, ExternalLink, FileText, Globe, Image as ImageIcon,
+  AppWindow, BookMarked, BookOpen, Check, Code2, Copy, Download, ExternalLink, FileText, Film, Globe, Image as ImageIcon,
   LayoutTemplate, Loader2, Mail, Music, Palette, Presentation, Table2,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -25,6 +25,7 @@ const KIND_ICON: Record<ArtifactKind, typeof FileText> = {
   music: Music,
   ebook: BookOpen,
   notebook: BookMarked,
+  video_studio: Film,
   download: Download,
   api: Globe,
 };
@@ -114,6 +115,7 @@ function summary(a: Artifact): string {
     case 'music': return `${a.tracks.length} faixa${a.tracks.length === 1 ? '' : 's'}`;
     case 'ebook': return `${Math.max(1, Math.round(a.content.split(/\s+/).length / 250))} páginas aprox.`;
     case 'notebook': return 'Notas, PDFs e links';
+    case 'video_studio': return `${a.aspect} · ${a.style}`;
     case 'api': return `HTTP ${a.status}`;
     case 'download': return a.format.toUpperCase();
     case 'email': return 'Rascunho';
@@ -188,6 +190,12 @@ export function ArtifactCard({ artifact, onOpen, active }: { artifact: Artifact;
       {artifact.kind === 'notebook' && (
         <div className="border-t border-border/50 p-4 text-center">
           <div className="text-4xl">{artifact.emoji || '📓'}</div>
+        </div>
+      )}
+      {artifact.kind === 'video_studio' && (
+        <div className="border-t border-border/50 p-4 text-center">
+          <div className="text-4xl">🎬</div>
+          <p className="mt-2 text-xs text-muted-foreground">{artifact.aspect} · {artifact.style}</p>
         </div>
       )}
     </div>
@@ -568,6 +576,21 @@ export function ArtifactViewer({ artifact, actions }: { artifact: Artifact; acti
           <h3 className="text-lg font-semibold">{a.title}</h3>
           {a.description && <p className="max-w-xs text-sm text-muted-foreground">{a.description}</p>}
           <p className="mt-4 text-sm text-muted-foreground">Abra o painel do Notebook para começar a adicionar notas, PDFs e links.</p>
+        </div>
+      );
+      break;
+    case 'video_studio':
+      body = (
+        <div className="flex flex-col items-center gap-3 py-10 text-center">
+          <div className="text-5xl">🎬</div>
+          <h3 className="text-lg font-semibold">{a.title}</h3>
+          {a.description && <p className="max-w-xs text-sm text-muted-foreground">{a.description}</p>}
+          <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs text-muted-foreground">
+            <span className="rounded-full border border-border/60 px-3 py-1">{a.tier}</span>
+            <span className="rounded-full border border-border/60 px-3 py-1">{a.aspect}</span>
+            <span className="rounded-full border border-border/60 px-3 py-1">{a.style}</span>
+          </div>
+          <p className="mt-4 text-sm text-muted-foreground">Abra o painel do Estúdio de Vídeo para fazer upload das imagens e gerar seu vídeo.</p>
         </div>
       );
       break;
