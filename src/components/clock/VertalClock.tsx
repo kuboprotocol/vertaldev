@@ -15,6 +15,7 @@ export const VertalClock = React.forwardRef<VertalClockElement, VertalClockProps
 
     useEffect(() => {
       defineVertalClock();
+      console.log('VertalClock mounted, element:', localRef.current);
     }, []);
 
     return (
@@ -27,7 +28,9 @@ export const VertalClock = React.forwardRef<VertalClockElement, VertalClockProps
           ring-ui={ringUI}
           className={className}
           style={{ width: '100%', height: '100%', display: 'block', flex: 1, minHeight: 0 }}
-        />
+        >
+          Carregando...
+        </vertal-clock>
       </div>
     );
   }
