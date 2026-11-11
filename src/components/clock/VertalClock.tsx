@@ -37,3 +37,5 @@ export const VertalClock = React.forwardRef<VertalClockElement, VertalClockProps
 );
 
 VertalClock.displayName = 'VertalClock';
+
+export default VertalClock;
