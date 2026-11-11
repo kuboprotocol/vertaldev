@@ -1060,8 +1060,9 @@ export default function CreativePage() {
         <SponsoredSlot className="max-w-2xl mx-auto" />
 
         <Tabs value={active} onValueChange={(v) => { setActive(v as ToolKey); navigate(v === "dashboard" ? "/creative" : `/creative/${v}`); }}>
-          <TabsList className="mb-6 grid grid-cols-2 max-w-md mx-auto bg-muted/20">
+          <TabsList className="mb-6 grid grid-cols-3 max-w-md mx-auto bg-muted/20">
             <TabsTrigger value="dashboard">Painel de Ferramentas</TabsTrigger>
+            <TabsTrigger value="clock">Vertal Clock</TabsTrigger>
             <TabsTrigger value="unified_history">Histórico Unificado</TabsTrigger>
           </TabsList>
 
