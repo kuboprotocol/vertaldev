@@ -346,6 +346,31 @@ async function runWeather(action: Extract<AgentAction, { tool: 'weather' }>): Pr
   ].join('\n'));
 }
 
+async function runWebSearch(action: Extract<AgentAction, { tool: 'web_search' }>): Promise<ActionOutcome> {
+  if (!action.query || action.query.trim().length === 0) {
+    return followUp('web_search', false, 'Consulta vazia. Digite o que procurar.');
+  }
+  try {
+    const max = Math.min(action.max ?? 5, 10);
+    const encoded = encodeURIComponent(action.query.trim());
+    const r = await fetch(`https://api.duckduckgo.com/?q=${encoded}&format=json&no_html=1&max_results=${max}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; VertChat/1.0)' },
+    });
+    if (!r.ok) return followUp('web_search', false, 'Serviço de busca indisponível no momento.');
+    const data = (await r.json()) as Record<string, unknown>;
+    const results = (data.Results as Array<{ Title?: string; Url?: string; Abstract?: string }> | undefined) ?? [];
+    if (results.length === 0) {
+      return followUp('web_search', true, `Nenhum resultado encontrado para: "${action.query}"`);
+    }
+    const summary = results
+      .map((r, i) => `${i + 1}. **${r.Title ?? 'Sem título'}**\n   ${r.Abstract ?? 'Sem resumo'}\n   🔗 ${r.Url}`)
+      .join('\n\n');
+    return followUp('web_search', true, `**Resultados para: "${action.query}"** (${results.length} encontrados)\n\n${summary}`);
+  } catch (err) {
+    return followUp('web_search', false, `Erro ao buscar: ${err instanceof Error ? err.message : 'desconhecido'}`);
+  }
+}
+
 const NOT_CONNECTED = (name: string) => `${name} não está conectado. O usuário conecta em Conectores.`;
 
 async function gmailAccount(): Promise<{ id: string; email: string } | null> {
@@ -552,6 +577,8 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
         return await runApi(action, ctx);
       case 'weather':
         return await runWeather(action);
+      case 'web_search':
+        return await runWebSearch(action);
       case 'gmail_search':
         return await runGmailSearch(action);
       case 'gmail_send':
@@ -592,6 +619,7 @@ export function actionLabel(action: AgentAction): string {
     case 'api_request': return 'Chamando API externa';
     case 'open_panel': return 'Abrindo painel';
     case 'weather': return 'Consultando o clima';
+    case 'web_search': return 'Buscando na web';
     case 'gmail_search': return 'Lendo o Gmail';
     case 'gmail_send': return 'Enviando e-mail pelo Gmail';
     case 'slack_send': return 'Enviando mensagem no Slack';
