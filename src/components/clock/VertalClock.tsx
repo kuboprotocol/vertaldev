@@ -18,15 +18,17 @@ export const VertalClock = React.forwardRef<VertalClockElement, VertalClockProps
     }, []);
 
     return (
-      <vertal-clock
-        ref={ref || localRef}
-        lang={lang}
-        tab={tab}
-        theme={theme}
-        ring-ui={ringUI}
-        className={className}
-        style={{ width: '100%', height: '100%', display: 'block' }}
-      />
+      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#1a1a1a' }}>
+        <vertal-clock
+          ref={ref || localRef}
+          lang={lang}
+          tab={tab}
+          theme={theme}
+          ring-ui={ringUI}
+          className={className}
+          style={{ width: '100%', height: '100%', display: 'block', flex: 1, minHeight: 0 }}
+        />
+      </div>
     );
   }
 );
