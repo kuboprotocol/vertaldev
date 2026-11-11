@@ -64,6 +64,7 @@ export type AgentAction =
   }
   | { tool: "open_panel"; panel: PanelKey }
   | { tool: "weather"; place?: string }
+  | { tool: "web_search"; query: string; max?: number }
   | { tool: "gmail_search"; query: string; max: number }
   | { tool: "gmail_send"; to: string; subject: string; body: string }
   | { tool: "slack_send"; channel: string; text: string }
@@ -120,6 +121,7 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   api_request: "grátis",
   open_panel: "grátis",
   weather: "grátis",
+  web_search: "grátis",
   gmail_search: "grátis",
   gmail_send: "grátis",
   slack_send: "grátis",
@@ -168,6 +170,7 @@ export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
     `- {"tool":"api_request","method":"GET|POST|PUT|PATCH|DELETE","url":"https://...","headers":{},"body":"texto ou JSON em string","reason":"por que esta chamada"} → chama uma API externa quando nenhuma ferramenta acima resolve. O usuário aprova cada chamada. Para autenticar, escreva {{NOME_DO_SEGREDO}} no valor do cabeçalho, na query ou no corpo; o servidor troca pelo valor do cofre. Nunca peça para o usuário colar chaves no chat. Segredos disponíveis: ${secrets}. Se faltar um segredo, explique qual nome criar e use {"tool":"open_panel","panel":"secrets"}.`,
     `- {"tool":"open_panel","panel":"${PANELS.join("|")}"} → abre um painel dentro do chat para o usuário trabalhar à mão. Use quando o pedido precisa de arquivos do usuário (video_studio: fotos viram vídeo; clips: cortes de vídeo longo; avatar: avatar falante; emo: animar foto; notebook: conversar com PDFs e links; office/design/canvas: edição manual).`,
     `- {"tool":"weather","place":"bairro ou cidade"} → clima atual e previsão de 3 dias. Sem "place", usa a localização do aparelho do usuário (ele autoriza). Nunca invente o clima: use sempre esta ferramenta.`,
+    `- {"tool":"web_search","query":"o que procurar","max":5} → busca na web por informações atuais. Retorna URLs com títulos e resumos. Use para responder sobre eventos recentes, notícias, preços, horários, ou qualquer coisa que mude frequentemente. "max" é opcional (padrão 5 resultados).`,
     `- {"tool":"gmail_search","query":"busca no formato do Gmail","max":10} → lê os e-mails da conta Gmail conectada.`,
     `- {"tool":"gmail_send","to":"email","subject":"...","body":"..."} → envia e-mail pelo Gmail conectado (o usuário confirma antes).`,
     `- {"tool":"slack_send","channel":"#canal ou id","text":"..."} → envia mensagem no Slack conectado (o usuário confirma antes).`,
