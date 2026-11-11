@@ -170,6 +170,14 @@ svg { width: 1.15em; height: 1.15em; fill: none; stroke: currentColor; stroke-wi
 .start-row { display: flex; gap: 8px; align-items: center; }
 .start-row .field { flex: 1; min-width: 0; }
 .err { color: var(--danger); font-size: 13px; }
+.err[hidden], optgroup[hidden] { display: none; }
+.sound-pick { display: flex; gap: 8px; align-items: center; }
+.sound-pick select { flex: 1; min-width: 0; }
+.sound-up { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.hint { font-size: 12px; color: var(--muted); flex: 1; min-width: 140px; }
+.my-sounds { display: grid; gap: 6px; }
+.my-sound { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 6px 6px 14px; border-radius: 12px; background: var(--field); border: 1px solid var(--line); }
+.my-sound span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 .result:disabled { opacity: .5; cursor: default; }
 .result .sub { font-size: 12.5px; color: var(--muted); }
 .result .when { color: var(--muted); font-variant-numeric: tabular-nums; }

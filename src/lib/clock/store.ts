@@ -9,7 +9,7 @@ import { CLOCK_CHANGE_EVENT, CLOCK_STORAGE_KEY } from './keys';
 
 export { CLOCK_STORAGE_KEY, CLOCK_CHANGE_EVENT };
 
-export const CLOCK_LIMITS = { cities: 30, alarms: 50, timers: 10, laps: 200, labelChars: 60, maxTimerMs: 100 * 3_600_000 } as const;
+export const CLOCK_LIMITS = { cities: 30, alarms: 50, timers: 10, customSounds: 20, laps: 200, labelChars: 60, maxTimerMs: 100 * 3_600_000 } as const;
 
 export interface CityRef {
   tz: string;
@@ -37,8 +37,27 @@ export interface Stopwatch {
   laps: number[];
 }
 
-export const ALARM_SOUNDS = ['classic', 'digital', 'gentle'] as const;
-export type AlarmSound = (typeof ALARM_SOUNDS)[number];
+/** Toques que vêm com o relógio (sintetizados, sem arquivo). */
+export const ALARM_SOUNDS = [
+  'classic', 'rooster', 'digital', 'gentle', 'beep', 'bell', 'chime', 'radar', 'siren', 'birds', 'harp',
+  'marimba', 'piano', 'xylophone', 'buzzer', 'phone', 'cuckoo', 'sonar', 'flute', 'musicbox', 'bugle',
+] as const;
+export type BuiltinSound = (typeof ALARM_SOUNDS)[number];
+/** Um toque embutido ou um som enviado pelo usuário ("custom:<id>"). */
+export type AlarmSound = string;
+
+/** Som enviado pelo usuário. O arquivo fica no IndexedDB (ver soundFiles.ts). */
+export interface CustomSound {
+  id: string;
+  name: string;
+}
+
+const CUSTOM_RE = /^custom:([A-Za-z0-9_-]{1,64})$/;
+export const soundRef = (customId: string): AlarmSound => `custom:${customId}`;
+/** Id do som enviado, ou null se for um toque embutido. */
+export const customSoundId = (sound: unknown): string | null => (typeof sound === 'string' ? CUSTOM_RE.exec(sound)?.[1] ?? null : null);
+export const isBuiltinSound = (sound: unknown): sound is BuiltinSound => (ALARM_SOUNDS as readonly unknown[]).includes(sound);
+const isSound = (sound: unknown): sound is AlarmSound => isBuiltinSound(sound) || customSoundId(sound) !== null;
 
 export interface ClockSettings {
   hour12: boolean;
@@ -53,6 +72,7 @@ export interface ClockState {
   timers: Timer[];
   stopwatch: Stopwatch;
   settings: ClockSettings;
+  customSounds: CustomSound[];
   /** Última ocorrência já tocada de cada alarme/timer: evita tocar em duas abas. */
   fired: Record<string, number>;
 }
@@ -67,6 +87,7 @@ export function defaultState(): ClockState {
     timers: [],
     stopwatch: { startedAt: null, elapsedMs: 0, laps: [] },
     settings: { hour12: false, sound: 'classic', snoozeMinutes: 9 },
+    customSounds: [],
     fired: {},
   };
 }
@@ -94,6 +115,7 @@ export function sanitizeAlarm(raw: unknown): Alarm | null {
     enabled: a.enabled !== false,
     ...(tz ? { tz, tzLabel: text(a.tzLabel, 60) || findCityByTz(tz).city } : {}),
     ...(snooze ? { snoozeUntil: snooze } : {}),
+    ...(isSound(a.sound) ? { sound: a.sound } : {}),
     createdAt: finite(a.createdAt, 0, Number.MAX_SAFE_INTEGER, 0),
   };
 }
@@ -132,10 +154,26 @@ export function sanitizeState(raw: unknown): ClockState {
   for (const [k, v] of Object.entries(record(s.fired)).slice(0, 200)) {
     if (typeof v === 'number' && Number.isFinite(v)) fired[k] = v;
   }
+  const customSounds: CustomSound[] = [];
+  for (const item of list(s.customSounds).slice(0, CLOCK_LIMITS.customSounds)) {
+    const c = record(item);
+    const id = idOf(c.id);
+    if (id && !customSounds.some((x) => x.id === id)) customSounds.push({ id, name: text(c.name, 60) || id });
+  }
+  // Um som enviado que foi removido deixa de valer: o alarme volta ao toque padrão.
+  const known = (sound: unknown): sound is AlarmSound => {
+    const custom = customSoundId(sound);
+    return custom === null ? isBuiltinSound(sound) : customSounds.some((x) => x.id === custom);
+  };
   return {
     v: 1,
     cities,
-    alarms: list(s.alarms).map(sanitizeAlarm).filter((a): a is Alarm => a !== null).slice(0, CLOCK_LIMITS.alarms),
+    alarms: list(s.alarms).map(sanitizeAlarm).filter((a): a is Alarm => a !== null).slice(0, CLOCK_LIMITS.alarms)
+      .map((a) => {
+        if (!a.sound || known(a.sound)) return a;
+        const { sound: _gone, ...rest } = a;
+        return rest;
+      }),
     timers: list(s.timers).map(sanitizeTimer).filter((t): t is Timer => t !== null).slice(0, CLOCK_LIMITS.timers),
     stopwatch: {
       startedAt: typeof sw.startedAt === 'number' && Number.isFinite(sw.startedAt) ? sw.startedAt : null,
@@ -144,9 +182,10 @@ export function sanitizeState(raw: unknown): ClockState {
     },
     settings: {
       hour12: settings.hour12 === true,
-      sound: (ALARM_SOUNDS as readonly unknown[]).includes(settings.sound) ? (settings.sound as AlarmSound) : base.settings.sound,
+      sound: known(settings.sound) ? settings.sound : base.settings.sound,
       snoozeMinutes: Math.round(finite(settings.snoozeMinutes, 1, 60, base.settings.snoozeMinutes)),
     },
+    customSounds,
     fired,
   };
 }
@@ -260,6 +299,8 @@ export interface AlarmInput {
   tz?: string;
   tzLabel?: string;
   enabled?: boolean;
+  /** Toque só deste alarme. Vazio = usa o toque padrão das preferências. */
+  sound?: AlarmSound;
 }
 
 /** Cria (ou, com `id`, altera) um alarme. Devolve o alarme gravado, ou null se o horário for inválido ou a lista estiver cheia. */
@@ -275,6 +316,7 @@ export function saveAlarm(input: AlarmInput, id?: string): Alarm | null {
     enabled: input.enabled ?? true,
     tz: input.tz,
     tzLabel: input.tzLabel,
+    sound: 'sound' in input ? input.sound : previous?.sound,
     createdAt: previous?.createdAt ?? Date.now(),
   });
   if (!alarm) return null;
@@ -357,6 +399,18 @@ export function stopwatchReset(): void {
 
 export function updateSettings(patch: Partial<ClockSettings>): void {
   updateClockState((s) => sanitizeState({ ...s, settings: { ...s.settings, ...patch } }));
+}
+
+/** Registra um som enviado (o arquivo já está no IndexedDB). Devolve null se a lista estiver cheia. */
+export function addCustomSound(id: string, name: string): CustomSound | null {
+  if (getClockState().customSounds.length >= CLOCK_LIMITS.customSounds) return null;
+  const next = updateClockState((s) => sanitizeState({ ...s, customSounds: [...s.customSounds, { id, name }] }));
+  return next.customSounds.find((c) => c.id === id) ?? null;
+}
+
+/** Tira um som enviado da lista; alarmes que o usavam voltam ao toque padrão. */
+export function removeCustomSound(id: string): void {
+  updateClockState((s) => sanitizeState({ ...s, customSounds: s.customSounds.filter((c) => c.id !== id) }));
 }
 
 /** "01:05:09", "05:09". */
