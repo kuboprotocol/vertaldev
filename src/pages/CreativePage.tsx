@@ -1311,11 +1311,11 @@ export default function CreativePage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="clock">
-            <div className="space-y-6">
-              <Button variant="ghost" size="sm" onClick={() => { setActive("dashboard"); navigate("/creative"); }} className="mb-2">
-                <ArrowLeft className="h-4 w-4 mr-2" /> Voltar ao Painel
-              </Button>
+          <TabsContent value="clock" className="flex flex-col h-[calc(100vh-200px)]">
+            <Button variant="ghost" size="sm" onClick={() => { setActive("dashboard"); navigate("/creative"); }} className="mb-2">
+              <ArrowLeft className="h-4 w-4 mr-2" /> Voltar ao Painel
+            </Button>
+            <div className="flex-1 min-h-0">
               <React.Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin" aria-label="Carregando" /></div>}>
                 <VertalClock lang="pt" tab="relógio" theme="auto" ringUI="on" />
               </React.Suspense>
