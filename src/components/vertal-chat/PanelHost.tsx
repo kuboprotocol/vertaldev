@@ -7,6 +7,7 @@ import { HistoryPanel } from './HistoryPanel';
 const OfficeSuite = lazy(() => import('@/components/office/OfficeSuite').then((m) => ({ default: m.OfficeSuite })));
 const CreativeDesign = lazy(() => import('@/components/CreativeDesign').then((m) => ({ default: m.CreativeDesign })));
 const VertalNotebook = lazy(() => import('@/components/notebook/VertalNotebook').then((m) => ({ default: m.VertalNotebook })));
+const VertalClock = lazy(() => import('@/components/clock/VertalClock'));
 const CreativeSheets = lazy(() => import('@/components/CreativeSheets').then((m) => ({ default: m.CreativeSheets })));
 const CreativeToolInterface = lazy(() =>
   import('@/components/creative/CreativeToolInterface').then((m) => ({ default: m.CreativeToolInterface })),
@@ -44,6 +45,7 @@ export function PanelHost({ request, credits, userId }: { request: PanelRequest;
     );
   }
   if (key === 'notebook') return <VertalNotebook />;
+  if (key === 'clock') return <div className="mx-auto max-w-3xl p-3 sm:p-4"><VertalClock /></div>;
   if (key === 'sheet') return <div className="mx-auto max-w-6xl p-4"><CreativeSheets creditsAvailable={credits} /></div>;
   if (isToolPanel(key)) return <div className="mx-auto max-w-5xl p-4 sm:p-6"><CreativeToolInterface toolKey={key} /></div>;
   return null;

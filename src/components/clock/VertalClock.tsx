@@ -1,41 +1,22 @@
-import React, { useEffect, useRef } from 'react';
-import { VertalClockElement, defineVertalClock } from '@/embed/clock/element';
+import { createElement, useEffect, type CSSProperties } from 'react';
+import { defineVertalClock } from '@/embed/clock/element';
 
 export interface VertalClockProps {
   lang?: 'pt' | 'en';
-  tab?: 'relógio' | 'alarme' | 'cronômetro' | 'timer';
+  tab?: 'clock' | 'alarm' | 'stopwatch' | 'timer';
   theme?: 'auto' | 'light' | 'dark';
+  /** Dentro do app o toque aparece pelo ClockRinger (em qualquer tela), então fica desligado aqui. */
   ringUI?: 'on' | 'off';
   className?: string;
+  style?: CSSProperties;
 }
 
-export const VertalClock = React.forwardRef<VertalClockElement, VertalClockProps>(
-  ({ lang = 'pt', tab = 'relógio', theme = 'auto', ringUI = 'on', className }, ref) => {
-    const localRef = useRef<VertalClockElement>(null);
+defineVertalClock();
 
-    useEffect(() => {
-      defineVertalClock();
-      console.log('VertalClock mounted, element:', localRef.current);
-    }, []);
-
-    return (
-      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#1a1a1a' }}>
-        <vertal-clock
-          ref={ref || localRef}
-          lang={lang}
-          tab={tab}
-          theme={theme}
-          ring-ui={ringUI}
-          className={className}
-          style={{ width: '100%', height: '100%', display: 'block', flex: 1, minHeight: 0 }}
-        >
-          Carregando...
-        </vertal-clock>
-      </div>
-    );
-  }
-);
-
-VertalClock.displayName = 'VertalClock';
+/** O Vertal Clock dentro do app: o mesmo elemento <vertal-clock> do widget incorporável. */
+export function VertalClock({ lang = 'pt', tab = 'clock', theme = 'dark', ringUI = 'off', className, style }: VertalClockProps) {
+  useEffect(() => defineVertalClock(), []);
+  return createElement('vertal-clock', { lang, tab, theme, 'ring-ui': ringUI, class: className, style });
+}
 
 export default VertalClock;

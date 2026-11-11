@@ -1,50 +1,48 @@
-import React, { useEffect, useState, lazy, Suspense } from 'react';
-import { CLOCK_STORAGE_KEY, CLOCK_CHANGE_EVENT, getClockState } from '@/lib/clock/store';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { CLOCK_CHANGE_EVENT, CLOCK_STORAGE_KEY } from '@/lib/clock/keys';
 
-const VertalClock = lazy(() => import('@/components/clock/VertalClock').then((m) => ({ default: m.VertalClock })));
+const ClockRingerActive = lazy(() => import('./ClockRingerActive'));
+
+/** Há alarme ligado, soneca ou timer correndo? Lê direto do armazenamento, sem carregar o relógio. */
+function hasPending(): boolean {
+  try {
+    const state = JSON.parse(window.localStorage.getItem(CLOCK_STORAGE_KEY) ?? 'null') as
+      | { alarms?: { enabled?: boolean; snoozeUntil?: number }[]; timers?: { endsAt?: number | null }[] }
+      | null;
+    return Boolean(
+      state?.alarms?.some((a) => a?.enabled !== false || typeof a?.snoozeUntil === 'number') ||
+      state?.timers?.some((t) => typeof t?.endsAt === 'number'),
+    );
+  } catch {
+    return false;
+  }
+}
 
 /**
- * Portal global de despertador. Mostrado em tela cheia quando um alarme/timer toca.
- * Carregado só quando há alarmes/timers habilitados.
+ * Despertador do app inteiro: o alarme toca em qualquer tela do Vertal, não só
+ * com o painel do relógio aberto. O motor só é baixado quando há o que tocar.
  */
-export const ClockRinger = () => {
-  const [hasRinger, setHasRinger] = useState(false);
+export function ClockRinger() {
+  const [active, setActive] = useState(hasPending);
 
   useEffect(() => {
-    const check = () => {
-      const state = getClockState();
-      const hasEnabled = state.alarms.some((a) => a.enabled) || state.timers.some((t) => t.endsAt !== null || t.done);
-      setHasRinger(hasEnabled);
+    // Uma vez ligado fica ligado: quem está tocando não pode sumir da tela.
+    const check = () => setActive((on) => on || hasPending());
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === CLOCK_STORAGE_KEY) check();
     };
-
-    check();
-
-    const unsubStorage = () => {
-      window.addEventListener(CLOCK_CHANGE_EVENT, check);
-      return () => window.removeEventListener(CLOCK_CHANGE_EVENT, check);
+    window.addEventListener(CLOCK_CHANGE_EVENT, check);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener(CLOCK_CHANGE_EVENT, check);
+      window.removeEventListener('storage', onStorage);
     };
-
-    const stop = unsubStorage();
-    return stop;
   }, []);
 
-  if (!hasRinger) return null;
-
+  if (!active) return null;
   return (
     <Suspense fallback={null}>
-      <div
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          pointerEvents: 'none',
-          zIndex: 999999,
-        }}
-      >
-        <VertalClock ringUI="on" theme="auto" tab="relógio" />
-      </div>
+      <ClockRingerActive />
     </Suspense>
   );
-};
+}

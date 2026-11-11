@@ -5,10 +5,9 @@
 // (inclusive em outra aba) é avisado na hora.
 import { isClockTime, parseDays, type Alarm } from './alarms';
 import { findCityByTz, isValidTimeZone } from './zones';
+import { CLOCK_CHANGE_EVENT, CLOCK_STORAGE_KEY } from './keys';
 
-export const CLOCK_STORAGE_KEY = 'vertal-clock-v1';
-/** Evento disparado em `window` a cada mudança (o app usa para ligar o despertador). */
-export const CLOCK_CHANGE_EVENT = 'vertal-clock:change';
+export { CLOCK_STORAGE_KEY, CLOCK_CHANGE_EVENT };
 
 export const CLOCK_LIMITS = { cities: 30, alarms: 50, timers: 10, laps: 200, labelChars: 60, maxTimerMs: 100 * 3_600_000 } as const;
 

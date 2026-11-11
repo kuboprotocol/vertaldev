@@ -44,7 +44,7 @@ svg { width: 1.15em; height: 1.15em; fill: none; stroke: currentColor; stroke-wi
 .tab span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tab:hover { color: var(--fg); }
 .tab[aria-selected="true"] { color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow: 0 6px 18px -8px var(--accent); }
-@container (max-width: 400px) { .tab span { display: none; } .tab svg { width: 1.35em; height: 1.35em; } }
+@container (max-width: 460px) { .tabs { border-radius: 22px; } .tab { flex-direction: column; gap: 3px; padding: 8px 2px; border-radius: 18px; font-size: 10.5px; } .tab svg { width: 1.7em; height: 1.7em; } }
 .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 999px; color: var(--muted); border: 1px solid var(--line); background: var(--card); transition: color .15s, background .15s; }
 .icon-btn:hover { color: var(--fg); background: var(--card-hover); }
 .icon-btn.small { width: 34px; height: 34px; border-color: transparent; background: transparent; }
@@ -56,7 +56,8 @@ svg { width: 1.15em; height: 1.15em; fill: none; stroke: currentColor; stroke-wi
 .hero { text-align: center; padding: 22px 0 18px; }
 .hero-time { display: inline-flex; align-items: baseline; font-weight: 200; letter-spacing: -.045em; line-height: 1; font-size: clamp(60px, 21cqi, 132px); }
 .hero-time small { font-size: .34em; font-weight: 400; letter-spacing: 0; margin-left: .18em; color: var(--accent2); min-width: 1.3em; text-align: left; }
-.hero-date { margin-top: 10px; font-size: 16px; color: var(--fg); text-transform: capitalize; }
+.hero-date { margin-top: 10px; font-size: 16px; color: var(--fg); }
+.hero-date::first-letter { text-transform: uppercase; }
 .hero-zone { margin-top: 4px; font-size: 13px; color: var(--muted); }
 
 .section { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 18px 2px 10px; }
@@ -80,7 +81,7 @@ svg { width: 1.15em; height: 1.15em; fill: none; stroke: currentColor; stroke-wi
 .row.off .big, .row.off .title { color: var(--muted); }
 .flag { font-size: 22px; line-height: 1; width: 28px; text-align: center; }
 .daynight { color: var(--muted); display: inline-flex; }
-.daynight.day { color: #f5b942; }
+.daynight.lit { color: #f5b942; }
 .empty { padding: 26px 16px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 18px; font-size: 14px; }
 .hint { margin: 14px 4px 0; font-size: 12.5px; color: var(--muted); }
 .notice { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; padding: 12px 14px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); font-size: 13px; color: var(--muted); }
@@ -159,4 +160,19 @@ svg { width: 1.15em; height: 1.15em; fill: none; stroke: currentColor; stroke-wi
 @keyframes rise { from { transform: translateY(24px); opacity: 0; } }
 @keyframes shake { 0%, 100% { transform: rotate(0); } 15% { transform: rotate(-14deg); } 30% { transform: rotate(12deg); } 45% { transform: rotate(-8deg); } 60% { transform: rotate(6deg); } 75% { transform: rotate(0); } }
 @media (prefers-reduced-motion: reduce) { .ring .bell, .sheet, .sheet-bg, .ring { animation: none; } * { transition: none !important; } }
+.hero-time .ampm { font-size: .2em; font-weight: 600; letter-spacing: .04em; margin-left: .3em; color: var(--muted); }
+.locate { display: flex; justify-content: center; margin-top: 12px; }
+.row .big .ampm { font-size: .42em; font-weight: 600; color: var(--muted); margin-left: 4px; }
+.timer .grow { flex: 1; min-width: 0; }
+.timer .title { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.timer .acts { display: flex; gap: 2px; flex: none; }
+.timer.done .big { color: var(--accent2); }
+.start-row { display: flex; gap: 8px; align-items: center; }
+.start-row .field { flex: 1; min-width: 0; }
+.err { color: var(--danger); font-size: 13px; }
+.result:disabled { opacity: .5; cursor: default; }
+.result .sub { font-size: 12.5px; color: var(--muted); }
+.result .when { color: var(--muted); font-variant-numeric: tabular-nums; }
+.results { overflow-y: auto; align-content: start; }
+[hidden] { display: none !important; }
 `;

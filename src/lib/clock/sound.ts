@@ -93,10 +93,3 @@ export function previewAlarmSound(sound: AlarmSound): void {
   unlockAudio();
   pattern(c, sound);
 }
-
-/** Solicita permissão de notificações ao navegador. */
-export async function requestClockNotifications(): Promise<NotificationPermission> {
-  if (typeof window === 'undefined' || !('Notification' in window)) return 'denied';
-  if (Notification.permission === 'granted' || Notification.permission === 'denied') return Notification.permission;
-  return Notification.requestPermission();
-}

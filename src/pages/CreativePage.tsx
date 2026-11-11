@@ -27,7 +27,7 @@ import { OfficeSuite } from "@/components/office/OfficeSuite";
 // O Notebook (pdf.js, leitor de fontes, estúdio) só carrega quando é aberto.
 const VertalNotebook = React.lazy(() => import("@/components/notebook/VertalNotebook").then((m) => ({ default: m.VertalNotebook })));
 // O Clock (relógio, alarmes, cronômetro, timer) carrega quando a aba é aberta.
-import { VertalClock } from "@/components/clock/VertalClock";
+const VertalClock = React.lazy(() => import("@/components/clock/VertalClock"));
 import { CreativeDesign } from "@/components/CreativeDesign";
 import { SponsoredSlot } from "@/components/creative/SponsoredSlot";
 import { CreativeAdFrame } from "@/components/creative/AdBanner";
@@ -1060,9 +1060,8 @@ export default function CreativePage() {
         <SponsoredSlot className="max-w-2xl mx-auto" />
 
         <Tabs value={active} onValueChange={(v) => { setActive(v as ToolKey); navigate(v === "dashboard" ? "/creative" : `/creative/${v}`); }}>
-          <TabsList className="mb-6 grid grid-cols-3 max-w-md mx-auto bg-muted/20">
+          <TabsList className="mb-6 grid grid-cols-2 max-w-md mx-auto bg-muted/20">
             <TabsTrigger value="dashboard">Painel de Ferramentas</TabsTrigger>
-            <TabsTrigger value="clock">Vertal Clock</TabsTrigger>
             <TabsTrigger value="unified_history">Histórico Unificado</TabsTrigger>
           </TabsList>
 
@@ -1311,12 +1310,16 @@ export default function CreativePage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="clock" className="flex flex-col h-[calc(100vh-200px)]">
-            <Button variant="ghost" size="sm" onClick={() => { setActive("dashboard"); navigate("/creative"); }} className="mb-2">
-              <ArrowLeft className="h-4 w-4 mr-2" /> Voltar ao Painel
-            </Button>
-            <div className="flex-1 min-h-0">
-              <VertalClock lang="pt" tab="relógio" theme="auto" ringUI="on" />
+          <TabsContent value="clock">
+            <div className="space-y-6">
+              <Button variant="ghost" size="sm" onClick={() => { setActive("dashboard"); navigate("/creative"); }} className="mb-2">
+                <ArrowLeft className="h-4 w-4 mr-2" /> Voltar ao Painel
+              </Button>
+              <React.Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin" aria-label="Carregando" /></div>}>
+                <div className="mx-auto max-w-3xl">
+                  <VertalClock />
+                </div>
+              </React.Suspense>
             </div>
           </TabsContent>
 
