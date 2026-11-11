@@ -32,6 +32,7 @@ export type Artifact =
   | (Base & { kind: 'app'; html: string; prompt: string; projectId?: string })
   | (Base & { kind: 'music'; tracks: Array<{ title: string; audioUrl: string; imageUrl?: string }>; prompt: string })
   | (Base & { kind: 'ebook'; content: string; cover?: string })
+  | (Base & { kind: 'notebook'; description: string; emoji?: string; notebookId?: string })
   | (Base & { kind: 'download'; url: string; format: string })
   | (Base & { kind: 'api'; method: string; host: string; status: number; ok: boolean; body: string });
 
@@ -115,6 +116,7 @@ export const KIND_LABEL: Record<ArtifactKind, string> = {
   app: 'Aplicativo',
   music: 'Música',
   ebook: 'Ebook',
+  notebook: 'Notebook',
   download: 'Download',
   api: 'Resposta da API',
 };

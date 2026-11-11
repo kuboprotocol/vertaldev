@@ -2,7 +2,7 @@
 import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import {
-  AppWindow, BookOpen, Check, Code2, Copy, Download, ExternalLink, FileText, Globe, Image as ImageIcon,
+  AppWindow, BookMarked, BookOpen, Check, Code2, Copy, Download, ExternalLink, FileText, Globe, Image as ImageIcon,
   LayoutTemplate, Loader2, Mail, Music, Palette, Presentation, Table2,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -24,6 +24,7 @@ const KIND_ICON: Record<ArtifactKind, typeof FileText> = {
   app: AppWindow,
   music: Music,
   ebook: BookOpen,
+  notebook: BookMarked,
   download: Download,
   api: Globe,
 };
@@ -112,6 +113,7 @@ function summary(a: Artifact): string {
     case 'app': return 'Prévia interativa';
     case 'music': return `${a.tracks.length} faixa${a.tracks.length === 1 ? '' : 's'}`;
     case 'ebook': return `${Math.max(1, Math.round(a.content.split(/\s+/).length / 250))} páginas aprox.`;
+    case 'notebook': return 'Notas, PDFs e links';
     case 'api': return `HTTP ${a.status}`;
     case 'download': return a.format.toUpperCase();
     case 'email': return 'Rascunho';
@@ -181,6 +183,11 @@ export function ArtifactCard({ artifact, onOpen, active }: { artifact: Artifact;
               <audio controls preload="none" src={t.audioUrl} className="h-9 w-full" />
             </div>
           ))}
+        </div>
+      )}
+      {artifact.kind === 'notebook' && (
+        <div className="border-t border-border/50 p-4 text-center">
+          <div className="text-4xl">{artifact.emoji || '📓'}</div>
         </div>
       )}
     </div>
@@ -551,6 +558,16 @@ export function ArtifactViewer({ artifact, actions }: { artifact: Artifact; acti
         <div className="mx-auto max-w-3xl space-y-6">
           {a.cover && <img src={a.cover} alt={`Capa de ${a.title}`} className="mx-auto max-h-96 rounded-xl shadow-2xl" />}
           <ChatMarkdown text={a.content} />
+        </div>
+      );
+      break;
+    case 'notebook':
+      body = (
+        <div className="flex flex-col items-center gap-3 py-10 text-center">
+          <div className="text-5xl">{a.emoji || '📓'}</div>
+          <h3 className="text-lg font-semibold">{a.title}</h3>
+          {a.description && <p className="max-w-xs text-sm text-muted-foreground">{a.description}</p>}
+          <p className="mt-4 text-sm text-muted-foreground">Abra o painel do Notebook para começar a adicionar notas, PDFs e links.</p>
         </div>
       );
       break;
