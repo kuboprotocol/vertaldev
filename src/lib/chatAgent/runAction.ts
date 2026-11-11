@@ -521,6 +521,22 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
           result: { tool: 'video_studio', ok: true, summary: `Estúdio de Vídeo ${action.tier} aberto (${action.aspect}, ${action.style}).` },
         };
       }
+      case 'clips': {
+        const title = action.description ? titleFrom(action.description, 50) : `Corte ${action.theme}`;
+        return {
+          artifact: { id: ctx.newId(), kind: 'clips', title, description: action.description, theme: action.theme, mood: action.mood },
+          panel: 'clips',
+          result: { tool: 'clips', ok: true, summary: `Corte viral (${action.theme} · ${action.mood}) aberto para edição.` },
+        };
+      }
+      case 'emo': {
+        const title = action.description ? titleFrom(action.description, 50) : 'Animação com EMO';
+        return {
+          artifact: { id: ctx.newId(), kind: 'emo', title, description: action.description },
+          panel: 'emo',
+          result: { tool: 'emo', ok: true, summary: `EMO (animação de foto com movimento) aberto.` },
+        };
+      }
       case 'download': {
         const { data, error } = await supabase.functions.invoke('creative-download', {
           body: { url: action.url, format: action.format },
@@ -570,6 +586,8 @@ export function actionLabel(action: AgentAction): string {
     case 'ebook': return 'Escrevendo ebook (pode levar alguns minutos)';
     case 'notebook': return 'Criando notebook';
     case 'video_studio': return 'Abrindo Estúdio de Vídeo';
+    case 'clips': return 'Abrindo painel de Cortes';
+    case 'emo': return 'Abrindo EMO';
     case 'download': return 'Buscando link de download';
     case 'api_request': return 'Chamando API externa';
     case 'open_panel': return 'Abrindo painel';

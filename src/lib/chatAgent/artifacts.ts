@@ -34,6 +34,8 @@ export type Artifact =
   | (Base & { kind: 'ebook'; content: string; cover?: string })
   | (Base & { kind: 'notebook'; description: string; emoji?: string; notebookId?: string })
   | (Base & { kind: 'video_studio'; description?: string; tier: string; style: string; aspect: string })
+  | (Base & { kind: 'clips'; description?: string; theme: string; mood: string })
+  | (Base & { kind: 'emo'; description?: string })
   | (Base & { kind: 'download'; url: string; format: string })
   | (Base & { kind: 'api'; method: string; host: string; status: number; ok: boolean; body: string });
 
@@ -119,6 +121,8 @@ export const KIND_LABEL: Record<ArtifactKind, string> = {
   ebook: 'Ebook',
   notebook: 'Notebook',
   video_studio: 'Vídeo',
+  clips: 'Cortes',
+  emo: 'Animação',
   download: 'Download',
   api: 'Resposta da API',
 };
