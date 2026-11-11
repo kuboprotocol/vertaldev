@@ -504,6 +504,15 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
           result: { tool: 'ebook', ok: true, summary: `Ebook "${data.title}" com ${action.chapters} capítulos.` },
         };
       }
+      case 'notebook': {
+        const title = action.name || titleFrom(action.description, 50) || 'Novo Notebook';
+        const emoji = action.emoji || '📓';
+        return {
+          artifact: { id: ctx.newId(), kind: 'notebook', title, description: action.description, emoji },
+          panel: 'notebook',
+          result: { tool: 'notebook', ok: true, summary: `Notebook "${title}" criado e aberto para começar.` },
+        };
+      }
       case 'download': {
         const { data, error } = await supabase.functions.invoke('creative-download', {
           body: { url: action.url, format: action.format },
@@ -551,6 +560,7 @@ export function actionLabel(action: AgentAction): string {
     case 'app': return 'Construindo aplicativo no Dev Code';
     case 'music': return 'Compondo música (1 a 3 min)';
     case 'ebook': return 'Escrevendo ebook (pode levar alguns minutos)';
+    case 'notebook': return 'Criando notebook';
     case 'download': return 'Buscando link de download';
     case 'api_request': return 'Chamando API externa';
     case 'open_panel': return 'Abrindo painel';

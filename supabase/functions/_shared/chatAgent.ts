@@ -53,6 +53,7 @@ export type AgentAction =
   | { tool: "app"; prompt: string; source_artifact?: string }
   | { tool: "music"; prompt: string; instrumental: boolean }
   | { tool: "ebook"; topic: string; chapters: number }
+  | { tool: "notebook"; name: string; description: string; emoji?: string }
   | { tool: "download"; url: string; format: "mp4" | "mp3" }
   | {
     tool: "api_request"; method: (typeof API_METHODS)[number]; url: string;
@@ -108,6 +109,7 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   app: "1 edição do plano",
   music: "1 crédito",
   ebook: "varia com o número de capítulos",
+  notebook: "grátis",
   download: "2 créditos",
   api_request: "grátis",
   open_panel: "grátis",
@@ -152,6 +154,7 @@ export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
     `- {"tool":"app","prompt":"descrição completa do site ou aplicativo"} → constrói no Dev Code e mostra a prévia (${TOOL_COSTS.app}).`,
     `- {"tool":"music","prompt":"estilo e tema","instrumental":false} → música original (${TOOL_COSTS.music}).`,
     `- {"tool":"ebook","topic":"tema","chapters":5} → ebook completo, ${AGENT_LIMITS.ebookMinChapters} a ${AGENT_LIMITS.ebookMaxChapters} capítulos (${TOOL_COSTS.ebook}).`,
+    `- {"tool":"notebook","name":"Nome do notebook","description":"descrição ou tópico"} → cria um notebook do Vertal Notebook para o usuário guardar notas, PDFs e links, e conversar com a IA sobre eles (${TOOL_COSTS.notebook}). Opcionalmente, "emoji" para o ícone (ex.: "🧬" para ciência).`,
     `- {"tool":"download","url":"https://...","format":"mp4|mp3"} → baixa vídeo de rede social (${TOOL_COSTS.download}).`,
     `- {"tool":"api_request","method":"GET|POST|PUT|PATCH|DELETE","url":"https://...","headers":{},"body":"texto ou JSON em string","reason":"por que esta chamada"} → chama uma API externa quando nenhuma ferramenta acima resolve. O usuário aprova cada chamada. Para autenticar, escreva {{NOME_DO_SEGREDO}} no valor do cabeçalho, na query ou no corpo; o servidor troca pelo valor do cofre. Nunca peça para o usuário colar chaves no chat. Segredos disponíveis: ${secrets}. Se faltar um segredo, explique qual nome criar e use {"tool":"open_panel","panel":"secrets"}.`,
     `- {"tool":"open_panel","panel":"${PANELS.join("|")}"} → abre um painel dentro do chat para o usuário trabalhar à mão. Use quando o pedido precisa de arquivos do usuário (video_studio: fotos viram vídeo; clips: cortes de vídeo longo; avatar: avatar falante; emo: animar foto; notebook: conversar com PDFs e links; office/design/canvas: edição manual).`,
