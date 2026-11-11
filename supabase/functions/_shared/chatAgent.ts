@@ -37,7 +37,7 @@ export interface CanvasSpec {
 /** Painéis que o chat abre dentro do próprio layout. */
 export const PANELS = [
   "history", "office", "design", "canvas", "notebook", "video_studio", "clips", "avatar",
-  "shorts", "emo", "sheet", "ebook", "music", "downloader", "builder",
+  "shorts", "emo", "sheet", "ebook", "music", "downloader", "builder", "clock",
   "connectors", "secrets", "agents",
 ] as const;
 export type PanelKey = (typeof PANELS)[number];
@@ -63,6 +63,9 @@ export type AgentAction =
     headers: Record<string, string>; body?: string; reason: string;
   }
   | { tool: "open_panel"; panel: PanelKey }
+  | { tool: "world_time"; places: string[] }
+  | { tool: "alarm"; op: "set" | "list" | "remove"; time?: string; label?: string; days?: number[]; place?: string; id?: string }
+  | { tool: "timer"; op: "start" | "cancel"; seconds?: number; minutes?: number; label?: string; id?: string }
   | { tool: "weather"; place?: string }
   | { tool: "web_search"; query: string; max?: number }
   | { tool: "gmail_search"; query: string; max: number }
