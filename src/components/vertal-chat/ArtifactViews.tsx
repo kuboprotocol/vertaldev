@@ -2,8 +2,8 @@
 import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import {
-  AppWindow, BookMarked, BookOpen, Check, Code2, Copy, Download, ExternalLink, FileText, Film, Globe, Image as ImageIcon,
-  LayoutTemplate, Loader2, Mail, Music, Palette, Presentation, Table2,
+  AppWindow, BookMarked, BookOpen, Check, Code2, Copy, Download, ExternalLink, FileText, Film, Sparkles, Globe, Image as ImageIcon,
+  LayoutTemplate, Loader2, Mail, Music, Palette, Presentation, Scissors, Table2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -26,6 +26,8 @@ const KIND_ICON: Record<ArtifactKind, typeof FileText> = {
   ebook: BookOpen,
   notebook: BookMarked,
   video_studio: Film,
+  clips: Scissors,
+  emo: Sparkles,
   download: Download,
   api: Globe,
 };
@@ -116,6 +118,8 @@ function summary(a: Artifact): string {
     case 'ebook': return `${Math.max(1, Math.round(a.content.split(/\s+/).length / 250))} páginas aprox.`;
     case 'notebook': return 'Notas, PDFs e links';
     case 'video_studio': return `${a.aspect} · ${a.style}`;
+    case 'clips': return `${a.theme} · ${a.mood}`;
+    case 'emo': return 'Animar foto com movimento';
     case 'api': return `HTTP ${a.status}`;
     case 'download': return a.format.toUpperCase();
     case 'email': return 'Rascunho';
@@ -591,6 +595,30 @@ export function ArtifactViewer({ artifact, actions }: { artifact: Artifact; acti
             <span className="rounded-full border border-border/60 px-3 py-1">{a.style}</span>
           </div>
           <p className="mt-4 text-sm text-muted-foreground">Abra o painel do Estúdio de Vídeo para fazer upload das imagens e gerar seu vídeo.</p>
+        </div>
+      );
+      break;
+    case 'clips':
+      body = (
+        <div className="flex flex-col items-center gap-3 py-10 text-center">
+          <div className="text-5xl">✂️</div>
+          <h3 className="text-lg font-semibold">{a.title}</h3>
+          {a.description && <p className="max-w-xs text-sm text-muted-foreground">{a.description}</p>}
+          <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs text-muted-foreground">
+            <span className="rounded-full border border-border/60 px-3 py-1">{a.theme}</span>
+            <span className="rounded-full border border-border/60 px-3 py-1">{a.mood}</span>
+          </div>
+          <p className="mt-4 text-sm text-muted-foreground">Abra o painel de Cortes para fazer upload do vídeo e gerar seus cortes virais em 9:16.</p>
+        </div>
+      );
+      break;
+    case 'emo':
+      body = (
+        <div className="flex flex-col items-center gap-3 py-10 text-center">
+          <div className="text-5xl">✨</div>
+          <h3 className="text-lg font-semibold">{a.title}</h3>
+          {a.description && <p className="max-w-xs text-sm text-muted-foreground">{a.description}</p>}
+          <p className="mt-4 text-sm text-muted-foreground">Abra o painel EMO para carregar uma foto e um vídeo de referência de movimento.</p>
         </div>
       );
       break;

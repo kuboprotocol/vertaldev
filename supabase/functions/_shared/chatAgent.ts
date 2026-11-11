@@ -55,6 +55,8 @@ export type AgentAction =
   | { tool: "ebook"; topic: string; chapters: number }
   | { tool: "notebook"; name: string; description: string; emoji?: string }
   | { tool: "video_studio"; tier: string; style: string; aspect: string; description?: string }
+  | { tool: "clips"; theme: string; mood: string; description?: string }
+  | { tool: "emo"; description?: string }
   | { tool: "download"; url: string; format: "mp4" | "mp3" }
   | {
     tool: "api_request"; method: (typeof API_METHODS)[number]; url: string;
@@ -112,6 +114,8 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   ebook: "varia com o número de capítulos",
   notebook: "grátis",
   video_studio: "varia com o tier (Express grátis, AI 2-5 créditos/clipe)",
+  clips: "varia com o tema (1-3 créditos/corte)",
+  emo: "1 crédito por animação",
   download: "2 créditos",
   api_request: "grátis",
   open_panel: "grátis",
@@ -158,6 +162,8 @@ export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
     `- {"tool":"ebook","topic":"tema","chapters":5} → ebook completo, ${AGENT_LIMITS.ebookMinChapters} a ${AGENT_LIMITS.ebookMaxChapters} capítulos (${TOOL_COSTS.ebook}).`,
     `- {"tool":"notebook","name":"Nome do notebook","description":"descrição ou tópico"} → cria um notebook do Vertal Notebook para o usuário guardar notas, PDFs e links, e conversar com a IA sobre eles (${TOOL_COSTS.notebook}). Opcionalmente, "emoji" para o ícone (ex.: "🧬" para ciência).`,
     `- {"tool":"video_studio","tier":"express|standard|professional","style":"estilo de animação","aspect":"9:16|16:9|1:1","description":"descrição opcional"} → transforma imagens em vídeos animados usando o Vertal Video Studio (${TOOL_COSTS.video_studio}). O usuário faz upload das imagens no painel. Tiers: express (rápido, grátis), standard e professional (IA, mais qualidade).`,
+    `- {"tool":"clips","theme":"tema do corte (viral|romance|ação|comédia|educativo)","mood":"tom (energético|melancólico|inspirador|engraçado)","description":"descrição opcional"} → cria cortes virais em 9:16 com legenda automática (${TOOL_COSTS.clips}). O usuário faz upload do vídeo ou fornece link no painel.`,
+    `- {"tool":"emo","description":"descrição opcional"} → anima uma foto estática usando movimento de vídeo (${TOOL_COSTS.emo}). O usuário carrega uma foto e um vídeo de referência de movimento no painel.`,
     `- {"tool":"download","url":"https://...","format":"mp4|mp3"} → baixa vídeo de rede social (${TOOL_COSTS.download}).`,
     `- {"tool":"api_request","method":"GET|POST|PUT|PATCH|DELETE","url":"https://...","headers":{},"body":"texto ou JSON em string","reason":"por que esta chamada"} → chama uma API externa quando nenhuma ferramenta acima resolve. O usuário aprova cada chamada. Para autenticar, escreva {{NOME_DO_SEGREDO}} no valor do cabeçalho, na query ou no corpo; o servidor troca pelo valor do cofre. Nunca peça para o usuário colar chaves no chat. Segredos disponíveis: ${secrets}. Se faltar um segredo, explique qual nome criar e use {"tool":"open_panel","panel":"secrets"}.`,
     `- {"tool":"open_panel","panel":"${PANELS.join("|")}"} → abre um painel dentro do chat para o usuário trabalhar à mão. Use quando o pedido precisa de arquivos do usuário (video_studio: fotos viram vídeo; clips: cortes de vídeo longo; avatar: avatar falante; emo: animar foto; notebook: conversar com PDFs e links; office/design/canvas: edição manual).`,
