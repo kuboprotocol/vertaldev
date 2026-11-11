@@ -27,10 +27,7 @@ import { OfficeSuite } from "@/components/office/OfficeSuite";
 // O Notebook (pdf.js, leitor de fontes, estúdio) só carrega quando é aberto.
 const VertalNotebook = React.lazy(() => import("@/components/notebook/VertalNotebook").then((m) => ({ default: m.VertalNotebook })));
 // O Clock (relógio, alarmes, cronômetro, timer) carrega quando a aba é aberta.
-const VertalClock = React.lazy(async () => {
-  const { VertalClock } = await import("@/components/clock/VertalClock");
-  return { default: VertalClock };
-});
+const VertalClock = React.lazy(() => import("@/components/clock/VertalClock").then((m) => ({ default: m.default })));
 import { CreativeDesign } from "@/components/CreativeDesign";
 import { SponsoredSlot } from "@/components/creative/SponsoredSlot";
 import { CreativeAdFrame } from "@/components/creative/AdBanner";
