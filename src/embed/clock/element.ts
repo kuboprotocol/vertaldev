@@ -1,609 +1,660 @@
-// Vertal Clock — Web Component (Shadow DOM)
-// Usável dentro da app React, no Vertal Chat, ou incorporado em qualquer site.
+// Vertal Clock — Web Component (Shadow DOM).
+// Usável dentro do app React, no Vertal Chat ou incorporado em qualquer site.
+//
+// O corpo é redesenhado quando o estado muda; a cada tique só os números são
+// trocados, para não apagar o que o usuário está digitando.
 import { STRINGS, type ClockStrings } from './strings';
 import { CLOCK_CSS } from './styles';
-import type { ClockLang } from '@/lib/clock/alarms';
+import { dayNames, describeDays, describeWait, nextRing, parseClockTime, type Alarm, type ClockLang } from '@/lib/clock/alarms';
+import { CLOCK_PLACE_KEY } from '@/lib/clock/keys';
 import {
-  CLOCK_LIMITS, CLOCK_STORAGE_KEY, CLOCK_CHANGE_EVENT, CLOCK_LIMITS as LIMITS,
-  getClockState, updateClockState, addCity, removeCity, saveAlarm, setAlarmEnabled, removeAlarm,
-  startTimer, pauseTimer, resumeTimer, resetTimer, removeTimer, updateSettings, newClockId,
-  stopwatchStart, stopwatchStop, stopwatchLap, stopwatchReset, formatDuration, formatStopwatch,
-  timerRemaining, stopwatchElapsed, type ClockState, type CityRef, type Alarm, type Timer,
+  CLOCK_LIMITS, addCity, formatDuration, formatStopwatch, getClockState, pauseTimer, removeAlarm, removeCity,
+  removeTimer, resetTimer, resumeTimer, saveAlarm, setAlarmEnabled, startTimer, stopwatchElapsed, stopwatchLap,
+  stopwatchReset, stopwatchStart, stopwatchStop, subscribeClock, timerRemaining, updateSettings,
+  type AlarmSound, type CityRef,
 } from '@/lib/clock/store';
-import { startClockEngine, subscribeRinging, dismissRing, snoozeRing, type Ring } from '@/lib/clock/engine';
 import {
-  resolvePlace, searchCities, localTimeZone, formatZoneTime, formatZoneDate,
-  isDaytime, flagEmoji, zoneParts,
+  dismissRing, getRinging, requestClockNotifications, snoozeRing, startClockEngine, subscribeRinging, type Ring,
+} from '@/lib/clock/engine';
+import {
+  CITIES, findCityByTz, flagEmoji, isDaytime, isValidTimeZone, localTimeZone, offsetLabel,
+  searchCities, zoneDiff, zoneParts, type City,
 } from '@/lib/clock/zones';
-import { parseClockTime, parseDays, describeDays, describeWait } from '@/lib/clock/alarms';
-import { previewAlarmSound, requestClockNotifications } from '@/lib/clock/sound';
+import { previewAlarmSound, unlockAudio } from '@/lib/clock/sound';
+
+type Tab = 'clock' | 'alarm' | 'stopwatch' | 'timer';
+
+const TAB_ALIASES: Record<string, Tab> = {
+  clock: 'clock', 'relógio': 'clock', relogio: 'clock',
+  alarm: 'alarm', alarme: 'alarm',
+  stopwatch: 'stopwatch', 'cronômetro': 'stopwatch', cronometro: 'stopwatch',
+  timer: 'timer',
+};
+
+type Sheet =
+  | { type: 'city' }
+  | { type: 'settings' }
+  | { type: 'alarm'; id: string; days: number[]; error: string };
+
+interface Place {
+  tz: string;
+  label: string;
+}
+
+const svg = (body: string) => `<svg viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
+const ICON = {
+  clock: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
+  alarm: svg('<circle cx="12" cy="13" r="7.5"/><path d="M12 9.5V13l2.2 1.6M4.5 5.5 7 3.5M19.5 5.5 17 3.5"/>'),
+  stopwatch: svg('<circle cx="12" cy="13.5" r="7.5"/><path d="M12 13.5V9.5M10 2.8h4M18.2 7.3l1.3-1.3"/>'),
+  timer: svg('<path d="M7 3h10M7 21h10M8 3v3.5a4 4 0 0 0 1.6 3.2L12 12l2.4-2.3A4 4 0 0 0 16 6.5V3M8 21v-3.5a4 4 0 0 1 1.6-3.2L12 12l2.4 2.3a4 4 0 0 1 1.6 3.2V21"/>'),
+  gear: svg('<circle cx="12" cy="12" r="3"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l1.9-1.5-2-3.4-2.3.9a7.6 7.6 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5A7.6 7.6 0 0 0 7 6.5l-2.3-.9-2 3.4 1.9 1.5a7.6 7.6 0 0 0 0 3l-1.9 1.5 2 3.4 2.3-.9a7.6 7.6 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.6 7.6 0 0 0 2.6-1.5l2.3.9 2-3.4z"/>'),
+  plus: svg('<path d="M12 5v14M5 12h14"/>'),
+  close: svg('<path d="M6 6l12 12M18 6 6 18"/>'),
+  pin: svg('<path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>'),
+  sun: svg('<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>'),
+  moon: svg('<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>'),
+  trash: svg('<path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l.8 12.5h9.4L17.5 7"/>'),
+  play: svg('<path d="M8 5.5v13l10-6.5z"/>'),
+  pause: svg('<path d="M8.5 5.5v13M15.5 5.5v13"/>'),
+  reset: svg('<path d="M4.5 12a7.5 7.5 0 1 0 2.3-5.4M4.5 4.5v4h4"/>'),
+  bell: svg('<path d="M6 16.5V11a6 6 0 1 1 12 0v5.5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0"/>'),
+};
+
+const esc = (text: unknown): string =>
+  String(text ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+const pad = (n: number) => String(n).padStart(2, '0');
+const TIMER_PRESETS_MIN = [1, 3, 5, 10, 15, 30];
+const RING_LEN = 2 * Math.PI * 27;
+
+function readPlace(): Place | null {
+  try {
+    const raw = JSON.parse(window.localStorage.getItem(CLOCK_PLACE_KEY) ?? 'null') as Partial<Place> | null;
+    return raw && isValidTimeZone(raw.tz) && typeof raw.label === 'string' && raw.label ? { tz: raw.tz, label: raw.label.slice(0, 60) } : null;
+  } catch {
+    return null;
+  }
+}
 
 export class VertalClockElement extends HTMLElement {
-  private root: ShadowRoot;
-  private lang: ClockLang = 'pt';
-  private strings: ClockStrings = STRINGS.pt;
-  private tab: 'relógio' | 'alarme' | 'cronômetro' | 'timer' = 'relógio';
-  private ringUI: 'on' | 'off' = 'on';
-  private theme: 'auto' | 'light' | 'dark' = 'auto';
+  static get observedAttributes() {
+    return ['lang', 'tab', 'theme', 'ring-ui'];
+  }
+
+  private readonly root: ShadowRoot;
+  private readonly vc: HTMLElement;
+  private readonly topEl: HTMLElement;
+  private readonly wrapEl: HTMLElement;
+  private readonly sheetEl: HTMLElement;
+  private readonly ringEl: HTMLElement;
+
+  private language: ClockLang = 'pt';
+  private t: ClockStrings = STRINGS.pt;
+  private tab: Tab = 'clock';
+  private ringUI = true;
   private stops: (() => void)[] = [];
   private ringing: Ring[] = [];
-  private myLocation: { tz: string; city: string; cc: string } | null = null;
+  private sheet: Sheet | null = null;
+  private cityResults: City[] = [];
+  private place: Place | null = null;
+  private locating = false;
+  private locateMsg = '';
+  private dial = { h: '', m: '', s: '', label: '' };
+  private minuteKey = -1;
+  private frame = 0;
 
   constructor() {
     super();
     this.root = this.attachShadow({ mode: 'open' });
-    this.root.innerHTML = `<style>${CLOCK_CSS}</style><div class="vc"></div>`;
+    this.root.innerHTML =
+      `<style>${CLOCK_CSS}</style><div class="vc" data-theme="auto"><div class="top"></div>` +
+      `<div class="body"><div class="wrap"></div></div><div class="sheet-bg" hidden></div><div class="ring" hidden></div></div>`;
+    this.vc = this.root.querySelector('.vc')!;
+    this.topEl = this.root.querySelector('.top')!;
+    this.wrapEl = this.root.querySelector('.wrap')!;
+    this.sheetEl = this.root.querySelector('.sheet-bg')!;
+    this.ringEl = this.root.querySelector('.ring')!;
+    this.root.addEventListener('click', (e) => this.onClick(e));
+    this.root.addEventListener('input', (e) => this.onInput(e));
+    this.root.addEventListener('change', (e) => this.onChange(e));
+    this.root.addEventListener('keydown', (e) => {
+      if ((e as KeyboardEvent).key === 'Escape' && this.sheet) this.closeSheet();
+    });
   }
 
   connectedCallback() {
     this.readAttributes();
-    this.render();
-    this.startEngine();
-    this.attachListeners();
-    this.updateLiveTime();
+    this.place = readPlace();
+    this.ringing = getRinging();
+    this.stops.push(
+      startClockEngine(),
+      subscribeClock(() => this.renderBody()),
+      subscribeRinging((rings) => {
+        this.ringing = rings;
+        this.renderRing();
+      }),
+    );
+    const interval = setInterval(() => this.tick(), 250);
+    this.stops.push(() => clearInterval(interval), () => cancelAnimationFrame(this.frame));
+    this.renderAll();
   }
 
   disconnectedCallback() {
-    this.stops.forEach((f) => f());
+    this.stops.forEach((stop) => stop());
     this.stops = [];
   }
 
+  attributeChangedCallback() {
+    if (!this.isConnected) return;
+    this.readAttributes();
+    this.renderAll();
+  }
+
   private readAttributes() {
-    this.lang = (this.getAttribute('lang') || 'pt') as ClockLang;
-    this.strings = STRINGS[this.lang] || STRINGS.pt;
-    this.tab = (this.getAttribute('tab') || 'relógio') as any;
-    this.ringUI = (this.getAttribute('ring-ui') || 'on') as 'on' | 'off';
-    this.theme = (this.getAttribute('theme') || 'auto') as 'auto' | 'light' | 'dark';
+    this.language = this.getAttribute('lang') === 'en' ? 'en' : 'pt';
+    this.t = STRINGS[this.language];
+    this.tab = TAB_ALIASES[(this.getAttribute('tab') ?? '').toLowerCase()] ?? this.tab;
+    this.ringUI = this.getAttribute('ring-ui') !== 'off';
+    const theme = this.getAttribute('theme');
+    this.vc.dataset.theme = theme === 'light' || theme === 'dark' ? theme : 'auto';
   }
 
-  private startEngine() {
-    const stop = startClockEngine();
-    this.stops.push(stop);
-    const unsubRing = subscribeRinging((rings) => {
-      this.ringing = rings;
-      this.renderRing();
-    });
-    this.stops.push(unsubRing);
-    const unsub = window.addEventListener('storage', () => this.render());
-    this.stops.push(() => window.removeEventListener('storage', unsub as any));
+  private get locale() {
+    return this.language === 'pt' ? 'pt-BR' : 'en-US';
   }
 
-  private attachListeners() {
-    this.root.addEventListener('click', (e) => this.handleClick(e));
-    this.root.addEventListener('input', (e) => this.handleInput(e));
-    this.root.addEventListener('change', (e) => this.handleChange(e));
-    this.root.addEventListener('keydown', (e) => this.handleKeydown(e));
+  // ─── Desenho ────────────────────────────────────────────────────────────
+
+  private renderAll() {
+    this.renderTop();
+    this.renderBody();
+    this.renderSheet();
+    this.renderRing();
   }
 
-  private updateLiveTime() {
-    const update = () => {
-      const els = this.root.querySelectorAll('[data-t]');
-      for (const el of els) el.textContent = new Date().toLocaleTimeString(this.lang === 'pt' ? 'pt-BR' : 'en-US');
-      requestAnimationFrame(update);
-    };
-    update();
+  private renderTop() {
+    const tabs: [Tab, string, string][] = [
+      ['clock', this.t.tabClock, ICON.clock], ['alarm', this.t.tabAlarm, ICON.alarm],
+      ['stopwatch', this.t.tabStopwatch, ICON.stopwatch], ['timer', this.t.tabTimer, ICON.timer],
+    ];
+    this.topEl.innerHTML =
+      `<div class="tabs" role="tablist">${tabs.map(([key, label, icon]) =>
+        `<button class="tab" role="tab" data-act="tab" data-tab="${key}" aria-selected="${this.tab === key}">${icon}<span>${esc(label)}</span></button>`).join('')}</div>` +
+      `<button class="icon-btn" data-act="settings" aria-label="${esc(this.t.settings)}" title="${esc(this.t.settings)}">${ICON.gear}</button>`;
   }
 
-  private handleClick(e: Event) {
-    const target = e.target as HTMLElement;
-    const act = target.getAttribute('data-act');
-    if (!act) return;
-
-    // Tabs
-    if (act.startsWith('tab:')) {
-      this.tab = act.slice(4) as any;
-      this.render();
-      return;
-    }
-
-    // Cities
-    if (act === 'add-city-sheet') {
-      this.showSheet('city-search');
-      return;
-    }
-    if (act === 'my-location') {
-      this.requestGeolocation();
-      return;
-    }
-    if (act.startsWith('remove-city:')) {
-      const idx = +act.slice(12);
-      removeCity(idx);
-      this.render();
-      return;
-    }
-
-    // Alarms
-    if (act === 'new-alarm-sheet') {
-      this.showSheet('alarm-editor', { id: '' });
-      return;
-    }
-    if (act.startsWith('edit-alarm:')) {
-      this.showSheet('alarm-editor', { id: act.slice(11) });
-      return;
-    }
-    if (act.startsWith('alarm-toggle:')) {
-      const id = act.slice(13);
-      const state = getClockState();
-      const alarm = state.alarms.find((a) => a.id === id);
-      if (alarm) setAlarmEnabled(id, !alarm.enabled);
-      this.render();
-      return;
-    }
-    if (act.startsWith('remove-alarm:')) {
-      removeAlarm(act.slice(13));
-      this.render();
-      return;
-    }
-
-    // Timers
-    if (act === 'start-timer') {
-      const minInput = this.root.querySelector('input[data-field="timer-min"]') as HTMLInputElement;
-      const secInput = this.root.querySelector('input[data-field="timer-sec"]') as HTMLInputElement;
-      const labelInput = this.root.querySelector('input[data-field="timer-label"]') as HTMLInputElement;
-      const min = +(minInput?.value || 0);
-      const sec = +(secInput?.value || 0);
-      const ms = (min * 60 + sec) * 1000;
-      if (ms >= 1000 && ms <= LIMITS.maxTimerMs) {
-        startTimer(ms, labelInput?.value || '');
-        minInput.value = '';
-        secInput.value = '';
-        labelInput.value = '';
-        this.render();
-      }
-      return;
-    }
-    if (act.startsWith('pause-timer:')) {
-      pauseTimer(act.slice(12));
-      this.render();
-      return;
-    }
-    if (act.startsWith('resume-timer:')) {
-      resumeTimer(act.slice(13));
-      this.render();
-      return;
-    }
-    if (act.startsWith('reset-timer:')) {
-      resetTimer(act.slice(12));
-      this.render();
-      return;
-    }
-    if (act.startsWith('remove-timer:')) {
-      removeTimer(act.slice(13));
-      this.render();
-      return;
-    }
-
-    // Stopwatch
-    if (act === 'stopwatch-start') {
-      stopwatchStart();
-      this.render();
-      return;
-    }
-    if (act === 'stopwatch-stop') {
-      stopwatchStop();
-      this.render();
-      return;
-    }
-    if (act === 'stopwatch-lap') {
-      stopwatchLap();
-      this.render();
-      return;
-    }
-    if (act === 'stopwatch-reset') {
-      stopwatchReset();
-      this.render();
-      return;
-    }
-
-    // Sheets
-    if (act === 'close-sheet') {
-      this.hideSheet();
-      return;
-    }
-    if (act === 'save-alarm') {
-      this.saveAlarmFromSheet();
-      return;
-    }
-    if (act === 'delete-alarm') {
-      const id = this.root.querySelector('[data-field="alarm-id"]')?.getAttribute('value');
-      if (id) removeAlarm(id);
-      this.hideSheet();
-      this.render();
-      return;
-    }
-    if (act === 'settings-sheet') {
-      this.showSheet('settings');
-      return;
-    }
-    if (act === 'enable-notifications') {
-      void requestClockNotifications();
-      return;
-    }
-    if (act.startsWith('preview-sound:')) {
-      previewAlarmSound(act.slice(14) as any);
-      return;
-    }
-
-    // Ring overlay
-    if (act === 'snooze-ring') {
-      if (this.ringing[0]) snoozeRing(this.ringing[0]);
-      return;
-    }
-    if (act === 'dismiss-ring') {
-      if (this.ringing[0]) dismissRing(this.ringing[0]);
-      return;
-    }
-
-    // Search & add city
-    if (act === 'add-searched-city') {
-      const input = this.root.querySelector('input[data-field="city-search"]') as HTMLInputElement;
-      const tz = input?.getAttribute('data-selected-tz');
-      if (tz) {
-        const results = searchCities(input.value, 1);
-        const city = results[0];
-        if (city && addCity(city.tz, city.city)) {
-          input.value = '';
-          input.removeAttribute('data-selected-tz');
-          this.hideSheet();
-          this.render();
-        }
-      }
-      return;
-    }
+  private renderBody() {
+    const now = Date.now();
+    this.minuteKey = Math.floor(now / 60_000);
+    const html = this.tab === 'clock' ? this.clockHtml(now)
+      : this.tab === 'alarm' ? this.alarmHtml(now)
+      : this.tab === 'stopwatch' ? this.stopwatchHtml(now)
+      : this.timerHtml(now);
+    this.wrapEl.innerHTML = html;
+    this.tick();
+    this.runStopwatchFrames();
   }
 
-  private handleInput(e: Event) {
-    const target = e.target as HTMLInputElement;
-    if (target.getAttribute('data-field') === 'city-search') {
-      const query = target.value.trim();
-      const results = searchCities(query, 10);
-      const list = this.root.querySelector('.city-search-results');
-      if (!list) return;
-      if (results.length === 0) {
-        list.innerHTML = `<div class="hint">${this.escape(this.strings.noCity)}</div>`;
+  private timeHtml(tz: string, now: number, seconds = false): string {
+    const p = zoneParts(tz, now);
+    const hour12 = getClockState().settings.hour12;
+    const hh = hour12 ? String(p.hour % 12 || 12) : pad(p.hour);
+    return `${hh}:${pad(p.minute)}${seconds ? `<small>${pad(p.second)}</small>` : ''}${hour12 ? `<span class="ampm">${p.hour < 12 ? 'AM' : 'PM'}</span>` : ''}`;
+  }
+
+  private cityOf(ref: CityRef): City {
+    return CITIES.find((c) => c.tz === ref.tz && c.city === ref.label) ?? findCityByTz(ref.tz);
+  }
+
+  private diffText(tz: string, baseTz: string, now: number): string {
+    const d = zoneDiff(tz, baseTz, now);
+    const day = d.dayShift > 0 ? this.t.tomorrow : d.dayShift < 0 ? this.t.yesterday : this.t.today;
+    if (d.minutes === 0) return `${day}, ${this.t.sameTime}`;
+    const abs = Math.abs(d.minutes);
+    const amount = `${Math.floor(abs / 60)}h${abs % 60 ? pad(abs % 60) : ''}`;
+    return `${day}, ${d.minutes > 0 ? '+' : '−'}${amount}`;
+  }
+
+  private clockHtml(now: number): string {
+    const state = getClockState();
+    const deviceTz = localTimeZone();
+    const zone = this.place ?? { tz: deviceTz, label: findCityByTz(deviceTz).city };
+    const rows = state.cities.map((c, i) => {
+      const day = isDaytime(c.tz, now);
+      return `<li class="row"><span class="flag">${flagEmoji(this.cityOf(c).cc)}</span>` +
+        `<div class="grow"><div class="title">${esc(c.label)}</div><div class="sub">${esc(this.diffText(c.tz, deviceTz, now))}</div></div>` +
+        `<span class="daynight${day ? ' lit' : ''}">${day ? ICON.sun : ICON.moon}</span>` +
+        `<div class="big num" data-city-time="${esc(c.tz)}">${this.timeHtml(c.tz, now)}</div>` +
+        `<button class="icon-btn small" data-act="remove-city" data-i="${i}" aria-label="${esc(this.t.remove)} ${esc(c.label)}" title="${esc(this.t.remove)}">${ICON.close}</button></li>`;
+    }).join('');
+    return `<div class="hero"><div class="hero-time num" data-hero>${this.timeHtml(deviceTz, now, true)}</div>` +
+      `<div class="hero-date">${esc(new Intl.DateTimeFormat(this.locale, { timeZone: deviceTz, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(now))}</div>` +
+      `<div class="hero-zone">${this.place ? '📍 ' : ''}${esc(zone.label)} · ${esc(offsetLabel(zone.tz, now))}</div>` +
+      `<div class="locate"><button class="pill" data-act="locate" ${this.locating ? 'disabled' : ''}>${ICON.pin}${esc(this.locating ? this.t.locating : this.t.locate)}</button></div>` +
+      (this.locateMsg ? `<div class="hint" role="status" style="text-align:center">${esc(this.locateMsg)}</div>` : '') +
+      `</div><div class="section"><h2>${esc(this.t.worldClock)}</h2>` +
+      `<button class="pill" data-act="add-city">${ICON.plus}${esc(this.t.addCity)}</button></div>` +
+      (rows ? `<ul class="list">${rows}</ul>` : `<div class="empty">${esc(this.t.noCities)}</div>`);
+  }
+
+  private nextAlarm(now: number): { alarm: Alarm; at: number } | null {
+    const deviceTz = localTimeZone();
+    let best: { alarm: Alarm; at: number } | null = null;
+    for (const alarm of getClockState().alarms) {
+      const at = alarm.snoozeUntil ?? (alarm.enabled ? nextRing(alarm, now, deviceTz) : null);
+      if (at !== null && (!best || at < best.at)) best = { alarm, at };
+    }
+    return best;
+  }
+
+  private alarmTime(time: string): string {
+    if (!getClockState().settings.hour12) return esc(time);
+    const [h, m] = time.split(':').map(Number);
+    return `${h % 12 || 12}:${pad(m)}<span class="ampm">${h < 12 ? 'AM' : 'PM'}</span>`;
+  }
+
+  private alarmHtml(now: number): string {
+    const { alarms } = getClockState();
+    const next = this.nextAlarm(now);
+    const summary = alarms.length === 0 ? ''
+      : `<div class="summary"><div class="k">${esc(next ? this.t.nextAlarm : this.t.alarmOff)}</div>` +
+        (next ? `<div class="v"><span class="num">${this.alarmTime(next.alarm.time)}</span> · <span data-next-wait>${esc(describeWait(next.at - now, this.language))}</span></div>` : '') + `</div>`;
+    const rows = [...alarms].sort((a, b) => a.time.localeCompare(b.time)).map((a) => {
+      const sub = [a.label, describeDays(a.days, this.language), a.tzLabel].filter(Boolean).join(' · ');
+      return `<li class="row click${a.enabled ? '' : ' off'}" data-act="edit-alarm" data-id="${esc(a.id)}">` +
+        `<div class="grow"><div class="big num">${this.alarmTime(a.time)}</div><div class="sub">${esc(sub)}</div></div>` +
+        `<button class="switch" role="switch" data-act="toggle-alarm" data-id="${esc(a.id)}" aria-checked="${a.enabled}" aria-label="${esc(this.t.alarm)} ${esc(a.time)}"></button></li>`;
+    }).join('');
+    return summary + `<div class="section"><h2>${esc(this.t.alarms)}</h2>` +
+      `<button class="pill primary" data-act="new-alarm">${ICON.plus}${esc(this.t.newAlarm)}</button></div>` +
+      (rows ? `<ul class="list">${rows}</ul>` : `<div class="empty">${esc(this.t.noAlarms)}</div>`) +
+      `<p class="hint">${esc(this.t.alarmHint)}</p>` + this.notificationHtml();
+  }
+
+  private notificationHtml(): string {
+    if (typeof Notification === 'undefined') return '';
+    if (Notification.permission === 'granted') return `<div class="notice"><span>${esc(this.t.notificationsOn)}</span></div>`;
+    if (Notification.permission === 'denied') return `<div class="notice"><span>${esc(this.t.notificationsBlocked)}</span></div>`;
+    return `<div class="notice"><span>${esc(this.t.notificationsHint)}</span>` +
+      `<button class="pill primary" data-act="notify">${ICON.bell}${esc(this.t.enableNotifications)}</button></div>`;
+  }
+
+  private stopwatchHtml(now: number): string {
+    const sw = getClockState().stopwatch;
+    const running = sw.startedAt !== null;
+    const elapsed = stopwatchElapsed(sw, now);
+    const splits = sw.laps.map((total, i) => total - (i ? sw.laps[i - 1] : 0));
+    const best = splits.length > 1 ? Math.min(...splits) : -1;
+    const worst = splits.length > 1 ? Math.max(...splits) : -1;
+    const laps = splits.map((split, i) =>
+      `<div class="lap${split === best ? ' best' : split === worst ? ' worst' : ''}"><span class="n">${esc(this.t.lap)} ${i + 1}</span>` +
+      `<span class="d num">${formatStopwatch(split)}</span><span class="t num">${formatStopwatch(sw.laps[i])}</span></div>`).reverse().join('');
+    const second = running
+      ? `<button class="round" data-act="sw-lap" ${sw.laps.length >= CLOCK_LIMITS.laps ? 'disabled' : ''}>${esc(this.t.lap)}</button>`
+      : `<button class="round" data-act="sw-reset" ${elapsed === 0 ? 'disabled' : ''}>${esc(this.t.reset)}</button>`;
+    const main = running
+      ? `<button class="round halt" data-act="sw-stop">${esc(this.t.stop)}</button>`
+      : `<button class="round go" data-act="sw-start">${esc(elapsed > 0 ? this.t.resume : this.t.start)}</button>`;
+    return `<div class="display num" data-sw>${formatStopwatch(elapsed)}</div><div class="controls">${second}${main}</div>` +
+      (laps ? `<div class="section"><h2>${esc(this.t.laps)}</h2></div><div>${laps}</div>` : '');
+  }
+
+  private timerHtml(now: number): string {
+    const { timers } = getClockState();
+    const field = (key: 'h' | 'm' | 's', unit: string, max: number) =>
+      `<label><input class="num" type="number" inputmode="numeric" min="0" max="${max}" placeholder="00" data-dial="${key}" value="${esc(this.dial[key])}" aria-label="${esc(unit)}"/>${esc(unit)}</label>`;
+    const items = timers.map((timer) => {
+      const left = timerRemaining(timer, now);
+      const running = timer.endsAt !== null && !timer.done;
+      const offset = RING_LEN * (1 - (timer.durationMs ? left / timer.durationMs : 0));
+      return `<li class="timer${timer.done ? ' done' : ''}"><div class="ringp"><svg viewBox="0 0 64 64" aria-hidden="true">` +
+        `<circle class="track" cx="32" cy="32" r="27"/><circle class="bar" cx="32" cy="32" r="27" stroke-dasharray="${RING_LEN.toFixed(1)}" stroke-dashoffset="${offset.toFixed(1)}" data-timer-bar="${esc(timer.id)}"/></svg></div>` +
+        `<div class="grow"><div class="title">${esc(timer.label || `${this.t.timer} · ${formatDuration(timer.durationMs)}`)}</div>` +
+        `<div class="big num" data-timer-left="${esc(timer.id)}">${timer.done ? esc(this.t.done) : formatDuration(left)}</div></div><div class="acts">` +
+        (timer.done ? '' : running
+          ? `<button class="icon-btn small" data-act="timer-pause" data-id="${esc(timer.id)}" aria-label="${esc(this.t.pause)}" title="${esc(this.t.pause)}">${ICON.pause}</button>`
+          : `<button class="icon-btn small" data-act="timer-resume" data-id="${esc(timer.id)}" aria-label="${esc(this.t.resume)}" title="${esc(this.t.resume)}">${ICON.play}</button>`) +
+        `<button class="icon-btn small" data-act="timer-reset" data-id="${esc(timer.id)}" aria-label="${esc(this.t.restart)}" title="${esc(this.t.restart)}">${ICON.reset}</button>` +
+        `<button class="icon-btn small" data-act="timer-remove" data-id="${esc(timer.id)}" aria-label="${esc(this.t.delete)}" title="${esc(this.t.delete)}">${ICON.trash}</button></div></li>`;
+    }).join('');
+    return `<div class="dial">${field('h', this.t.hours, 99)}${field('m', this.t.minutes, 59)}${field('s', this.t.seconds, 59)}</div>` +
+      `<div class="presets">${TIMER_PRESETS_MIN.map((min) => `<button class="pill" data-act="timer-preset" data-min="${min}">${min} min</button>`).join('')}</div>` +
+      `<div class="start-row"><input class="field" type="text" maxlength="${CLOCK_LIMITS.labelChars}" placeholder="${esc(this.t.timerLabel)}" data-dial="label" value="${esc(this.dial.label)}"/>` +
+      `<button class="round go" data-act="timer-start">${esc(this.t.start)}</button></div>` +
+      `<div class="section"><h2>${esc(this.t.timers)}</h2></div>` +
+      (items ? `<ul class="list">${items}</ul>` : `<div class="empty">${esc(this.t.noTimers)}</div>`);
+  }
+
+  // ─── Tique: só os números mudam ─────────────────────────────────────────
+
+  private tick() {
+    if (!this.isConnected) return;
+    const now = Date.now();
+    if (this.tab === 'clock' || this.tab === 'alarm') {
+      // Na virada do minuto mudam hora das cidades, "amanhã/ontem" e o próximo alarme.
+      if (Math.floor(now / 60_000) !== this.minuteKey) {
+        this.renderBody();
         return;
       }
-      list.innerHTML = results.map((c) => `
-        <button class="city-result" data-act="select-city" data-tz="${this.escape(c.tz)}" data-city="${this.escape(c.city)}">
-          ${this.escape(flagEmoji(c.cc))} ${this.escape(c.city)}, ${this.escape(c.country)}
-        </button>
-      `).join('');
-      this.root.querySelectorAll('.city-result').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const tz = btn.getAttribute('data-tz');
-          const city = btn.getAttribute('data-city');
-          const input = this.root.querySelector('input[data-field="city-search"]') as HTMLInputElement;
-          input.value = city + '';
-          input.setAttribute('data-selected-tz', tz || '');
-        });
-      });
+      const hero = this.wrapEl.querySelector('[data-hero]');
+      if (hero) hero.innerHTML = this.timeHtml(localTimeZone(), now, true);
+    } else if (this.tab === 'timer') {
+      for (const timer of getClockState().timers) {
+        if (timer.done) continue;
+        const left = timerRemaining(timer, now);
+        const text = this.wrapEl.querySelector(`[data-timer-left="${timer.id}"]`);
+        if (text) text.textContent = formatDuration(left);
+        this.wrapEl.querySelector(`[data-timer-bar="${timer.id}"]`)
+          ?.setAttribute('stroke-dashoffset', (RING_LEN * (1 - left / timer.durationMs)).toFixed(1));
+      }
+    } else {
+      this.paintStopwatch(now);
     }
   }
 
-  private handleChange(e: Event) {
-    const target = e.target as HTMLInputElement;
-    if (target.getAttribute('data-field')?.startsWith('day-')) {
-      return; // handled by click
-    }
+  private paintStopwatch(now: number) {
+    const el = this.wrapEl.querySelector('[data-sw]');
+    if (el) el.textContent = formatStopwatch(stopwatchElapsed(getClockState().stopwatch, now));
   }
 
-  private handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      this.hideSheet();
-    }
+  private runStopwatchFrames() {
+    cancelAnimationFrame(this.frame);
+    const step = () => {
+      if (!this.isConnected || this.tab !== 'stopwatch' || getClockState().stopwatch.startedAt === null) return;
+      this.paintStopwatch(Date.now());
+      this.frame = requestAnimationFrame(step);
+    };
+    step();
   }
 
-  private requestGeolocation() {
-    if (!navigator.geolocation) {
-      alert('Geolocalização não disponível');
+  // ─── Folhas (cidade, alarme, preferências) ──────────────────────────────
+
+  private openSheet(sheet: Sheet) {
+    this.sheet = sheet;
+    this.renderSheet();
+    const focus = this.sheetEl.querySelector<HTMLElement>('[data-autofocus]');
+    // No celular o foco automático abre o teclado por cima da folha: só no computador.
+    if (focus && window.matchMedia('(hover: hover)').matches) focus.focus();
+  }
+
+  private closeSheet() {
+    this.sheet = null;
+    this.renderSheet();
+  }
+
+  private renderSheet() {
+    const sheet = this.sheet;
+    this.sheetEl.hidden = !sheet;
+    if (!sheet) {
+      this.sheetEl.innerHTML = '';
       return;
     }
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const res = await fetch(
-            `https://geocoding-api.open-meteo.com/v1/search?latitude=${pos.coords.latitude}&longitude=${pos.coords.longitude}&count=1&language=${this.lang}`
-          );
-          const data = (await res.json()) as any;
-          if (data.results?.[0]) {
-            const r = data.results[0];
-            this.myLocation = { tz: r.timezone, city: r.name || 'Minha localização', cc: r.country_code || '🌍' };
-            this.render();
-          }
-        } catch (err) {
-          console.error('Geolocation lookup failed:', err);
-        }
-      },
-      (err) => {
-        console.error('Geolocation error:', err.message);
+    const head = (title: string) =>
+      `<div class="sheet-head"><h3>${esc(title)}</h3><button class="icon-btn small" data-act="close-sheet" aria-label="${esc(this.t.close)}">${ICON.close}</button></div>`;
+    let inner = '';
+    if (sheet.type === 'city') {
+      inner = head(this.t.addCity) +
+        `<div class="sheet-body"><input class="field" type="search" data-field="city-q" data-autofocus placeholder="${esc(this.t.searchCity)}" aria-label="${esc(this.t.searchCity)}" autocomplete="off"/>` +
+        `<div class="results" data-results>${this.cityResultsHtml('')}</div></div>`;
+    } else if (sheet.type === 'alarm') {
+      const state = getClockState();
+      const alarm = state.alarms.find((a) => a.id === sheet.id);
+      const zones: Place[] = [];
+      for (const z of [...(alarm?.tz ? [{ tz: alarm.tz, label: alarm.tzLabel ?? findCityByTz(alarm.tz).city }] : []), ...state.cities]) {
+        if (!zones.some((x) => x.tz === z.tz && x.label === z.label)) zones.push(z);
       }
-    );
-  }
-
-  private showSheet(type: string, data?: any) {
-    const sheet = this.root.querySelector('.sheet') || this.createSheet();
-    sheet.classList.remove('hidden');
-    sheet.setAttribute('data-sheet', type);
-    sheet.innerHTML = this.renderSheetContent(type, data);
-  }
-
-  private hideSheet() {
-    const sheet = this.root.querySelector('.sheet');
-    if (sheet) sheet.classList.add('hidden');
-  }
-
-  private createSheet(): Element {
-    const sheet = document.createElement('div');
-    sheet.className = 'sheet sheet-bg hidden';
-    this.root.querySelector('.vc')?.appendChild(sheet);
-    return sheet;
-  }
-
-  private renderSheetContent(type: string, data?: any): string {
-    if (type === 'city-search') {
-      return `
-        <div class="sheet">
-          <div class="sheet-head"><h3>${this.escape(this.strings.searchCity)}</h3></div>
-          <div class="sheet-body">
-            <input type="text" data-field="city-search" placeholder="${this.escape(this.strings.searchCity)}" class="field" />
-            <div class="city-search-results" style="margin-top:1rem;"></div>
-            <button class="pill" data-act="add-searched-city">${this.escape(this.strings.addCity)}</button>
-          </div>
-          <div class="sheet-foot"><button class="pill" data-act="close-sheet">${this.escape(this.strings.close)}</button></div>
-        </div>
-      `;
+      const selected = alarm?.tz ? zones.findIndex((z) => z.tz === alarm.tz && z.label === alarm.tzLabel) : -1;
+      inner = head(alarm ? this.t.editAlarm : this.t.newAlarm) +
+        `<div class="sheet-body"><div class="form-row"><label for="vc-time">${esc(this.t.time)}</label>` +
+        `<input id="vc-time" class="time-input num" type="time" data-field="alarm-time" data-autofocus value="${esc(alarm?.time ?? '07:00')}"/></div>` +
+        `<div class="form-row"><label for="vc-label">${esc(this.t.label)}</label>` +
+        `<input id="vc-label" class="field" type="text" data-field="alarm-label" maxlength="${CLOCK_LIMITS.labelChars}" value="${esc(alarm?.label ?? '')}" placeholder="${esc(this.t.labelHint)}"/></div>` +
+        `<div class="form-row"><span>${esc(this.t.repeat)}</span><div class="days">${dayNames(this.language).map((name, d) =>
+          `<button class="day" data-act="toggle-day" data-day="${d}" aria-pressed="${sheet.days.includes(d)}">${esc(name)}</button>`).join('')}</div></div>` +
+        `<div class="form-row"><label for="vc-tz">${esc(this.t.zone)}</label><select id="vc-tz" class="field" data-field="alarm-tz">` +
+        `<option value="-1">${esc(this.t.deviceZone)}</option>${zones.map((z, i) =>
+          `<option value="${i}" data-tz="${esc(z.tz)}" data-label="${esc(z.label)}" ${i === selected ? 'selected' : ''}>${esc(z.label)} (${esc(offsetLabel(z.tz, Date.now()))})</option>`).join('')}</select></div>` +
+        (sheet.error ? `<div class="err" role="alert">${esc(sheet.error)}</div>` : '') + `</div>` +
+        `<div class="sheet-foot">${alarm ? `<button class="pill danger" data-act="delete-alarm">${ICON.trash}${esc(this.t.delete)}</button>` : ''}<span class="spacer"></span>` +
+        `<button class="pill" data-act="close-sheet">${esc(this.t.cancel)}</button><button class="pill primary" data-act="save-alarm">${esc(this.t.save)}</button></div>`;
+    } else {
+      const { settings } = getClockState();
+      const sounds: [AlarmSound, string][] = [['classic', this.t.soundClassic], ['digital', this.t.soundDigital], ['gentle', this.t.soundGentle]];
+      inner = head(this.t.settings) +
+        `<div class="sheet-body"><div class="set-row"><span>${esc(this.t.format24)}</span>` +
+        `<button class="switch" role="switch" data-act="toggle-24" aria-checked="${!settings.hour12}" aria-label="${esc(this.t.format24)}"></button></div>` +
+        `<div class="set-row"><label for="vc-sound">${esc(this.t.sound)}</label><span style="display:flex;gap:8px;align-items:center">` +
+        `<select id="vc-sound" class="field" data-field="sound">${sounds.map(([key, label]) => `<option value="${key}" ${settings.sound === key ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select>` +
+        `<button class="pill" data-act="preview-sound">${ICON.play}${esc(this.t.listen)}</button></span></div>` +
+        `<div class="set-row"><label for="vc-snooze">${esc(this.t.snoozeFor)}</label>` +
+        `<input id="vc-snooze" class="field num" type="number" inputmode="numeric" min="1" max="60" data-field="snooze" value="${settings.snoozeMinutes}" style="min-width:0;width:88px;text-align:center"/></div>` +
+        this.notificationHtml() + `</div>`;
     }
-    if (type === 'alarm-editor') {
-      const state = getClockState();
-      const id = data?.id || '';
-      const alarm = id ? state.alarms.find((a) => a.id === id) : null;
-      const dayChips = [0, 1, 2, 3, 4, 5, 6].map((d) => {
-        const names = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
-        const selected = alarm?.days.includes(d) || false;
-        return `<button class="day ${selected ? 'active' : ''}" data-act="toggle-day:${d}" data-day="${d}">${names[d]}</button>`;
-      }).join('');
-      return `
-        <div class="sheet">
-          <div class="sheet-head"><h3>${alarm ? this.escape(this.strings.editAlarm) : this.escape(this.strings.newAlarm)}</h3></div>
-          <div class="sheet-body">
-            <input type="hidden" data-field="alarm-id" value="${id}" />
-            <div class="form-row">
-              <label>${this.escape(this.strings.time)}</label>
-              <input type="time" data-field="alarm-time" value="${alarm?.time || ''}" class="field" />
-            </div>
-            <div class="form-row">
-              <label>${this.escape(this.strings.label)}</label>
-              <input type="text" data-field="alarm-label" value="${this.escape(alarm?.label || '')}" placeholder="${this.escape(this.strings.labelHint)}" class="field" />
-            </div>
-            <div class="form-row">
-              <label>${this.escape(this.strings.repeat)}</label>
-              <div class="days">${dayChips}</div>
-            </div>
-            <div class="form-row">
-              <label>${this.escape(this.strings.zone)}</label>
-              <select data-field="alarm-tz" class="field">
-                <option value="">${this.escape(this.strings.deviceZone)}</option>
-                ${state.cities.map((c) => `<option value="${this.escape(c.tz)}" ${alarm?.tz === c.tz ? 'selected' : ''}>${this.escape(c.label)}</option>`).join('')}
-              </select>
-            </div>
-            <div class="hint">${this.escape(this.strings.alarmHint)}</div>
-          </div>
-          <div class="sheet-foot">
-            <button class="pill primary" data-act="save-alarm">${this.escape(this.strings.save)}</button>
-            ${alarm ? `<button class="pill danger" data-act="delete-alarm">${this.escape(this.strings.delete)}</button>` : ''}
-            <button class="pill" data-act="close-sheet">${this.escape(this.strings.cancel)}</button>
-          </div>
-        </div>
-      `;
+    this.sheetEl.innerHTML = `<div class="sheet" role="dialog" aria-modal="true">${inner}</div>`;
+  }
+
+  private cityResultsHtml(query: string): string {
+    this.cityResults = searchCities(query, 40);
+    if (this.cityResults.length === 0) return `<div class="empty">${esc(this.t.noCity)}</div>`;
+    const now = Date.now();
+    const have = getClockState().cities;
+    return this.cityResults.map((c, i) => {
+      const added = have.some((x) => x.tz === c.tz && x.label === c.city);
+      return `<button class="result" data-act="pick-city" data-i="${i}" ${added ? 'disabled' : ''}><span class="flag">${flagEmoji(c.cc)}</span>` +
+        `<span class="grow"><span class="title">${esc(c.city)}</span><br/><span class="sub">${esc(added ? this.t.added : `${c.country} · ${offsetLabel(c.tz, now)}`)}</span></span>` +
+        `<span class="when">${this.timeHtml(c.tz, now)}</span></button>`;
+    }).join('');
+  }
+
+  // ─── Toque ──────────────────────────────────────────────────────────────
+
+  private renderRing() {
+    const ring = this.ringUI ? this.ringing[0] : undefined;
+    this.ringEl.hidden = !ring;
+    if (!ring) {
+      this.ringEl.innerHTML = '';
+      return;
     }
-    if (type === 'settings') {
-      const state = getClockState();
-      return `
-        <div class="sheet">
-          <div class="sheet-head"><h3>${this.escape(this.strings.settings)}</h3></div>
-          <div class="sheet-body">
-            <div class="form-row">
-              <label><input type="checkbox" data-field="hour12" ${state.settings.hour12 ? 'checked' : ''} /> ${this.escape(this.strings.format24)}</label>
-            </div>
-            <div class="form-row">
-              <label>${this.escape(this.strings.snoozeFor)}</label>
-              <input type="number" data-field="snooze-minutes" value="${state.settings.snoozeMinutes}" min="1" max="60" class="field" />
-            </div>
-            <div class="form-row">
-              <label>${this.escape(this.strings.sound)}</label>
-              <select data-field="alarm-sound" class="field">
-                <option value="classic" ${state.settings.sound === 'classic' ? 'selected' : ''}>${this.escape(this.strings.soundClassic)}</option>
-                <option value="digital" ${state.settings.sound === 'digital' ? 'selected' : ''}>${this.escape(this.strings.soundDigital)}</option>
-                <option value="gentle" ${state.settings.sound === 'gentle' ? 'selected' : ''}>${this.escape(this.strings.soundGentle)}</option>
-              </select>
-              <button class="pill small" data-act="preview-sound:${state.settings.sound}">${this.escape(this.strings.listen)}</button>
-            </div>
-            <button class="pill primary" data-act="enable-notifications">${this.escape(this.strings.enableNotifications)}</button>
-            <div class="hint">${this.escape(this.strings.notificationsHint)}</div>
-          </div>
-          <div class="sheet-foot"><button class="pill" data-act="close-sheet">${this.escape(this.strings.close)}</button></div>
-        </div>
-      `;
+    const alarm = ring.kind === 'alarm';
+    this.ringEl.innerHTML = `<div class="bell">${ICON.bell}</div>` +
+      `<div class="rt num">${alarm ? this.alarmTime(ring.time ?? '') : '00:00'}</div>` +
+      `<div class="rl">${esc(ring.label || (alarm ? this.t.alarm : this.t.timerDone))}</div>` +
+      (ring.tzLabel ? `<div class="rs">${esc(ring.tzLabel)}</div>` : '') +
+      `<div class="controls">${alarm ? `<button class="round" data-act="ring-snooze">${esc(this.t.snooze)}</button>` : ''}` +
+      `<button class="round go" data-act="ring-dismiss">${esc(this.t.dismiss)}</button></div>`;
+  }
+
+  // ─── Eventos ────────────────────────────────────────────────────────────
+
+  private onClick(e: Event) {
+    const target = e.target as Element;
+    if (target === this.sheetEl) {
+      this.closeSheet();
+      return;
     }
-    return '';
+    const el = target.closest<HTMLElement>('[data-act]');
+    if (!el || (el as HTMLButtonElement).disabled) return;
+    unlockAudio();
+    const id = el.dataset.id ?? '';
+    switch (el.dataset.act) {
+      case 'tab':
+        this.tab = el.dataset.tab as Tab;
+        this.renderTop();
+        this.renderBody();
+        this.root.querySelector('.body')!.scrollTop = 0;
+        break;
+      case 'settings': this.openSheet({ type: 'settings' }); break;
+      case 'close-sheet': this.closeSheet(); break;
+      case 'locate': this.locate(); break;
+      case 'add-city': this.openSheet({ type: 'city' }); break;
+      case 'remove-city': removeCity(Number(el.dataset.i)); break;
+      case 'pick-city': {
+        const city = this.cityResults[Number(el.dataset.i)];
+        if (city && addCity(city.tz, city.city)) this.closeSheet();
+        else if (city) this.flashSheetError(this.t.full);
+        break;
+      }
+      case 'new-alarm':
+        this.openSheet({ type: 'alarm', id: '', days: [], error: getClockState().alarms.length >= CLOCK_LIMITS.alarms ? this.t.full : '' });
+        break;
+      case 'edit-alarm': {
+        const alarm = getClockState().alarms.find((a) => a.id === id);
+        if (alarm) this.openSheet({ type: 'alarm', id, days: [...alarm.days], error: '' });
+        break;
+      }
+      case 'toggle-alarm': {
+        const alarm = getClockState().alarms.find((a) => a.id === id);
+        if (alarm) setAlarmEnabled(id, !alarm.enabled);
+        break;
+      }
+      case 'toggle-day':
+        if (this.sheet?.type === 'alarm') {
+          const day = Number(el.dataset.day);
+          const days = this.sheet.days;
+          this.sheet.days = days.includes(day) ? days.filter((d) => d !== day) : [...days, day];
+          el.setAttribute('aria-pressed', String(this.sheet.days.includes(day)));
+        }
+        break;
+      case 'save-alarm': this.saveAlarmFromSheet(); break;
+      case 'delete-alarm':
+        if (this.sheet?.type === 'alarm') removeAlarm(this.sheet.id);
+        this.closeSheet();
+        break;
+      case 'notify':
+        void requestClockNotifications().then(() => {
+          this.renderBody();
+          if (this.sheet?.type === 'settings') this.renderSheet();
+        });
+        break;
+      case 'toggle-24':
+        updateSettings({ hour12: !getClockState().settings.hour12 });
+        this.renderSheet();
+        break;
+      case 'preview-sound': previewAlarmSound(getClockState().settings.sound); break;
+      case 'sw-start': stopwatchStart(); break;
+      case 'sw-stop': stopwatchStop(); break;
+      case 'sw-lap': stopwatchLap(); break;
+      case 'sw-reset': stopwatchReset(); break;
+      case 'timer-preset':
+        this.dial = { ...this.dial, h: '', m: el.dataset.min ?? '', s: '' };
+        this.renderBody();
+        break;
+      case 'timer-start': {
+        const ms = ((Number(this.dial.h) || 0) * 3600 + (Number(this.dial.m) || 0) * 60 + (Number(this.dial.s) || 0)) * 1000;
+        if (ms >= 1000 && startTimer(ms, this.dial.label)) {
+          this.dial = { h: '', m: '', s: '', label: '' };
+          this.renderBody();
+        }
+        break;
+      }
+      case 'timer-pause': pauseTimer(id); break;
+      case 'timer-resume': resumeTimer(id); break;
+      case 'timer-reset': resetTimer(id); break;
+      case 'timer-remove': removeTimer(id); break;
+      case 'ring-snooze': if (this.ringing[0]) snoozeRing(this.ringing[0]); break;
+      case 'ring-dismiss': if (this.ringing[0]) dismissRing(this.ringing[0]); break;
+    }
+  }
+
+  private onInput(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const dial = input.dataset?.dial as keyof typeof this.dial | undefined;
+    if (dial) {
+      this.dial[dial] = input.value;
+    } else if (input.dataset?.field === 'city-q') {
+      const results = this.sheetEl.querySelector('[data-results]');
+      if (results) results.innerHTML = this.cityResultsHtml(input.value);
+    }
+  }
+
+  private onChange(e: Event) {
+    const input = e.target as HTMLInputElement;
+    if (input.dataset?.field === 'sound') {
+      updateSettings({ sound: input.value as AlarmSound });
+      previewAlarmSound(input.value as AlarmSound);
+    } else if (input.dataset?.field === 'snooze') {
+      updateSettings({ snoozeMinutes: Number(input.value) });
+      input.value = String(getClockState().settings.snoozeMinutes);
+    }
+  }
+
+  private flashSheetError(message: string) {
+    if (this.sheet?.type === 'alarm') {
+      this.sheet.error = message;
+      this.renderSheet();
+    }
   }
 
   private saveAlarmFromSheet() {
-    const timeInput = this.root.querySelector('input[data-field="alarm-time"]') as HTMLInputElement;
-    const labelInput = this.root.querySelector('input[data-field="alarm-label"]') as HTMLInputElement;
-    const tzInput = this.root.querySelector('select[data-field="alarm-tz"]') as HTMLSelectElement;
-    const idInput = this.root.querySelector('[data-field="alarm-id"]') as HTMLInputElement;
-
-    const time = timeInput?.value;
-    if (!time || !parseClockTime(time)) {
-      alert('Hora inválida');
+    if (this.sheet?.type !== 'alarm') return;
+    const get = <T extends Element>(field: string) => this.sheetEl.querySelector<T>(`[data-field="${field}"]`);
+    const time = parseClockTime(get<HTMLInputElement>('alarm-time')?.value ?? '');
+    // Guarda o que foi digitado antes de redesenhar a folha com o erro.
+    const label = get<HTMLInputElement>('alarm-label')?.value ?? '';
+    const option = get<HTMLSelectElement>('alarm-tz')?.selectedOptions[0];
+    if (!time) {
+      this.flashSheetError(this.t.invalidTime);
       return;
     }
-
-    const days = Array.from(this.root.querySelectorAll('.day.active')).map((b) => +b.getAttribute('data-day')!);
-    const tz = tzInput?.value || undefined;
-    const alarm = saveAlarm(
-      { time, label: labelInput?.value || '', days, tz },
-      idInput?.value ? idInput.value : undefined
+    const saved = saveAlarm(
+      { time, label, days: this.sheet.days, tz: option?.dataset.tz, tzLabel: option?.dataset.label, enabled: true },
+      this.sheet.id || undefined,
     );
-
-    if (alarm) {
-      this.hideSheet();
-      this.render();
-    } else {
-      alert(this.strings.full);
-    }
+    if (saved) this.closeSheet();
+    else this.flashSheetError(this.t.full);
   }
 
-  private renderRing(): string {
-    if (this.ringUI === 'off' || this.ringing.length === 0) return '';
-    const ring = this.ringing[0];
-    return `
-      <div class="ring">
-        <div class="ringp">
-          <svg viewBox="0 0 100 100" class="ringsvg">
-            <circle cx="50" cy="50" r="45" class="track" />
-            <circle cx="50" cy="50" r="45" class="bar" style="stroke-dasharray: 283; stroke-dashoffset: 70;" />
-          </svg>
-          <div class="rt">${this.escape(ring.kind === 'alarm' ? this.strings.alarm : this.strings.timer)}</div>
-          <div class="rl">${this.escape(ring.label)}</div>
-          <div class="rs">${ring.time ? this.escape(ring.time) : ''}</div>
-        </div>
-        <div style="display:flex; gap:1rem; justify-content:center;">
-          <button class="round go" data-act="snooze-ring">${this.escape(this.strings.snooze)}</button>
-          <button class="round halt" data-act="dismiss-ring">${this.escape(this.strings.dismiss)}</button>
-        </div>
-      </div>
-    `;
-  }
+  // ─── Localizador ────────────────────────────────────────────────────────
 
-  private render() {
-    const state = getClockState();
-    const now = Date.now();
-    const vc = this.root.querySelector('.vc') as HTMLElement;
-    const themeClass = this.theme === 'auto' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : this.theme;
-    vc.className = `vc vc-theme-${themeClass}`;
-
-    const tabs = [
-      { key: 'relógio', label: this.strings.tabClock },
-      { key: 'alarme', label: this.strings.tabAlarm },
-      { key: 'cronômetro', label: this.strings.tabStopwatch },
-      { key: 'timer', label: this.strings.tabTimer },
-    ];
-
-    let content = `<div class="top"><div class="tabs">`;
-    for (const t of tabs) {
-      content += `<button class="tab ${this.tab === t.key ? 'active' : ''}" data-act="tab:${t.key}" aria-selected="${this.tab === t.key}">${this.escape(t.label)}</button>`;
+  private locate() {
+    if (this.locating) return;
+    if (!navigator.geolocation) {
+      this.locateMsg = this.t.locateUnsupported;
+      this.renderBody();
+      return;
     }
-    content += `</div></div><div class="body">`;
-
-    if (this.tab === 'relógio') {
-      const devTz = localTimeZone();
-      const devTime = zoneParts(devTz, new Date(now));
-      const hour12 = state.settings.hour12;
-      const h = hour12 && devTime.hour > 12 ? devTime.hour - 12 : devTime.hour;
-      const ampm = hour12 ? (devTime.hour < 12 ? 'AM' : 'PM') : '';
-      content += `
-        <div class="hero">
-          <div class="hero-time"><span data-t>${String(h).padStart(2, '0')}</span>:<span data-t>${String(devTime.minute).padStart(2, '0')}</span><span class="small" data-t>${String(devTime.second).padStart(2, '0')}</span></div>
-          <div class="hero-date">${formatZoneDate(devTz, new Date(now))}</div>
-        </div>
-        <div class="section"><h2>${this.escape(this.strings.worldClock)}</h2>`;
-      if (this.myLocation) {
-        const loc = this.myLocation;
-        const locTime = formatZoneTime(loc.tz, new Date(now), { hour12 });
-        const dy = isDaytime(loc.tz, new Date(now));
-        content += `<div class="row"><div class="title">${this.escape(flagEmoji(loc.cc))} ${this.escape(loc.city)}</div><div class="big">${this.escape(locTime)}</div><div class="daynight ${dy ? 'day' : ''}">${dy ? '☀️' : '🌙'}</div></div>`;
-      }
-      for (let i = 0; i < state.cities.length; i++) {
-        const c = state.cities[i];
-        const t = formatZoneTime(c.tz, new Date(now), { hour12 });
-        const dy = isDaytime(c.tz, new Date(now));
-        const city = searchCities(c.label, 1)[0] || { cc: '🌍' };
-        content += `<div class="row click" data-act="remove-city:${i}"><div class="title">${this.escape(flagEmoji(city.cc))} ${this.escape(c.label)}</div><div class="big">${this.escape(t)}</div><div class="daynight ${dy ? 'day' : ''}">${dy ? '☀️' : '🌙'}</div></div>`;
-      }
-      content += `<button class="pill" data-act="add-city-sheet">${this.escape(this.strings.addCity)}</button>`;
-      if (!this.myLocation) {
-        content += `<button class="pill" data-act="my-location">📍 ${this.strings.worldClock === 'World clock' ? 'My Location' : 'Minha localização'}</button>`;
-      }
-      content += `</div>`;
-    } else if (this.tab === 'alarme') {
-      const nextAlarm = state.alarms.find((a) => a.enabled);
-      content += `<div class="section"><h2>${this.escape(this.strings.alarms)}</h2>`;
-      if (nextAlarm) {
-        content += `<div class="summary"><div class="k">${this.escape(this.strings.nextAlarm)}</div><div class="v">${this.escape(nextAlarm.time)} ${nextAlarm.label ? '·' : ''} ${this.escape(nextAlarm.label)}</div></div>`;
-      } else {
-        content += `<div class="empty">${this.escape(this.strings.noAlarms)}</div>`;
-      }
-      if (state.alarms.length === 0) {
-        content += `<button class="pill primary" data-act="new-alarm-sheet">${this.escape(this.strings.newAlarm)}</button>`;
-      } else {
-        content += `<div class="list">`;
-        for (const a of state.alarms) {
-          content += `<div class="row">
-            <div class="grow"><div class="title">${this.escape(a.label || a.time)}</div><div class="sub">${a.days.length === 0 ? this.strings.today : describeDays(a.days, this.lang)}</div></div>
-            <div><button class="switch" data-act="alarm-toggle:${a.id}" aria-checked="${a.enabled}" role="switch">${a.enabled ? '✓' : '○'}</button></div>
-            <button class="icon-btn small" data-act="edit-alarm:${a.id}">✎</button>
-            <button class="icon-btn small" data-act="remove-alarm:${a.id}">✕</button>
-          </div>`;
+    this.locating = true;
+    this.locateMsg = '';
+    this.renderBody();
+    const finish = (message: string, place?: Place) => {
+      this.locating = false;
+      this.locateMsg = message;
+      if (place) {
+        this.place = place;
+        try {
+          window.localStorage.setItem(CLOCK_PLACE_KEY, JSON.stringify(place));
+        } catch {
+          /* sem armazenamento: vale só nesta visita */
         }
-        content += `</div><button class="pill primary" data-act="new-alarm-sheet">${this.escape(this.strings.newAlarm)}</button>`;
       }
-      content += `</div>`;
-    } else if (this.tab === 'cronômetro') {
-      const sw = state.stopwatch;
-      const elapsed = stopwatchElapsed(sw, now);
-      const running = sw.startedAt !== null;
-      content += `<div class="hero"><div class="hero-time">${this.escape(formatStopwatch(elapsed))}</div></div>
-        <div class="controls">
-          ${!running ? `<button class="round go" data-act="stopwatch-start">${this.escape(this.strings.start)}</button>` : `<button class="round halt" data-act="stopwatch-stop">${this.escape(this.strings.stop)}</button>`}
-          ${running ? `<button class="round" data-act="stopwatch-lap">${this.escape(this.strings.lap)}</button>` : ''}
-          <button class="round" data-act="stopwatch-reset">${this.escape(this.strings.reset)}</button>
-        </div>
-        ${sw.laps.length > 0 ? `<div class="section"><h2>${this.strings.laps}</h2><div class="list">${sw.laps.map((l, i) => `<div class="lap"><div class="n">#${i + 1}</div><div class="d">${formatStopwatch(l)}</div></div>`).join('')}</div></div>` : ''}`;
-    } else if (this.tab === 'timer') {
-      content += `<div class="section"><h2>${this.escape(this.strings.timers)}</h2>`;
-      if (state.timers.length === 0) {
-        content += `<div class="summary"><label>${this.strings.minutes}: <input type="number" data-field="timer-min" min="0" max="99" class="field" style="width:3rem;" /> ${this.strings.seconds}: <input type="number" data-field="timer-sec" min="0" max="59" class="field" style="width:3rem;" /> <input type="text" data-field="timer-label" placeholder="${this.escape(this.strings.timerLabel)}" class="field" style="flex:1;" /> <button class="pill primary" data-act="start-timer">${this.escape(this.strings.start)}</button></label></div>`;
-      } else {
-        content += `<div class="list">`;
-        for (const t of state.timers) {
-          const rem = timerRemaining(t, now);
-          const running = t.endsAt !== null && !t.done;
-          content += `<div class="timer ${t.done ? 'done' : ''}">
-            <div class="title">${this.escape(t.label || `Timer`)}</div>
-            <div class="big">${this.escape(formatDuration(rem))}</div>
-            ${!running && !t.done ? `<button class="pill" data-act="resume-timer:${t.id}">${this.escape(this.strings.resume)}</button>` : ''}
-            ${running ? `<button class="pill" data-act="pause-timer:${t.id}">${this.escape(this.strings.pause)}</button>` : ''}
-            <button class="pill" data-act="reset-timer:${t.id}">${this.escape(this.strings.reset)}</button>
-            <button class="pill danger" data-act="remove-timer:${t.id}">${this.escape(this.strings.delete)}</button>
-          </div>`;
+      this.renderBody();
+    };
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        // O fuso sai das coordenadas (Open-Meteo, sem chave). Sem rede, vale o fuso do aparelho.
+        let tz = localTimeZone();
+        try {
+          const { latitude, longitude } = pos.coords;
+          const res = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${latitude.toFixed(3)}&longitude=${longitude.toFixed(3)}&current=temperature_2m&timezone=auto`,
+            { signal: AbortSignal.timeout(8000) },
+          );
+          const data = (await res.json()) as { timezone?: unknown };
+          if (isValidTimeZone(data.timezone)) tz = data.timezone;
+        } catch {
+          /* fica com o fuso do aparelho */
         }
-        content += `</div>`;
-      }
-      content += `</div>`;
-    }
-
-    content += `</div>
-      <div class="bottom">
-        <button class="icon-btn small" data-act="settings-sheet">⚙️</button>
-      </div>
-      ${this.renderRing()}
-      <div class="sheet hidden"></div>`;
-
-    vc.innerHTML = content;
-    this.attachListeners();
-  }
-
-  private escape(str: string): string {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+        const label = findCityByTz(tz).city;
+        if (tz !== localTimeZone()) addCity(tz, label);
+        finish('', { tz, label });
+      },
+      (err) => finish(err.code === err.PERMISSION_DENIED ? this.t.locateDenied : this.t.locateFailed),
+      { enableHighAccuracy: false, timeout: 15_000, maximumAge: 600_000 },
+    );
   }
 }
 
 export function defineVertalClock(tag = 'vertal-clock'): void {
-  if (!customElements.get(tag)) {
+  if (typeof customElements !== 'undefined' && !customElements.get(tag)) {
     customElements.define(tag, VertalClockElement);
   }
 }

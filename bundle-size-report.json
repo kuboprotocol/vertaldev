@@ -1,13 +1,13 @@
 {
-  "totalSizeMB": 1.5785064697265625,
+  "totalSizeMB": 1.5794925689697266,
   "exceeded": false,
   "largeFiles": [],
-  "timestamp": "2026-11-11T09:24:28.266Z",
+  "timestamp": "2026-11-11T10:03:58.599Z",
   "files": {
+    "index-BOMBsTdp.css": 0.19346141815185547,
     "CreativeDesign-C5OrTEln.css": 0.010119438171386719,
     "CreativeSheets-BCaMUEa2.css": 0.0107269287109375,
     "CanvasInfoPanel-DfQgqW1p.css": 0.07699108123779297,
-    "index-D7SIJ_5s.css": 0.1924753189086914,
     "robot-coding-CeXG8g3f.png": 0.08242321014404297,
     "pdf.worker.min-CjEcRF4W.mjs": 1.205770492553711
   },

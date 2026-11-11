@@ -64,6 +64,17 @@ const pt = {
   snoozeFor: 'Soneca (minutos)',
   listen: 'Ouvir',
   full: 'Limite atingido. Remova um item para adicionar outro.',
+  locate: 'Usar minha localização',
+  locating: 'Localizando…',
+  locateDenied: 'Localização bloqueada. Libere a permissão no navegador para usar o localizador.',
+  locateFailed: 'Não foi possível obter sua localização agora.',
+  locateUnsupported: 'Este navegador não oferece localização.',
+  notificationsOn: 'Notificações ativadas neste aparelho.',
+  notificationsBlocked: 'Notificações bloqueadas nas configurações do navegador.',
+  invalidTime: 'Informe um horário válido.',
+  total: 'Total',
+  once: 'Uma vez',
+  added: 'Já está na lista',
 };
 
 const en: typeof pt = {
@@ -129,6 +140,17 @@ const en: typeof pt = {
   snoozeFor: 'Snooze (minutes)',
   listen: 'Listen',
   full: 'Limit reached. Remove an item to add another.',
+  locate: 'Use my location',
+  locating: 'Locating…',
+  locateDenied: 'Location is blocked. Allow it in the browser to use the locator.',
+  locateFailed: 'Could not get your location right now.',
+  locateUnsupported: 'This browser does not offer location.',
+  notificationsOn: 'Notifications are on for this device.',
+  notificationsBlocked: 'Notifications are blocked in the browser settings.',
+  invalidTime: 'Enter a valid time.',
+  total: 'Total',
+  once: 'Once',
+  added: 'Already on the list',
 };
 
 export type ClockStrings = typeof pt;
