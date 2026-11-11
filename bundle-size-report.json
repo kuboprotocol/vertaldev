@@ -1,13 +1,15 @@
 {
-  "totalSizeMB": 0.31957435607910156,
+  "totalSizeMB": 1.5784549713134766,
   "exceeded": false,
   "largeFiles": [],
-  "timestamp": "2026-10-10T17:02:17.005Z",
+  "timestamp": "2026-11-11T06:51:14.935Z",
   "files": {
-    "CanvasPage-DfQgqW1p.css": 0.07699108123779297,
-    "index-BNK7gUXo.css": 0.1469707489013672,
-    "CreativeChatPage-BG4k49L3.css": 0.013189315795898438,
-    "robot-coding-CeXG8g3f.png": 0.08242321014404297
+    "CreativeDesign-C5OrTEln.css": 0.010119438171386719,
+    "index-Cp7GAZfM.css": 0.19242382049560547,
+    "CreativeSheets-BCaMUEa2.css": 0.0107269287109375,
+    "CanvasInfoPanel-DfQgqW1p.css": 0.07699108123779297,
+    "robot-coding-CeXG8g3f.png": 0.08242321014404297,
+    "pdf.worker.min-CjEcRF4W.mjs": 1.205770492553711
   },
   "evidence": {
     "screenshots": [
