@@ -16,6 +16,8 @@ export interface Alarm {
   tzLabel?: string;
   /** Soneca: toca de novo neste instante (ms). */
   snoozeUntil?: number;
+  /** Toque deste alarme (embutido ou "custom:<id>"). Sem ele, vale o toque padrão. */
+  sound?: string;
   createdAt: number;
 }
 

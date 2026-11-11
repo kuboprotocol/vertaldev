@@ -11,8 +11,9 @@ import {
   CLOCK_LIMITS, addCity, formatDuration, formatStopwatch, getClockState, pauseTimer, removeAlarm, removeCity,
   removeTimer, resetTimer, resumeTimer, saveAlarm, setAlarmEnabled, startTimer, stopwatchElapsed, stopwatchLap,
   stopwatchReset, stopwatchStart, stopwatchStop, subscribeClock, timerRemaining, updateSettings,
-  type AlarmSound, type CityRef,
+  ALARM_SOUNDS, customSoundId, soundRef, type AlarmSound, type CityRef,
 } from '@/lib/clock/store';
+import { addSoundFile, removeSoundFile } from '@/lib/clock/soundFiles';
 import {
   dismissRing, getRinging, requestClockNotifications, snoozeRing, startClockEngine, subscribeRinging, type Ring,
 } from '@/lib/clock/engine';
@@ -20,7 +21,7 @@ import {
   CITIES, findCityByTz, flagEmoji, isDaytime, isValidTimeZone, localTimeZone, offsetLabel,
   searchCities, zoneDiff, zoneParts, type City,
 } from '@/lib/clock/zones';
-import { previewAlarmSound, unlockAudio } from '@/lib/clock/sound';
+import { previewAlarmSound, stopSoundPreview, unlockAudio } from '@/lib/clock/sound';
 
 type Tab = 'clock' | 'alarm' | 'stopwatch' | 'timer';
 
@@ -57,6 +58,7 @@ const ICON = {
   play: svg('<path d="M8 5.5v13l10-6.5z"/>'),
   pause: svg('<path d="M8.5 5.5v13M15.5 5.5v13"/>'),
   reset: svg('<path d="M4.5 12a7.5 7.5 0 1 0 2.3-5.4M4.5 4.5v4h4"/>'),
+  upload: svg('<path d="M12 15.5V4.5M7.5 9 12 4.5 16.5 9M5 15.5v3.5h14v-3.5"/>'),
   bell: svg('<path d="M6 16.5V11a6 6 0 1 1 12 0v5.5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0"/>'),
 };
 
@@ -259,7 +261,7 @@ export class VertalClockElement extends HTMLElement {
       : `<div class="summary"><div class="k">${esc(next ? this.t.nextAlarm : this.t.alarmOff)}</div>` +
         (next ? `<div class="v"><span class="num">${this.alarmTime(next.alarm.time)}</span> · <span data-next-wait>${esc(describeWait(next.at - now, this.language))}</span></div>` : '') + `</div>`;
     const rows = [...alarms].sort((a, b) => a.time.localeCompare(b.time)).map((a) => {
-      const sub = [a.label, describeDays(a.days, this.language), a.tzLabel].filter(Boolean).join(' · ');
+      const sub = [a.label, describeDays(a.days, this.language), a.tzLabel, a.sound ? this.soundName(a.sound) : ''].filter(Boolean).join(' · ');
       return `<li class="row click${a.enabled ? '' : ' off'}" data-act="edit-alarm" data-id="${esc(a.id)}">` +
         `<div class="grow"><div class="big num">${this.alarmTime(a.time)}</div><div class="sub">${esc(sub)}</div></div>` +
         `<button class="switch" role="switch" data-act="toggle-alarm" data-id="${esc(a.id)}" aria-checked="${a.enabled}" aria-label="${esc(this.t.alarm)} ${esc(a.time)}"></button></li>`;
@@ -377,8 +379,58 @@ export class VertalClockElement extends HTMLElement {
   }
 
   private closeSheet() {
+    stopSoundPreview();
     this.sheet = null;
     this.renderSheet();
+  }
+
+  private soundName(sound: AlarmSound): string {
+    const custom = customSoundId(sound);
+    if (!custom) return this.t.sounds[sound] ?? sound;
+    return getClockState().customSounds.find((c) => c.id === custom)?.name ?? this.t.sounds.classic;
+  }
+
+  /** Lista de toques + "Ouvir" + envio de um som do aparelho. `withDefault`: primeira opção "Padrão". */
+  private soundPickerHtml(field: string, selected: AlarmSound | '', withDefault: boolean): string {
+    const { settings, customSounds } = getClockState();
+    const option = (value: string, label: string) => `<option value="${esc(value)}" ${value === selected ? 'selected' : ''}>${esc(label)}</option>`;
+    return `<div class="sound-pick"><select id="vc-${field}" class="field" data-field="${field}" data-sound-select>` +
+      (withDefault ? option('', `${this.t.useDefault} (${this.soundName(settings.sound)})`) : '') +
+      `<optgroup label="${esc(this.t.ringtones)}">${ALARM_SOUNDS.map((key) => option(key, this.t.sounds[key])).join('')}</optgroup>` +
+      `<optgroup label="${esc(this.t.mySounds)}" data-my-sounds ${customSounds.length ? '' : 'hidden'}>${customSounds.map((c) => option(soundRef(c.id), c.name)).join('')}</optgroup>` +
+      `</select><button class="pill" data-act="preview-sound">${ICON.play}${esc(this.t.listen)}</button></div>` +
+      `<div class="sound-up"><button class="pill" data-act="upload-sound">${ICON.upload}${esc(this.t.uploadSound)}</button>` +
+      `<input type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.opus,.flac" data-field="sound-file" hidden/>` +
+      `<span class="hint">${esc(this.t.uploadHint)}</span></div><div class="err" role="alert" data-sound-msg hidden></div>`;
+  }
+
+  private async uploadSound(input: HTMLInputElement) {
+    const file = input.files?.[0];
+    input.value = ''; // deixa escolher o mesmo arquivo de novo
+    if (!file) return;
+    const msg = this.sheetEl.querySelector<HTMLElement>('[data-sound-msg]');
+    const result = await addSoundFile(file, getClockState().customSounds.length);
+    if (!msg?.isConnected) return; // a folha fechou enquanto o arquivo era guardado
+    if ('reason' in result) {
+      msg.textContent = { type: this.t.soundBadType, size: this.t.soundTooBig, full: this.t.soundFull, storage: this.t.soundStorage }[result.reason];
+      msg.hidden = false;
+      return;
+    }
+    msg.hidden = true;
+    if (this.sheet?.type === 'settings') {
+      updateSettings({ sound: result.sound });
+      this.renderSheet();
+    } else {
+      // Na folha do alarme não redesenha, para não apagar o que já foi digitado.
+      const select = this.sheetEl.querySelector<HTMLSelectElement>('[data-sound-select]');
+      const group = select?.querySelector<HTMLOptGroupElement>('[data-my-sounds]');
+      if (select && group) {
+        group.hidden = false;
+        group.append(new Option(result.name, result.sound));
+        select.value = result.sound;
+      }
+    }
+    previewAlarmSound(result.sound);
   }
 
   private renderSheet() {
@@ -413,18 +465,19 @@ export class VertalClockElement extends HTMLElement {
         `<div class="form-row"><label for="vc-tz">${esc(this.t.zone)}</label><select id="vc-tz" class="field" data-field="alarm-tz">` +
         `<option value="-1">${esc(this.t.deviceZone)}</option>${zones.map((z, i) =>
           `<option value="${i}" data-tz="${esc(z.tz)}" data-label="${esc(z.label)}" ${i === selected ? 'selected' : ''}>${esc(z.label)} (${esc(offsetLabel(z.tz, Date.now()))})</option>`).join('')}</select></div>` +
+        `<div class="form-row"><label for="vc-alarm-sound">${esc(this.t.sound)}</label>${this.soundPickerHtml('alarm-sound', alarm?.sound ?? '', true)}</div>` +
         (sheet.error ? `<div class="err" role="alert">${esc(sheet.error)}</div>` : '') + `</div>` +
         `<div class="sheet-foot">${alarm ? `<button class="pill danger" data-act="delete-alarm">${ICON.trash}${esc(this.t.delete)}</button>` : ''}<span class="spacer"></span>` +
         `<button class="pill" data-act="close-sheet">${esc(this.t.cancel)}</button><button class="pill primary" data-act="save-alarm">${esc(this.t.save)}</button></div>`;
     } else {
-      const { settings } = getClockState();
-      const sounds: [AlarmSound, string][] = [['classic', this.t.soundClassic], ['digital', this.t.soundDigital], ['gentle', this.t.soundGentle]];
+      const { settings, customSounds } = getClockState();
       inner = head(this.t.settings) +
         `<div class="sheet-body"><div class="set-row"><span>${esc(this.t.format24)}</span>` +
         `<button class="switch" role="switch" data-act="toggle-24" aria-checked="${!settings.hour12}" aria-label="${esc(this.t.format24)}"></button></div>` +
-        `<div class="set-row"><label for="vc-sound">${esc(this.t.sound)}</label><span style="display:flex;gap:8px;align-items:center">` +
-        `<select id="vc-sound" class="field" data-field="sound">${sounds.map(([key, label]) => `<option value="${key}" ${settings.sound === key ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select>` +
-        `<button class="pill" data-act="preview-sound">${ICON.play}${esc(this.t.listen)}</button></span></div>` +
+        `<div class="form-row"><label for="vc-sound">${esc(this.t.soundDefault)}</label>${this.soundPickerHtml('sound', settings.sound, false)}` +
+        (customSounds.length ? `<div class="my-sounds">${customSounds.map((c) =>
+          `<div class="my-sound"><span>${esc(c.name)}</span><button class="icon-btn small" data-act="remove-sound" data-id="${esc(c.id)}" aria-label="${esc(this.t.removeSound)}: ${esc(c.name)}" title="${esc(this.t.removeSound)}">${ICON.trash}</button></div>`).join('')}</div>` : '') +
+        `</div>` +
         `<div class="set-row"><label for="vc-snooze">${esc(this.t.snoozeFor)}</label>` +
         `<input id="vc-snooze" class="field num" type="number" inputmode="numeric" min="1" max="60" data-field="snooze" value="${settings.snoozeMinutes}" style="min-width:0;width:88px;text-align:center"/></div>` +
         this.notificationHtml() + `</div>`;
@@ -529,7 +582,16 @@ export class VertalClockElement extends HTMLElement {
         updateSettings({ hour12: !getClockState().settings.hour12 });
         this.renderSheet();
         break;
-      case 'preview-sound': previewAlarmSound(getClockState().settings.sound); break;
+      case 'preview-sound':
+        previewAlarmSound(this.sheetEl.querySelector<HTMLSelectElement>('[data-sound-select]')?.value || getClockState().settings.sound);
+        break;
+      case 'upload-sound': this.sheetEl.querySelector<HTMLInputElement>('[data-field="sound-file"]')?.click(); break;
+      case 'remove-sound':
+        stopSoundPreview();
+        void removeSoundFile(id).then(() => {
+          if (this.sheet?.type === 'settings') this.renderSheet();
+        });
+        break;
       case 'sw-start': stopwatchStart(); break;
       case 'sw-stop': stopwatchStop(); break;
       case 'sw-lap': stopwatchLap(); break;
@@ -569,8 +631,12 @@ export class VertalClockElement extends HTMLElement {
   private onChange(e: Event) {
     const input = e.target as HTMLInputElement;
     if (input.dataset?.field === 'sound') {
-      updateSettings({ sound: input.value as AlarmSound });
-      previewAlarmSound(input.value as AlarmSound);
+      updateSettings({ sound: input.value });
+      previewAlarmSound(input.value);
+    } else if (input.dataset?.field === 'alarm-sound') {
+      previewAlarmSound(input.value || getClockState().settings.sound);
+    } else if (input.dataset?.field === 'sound-file') {
+      void this.uploadSound(input);
     } else if (input.dataset?.field === 'snooze') {
       updateSettings({ snoozeMinutes: Number(input.value) });
       input.value = String(getClockState().settings.snoozeMinutes);
@@ -596,7 +662,10 @@ export class VertalClockElement extends HTMLElement {
       return;
     }
     const saved = saveAlarm(
-      { time, label, days: this.sheet.days, tz: option?.dataset.tz, tzLabel: option?.dataset.label, enabled: true },
+      {
+        time, label, days: this.sheet.days, tz: option?.dataset.tz, tzLabel: option?.dataset.label, enabled: true,
+        sound: get<HTMLSelectElement>('alarm-sound')?.value || undefined,
+      },
       this.sheet.id || undefined,
     );
     if (saved) this.closeSheet();

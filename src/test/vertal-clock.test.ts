@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { describeDays, nextRing, parseClockTime } from '@/lib/clock/alarms';
 import { dueRings } from '@/lib/clock/engine';
-import { defaultState, sanitizeState } from '@/lib/clock/store';
+import { ALARM_SOUNDS, defaultState, sanitizeState } from '@/lib/clock/store';
 import { resolvePlace, zonedToUtc } from '@/lib/clock/zones';
 
 const SP = 'America/Sao_Paulo';
@@ -46,5 +46,19 @@ describe('Vertal Clock', () => {
   it('acha cidade por texto livre', () => {
     expect(resolvePlace('japão')?.tz).toBe('Asia/Tokyo');
     expect(resolvePlace('hora de brasília')?.tz).toBe(SP);
+  });
+
+  it('guarda o toque de cada alarme e descarta som enviado que foi removido', () => {
+    const alarm = (id: string, sound: unknown) => ({ id, time: '07:00', label: '', days: [], enabled: true, createdAt: 0, sound });
+    const state = sanitizeState({
+      ...defaultState(),
+      customSounds: [{ id: 'abc', name: 'Minha música' }],
+      settings: { hour12: false, sound: 'custom:sumiu', snoozeMinutes: 9 },
+      alarms: [alarm('a', 'rooster'), alarm('b', 'custom:abc'), alarm('c', 'custom:sumiu'), alarm('d', 'inventado')],
+    });
+    expect(state.alarms.map((a) => a.sound)).toEqual(['rooster', 'custom:abc', undefined, undefined]);
+    expect(state.settings.sound).toBe('classic');
+    expect(ALARM_SOUNDS).toHaveLength(21);
+    expect(dueRings(state, NOW - 60_000, NOW, SP).map((r) => r.sound)).toEqual(['rooster', 'custom:abc', undefined, undefined]);
   });
 });
