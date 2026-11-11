@@ -1,7 +1,7 @@
 // Todos os painéis do Painel Criativo que o Vertal Chat abre dentro do próprio layout.
 import type { ComponentType } from 'react';
 import {
-  BookOpen, Clapperboard, Code2, Download, FileText, KeyRound, LayoutTemplate, Music, NotebookPen,
+  BookOpen, Clapperboard, Code2, Download, FileText, History, KeyRound, LayoutTemplate, Music, NotebookPen,
   Palette, Plug, Puzzle, Scissors, Sparkles, Table2, User2, Video,
 } from 'lucide-react';
 import type { PanelKey } from '@/lib/chatAgent/contract';
@@ -32,6 +32,7 @@ export interface PanelInfo {
 }
 
 export const PANEL_LIST: PanelInfo[] = [
+  { key: 'history', label: 'Histórico', hint: 'Tudo que você criou em todas as conversas', icon: History, group: 'criar' },
   { key: 'office', label: 'Vertal Office', hint: 'Documentos, planilhas, slides e PDF', icon: FileText, group: 'criar' },
   { key: 'design', label: 'Design Premium', hint: 'Artes com IA, slides, estúdio e avatares', icon: Palette, group: 'criar' },
   { key: 'canvas', label: 'Canvas', hint: 'Canvas infinito para montar artes', icon: LayoutTemplate, group: 'criar' },

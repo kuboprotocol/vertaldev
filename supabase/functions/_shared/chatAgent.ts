@@ -36,7 +36,7 @@ export interface CanvasSpec {
 
 /** Painéis que o chat abre dentro do próprio layout. */
 export const PANELS = [
-  "office", "design", "canvas", "notebook", "video_studio", "clips", "avatar",
+  "history", "office", "design", "canvas", "notebook", "video_studio", "clips", "avatar",
   "shorts", "emo", "sheet", "ebook", "music", "downloader", "builder",
   "connectors", "secrets", "agents",
 ] as const;
