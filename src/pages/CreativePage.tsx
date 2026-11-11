@@ -27,7 +27,7 @@ import { OfficeSuite } from "@/components/office/OfficeSuite";
 // O Notebook (pdf.js, leitor de fontes, estúdio) só carrega quando é aberto.
 const VertalNotebook = React.lazy(() => import("@/components/notebook/VertalNotebook").then((m) => ({ default: m.VertalNotebook })));
 // O Clock (relógio, alarmes, cronômetro, timer) carrega quando a aba é aberta.
-const VertalClock = React.lazy(() => import("@/components/clock/VertalClock").then((m) => ({ default: m.default })));
+import { VertalClock } from "@/components/clock/VertalClock";
 import { CreativeDesign } from "@/components/CreativeDesign";
 import { SponsoredSlot } from "@/components/creative/SponsoredSlot";
 import { CreativeAdFrame } from "@/components/creative/AdBanner";
@@ -1316,9 +1316,7 @@ export default function CreativePage() {
               <ArrowLeft className="h-4 w-4 mr-2" /> Voltar ao Painel
             </Button>
             <div className="flex-1 min-h-0">
-              <React.Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin" aria-label="Carregando" /></div>}>
-                <VertalClock lang="pt" tab="relógio" theme="auto" ringUI="on" />
-              </React.Suspense>
+              <VertalClock lang="pt" tab="relógio" theme="auto" ringUI="on" />
             </div>
           </TabsContent>
 
