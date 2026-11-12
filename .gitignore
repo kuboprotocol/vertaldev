@@ -37,3 +37,4 @@ playwright-report/
 
 # Estado local do wrangler dev
 .wrangler/
+supabase/functions/.env
