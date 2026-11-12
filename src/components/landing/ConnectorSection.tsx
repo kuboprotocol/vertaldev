@@ -1,32 +1,55 @@
 import { motion } from "framer-motion";
 import { Plug, ArrowRight, Zap, Database, CreditCard, Bot, Server, Globe, Code } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+
+// Items without a dedicated subpage fall back to the connectors catalog.
+const CATALOG = "/connectors";
 
 const connectorCategories = [
   {
     title: "AI & Automation",
     icon: Bot,
     accent: "from-primary/20 to-accent",
-    items: ["OpenAI", "Claude", "Gemini", "DeepSeek"],
+    items: [
+      { label: "OpenAI", to: CATALOG },
+      { label: "Claude", to: "/connectors/claude" },
+      { label: "Gemini", to: CATALOG },
+      { label: "DeepSeek", to: CATALOG },
+    ],
   },
   {
     title: "Pagamentos",
     icon: CreditCard,
     accent: "from-blue-900/30 to-indigo-900/20",
-    items: ["Stripe", "Mercado Pago", "PayPal", "Pix"],
+    items: [
+      { label: "Stripe", to: "/connectors/stripe" },
+      { label: "Mercado Pago", to: CATALOG },
+      { label: "PayPal", to: CATALOG },
+      { label: "Pix", to: CATALOG },
+    ],
   },
   {
     title: "Database",
     icon: Database,
     accent: "from-violet-900/30 to-purple-900/20",
-    items: ["Supabase", "PostgreSQL", "Firebase", "MongoDB"],
+    items: [
+      { label: "Supabase", to: "/connectors/supabase" },
+      { label: "PostgreSQL", to: CATALOG },
+      { label: "Firebase", to: CATALOG },
+      { label: "MongoDB", to: "/connectors/mongodb" },
+    ],
   },
   {
     title: "Your API",
     icon: Code,
     accent: "from-emerald-900/30 to-teal-900/20",
-    items: ["REST", "GraphQL", "Webhooks", "Proprietary APIs"],
+    items: [
+      { label: "REST", to: CATALOG },
+      { label: "GraphQL", to: CATALOG },
+      { label: "Webhooks", to: CATALOG },
+      { label: "Proprietary APIs", to: CATALOG },
+    ],
   },
 ];
 
@@ -73,9 +96,14 @@ const ConnectorSection = () => {
                   <h3 className="text-lg font-display font-semibold text-foreground mb-4">{category.title}</h3>
                   <ul className="space-y-3 flex-grow">
                     {category.items.map((item) => (
-                      <li key={item} className="flex items-center text-sm text-muted-foreground">
-                        <div className="w-1.5 h-1.5 rounded-full bg-primary/40 mr-2" />
-                        {item}
+                      <li key={item.label}>
+                        <Link
+                          to={item.to}
+                          className="flex items-center text-sm text-muted-foreground transition-colors hover:text-primary"
+                        >
+                          <div className="w-1.5 h-1.5 rounded-full bg-primary/40 mr-2" />
+                          {item.label}
+                        </Link>
                       </li>
                     ))}
                   </ul>
