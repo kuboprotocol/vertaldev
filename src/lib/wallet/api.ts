@@ -95,7 +95,7 @@ export const walletApi = {
   setDefault: (id: string) => call<{ ok: true }>('set-default', { id }),
   remove: (id: string) => call<{ ok: true }>('remove', { id }),
   connectStatus: () =>
-    call<{ account: ConnectAccount | null; charges: WalletCharge[]; platformFeeMinor: number }>('connect-status'),
+    call<{ account: ConnectAccount | null; charges: WalletCharge[]; platformFeeRate: number }>('connect-status'),
   connectOnboard: () => call<{ url: string }>('connect-onboard'),
   connectDashboard: () => call<{ url: string }>('connect-dashboard'),
   connectCharge: (p: { amount: number; currency: string; description?: string }) =>

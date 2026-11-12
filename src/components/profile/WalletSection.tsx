@@ -23,7 +23,7 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { walletApi, brandLabel, isExpired, FUNDING_LABEL, type WalletCard, type WalletPix, type ConnectAccount, type WalletCharge } from '@/lib/wallet/api'
-import { CHARGE_CURRENCIES, PLATFORM_FEE_MINOR, formatMinor, toMinorUnits, findCurrency } from '@/lib/wallet/currency'
+import { CHARGE_CURRENCIES, platformFeeFor, formatMinor, toMinorUnits, findCurrency } from '@/lib/wallet/currency'
 import { loadStripe, type StripeJs } from '@/lib/wallet/stripe'
 import { PIX_KEY_TYPES, PIX_COUNTRIES, validatePixKey, type PixKeyType } from '@/lib/wallet/pix'
 
@@ -515,7 +515,7 @@ function ReceiveTab() {
 
       <p className="flex items-start gap-2 rounded-xl bg-secondary/40 p-3 text-[11px] leading-relaxed text-muted-foreground">
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-        Taxa da plataforma: 1 centavo por cobrança, na moeda cobrada ({formatMinor(PLATFORM_FEE_MINOR, 'BRL')}, {formatMinor(PLATFORM_FEE_MINOR, 'USD')}, {formatMinor(PLATFORM_FEE_MINOR, 'EUR')}). As tarifas do Stripe aparecem no seu painel. O valor cai na sua conta Stripe e é repassado ao seu banco.
+        Taxa da plataforma: 1% de cada cobrança, na moeda cobrada (em {formatMinor(10000, 'BRL')}, {formatMinor(platformFeeFor(10000), 'BRL')}). As tarifas do Stripe aparecem no seu painel. O valor cai na sua conta Stripe e é repassado ao seu banco.
       </p>
 
       <NewChargeDialog open={newOpen} onOpenChange={setNewOpen} onCreated={(c) => { setShown(c); refresh() }} />
@@ -582,7 +582,7 @@ function NewChargeDialog({ open, onOpenChange, onCreated }: {
           {minor !== null && (
             <div className="space-y-1 rounded-xl bg-secondary/40 p-3 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Cliente paga</span><span className="font-mono">{formatMinor(minor, currency)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Taxa da plataforma</span><span className="font-mono">− {formatMinor(PLATFORM_FEE_MINOR, currency)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Taxa da plataforma (1%)</span><span className="font-mono">− {formatMinor(platformFeeFor(minor), currency)}</span></div>
               <p className="pt-1 text-[11px] text-muted-foreground">Mais as tarifas do Stripe, descontadas na sua conta.</p>
             </div>
           )}
