@@ -1,5 +1,6 @@
 // Edge function `mcp`: endpoint MCP do Vertal Vibe Dev.
 //   POST /functions/v1/mcp                                      → JSON-RPC (MCP)
+//   POST /functions/v1/mcp/keys                                 → gestão das chaves (JWT do usuário, keys.ts)
 //   GET  /functions/v1/mcp/.well-known/oauth-protected-resource → metadados OAuth
 // verify_jwt = false: a função valida o token ela mesma, porque o 401 precisa
 // do cabeçalho WWW-Authenticate para o cliente MCP achar o login, e as chaves
@@ -7,6 +8,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { handleMessage, type JsonRpcRequest, type Scope } from "./server.ts";
 import { hashMcpKey, hasValidMcpKeyShape, isKeyActive, isMcpAccessKey } from "../_shared/mcpKeys.ts";
+import { handleKeys } from "./keys.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -83,6 +85,9 @@ Deno.serve(async (req) => {
       resource_name: "Vertal Vibe Dev",
     });
   }
+
+  // Gestão das chaves (tela /mcp): só JWT do usuário, tratada em keys.ts.
+  if (url.pathname.endsWith("/keys")) return handleKeys(req);
 
   // Sem estado: não há stream GET nem sessão para encerrar.
   if (req.method === "GET" || req.method === "DELETE") {

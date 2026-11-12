@@ -1,10 +1,12 @@
-// Edge function `mcp-access-keys`: o dono gera, lista e revoga as chaves de acesso
-// ao servidor MCP do Vertal Dev (tela /mcp).
-//   POST { action: "list" }
-//   POST { action: "create", name, scopes: ["read"|"write"], expiresInDays: 7|30|90|365|null }
-//   POST { action: "revoke", id }
-// Autenticação: JWT do usuário logado (verify_jwt padrão + getUser aqui).
-// A chave completa só volta na resposta de "create"; o banco guarda o SHA-256.
+// Gestão das chaves de acesso do MCP, servida pela própria função `mcp` em
+//   POST /functions/v1/mcp/keys
+//   body: { action: "list" }
+//         { action: "create", name, scopes: ["read"|"write"], expiresInDays: 7|30|90|365|null }
+//         { action: "revoke", id }
+// Autenticação: SOMENTE o JWT do usuário logado. Uma chave vtl_mcp_ não pode criar
+// nem revogar outras chaves. A chave completa só volta na resposta de "create".
+// Esta rota fica na função `mcp` (verify_jwt = false) para não gastar um slot de
+// Edge Function; a autenticação é feita aqui, rota a rota.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, sanitizeError } from "../_shared/cors.ts";
 import {
@@ -13,6 +15,7 @@ import {
   generateMcpKey,
   hashMcpKey,
   isKeyActive,
+  isMcpAccessKey,
   mcpKeyPrefix,
   normalizeScopes,
 } from "../_shared/mcpKeys.ts";
@@ -31,12 +34,15 @@ function badRequest(message: string) {
   return json({ error: message }, 400);
 }
 
-Deno.serve(async (req) => {
+/** Rota de chaves. Retorna sempre uma Response; nunca lança. */
+export async function handleKeys(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
   const authHeader = req.headers.get("Authorization") ?? "";
-  if (!authHeader.startsWith("Bearer ")) return json({ error: "missing auth" }, 401);
+  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+  // Chave MCP não gerencia chaves: só o login do usuário.
+  if (!token || isMcpAccessKey(token)) return json({ error: "login necessário" }, 401);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -44,10 +50,10 @@ Deno.serve(async (req) => {
 
   try {
     const userDb = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
+      global: { headers: { Authorization: `Bearer ${token}` } },
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const { data: userData, error: userErr } = await userDb.auth.getUser();
+    const { data: userData, error: userErr } = await userDb.auth.getUser(token);
     if (userErr || !userData.user) return json({ error: "invalid token" }, 401);
     const userId = userData.user.id;
 
@@ -140,4 +146,4 @@ Deno.serve(async (req) => {
   } catch (err) {
     return json({ error: sanitizeError(err) }, 500);
   }
-});
+}
