@@ -66,6 +66,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS wallet_one_default_per_kind
 
 ALTER TABLE public.wallet_payment_methods ENABLE ROW LEVEL SECURITY;
 -- Sem policies de propósito: só a service role (Edge Function `wallet`) acessa.
+REVOKE ALL ON public.wallet_payment_methods FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.wallet_payment_methods TO service_role;
 
 CREATE OR REPLACE FUNCTION public.wallet_payment_methods_touch()
 RETURNS trigger
