@@ -14,8 +14,15 @@ export async function creativeInvoke(tool: string, payload: any) {
   return data;
 }
 
+// Every model below is called through OpenRouter by the creative-router edge function.
 export const PUTER_MODELS = [
-  { id: "meta-llama/llama-3.1-70b-instruct", label: "Llama 3.1 70B (Router)" },
-  { id: "openai/gpt-4o-mini", label: "GPT-4o Mini (Router)" },
-  { id: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet (Router)" },
+  { id: "meta-llama/llama-3.1-70b-instruct", label: "Llama 3.1 70B" },
+  { id: "openai/gpt-4o-mini", label: "GPT-4o Mini" },
+  { id: "openai/gpt-4o", label: "GPT-4o" },
+  { id: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet" },
+  { id: "deepseek/deepseek-chat", label: "DeepSeek V3" },
+  { id: "deepseek/deepseek-r1", label: "DeepSeek R1" },
+  { id: "moonshotai/kimi-k2", label: "Kimi K2" },
+  { id: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+  { id: "google/gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite" },
 ];
