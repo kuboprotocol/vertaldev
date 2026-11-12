@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { CreditCard, Wallet, QrCode, Plus, Star, Trash2, Loader2, ShieldCheck, Globe2 } from 'lucide-react'
+import { CreditCard, Wallet, QrCode, Plus, Star, Trash2, Loader2, ShieldCheck, Globe2, Copy, Check, HandCoins } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,6 +25,7 @@ export default function WalletSection() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [cardOpen, setCardOpen] = useState(false)
   const [pixOpen, setPixOpen] = useState(false)
+  const [receiveFrom, setReceiveFrom] = useState<WalletPix | null>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -137,6 +139,9 @@ export default function WalletSection() {
                     {p.countries.map(countryFlag).join(' ')}
                   </p>
                 </div>
+                <Button variant="ghost" size="icon" onClick={() => setReceiveFrom(p)} title="Receber com QR Code" aria-label="Receber com QR Code">
+                  <HandCoins className="h-4 w-4" />
+                </Button>
                 <ItemActions
                   busy={busyId === p.id}
                   isDefault={p.isDefault}
@@ -158,6 +163,7 @@ export default function WalletSection() {
 
       <AddCardDialog open={cardOpen} onOpenChange={setCardOpen} onAdded={refresh} />
       <AddPixDialog open={pixOpen} onOpenChange={setPixOpen} onAdded={refresh} />
+      <ReceivePixDialog pix={receiveFrom} onClose={() => setReceiveFrom(null)} />
     </motion.div>
   )
 }
@@ -396,6 +402,95 @@ function AddPixDialog({ open, onOpenChange, onAdded }: {
             {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Salvar chave Pix
           </Button>
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ── Receber via Pix: gera BR Code (copia e cola) + QR Code ─────────────────
+function ReceivePixDialog({ pix, onClose }: { pix: WalletPix | null; onClose: () => void }) {
+  const [amount, setAmount] = useState('')
+  const [name, setName] = useState('')
+  const [city, setCity] = useState('Sao Paulo')
+  const [description, setDescription] = useState('')
+  const [brCode, setBrCode] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => { if (!pix) { setBrCode(null); setAmount(''); setDescription(''); setCopied(false) } }, [pix])
+
+  const generate = async () => {
+    if (!pix) return
+    const value = amount.trim() ? Number(amount.replace(/\./g, '').replace(',', '.')) : 0
+    if (Number.isNaN(value) || value < 0) return toast.error('Valor inválido')
+    setLoading(true)
+    try {
+      const res = await walletApi.pixBrCode({
+        id: pix.id, amount: value, merchantName: name, merchantCity: city, description: description || undefined,
+      })
+      setBrCode(res.brCode)
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const copy = async () => {
+    if (!brCode) return
+    await navigator.clipboard.writeText(brCode)
+    setCopied(true)
+    toast.success('Pix copia e cola copiado!')
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <Dialog open={!!pix} onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Receber via Pix</DialogTitle>
+          <DialogDescription>
+            {pix ? `Chave ${pix.maskedKey}. ` : ''}Gera um QR Code estático no padrão BR Code do Banco Central.
+          </DialogDescription>
+        </DialogHeader>
+        {brCode ? (
+          <div className="space-y-4">
+            <div className="mx-auto w-fit rounded-xl bg-white p-4">
+              <QRCodeSVG value={brCode} size={220} level="M" />
+            </div>
+            <div className="flex gap-2">
+              <Input readOnly value={brCode} className="text-xs font-mono bg-muted/30" />
+              <Button variant="outline" size="icon" onClick={copy} className="shrink-0">
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+            <Button variant="ghost" className="w-full" onClick={() => setBrCode(null)}>Gerar outro</Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="rx-amount" className="text-sm text-muted-foreground">Valor em R$ (vazio = quem paga digita)</Label>
+              <Input id="rx-amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0,00" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="rx-name" className="text-sm text-muted-foreground">Nome do recebedor</Label>
+                <Input id="rx-name" maxLength={25} value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="rx-city" className="text-sm text-muted-foreground">Cidade</Label>
+                <Input id="rx-city" maxLength={15} value={city} onChange={(e) => setCity(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="rx-desc" className="text-sm text-muted-foreground">Descrição (opcional)</Label>
+              <Input id="rx-desc" maxLength={40} value={description} onChange={(e) => setDescription(e.target.value)} />
+            </div>
+            <Button onClick={generate} disabled={loading || !name.trim() || !city.trim()} className="w-full gradient-primary text-primary-foreground">
+              {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Gerar QR Code
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )

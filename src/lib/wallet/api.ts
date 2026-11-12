@@ -33,6 +33,8 @@ const ERRORS: Record<string, string> = {
   duplicate_card: 'Este cartão já está na sua carteira',
   duplicate_pix_key: 'Esta chave Pix já está na sua carteira',
   not_found: 'Item não encontrado',
+  invalid_amount: 'Valor inválido',
+  missing_merchant: 'Informe nome e cidade do recebedor',
   'STRIPE_PUBLISHABLE_KEY not configured': 'Pagamentos com cartão ainda não estão configurados',
 }
 
@@ -63,6 +65,8 @@ export const walletApi = {
     call<{ card: WalletCard }>('card-attach', { setupIntentId, label, makeDefault }),
   pixAdd: (p: { keyType: PixKeyType; key: string; label?: string; countries?: string[]; makeDefault?: boolean }) =>
     call<{ pix: WalletPix }>('pix-add', p),
+  pixBrCode: (p: { id: string; amount?: number; merchantName: string; merchantCity: string; description?: string }) =>
+    call<{ brCode: string }>('pix-brcode', p),
   setDefault: (id: string) => call<{ ok: true }>('set-default', { id }),
   remove: (id: string) => call<{ ok: true }>('remove', { id }),
 }
