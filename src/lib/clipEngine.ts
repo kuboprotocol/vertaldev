@@ -371,10 +371,12 @@ export function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffe
   return buf;
 }
 
-/** Credits a full run costs: one per transcription chunk plus one for the AI analysis. */
-export function quoteClips(durationSec: number): { transcribe: number; analyze: number; total: number } {
-  const transcribe = Math.max(1, Math.ceil(durationSec / TRANSCRIBE_CHUNK_SECONDS));
-  return { transcribe, analyze: 1, total: transcribe + 1 };
+/** Credits charged per clip the AI delivers (transcription is free). */
+export const CREDITS_PER_CLIP = 1;
+
+/** Maximum credits a run can cost: one per requested clip. */
+export function quoteClips(count: number): number {
+  return Math.max(1, Math.round(count)) * CREDITS_PER_CLIP;
 }
 
 // ---------------------------------------------------------------- auto-reframe (Vertal Track)

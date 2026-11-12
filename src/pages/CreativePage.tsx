@@ -55,7 +55,7 @@ const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: strin
   { key: "video_studio", title: "Vertal Video Studio", desc: "1 a 10 fotos viram clipe musical, meme ou anúncio com IA realista", icon: Clapperboard, cost: "a partir de 2 créditos" },
   { key: "chat", title: "Vertal Chat", desc: "Conversas, resumos, traduções, geração de textos", icon: MessageSquare, cost: "1 crédito/msg" },
   { key: "downloader", title: "Downloader Universal", desc: "YouTube, Instagram, TikTok, Facebook, Kwai", icon: Download, cost: "2 créditos" },
-  { key: "clips", title: "Vertal Clips", desc: "IA acha os momentos virais, reenquadra em 9:16 e legenda palavra por palavra", icon: Scissors, cost: "1 crédito a cada 5 min" },
+  { key: "clips", title: "Vertal Clips", desc: "IA acha os momentos virais, reenquadra em 9:16 e legenda palavra por palavra", icon: Scissors, cost: "1 crédito por corte" },
   { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes com narração IA", icon: User2, cost: "4 créditos/s de vídeo" },
   { key: "shorts", title: "Vertal Shorts", desc: "Vídeos curtos verticais a partir de texto", icon: Video, cost: "3 créditos" },
   { key: "music", title: "Vertal Music AI", desc: "Música original via MusKAI", icon: Music, cost: "1 crédito" },
