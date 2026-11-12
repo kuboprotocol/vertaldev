@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
-import { CreditCard, Wallet, QrCode, Plus, Star, Trash2, Loader2, ShieldCheck, Globe2 } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  CreditCard, Wallet, QrCode, Plus, Star, Trash2, Loader2, ShieldCheck, Globe2, Copy, Check, HandCoins,
+  Lock, BadgeCheck, Fingerprint, MoreHorizontal,
+} from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,11 +15,141 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { walletApi, brandLabel, isExpired, FUNDING_LABEL, type WalletCard, type WalletPix } from '@/lib/wallet/api'
 import { loadStripe, type StripeJs } from '@/lib/wallet/stripe'
 import { PIX_KEY_TYPES, PIX_COUNTRIES, validatePixKey, type PixKeyType } from '@/lib/wallet/pix'
 
 const countryFlag = (code: string) => PIX_COUNTRIES.find((c) => c.code === code)?.flag ?? code
+const PIX_TEAL = '#32BCAD' // cor oficial da marca Pix (Banco Central)
+
+// Gradientes por bandeira: o cartão na tela lembra o plástico de verdade.
+const BRAND_SKIN: Record<string, string> = {
+  visa: 'from-[#1a1f71] via-[#2a3a9f] to-[#0e1240]',
+  mastercard: 'from-[#2b2b2b] via-[#3d2a1f] to-[#120c08]',
+  amex: 'from-[#1f6fb5] via-[#2e8bd6] to-[#0d3f6e]',
+  elo: 'from-[#111111] via-[#2a2a2a] to-[#000000]',
+  hipercard: 'from-[#8c1515] via-[#b11d1d] to-[#4f0b0b]',
+  discover: 'from-[#3a3a3a] via-[#5a4632] to-[#1c1c1c]',
+  default: 'from-[#2d1b69] via-[#4c2a9a] to-[#120a2e]',
+}
+
+function BrandMark({ brand }: { brand: string }) {
+  const b = brand?.toLowerCase()
+  if (b === 'mastercard') {
+    return (
+      <span className="relative flex h-6 w-10" aria-label="Mastercard">
+        <span className="absolute left-0 h-6 w-6 rounded-full bg-[#eb001b]" />
+        <span className="absolute right-0 h-6 w-6 rounded-full bg-[#f79e1b] mix-blend-screen opacity-90" />
+      </span>
+    )
+  }
+  return (
+    <span className={`text-white font-bold tracking-wide ${b === 'visa' ? 'italic text-xl' : 'text-sm uppercase'}`}>
+      {brandLabel(brand)}
+    </span>
+  )
+}
+
+function CardVisual({ card }: { card: WalletCard }) {
+  const skin = BRAND_SKIN[card.brand?.toLowerCase()] ?? BRAND_SKIN.default
+  const expired = isExpired(card)
+  return (
+    <div
+      className={`relative aspect-[1.586] w-full overflow-hidden rounded-2xl bg-gradient-to-br ${skin} p-5 text-white shadow-[0_20px_40px_-20px_rgba(0,0,0,0.7)] ring-1 ring-white/10 ${expired ? 'grayscale opacity-70' : ''}`}
+    >
+      {/* brilho e textura */}
+      <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/10 blur-2xl" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(255,255,255,0.08),transparent_60%)]" />
+      <div className="relative flex h-full flex-col justify-between">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2">
+            <div className="h-7 w-10 rounded-md bg-gradient-to-br from-[#f5d77a] via-[#d4af37] to-[#9c7c1c] shadow-inner">
+              <div className="m-1 h-5 rounded-sm border border-black/20" />
+            </div>
+            <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-white/70">{FUNDING_LABEL[card.funding]}</span>
+          </div>
+          {card.isDefault && (
+            <span className="flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-medium backdrop-blur">
+              <Star className="h-3 w-3 fill-current" />Padrão
+            </span>
+          )}
+        </div>
+        <p className="font-mono text-lg tracking-[0.18em] sm:text-xl">•••• •••• •••• {card.last4}</p>
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[9px] uppercase tracking-[0.2em] text-white/60">{card.label ? 'Apelido' : 'Titular'}</p>
+            <p className="truncate text-sm font-medium uppercase">{card.label || card.holderName || 'Seu cartão'}</p>
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="text-[9px] uppercase tracking-[0.2em] text-white/60">{expired ? 'Vencido' : 'Validade'}</p>
+            <p className="font-mono text-sm">{String(card.expMonth).padStart(2, '0')}/{String(card.expYear).slice(-2)}</p>
+          </div>
+          <BrandMark brand={card.brand} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PixLogo({ className = 'h-5 w-5' }: { className?: string }) {
+  // Losango estilizado na cor oficial do Pix.
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <path fill={PIX_TEAL} d="M12 2.2 21.8 12 12 21.8 2.2 12Z" opacity=".18" />
+      <path fill="none" stroke={PIX_TEAL} strokeWidth="2.2" strokeLinejoin="round" d="M7 9.5 9.5 7a3.5 3.5 0 0 1 5 0L17 9.5M7 14.5 9.5 17a3.5 3.5 0 0 0 5 0l2.5-2.5" />
+    </svg>
+  )
+}
+
+function TrustStrip() {
+  const items = [
+    { icon: Lock, title: 'PCI DSS nível 1', text: 'Cartão digitado direto no Stripe' },
+    { icon: Fingerprint, title: 'AES-256-GCM', text: 'Chaves Pix cifradas em repouso' },
+    { icon: BadgeCheck, title: 'LGPD', text: 'Só você vê e remove seus dados' },
+  ]
+  return (
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+      {items.map(({ icon: Icon, title, text }) => (
+        <div key={title} className="flex items-start gap-2.5 rounded-xl border border-border/60 bg-background/40 p-3">
+          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+            <Icon className="h-3.5 w-3.5 text-primary" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-foreground">{title}</p>
+            <p className="text-[11px] leading-snug text-muted-foreground">{text}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function EmptyState({ icon, title, text, action, onAction }: {
+  icon: ReactNode; title: string; text: string; action: string; onAction: () => void
+}) {
+  return (
+    <button
+      onClick={onAction}
+      className="group flex w-full flex-col items-center gap-3 rounded-2xl border border-dashed border-border bg-background/30 px-6 py-10 text-center transition-colors hover:border-primary/50 hover:bg-primary/5"
+    >
+      <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 transition-transform group-hover:scale-105">{icon}</span>
+      <span className="font-display font-semibold text-foreground">{title}</span>
+      <span className="max-w-xs text-sm text-muted-foreground">{text}</span>
+      <span className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-primary"><Plus className="h-4 w-4" />{action}</span>
+    </button>
+  )
+}
+
+function Skeleton() {
+  return <div className="aspect-[1.586] w-full animate-pulse rounded-2xl bg-muted/50" />
+}
 
 export default function WalletSection() {
   const [loading, setLoading] = useState(true)
@@ -24,6 +158,8 @@ export default function WalletSection() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [cardOpen, setCardOpen] = useState(false)
   const [pixOpen, setPixOpen] = useState(false)
+  const [receiveFrom, setReceiveFrom] = useState<WalletPix | null>(null)
+  const [confirmRemove, setConfirmRemove] = useState<{ id: string; what: string } | null>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -53,134 +189,228 @@ export default function WalletSection() {
   }
 
   return (
-    <motion.div
+    <motion.section
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.2 }}
-      className="glass glass-border rounded-2xl p-8 space-y-5"
+      className="glass glass-border relative overflow-hidden rounded-2xl p-6 sm:p-8 space-y-6"
       data-testid="wallet-section"
+      aria-labelledby="wallet-title"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Wallet className="h-4 w-4 text-primary" />
-          <h3 className="font-semibold text-foreground font-display">Carteira</h3>
-        </div>
-        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-          <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-          Cartões protegidos pelo Stripe · chaves Pix cifradas
-        </span>
-      </div>
+      <div className="pointer-events-none absolute -top-24 right-0 h-48 w-72 rounded-full bg-primary/15 blur-3xl" />
 
-      <Tabs defaultValue="cards">
-        <TabsList className="grid grid-cols-2 w-full">
-          <TabsTrigger value="cards" className="gap-1.5"><CreditCard className="h-3.5 w-3.5" />Cartões</TabsTrigger>
-          <TabsTrigger value="pix" className="gap-1.5"><QrCode className="h-3.5 w-3.5" />Pix</TabsTrigger>
+      {/* Cabeçalho */}
+      <header className="relative flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 items-center justify-center rounded-2xl gradient-primary shadow-glow">
+            <Wallet className="h-5 w-5 text-primary-foreground" />
+          </span>
+          <div>
+            <h3 id="wallet-title" className="font-display text-lg font-semibold text-foreground">Carteira</h3>
+            <p className="text-sm text-muted-foreground">Cartões e Pix para pagar e receber no Vertal Dev</p>
+          </div>
+        </div>
+        <div className="flex gap-2 text-center">
+          <div className="rounded-xl bg-secondary/50 px-3 py-1.5">
+            <p className="font-display text-base font-bold text-foreground">{loading ? '–' : cards.length}</p>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Cartões</p>
+          </div>
+          <div className="rounded-xl bg-secondary/50 px-3 py-1.5">
+            <p className="font-display text-base font-bold text-foreground">{loading ? '–' : pix.length}</p>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Chaves Pix</p>
+          </div>
+        </div>
+      </header>
+
+      <Tabs defaultValue="cards" className="relative">
+        <TabsList className="grid h-11 w-full grid-cols-2 rounded-xl">
+          <TabsTrigger value="cards" className="gap-2 rounded-lg"><CreditCard className="h-4 w-4" />Cartões</TabsTrigger>
+          <TabsTrigger value="pix" className="gap-2 rounded-lg"><PixLogo className="h-4 w-4" />Pix</TabsTrigger>
         </TabsList>
 
         {/* ── Cartões ───────────────────────────────────────────── */}
-        <TabsContent value="cards" className="space-y-3 pt-3">
+        <TabsContent value="cards" className="pt-5">
           {loading ? (
-            <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+            <div className="grid gap-4 sm:grid-cols-2"><Skeleton /><Skeleton /></div>
           ) : cards.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">Nenhum cartão salvo.</p>
+            <EmptyState
+              icon={<CreditCard className="h-6 w-6 text-primary" />}
+              title="Nenhum cartão ainda"
+              text="Adicione um cartão de crédito ou débito, de qualquer país. O número nunca passa pelos nossos servidores."
+              action="Adicionar cartão"
+              onAction={() => setCardOpen(true)}
+            />
           ) : (
-            cards.map((c) => (
-              <div key={c.id} className="flex items-center gap-3 rounded-xl bg-secondary/50 p-4" data-testid="wallet-card">
-                <div className="h-10 w-14 shrink-0 rounded-md bg-gradient-to-br from-primary/70 to-primary/20 flex items-end justify-end p-1.5">
-                  <span className="text-[9px] font-bold text-primary-foreground uppercase">{brandLabel(c.brand)}</span>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-medium text-foreground">{c.label || brandLabel(c.brand)} •••• {c.last4}</span>
-                    <Badge variant="secondary" className="text-[10px]">{FUNDING_LABEL[c.funding]}</Badge>
-                    {c.isDefault && <Badge className="text-[10px]">Padrão</Badge>}
-                    {isExpired(c) && <Badge variant="destructive" className="text-[10px]">Vencido</Badge>}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Validade {String(c.expMonth).padStart(2, '0')}/{String(c.expYear).slice(-2)}
-                    {c.country ? ` · emitido em ${c.country}` : ''}
-                  </p>
-                </div>
-                <ItemActions
-                  busy={busyId === c.id}
-                  isDefault={c.isDefault}
-                  onDefault={() => run(c.id, () => walletApi.setDefault(c.id), 'Cartão definido como padrão')}
-                  onRemove={() => run(c.id, () => walletApi.remove(c.id), 'Cartão removido')}
-                />
+            <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <AnimatePresence initial={false}>
+                  {cards.map((c) => (
+                    <motion.div
+                      key={c.id}
+                      layout
+                      initial={{ opacity: 0, scale: 0.96 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.96 }}
+                      className="group relative"
+                      data-testid="wallet-card"
+                    >
+                      <CardVisual card={c} />
+                      <div className="absolute right-3 top-12 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
+                        <ItemMenu
+                          busy={busyId === c.id}
+                          isDefault={c.isDefault}
+                          onDefault={() => run(c.id, () => walletApi.setDefault(c.id), 'Cartão definido como padrão')}
+                          onRemove={() => setConfirmRemove({ id: c.id, what: `o cartão final ${c.last4}` })}
+                          light
+                        />
+                      </div>
+                      {c.country && (
+                        <p className="mt-2 px-1 text-[11px] text-muted-foreground">Emitido em {c.country}</p>
+                      )}
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+                <button
+                  onClick={() => setCardOpen(true)}
+                  className="flex aspect-[1.586] w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-background/30 text-sm font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                >
+                  <Plus className="h-6 w-6" />Adicionar cartão
+                </button>
               </div>
-            ))
+            </div>
           )}
-          <Button variant="outline" className="w-full gap-2" onClick={() => setCardOpen(true)}>
-            <Plus className="h-4 w-4" />Adicionar cartão de crédito ou débito
-          </Button>
         </TabsContent>
 
         {/* ── Pix ──────────────────────────────────────────────── */}
-        <TabsContent value="pix" className="space-y-3 pt-3">
+        <TabsContent value="pix" className="pt-5 space-y-4">
           {loading ? (
-            <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+            <div className="space-y-3"><div className="h-20 animate-pulse rounded-2xl bg-muted/50" /><div className="h-20 animate-pulse rounded-2xl bg-muted/50" /></div>
           ) : pix.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">Nenhuma chave Pix salva.</p>
+            <EmptyState
+              icon={<PixLogo className="h-7 w-7" />}
+              title="Nenhuma chave Pix ainda"
+              text="Cadastre CPF, CNPJ, e-mail, celular ou chave aleatória para receber com QR Code."
+              action="Adicionar chave Pix"
+              onAction={() => setPixOpen(true)}
+            />
           ) : (
-            pix.map((p) => (
-              <div key={p.id} className="flex items-center gap-3 rounded-xl bg-secondary/50 p-4" data-testid="wallet-pix">
-                <div className="h-10 w-10 shrink-0 rounded-md bg-primary/15 flex items-center justify-center">
-                  <QrCode className="h-5 w-5 text-primary" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-medium text-foreground">{p.label || PIX_KEY_TYPES.find((t) => t.value === p.keyType)?.label}</span>
-                    {p.isDefault && <Badge className="text-[10px]">Padrão</Badge>}
-                  </div>
-                  <p className="text-xs text-muted-foreground font-mono truncate">{p.maskedKey}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5" title="Países onde você usa este Pix">
-                    {p.countries.map(countryFlag).join(' ')}
-                  </p>
-                </div>
-                <ItemActions
-                  busy={busyId === p.id}
-                  isDefault={p.isDefault}
-                  onDefault={() => run(p.id, () => walletApi.setDefault(p.id), 'Chave Pix definida como padrão')}
-                  onRemove={() => run(p.id, () => walletApi.remove(p.id), 'Chave Pix removida')}
-                />
-              </div>
-            ))
+            <div className="space-y-3">
+              <AnimatePresence initial={false}>
+                {pix.map((p) => (
+                  <motion.div
+                    key={p.id}
+                    layout
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    className="flex items-center gap-4 rounded-2xl border border-border/60 bg-background/40 p-4 transition-colors hover:border-[#32BCAD]/40"
+                    data-testid="wallet-pix"
+                  >
+                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" style={{ backgroundColor: `${PIX_TEAL}1f` }}>
+                      <PixLogo className="h-6 w-6" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-medium text-foreground">{p.label || PIX_KEY_TYPES.find((t) => t.value === p.keyType)?.label}</span>
+                        <Badge variant="secondary" className="text-[10px]">{PIX_KEY_TYPES.find((t) => t.value === p.keyType)?.label}</Badge>
+                        {p.isDefault && <Badge className="gap-1 text-[10px]"><Star className="h-2.5 w-2.5 fill-current" />Padrão</Badge>}
+                      </div>
+                      <p className="mt-0.5 truncate font-mono text-sm text-muted-foreground">{p.maskedKey}</p>
+                      <p className="mt-1 text-sm leading-none" title="Países onde você usa este Pix">
+                        {p.countries.map((c) => <span key={c} className="mr-1">{countryFlag(c)}</span>)}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => setReceiveFrom(p)}
+                      className="hidden gap-1.5 text-white sm:inline-flex"
+                      style={{ backgroundColor: PIX_TEAL }}
+                    >
+                      <QrCode className="h-4 w-4" />Receber
+                    </Button>
+                    <ItemMenu
+                      busy={busyId === p.id}
+                      isDefault={p.isDefault}
+                      onReceive={() => setReceiveFrom(p)}
+                      onDefault={() => run(p.id, () => walletApi.setDefault(p.id), 'Chave Pix definida como padrão')}
+                      onRemove={() => setConfirmRemove({ id: p.id, what: `a chave Pix ${p.maskedKey}` })}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+              <Button variant="outline" className="h-11 w-full gap-2 rounded-xl" onClick={() => setPixOpen(true)}>
+                <Plus className="h-4 w-4" />Adicionar chave Pix
+              </Button>
+            </div>
           )}
-          <Button variant="outline" className="w-full gap-2" onClick={() => setPixOpen(true)}>
-            <Plus className="h-4 w-4" />Adicionar chave Pix
-          </Button>
-          <p className="text-[11px] text-muted-foreground">
-            A chave Pix é sempre de uma conta no Brasil. Fora do Brasil, o Pix é aceito em comércios parceiros de{' '}
-            {PIX_COUNTRIES.filter((c) => !c.domestic).map((c) => c.name).join(', ')}, com conversão de moeda no app do seu banco.
-          </p>
+          <div className="flex items-start gap-2.5 rounded-xl bg-secondary/40 p-3">
+            <Globe2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              A chave Pix é sempre de uma conta no Brasil. Fora do país, o Pix é aceito em comércios parceiros de{' '}
+              {PIX_COUNTRIES.filter((c) => !c.domestic).map((c) => `${c.flag} ${c.name}`).join(', ')}, com conversão de moeda no app do seu banco.
+            </p>
+          </div>
         </TabsContent>
       </Tabs>
 
+      <TrustStrip />
+
       <AddCardDialog open={cardOpen} onOpenChange={setCardOpen} onAdded={refresh} />
       <AddPixDialog open={pixOpen} onOpenChange={setPixOpen} onAdded={refresh} />
-    </motion.div>
+      <ReceivePixDialog pix={receiveFrom} onClose={() => setReceiveFrom(null)} />
+
+      <AlertDialog open={!!confirmRemove} onOpenChange={(o) => { if (!o) setConfirmRemove(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover da carteira?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Vamos remover {confirmRemove?.what}. Você pode adicionar de novo quando quiser.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                const target = confirmRemove
+                setConfirmRemove(null)
+                if (target) run(target.id, () => walletApi.remove(target.id), 'Removido da carteira')
+              }}
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </motion.section>
   )
 }
 
-function ItemActions({ busy, isDefault, onDefault, onRemove }: {
-  busy: boolean; isDefault: boolean; onDefault: () => void; onRemove: () => void
+function ItemMenu({ busy, isDefault, onDefault, onRemove, onReceive, light }: {
+  busy: boolean; isDefault: boolean; onDefault: () => void; onRemove: () => void; onReceive?: () => void; light?: boolean
 }) {
-  if (busy) return <Loader2 className="h-4 w-4 animate-spin text-primary" />
+  if (busy) return <Loader2 className={`h-5 w-5 animate-spin ${light ? 'text-white' : 'text-primary'}`} />
   return (
-    <div className="flex shrink-0 gap-1">
-      {!isDefault && (
-        <Button variant="ghost" size="icon" onClick={onDefault} title="Definir como padrão" aria-label="Definir como padrão">
-          <Star className="h-4 w-4" />
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost" size="icon" aria-label="Opções"
+          className={light ? 'h-8 w-8 rounded-full bg-black/30 text-white backdrop-blur hover:bg-black/50 hover:text-white' : 'shrink-0'}
+        >
+          <MoreHorizontal className="h-4 w-4" />
         </Button>
-      )}
-      <Button
-        variant="ghost" size="icon" title="Remover" aria-label="Remover"
-        onClick={() => { if (window.confirm('Remover da carteira?')) onRemove() }}
-        className="text-destructive hover:text-destructive"
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
-    </div>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        {onReceive && (
+          <DropdownMenuItem onClick={onReceive} className="gap-2"><HandCoins className="h-4 w-4" />Receber com QR Code</DropdownMenuItem>
+        )}
+        {!isDefault && (
+          <DropdownMenuItem onClick={onDefault} className="gap-2"><Star className="h-4 w-4" />Definir como padrão</DropdownMenuItem>
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onRemove} className="gap-2 text-destructive focus:text-destructive"><Trash2 className="h-4 w-4" />Remover</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -262,7 +492,7 @@ function AddCardDialog({ open, onOpenChange, onAdded }: {
         <DialogHeader>
           <DialogTitle>Adicionar cartão</DialogTitle>
           <DialogDescription>
-            Crédito ou débito, de qualquer país. Os dados do cartão vão direto para o Stripe; guardamos só a bandeira e o final.
+            Crédito ou débito, de qualquer país. Os dados vão direto para o Stripe; guardamos só a bandeira e os 4 últimos dígitos.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -280,9 +510,12 @@ function AddCardDialog({ open, onOpenChange, onAdded }: {
         </div>
         <DialogFooter>
           <Button onClick={submit} disabled={!ready || saving} className="w-full gradient-primary text-primary-foreground">
-            {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Salvar cartão
+            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Lock className="h-4 w-4 mr-2" />}Salvar cartão com segurança
           </Button>
         </DialogFooter>
+        <p className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+          <ShieldCheck className="h-3.5 w-3.5 text-primary" />Processado pelo Stripe · certificado PCI DSS nível 1
+        </p>
       </DialogContent>
     </Dialog>
   )
@@ -393,9 +626,102 @@ function AddPixDialog({ open, onOpenChange, onAdded }: {
         </div>
         <DialogFooter>
           <Button onClick={submit} disabled={saving} className="w-full gradient-primary text-primary-foreground">
-            {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Salvar chave Pix
+            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Lock className="h-4 w-4 mr-2" />}Salvar chave Pix
           </Button>
         </DialogFooter>
+        <p className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+          <Fingerprint className="h-3.5 w-3.5 text-primary" />Cifrada com AES-256-GCM · só você vê a chave
+        </p>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ── Receber via Pix: gera BR Code (copia e cola) + QR Code ─────────────────
+function ReceivePixDialog({ pix, onClose }: { pix: WalletPix | null; onClose: () => void }) {
+  const [amount, setAmount] = useState('')
+  const [name, setName] = useState('')
+  const [city, setCity] = useState('Sao Paulo')
+  const [description, setDescription] = useState('')
+  const [brCode, setBrCode] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => { if (!pix) { setBrCode(null); setAmount(''); setDescription(''); setCopied(false) } }, [pix])
+
+  const generate = async () => {
+    if (!pix) return
+    const value = amount.trim() ? Number(amount.replace(/\./g, '').replace(',', '.')) : 0
+    if (Number.isNaN(value) || value < 0) return toast.error('Valor inválido')
+    setLoading(true)
+    try {
+      const res = await walletApi.pixBrCode({
+        id: pix.id, amount: value, merchantName: name, merchantCity: city, description: description || undefined,
+      })
+      setBrCode(res.brCode)
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const copy = async () => {
+    if (!brCode) return
+    await navigator.clipboard.writeText(brCode)
+    setCopied(true)
+    toast.success('Pix copia e cola copiado!')
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <Dialog open={!!pix} onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><PixLogo />Receber via Pix</DialogTitle>
+          <DialogDescription>
+            {pix ? `Chave ${pix.maskedKey}. ` : ''}Gera um QR Code estático no padrão BR Code do Banco Central.
+          </DialogDescription>
+        </DialogHeader>
+        {brCode ? (
+          <div className="space-y-4">
+            <div className="mx-auto w-fit rounded-2xl bg-white p-5 shadow-lg ring-1 ring-black/5">
+              <QRCodeSVG value={brCode} size={220} level="M" fgColor="#0b1f1d" />
+              <p className="mt-3 flex items-center justify-center gap-1.5 text-xs font-medium text-[#0b1f1d]"><PixLogo className="h-4 w-4" />Pague com Pix</p>
+            </div>
+            <div className="flex gap-2">
+              <Input readOnly value={brCode} className="text-xs font-mono bg-muted/30" />
+              <Button variant="outline" size="icon" onClick={copy} className="shrink-0">
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+            <Button variant="ghost" className="w-full" onClick={() => setBrCode(null)}>Gerar outro</Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="rx-amount" className="text-sm text-muted-foreground">Valor em R$ (vazio = quem paga digita)</Label>
+              <Input id="rx-amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0,00" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="rx-name" className="text-sm text-muted-foreground">Nome do recebedor</Label>
+                <Input id="rx-name" maxLength={25} value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="rx-city" className="text-sm text-muted-foreground">Cidade</Label>
+                <Input id="rx-city" maxLength={15} value={city} onChange={(e) => setCity(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="rx-desc" className="text-sm text-muted-foreground">Descrição (opcional)</Label>
+              <Input id="rx-desc" maxLength={40} value={description} onChange={(e) => setDescription(e.target.value)} />
+            </div>
+            <Button onClick={generate} disabled={loading || !name.trim() || !city.trim()} className="w-full gradient-primary text-primary-foreground">
+              {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Gerar QR Code
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )

@@ -15,7 +15,7 @@ export function brandLabel(brand: string): string {
   return map[brand?.toLowerCase()] ?? (brand ? brand[0].toUpperCase() + brand.slice(1) : 'Cartão')
 }
 
-export function isExpired(card: Pick<WalletCard, 'expMonth' | 'expYear'>, now = new Date()): boolean {
+export function isExpired(card: { expMonth: number; expYear: number }, now = new Date()): boolean {
   const y = now.getFullYear()
   const m = now.getMonth() + 1
   return card.expYear < y || (card.expYear === y && card.expMonth < m)

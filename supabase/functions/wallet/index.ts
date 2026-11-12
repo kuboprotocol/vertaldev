@@ -5,6 +5,7 @@
 //   card-setup                             -> { clientSecret, publishableKey }
 //   card-attach   { setupIntentId, label?, makeDefault? }
 //   pix-add       { keyType, key, label?, countries?, makeDefault? }
+//   pix-brcode    { id, amount?, merchantName, merchantCity, description? } -> { brCode }
 //   set-default   { id }
 //   remove        { id }
 //
@@ -15,7 +16,8 @@
 
 import { createClient } from "npm:@supabase/supabase-js@^2";
 import Stripe from "npm:stripe@^14";
-import { encryptSecret } from "../_shared/connectorCrypto.ts";
+import { createStaticPix, hasError } from "npm:pix-utils@^2.8.2";
+import { encryptSecret, decryptSecret } from "../_shared/connectorCrypto.ts";
 import {
   normalizePixKey,
   validatePixKey,
@@ -51,6 +53,11 @@ async function sha256(text: string) {
 }
 
 type Row = Record<string, any>;
+
+// BR Code exige texto sem acento (EMV, ASCII) e com limite de tamanho.
+function emvText(s: string, max: number) {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9 .,@/-]/g, "").trim().slice(0, max);
+}
 
 function toCard(r: Row) {
   return {
@@ -262,6 +269,35 @@ Deno.serve(async (req) => {
         throw error;
       }
       return json({ pix: toPix(row) });
+    }
+
+    // ── Pix: gerar BR Code (copia e cola / QR) para receber ───────────────
+    // Usa pix-utils (thalesog/pix-utils, MIT), padrão EMV/BR Code do Bacen.
+    if (action === "pix-brcode") {
+      const id = String(body.id ?? "");
+      const { data: row } = await db
+        .from("wallet_payment_methods").select("*")
+        .eq("id", id).eq("user_id", user.id).eq("kind", "pix").maybeSingle();
+      if (!row) return json({ error: "not_found" }, 404);
+
+      const amount = Number(body.amount ?? 0);
+      if (!Number.isFinite(amount) || amount < 0 || amount > 1_000_000) return json({ error: "invalid_amount" }, 400);
+      const merchantName = emvText(String(body.merchantName ?? ""), 25);
+      const merchantCity = emvText(String(body.merchantCity ?? ""), 15).toUpperCase();
+      if (!merchantName || !merchantCity) return json({ error: "missing_merchant" }, 400);
+
+      const pixKey = await decryptSecret({
+        ciphertext: row.pix_key_ciphertext, iv: row.pix_key_iv, tag: row.pix_key_tag,
+      });
+      const pix = createStaticPix({
+        merchantName,
+        merchantCity,
+        pixKey,
+        infoAdicional: body.description ? emvText(String(body.description), 40) : undefined,
+        transactionAmount: Math.round(amount * 100) / 100,
+      });
+      if (hasError(pix)) return json({ error: (pix as Row).message ?? "brcode_error" }, 400);
+      return json({ brCode: pix.toBRCode() });
     }
 
     // ── Definir padrão / remover ──────────────────────────────────────────
