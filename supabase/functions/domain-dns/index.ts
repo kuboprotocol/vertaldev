@@ -1,6 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, sanitizeError } from "../_shared/cors.ts";
+import { cfConfig, cfCreateDnsRecord, cfDeleteDnsRecord } from "../_shared/cloudflare.ts";
 
 const DNS_API = "https://api.hosting.ionos.com/dns/v1";
 const VALID_TYPES = ["A", "AAAA", "CNAME", "TXT", "MX", "SRV", "NS"];
@@ -68,19 +69,30 @@ Deno.serve(async (req) => {
       const priority = rec?.priority != null ? Number(rec.priority) : null;
       if (!value) return new Response(JSON.stringify({ error: "value required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-      const ionos_record_id = apiKey
-        ? await ionosCreate(apiKey, domain.domain_name, { name, type, value, ttl, priority })
-        : null;
+      const cfZoneId: string | null = domain.metadata?.cf_zone_id ?? null;
+      let cf_record_id: string | null = null;
+      let ionos_record_id: string | null = null;
+      if (cfZoneId && cfConfig().enabled) {
+        const fqdn = name === "@" ? domain.domain_name : `${name}.${domain.domain_name}`;
+        const r = await cfCreateDnsRecord(cfZoneId, { type, name: fqdn, content: value, ttl, priority });
+        cf_record_id = r.ok ? String(r.body?.result?.id ?? "") || null : null;
+      } else if (apiKey) {
+        ionos_record_id = await ionosCreate(apiKey, domain.domain_name, { name, type, value, ttl, priority });
+      }
 
       const { data: row, error } = await svc.from("kubo_dns_records").insert({
-        domain_id, user_id: userId, record_type: type, name, value, ttl, priority, ionos_record_id,
+        domain_id, user_id: userId, record_type: type, name, value, ttl, priority, ionos_record_id, cf_record_id,
       }).select().single();
       if (error) return new Response(JSON.stringify({ error: sanitizeError(error) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      return new Response(JSON.stringify({ record: row, synced: !!ionos_record_id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ record: row, synced: !!(cf_record_id || ionos_record_id), provider: cf_record_id ? "cloudflare" : ionos_record_id ? "ionos" : null }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     if (action === "delete") {
       const id = String(body?.record_id ?? "");
+      const { data: rec } = await svc.from("kubo_dns_records").select("cf_record_id").eq("id", id).eq("user_id", userId).maybeSingle();
+      if (rec?.cf_record_id && domain.metadata?.cf_zone_id && cfConfig().enabled) {
+        await cfDeleteDnsRecord(domain.metadata.cf_zone_id, rec.cf_record_id);
+      }
       const { error } = await svc.from("kubo_dns_records").delete().eq("id", id).eq("user_id", userId);
       if (error) return new Response(JSON.stringify({ error: sanitizeError(error) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
