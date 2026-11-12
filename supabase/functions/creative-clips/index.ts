@@ -47,7 +47,9 @@ async function transcribe(req: Request, user: User, idempotencyKey?: string) {
   if (OPENAI) providers.push({ url: "https://api.openai.com/v1/audio/transcriptions", key: OPENAI, model: "whisper-1" });
   if (!providers.length) return j(503, { error: "transcription_unavailable" });
 
-  const ded = await deductCredits(user.id, COST_TRANSCRIBE_CHUNK, "creative_clips_transcribe", { size: file.size }, user.email, idempotencyKey);
+  // A video runs as many chunks in parallel (20+ for ~100 min). The per-minute limit would reject
+  // the rest mid-run, so each chunk is bounded by its own credit instead.
+  const ded = await deductCredits(user.id, COST_TRANSCRIBE_CHUNK, "creative_clips_transcribe", { size: file.size }, user.email, idempotencyKey, { rateLimit: false });
   if (!ded.ok) return j((ded as any).status ?? 402, { error: ded.error });
 
   let lastError = "transcribe_failed";
