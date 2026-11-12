@@ -37,6 +37,7 @@ export type Artifact =
   | (Base & { kind: 'notebook_to_podcast'; focus?: string; duration?: number; podcastId?: string; notebookId?: string })
   | (Base & { kind: 'news_feed'; category?: string; timeRange?: string; location?: string; articleCount?: number })
   | (Base & { kind: 'news_weather'; location?: string; temperature?: number; condition?: string })
+  | (Base & { kind: 'voice_input'; transcript: string; duration?: number; language?: string; confidence?: number; recordingId?: string })
   | (Base & { kind: 'video_studio'; description?: string; tier: string; style: string; aspect: string })
   | (Base & { kind: 'clips'; description?: string; theme: string; mood: string })
   | (Base & { kind: 'emo'; description?: string })
@@ -129,6 +130,7 @@ export const KIND_LABEL: Record<ArtifactKind, string> = {
   notebook_to_podcast: 'Podcast do Notebook',
   news_feed: 'Notícias',
   news_weather: 'Clima',
+  voice_input: 'Mensagem de Voz',
   video_studio: 'Vídeo',
   clips: 'Cortes',
   emo: 'Animação',

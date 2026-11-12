@@ -620,6 +620,15 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
           result: { tool: 'download', ok: true, summary: 'Link de download pronto.' },
         };
       }
+      case 'voice_input': {
+        const language = action.language ?? 'pt-BR';
+        const provider = action.provider ?? 'web_speech';
+        const title = `Mensagem de Voz (${language === 'pt-BR' ? 'Português' : language === 'en-US' ? 'English' : language})`;
+        return {
+          panel: 'history',
+          result: { tool: 'voice_input', ok: true, summary: `🎤 Painel de gravação de voz aberto (${provider}). O usuário pode falar, editar e enviar a mensagem.` },
+        };
+      }
       case 'api_request':
         return await runApi(action, ctx);
       case 'weather':
@@ -668,6 +677,7 @@ export function actionLabel(action: AgentAction): string {
     case 'emo': return 'Abrindo EMO';
     case 'podcast_studio': return 'Abrindo Podcast Studio';
     case 'download': return 'Buscando link de download';
+    case 'voice_input': return 'Abrindo gravador de voz para capturar sua mensagem';
     case 'api_request': return 'Chamando API externa';
     case 'open_panel': return 'Abrindo painel';
     case 'weather': return 'Consultando o clima';
