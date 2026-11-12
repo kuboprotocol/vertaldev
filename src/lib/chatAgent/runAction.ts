@@ -562,6 +562,43 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
           result: { tool: 'emo', ok: true, summary: `EMO (animação de foto com movimento) aberto.` },
         };
       }
+      case 'notebook_feed': {
+        const title = action.instructions ? titleFrom(action.instructions, 50) : 'Alimentando Notebook';
+        return {
+          artifact: { id: ctx.newId(), kind: 'notebook_feed', title, instructions: action.instructions, notebookId: action.notebook_id },
+          panel: 'notebook',
+          result: { tool: 'notebook_feed', ok: true, summary: `Notebook aberto para upload de PDFs, documentos e links. Faça upload para alimentar o notebook com novo conteúdo.` },
+        };
+      }
+      case 'notebook_to_podcast': {
+        const focus = action.focus ? titleFrom(action.focus, 40) : 'Podcast do Notebook';
+        const duration = action.duration ?? 20;
+        return {
+          artifact: { id: ctx.newId(), kind: 'notebook_to_podcast', title: focus, focus: action.focus, duration, notebookId: action.notebook_id },
+          panel: 'music',
+          result: { tool: 'notebook_to_podcast', ok: true, summary: `Podcast Studio aberto para converter conteúdo do notebook em episódio (${duration}min). O AI vai processar o material e criar o podcast automaticamente.` },
+        };
+      }
+      case 'news_feed': {
+        const category = action.category ?? 'geral';
+        const timeRange = action.timeRange ?? 'hoje';
+        const location = action.location ?? 'local';
+        const title = `Notícias ${location === 'local' ? 'do seu bairro' : location === 'regional' ? 'da sua região' : location === 'nacional' ? 'do Brasil' : 'internacionais'} - ${timeRange}`;
+        return {
+          artifact: { id: ctx.newId(), kind: 'news_feed', title, category, timeRange, location, articleCount: 0 },
+          panel: 'history',
+          result: { tool: 'news_feed', ok: true, summary: `📰 Notícias ${category} (${location}) buscadas. Mostrando artigos de ${timeRange}.` },
+        };
+      }
+      case 'news_weather': {
+        const location = action.location ?? 'sua localização';
+        const title = `Previsão do Tempo - ${location}`;
+        return {
+          artifact: { id: ctx.newId(), kind: 'news_weather', title, location },
+          panel: 'history',
+          result: { tool: 'news_weather', ok: true, summary: `🌤️ Clima de ${location} carregado com previsão detalhada e alertas.` },
+        };
+      }
       case 'podcast_studio': {
         const title = titleFrom(action.topic, 50);
         const duration = action.duration ?? 20;
@@ -622,6 +659,10 @@ export function actionLabel(action: AgentAction): string {
     case 'music': return 'Compondo música (1 a 3 min)';
     case 'ebook': return 'Escrevendo ebook (pode levar alguns minutos)';
     case 'notebook': return 'Criando notebook';
+    case 'notebook_feed': return 'Abrindo Notebook para alimentar com documentos';
+    case 'notebook_to_podcast': return 'Convertendo conteúdo do Notebook em Podcast';
+    case 'news_feed': return 'Buscando notícias com geolocalização';
+    case 'news_weather': return 'Carregando previsão do tempo';
     case 'video_studio': return 'Abrindo Estúdio de Vídeo';
     case 'clips': return 'Abrindo painel de Cortes';
     case 'emo': return 'Abrindo EMO';

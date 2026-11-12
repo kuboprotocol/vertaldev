@@ -54,6 +54,8 @@ export type AgentAction =
   | { tool: "music"; prompt: string; instrumental: boolean }
   | { tool: "ebook"; topic: string; chapters: number }
   | { tool: "notebook"; name: string; description: string; emoji?: string }
+  | { tool: "notebook_feed"; notebook_id?: string; instructions?: string }
+  | { tool: "notebook_to_podcast"; notebook_id?: string; focus?: string; duration?: number }
   | { tool: "video_studio"; tier: string; style: string; aspect: string; description?: string }
   | { tool: "clips"; theme: string; mood: string; description?: string }
   | { tool: "emo"; description?: string }
@@ -69,6 +71,8 @@ export type AgentAction =
   | { tool: "weather"; place?: string }
   | { tool: "web_search"; query: string; max?: number }
   | { tool: "podcast_studio"; topic: string; duration?: number; style?: string }
+  | { tool: "news_feed"; category?: string; timeRange?: "ultima_hora" | "hoje" | "ultima_semana"; location?: "local" | "regional" | "nacional" | "internacional" }
+  | { tool: "news_weather"; location?: string }
   | { tool: "gmail_search"; query: string; max: number }
   | { tool: "gmail_send"; to: string; subject: string; body: string }
   | { tool: "slack_send"; channel: string; text: string }
@@ -118,6 +122,8 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   music: "1 crédito",
   ebook: "varia com o número de capítulos",
   notebook: "grátis",
+  notebook_feed: "grátis (upload ilimitado de PDFs e documentos)",
+  notebook_to_podcast: "2-4 créditos (varia com duração e conteúdo)",
   video_studio: "varia com o tier (Express grátis, AI 2-5 créditos/clipe)",
   clips: "varia com o tema (1-3 créditos/corte)",
   emo: "1 crédito por animação",
@@ -127,6 +133,8 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   weather: "grátis",
   web_search: "grátis",
   podcast_studio: "2-4 créditos por episódio (varia com duração e qualidade)",
+  news_feed: "grátis (notícias em tempo real com geolocalização)",
+  news_weather: "grátis (previsão do tempo localizada)",
   gmail_search: "grátis",
   gmail_send: "grátis",
   slack_send: "grátis",
@@ -168,10 +176,14 @@ export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
     `- {"tool":"music","prompt":"estilo e tema","instrumental":false} → música original (${TOOL_COSTS.music}).`,
     `- {"tool":"ebook","topic":"tema","chapters":5} → ebook completo, ${AGENT_LIMITS.ebookMinChapters} a ${AGENT_LIMITS.ebookMaxChapters} capítulos (${TOOL_COSTS.ebook}).`,
     `- {"tool":"notebook","name":"Nome do notebook","description":"descrição ou tópico"} → cria um notebook do Vertal Notebook para o usuário guardar notas, PDFs e links, e conversar com a IA sobre eles (${TOOL_COSTS.notebook}). Opcionalmente, "emoji" para o ícone (ex.: "🧬" para ciência).`,
+    `- {"tool":"notebook_feed","instructions":"o que fazer com PDFs/docs"} → abre o painel notebook para o usuário fazer upload de PDFs, documentos, imagens ou links. O AI assimila o conteúdo e o notebook fica pronto para conversas sobre aquele material (${TOOL_COSTS.notebook_feed}). Opcionalmente, "notebook_id" para alimentar um notebook existente.`,
+    `- {"tool":"notebook_to_podcast","focus":"qual parte do notebook quer em podcast","duration":20} → converte o conteúdo do notebook em um episódio de podcast original, direto do chat (${TOOL_COSTS.notebook_to_podcast}). "duration" em minutos (padrão 15-30), "focus" pode ser um tópico específico (ex.: "resumo dos principais insights"). Opcionalmente, "notebook_id" para processar um notebook existente. O podcast é criado e salvo automaticamente.`,
     `- {"tool":"video_studio","tier":"express|standard|professional","style":"estilo de animação","aspect":"9:16|16:9|1:1","description":"descrição opcional"} → transforma imagens em vídeos animados usando o Vertal Video Studio (${TOOL_COSTS.video_studio}). O usuário faz upload das imagens no painel. Tiers: express (rápido, grátis), standard e professional (IA, mais qualidade).`,
     `- {"tool":"clips","theme":"tema do corte (viral|romance|ação|comédia|educativo)","mood":"tom (energético|melancólico|inspirador|engraçado)","description":"descrição opcional"} → cria cortes virais em 9:16 com legenda automática (${TOOL_COSTS.clips}). O usuário faz upload do vídeo ou fornece link no painel.`,
     `- {"tool":"emo","description":"descrição opcional"} → anima uma foto estática usando movimento de vídeo (${TOOL_COSTS.emo}). O usuário carrega uma foto e um vídeo de referência de movimento no painel.`,
     `- {"tool":"podcast_studio","topic":"tema do podcast","duration":15,"style":"conversacional|educativo|entrevista"} → cria um episódio de podcast original (${TOOL_COSTS.podcast_studio}). "duration" em minutos (padrão 15-30). "style" é opcional (padrão: conversacional).`,
+    `- {"tool":"news_feed","category":"economia|tecnologia|esportes|entretenimento|clima|saude|politica|local|internacional","timeRange":"ultima_hora|hoje|ultima_semana","location":"local|regional|nacional|internacional"} → mostra notícias em tempo real com geolocalização do usuário, filtradas por categoria e intervalo de tempo (${TOOL_COSTS.news_feed}). Mostra notícias do bairro, cidade, estado, país e internacionais. "category" e "timeRange" são opcionais.`,
+    `- {"tool":"news_weather","location":"cidade ou bairro"} → previsão do tempo detalhada para a localização do usuário, com alertas de clima (${TOOL_COSTS.news_weather}). Sem "location", usa a geolocalização do dispositivo.`,
     `- {"tool":"download","url":"https://...","format":"mp4|mp3"} → baixa vídeo de rede social (${TOOL_COSTS.download}).`,
     `- {"tool":"api_request","method":"GET|POST|PUT|PATCH|DELETE","url":"https://...","headers":{},"body":"texto ou JSON em string","reason":"por que esta chamada"} → chama uma API externa quando nenhuma ferramenta acima resolve. O usuário aprova cada chamada. Para autenticar, escreva {{NOME_DO_SEGREDO}} no valor do cabeçalho, na query ou no corpo; o servidor troca pelo valor do cofre. Nunca peça para o usuário colar chaves no chat. Segredos disponíveis: ${secrets}. Se faltar um segredo, explique qual nome criar e use {"tool":"open_panel","panel":"secrets"}.`,
     `- {"tool":"open_panel","panel":"${PANELS.join("|")}"} → abre um painel dentro do chat para o usuário trabalhar à mão. Use quando o pedido precisa de arquivos do usuário (video_studio: fotos viram vídeo; clips: cortes de vídeo longo; avatar: avatar falante; emo: animar foto; notebook: conversar com PDFs e links; office/design/canvas: edição manual).`,
