@@ -20,6 +20,7 @@ function setup(over: Partial<OfficeGalleryProps> = {}) {
     onNew: vi.fn(),
     onRename: vi.fn(),
     onDuplicate: vi.fn(),
+    onUpload: vi.fn(),
     onDownload: vi.fn(),
     onDelete: vi.fn(),
     ...over,

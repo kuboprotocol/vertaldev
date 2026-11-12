@@ -7,7 +7,7 @@
 import type { PDFDocument as PdfDocumentType, PDFFont, PDFPage } from 'pdf-lib';
 
 /** Edição é local no navegador: o limite segue a memória, não o anexo de e-mail (10 MB). */
-export const PDF_MAX_BYTES = 50 * 1024 * 1024;
+export const PDF_MAX_BYTES = 100 * 1024 * 1024;
 /** Limite de páginas para gerar miniaturas. Acima disso a tela mostra só a página atual. */
 export const PDF_THUMB_LIMIT = 200;
 

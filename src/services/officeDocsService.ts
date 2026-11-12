@@ -4,11 +4,12 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
 import type { OfficeItem, OfficeKind } from '@/lib/office/galleryModel';
 import { PDF_MAX_BYTES } from '@/lib/office/pdfEdit';
+import { FILE_MAX_BYTES, checkUploadableFile, fileExtension, downloadMimeType } from '@/lib/office/fileRules';
 
 const TABLE = 'office_documents';
 const BUCKET = 'office-files';
 const LIST_COLUMNS = 'id,kind,title,excerpt,size_bytes,created_at,updated_at';
-const FULL_COLUMNS = `${LIST_COLUMNS},content,file_path`;
+const FULL_COLUMNS = `${LIST_COLUMNS},content,file_path,file_name,mime_type`;
 /** Limite do conteúdo estruturado (JSON) por documento. */
 export const MAX_CONTENT_BYTES = 1024 * 1024;
 export const MAX_LIST = 500;
@@ -17,6 +18,9 @@ export const MAX_LIST = 500;
 export interface OfficeRecord extends OfficeItem {
   content: unknown | null;
   filePath: string | null;
+  /** Nome original do arquivo (com extensão) para o download; só PDF e arquivos. */
+  fileName: string | null;
+  mimeType: string | null;
 }
 
 interface Row {
@@ -29,6 +33,8 @@ interface Row {
   updated_at: string;
   content?: Json | null;
   file_path?: string | null;
+  file_name?: string | null;
+  mime_type?: string | null;
 }
 
 function toItem(r: Row): OfficeItem {
@@ -44,7 +50,13 @@ function toItem(r: Row): OfficeItem {
 }
 
 function toRecord(r: Row): OfficeRecord {
-  return { ...toItem(r), content: r.content ?? null, filePath: r.file_path ?? null };
+  return {
+    ...toItem(r),
+    content: r.content ?? null,
+    filePath: r.file_path ?? null,
+    fileName: r.file_name ?? null,
+    mimeType: r.mime_type ?? null,
+  };
 }
 
 function fail(action: string, message: string): never {
@@ -76,7 +88,7 @@ export async function getOfficeRecord(id: string): Promise<OfficeRecord> {
 export async function saveStructuredItem(input: {
   id?: string;
   userId: string;
-  kind: Exclude<OfficeKind, 'pdf'>;
+  kind: Exclude<OfficeKind, 'pdf' | 'file'>;
   title: string;
   excerpt: string;
   content: unknown;
@@ -106,27 +118,37 @@ export async function saveStructuredItem(input: {
   return toItem(data as unknown as Row);
 }
 
-/** Salva um PDF: envia os bytes ao bucket privado e grava a linha. Ao substituir, apaga o arquivo antigo. */
-export async function savePdfItem(input: {
+/**
+ * Grava um arquivo no bucket privado e a linha na galeria. Ao substituir, apaga o arquivo antigo.
+ * Usado por PDF e por arquivos enviados (qualquer tipo, exceto executáveis).
+ */
+async function saveStoredFile(input: {
   id?: string;
   userId: string;
+  kind: 'pdf' | 'file';
   title: string;
   excerpt: string;
   bytes: Uint8Array;
+  fileName: string;
+  mimeType: string;
 }): Promise<OfficeItem> {
-  if (input.bytes.byteLength > PDF_MAX_BYTES) fail('salvar o PDF', 'o arquivo passou de 50 MB.');
-  const path = `${input.userId}/${crypto.randomUUID()}.pdf`;
+  // Extensão só com letras e números: vai para o caminho no bucket.
+  const ext = fileExtension(input.fileName).replace(/[^a-z0-9]/g, '').slice(0, 10);
+  const path = `${input.userId}/${crypto.randomUUID()}${ext ? `.${ext}` : ''}`;
+  const contentType = downloadMimeType(input.mimeType);
   const upload = await supabase.storage
     .from(BUCKET)
-    .upload(path, new Blob([input.bytes as BlobPart], { type: 'application/pdf' }), { contentType: 'application/pdf', upsert: false });
-  if (upload.error) fail('enviar o PDF', upload.error.message);
+    .upload(path, new Blob([input.bytes as BlobPart], { type: contentType }), { contentType, upsert: false });
+  if (upload.error) fail(input.kind === 'pdf' ? 'enviar o PDF' : 'enviar o arquivo', upload.error.message);
 
   const payload = {
-    kind: 'pdf' as const,
-    title: input.title.trim() || 'PDF sem título',
+    kind: input.kind,
+    title: input.title.trim() || (input.kind === 'pdf' ? 'PDF sem título' : 'Arquivo sem título'),
     excerpt: input.excerpt,
     content: null,
     file_path: path,
+    file_name: input.fileName.slice(0, 255),
+    mime_type: contentType,
     size_bytes: input.bytes.byteLength,
     updated_at: new Date().toISOString(),
   };
@@ -141,17 +163,60 @@ export async function savePdfItem(input: {
   if (result.error || !result.data) {
     // Sem linha no banco, o arquivo enviado não serve para nada: remove para não sobrar lixo.
     await supabase.storage.from(BUCKET).remove([path]);
-    fail('salvar o PDF', result.error?.message ?? 'erro desconhecido');
+    fail(input.kind === 'pdf' ? 'salvar o PDF' : 'salvar o arquivo', result.error?.message ?? 'erro desconhecido');
   }
   if (previousPath && previousPath !== path) await supabase.storage.from(BUCKET).remove([previousPath]);
   return toItem(result.data as Row);
 }
 
-export async function downloadPdfBytes(filePath: string): Promise<Uint8Array> {
+/** Salva um PDF (até 100 MB). */
+export async function savePdfItem(input: {
+  id?: string;
+  userId: string;
+  title: string;
+  excerpt: string;
+  bytes: Uint8Array;
+}): Promise<OfficeItem> {
+  if (input.bytes.byteLength > PDF_MAX_BYTES) fail('salvar o PDF', 'o arquivo passou de 100 MB.');
+  return saveStoredFile({
+    ...input,
+    kind: 'pdf',
+    fileName: `${input.title.trim() || 'PDF sem título'}.pdf`,
+    mimeType: 'application/pdf',
+  });
+}
+
+/**
+ * Guarda um arquivo enviado pelo usuário, de qualquer tipo que não seja executável.
+ * Valida nome, tamanho e extensão antes de enviar qualquer byte.
+ */
+export async function saveUploadedFile(input: { userId: string; file: File }): Promise<OfficeItem> {
+  const problem = checkUploadableFile({ name: input.file.name, size: input.file.size });
+  if (problem) fail('enviar o arquivo', problem);
+  if (input.file.size > FILE_MAX_BYTES) fail('enviar o arquivo', 'o arquivo passou de 100 MB.');
+  const bytes = new Uint8Array(await input.file.arrayBuffer());
+  const name = input.file.name.trim();
+  const dot = name.lastIndexOf('.');
+  const title = (dot > 0 ? name.slice(0, dot) : name).slice(0, 120) || 'Arquivo sem título';
+  return saveStoredFile({
+    userId: input.userId,
+    kind: 'file',
+    title,
+    excerpt: '',
+    bytes,
+    fileName: name,
+    mimeType: input.file.type,
+  });
+}
+
+/** Baixa os bytes de um PDF ou arquivo guardado no bucket. */
+export async function downloadStoredBytes(filePath: string): Promise<Uint8Array> {
   const { data, error } = await supabase.storage.from(BUCKET).download(filePath);
-  if (error || !data) fail('baixar o PDF', error?.message ?? 'arquivo não encontrado');
+  if (error || !data) fail('baixar o arquivo', error?.message ?? 'arquivo não encontrado');
   return new Uint8Array(await data.arrayBuffer());
 }
+
+export const downloadPdfBytes = downloadStoredBytes;
 
 /** Renomeia. Em documento, planilha e apresentação o título também muda dentro do conteúdo. */
 export async function renameOfficeItem(record: OfficeRecord, title: string): Promise<OfficeItem> {
@@ -177,12 +242,20 @@ export async function deleteOfficeItem(record: OfficeRecord): Promise<void> {
   if (record.filePath) await supabase.storage.from(BUCKET).remove([record.filePath]);
 }
 
-/** Cria uma cópia com "(cópia)" no nome. PDFs têm o arquivo copiado para a pasta do dono. */
+/** Cria uma cópia com "(cópia)" no nome. PDFs e arquivos têm o arquivo copiado para a pasta do dono. */
 export async function duplicateOfficeItem(record: OfficeRecord, userId: string): Promise<OfficeItem> {
   const title = `${record.title} (cópia)`.slice(0, 120);
-  if (record.kind === 'pdf') {
-    const bytes = await downloadPdfBytes(record.filePath ?? '');
-    return savePdfItem({ userId, title, excerpt: record.excerpt, bytes });
+  if (record.kind === 'pdf' || record.kind === 'file') {
+    const bytes = await downloadStoredBytes(record.filePath ?? '');
+    return saveStoredFile({
+      userId,
+      kind: record.kind,
+      title,
+      excerpt: record.excerpt,
+      bytes,
+      fileName: record.fileName ?? (record.kind === 'pdf' ? `${title}.pdf` : title),
+      mimeType: record.mimeType ?? (record.kind === 'pdf' ? 'application/pdf' : ''),
+    });
   }
   const content =
     record.content && typeof record.content === 'object' ? { ...(record.content as Record<string, unknown>), title } : record.content;

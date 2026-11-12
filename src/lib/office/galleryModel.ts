@@ -4,15 +4,20 @@ import type { DocData } from './documentModel';
 import type { DeckData } from './slidesModel';
 import type { SheetData } from './sheetModel';
 
-export type OfficeKind = 'doc' | 'sheet' | 'slides' | 'pdf';
+/** 'file' é um arquivo enviado (qualquer tipo, sem edição): só abre por download. */
+export type OfficeKind = 'doc' | 'sheet' | 'slides' | 'pdf' | 'file';
 
-export const OFFICE_KINDS: OfficeKind[] = ['doc', 'sheet', 'slides', 'pdf'];
+export const OFFICE_KINDS: OfficeKind[] = ['doc', 'sheet', 'slides', 'pdf', 'file'];
+
+/** Tipos que podem ser criados do zero no botão "Criar novo". */
+export const CREATABLE_KINDS: OfficeKind[] = ['doc', 'sheet', 'slides', 'pdf'];
 
 export const KIND_META: Record<OfficeKind, { label: string; singular: string; accent: string; glow: string }> = {
   doc: { label: 'Documentos', singular: 'Documento', accent: 'text-sky-300', glow: 'from-sky-500/40 to-indigo-500/20' },
   sheet: { label: 'Planilhas', singular: 'Planilha', accent: 'text-emerald-300', glow: 'from-emerald-500/40 to-teal-500/20' },
   slides: { label: 'Apresentações', singular: 'Apresentação', accent: 'text-amber-300', glow: 'from-amber-500/40 to-orange-500/20' },
   pdf: { label: 'PDFs', singular: 'PDF', accent: 'text-rose-300', glow: 'from-rose-500/40 to-red-500/20' },
+  file: { label: 'Arquivos', singular: 'Arquivo', accent: 'text-violet-300', glow: 'from-violet-500/40 to-fuchsia-500/20' },
 };
 
 /** Item da lista da galeria (sem o conteúdo completo, para carregar rápido). */
@@ -79,7 +84,7 @@ export function filterAndSortItems(
 }
 
 export function countByKind(items: OfficeItem[]): Record<OfficeKind, number> {
-  const out: Record<OfficeKind, number> = { doc: 0, sheet: 0, slides: 0, pdf: 0 };
+  const out: Record<OfficeKind, number> = { doc: 0, sheet: 0, slides: 0, pdf: 0, file: 0 };
   for (const it of items) out[it.kind] += 1;
   return out;
 }
@@ -99,7 +104,7 @@ export function formatSize(bytes: number): string {
 
 /** Título e trecho de um rascunho de documento, planilha ou apresentação (para salvar na galeria). */
 export function describeDraft(
-  kind: Exclude<OfficeKind, 'pdf'>,
+  kind: Exclude<OfficeKind, 'pdf' | 'file'>,
   data: DocData | SheetData | DeckData,
 ): { title: string; excerpt: string } {
   if (kind === 'doc') {

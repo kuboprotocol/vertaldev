@@ -936,6 +936,7 @@ export function OfficeSuite({
 
   /** Abre um item da galeria no editor certo. */
   const openRecord = async (record: OfficeRecord) => {
+    if (record.kind === 'file') throw new Error('Arquivos enviados são baixados, não abertos no editor.');
     if (isDirty(record.kind) && !window.confirm('Abrir este item substitui o que está aberto agora e ainda não foi salvo. Continuar?')) return;
     if (record.kind === 'pdf') {
       const bytes = await downloadPdfBytes(record.filePath ?? '');
@@ -986,7 +987,7 @@ export function OfficeSuite({
   }, [initialRecordId]);
 
   /** Começa um item em branco. Pede confirmação se houver alterações não salvas nesse aplicativo. */
-  const newFromGallery = async (kind: OfficeKind) => {
+  const newFromGallery = async (kind: Exclude<OfficeKind, 'file'>) => {
     if (isDirty(kind) && !window.confirm('Começar um novo descarta as alterações não salvas deste aplicativo. Continuar?')) return;
     if (kind === 'pdf') {
       const bytes = await blankPdf();
@@ -1202,7 +1203,9 @@ export function OfficeSuite({
               userId={userId}
               refreshKey={galleryRefresh}
               onOpenRecord={openRecord}
-              onNew={(k) => void newFromGallery(k)}
+              onNew={(k) => {
+                if (k !== 'file') void newFromGallery(k);
+              }}
               onRenamed={onRenamed}
               onDeleted={onDeleted}
             />
