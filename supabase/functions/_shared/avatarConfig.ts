@@ -1,4 +1,4 @@
-// Vertal Avatar AI: text → voice (MiniMax Speech-02 HD) → optional talking face (Kling AI Avatar v2).
+// Vertal Avatar AI: talking photo via HeyGen Avatar IV (OpenRouter), or text → voice (MiniMax Speech-02 HD) → Kling AI Avatar v2 (fal.ai).
 // Shared by the creative-video edge function and the Creative panel (src/config/avatarPricing.ts).
 
 export const AVATAR_TTS_MODEL = "fal-ai/minimax/speech-02-hd";
@@ -42,10 +42,47 @@ export function avatarVideoCredits(seconds: number): number {
   return Math.max(5, Math.ceil(Math.max(0, seconds) * AVATAR_VIDEO_CREDITS_PER_SECOND));
 }
 
-/** Estimate shown before generating; the video part is billed on the real duration. */
+/** Estimated speech length of a script, in whole seconds (at least 1). */
+export function estimateAvatarSeconds(text: string): number {
+  return Math.max(1, Math.ceil(text.trim().length / CHARS_PER_SECOND));
+}
+
+// ── HeyGen Avatar IV (via OpenRouter) ───────────────────────────────────────────────────────────
+// Default provider for talking-photo videos: HeyGen voices the script itself, so there is no separate voice charge.
+// Set the AVATAR_PROVIDER=fal secret to go back to MiniMax voice + Kling lip-sync.
+
+export const AVATAR_HEYGEN_MODEL = "heygen/avatar-iv";
+/** OpenRouter price for heygen/avatar-iv. */
+export const HEYGEN_USD_PER_SECOND = 0.05;
+/** Owner's rule: 185% profit over cost, so price = cost × 2.85. */
+export const HEYGEN_PRICE_MULTIPLIER = 2.85;
+/** Seconds covered by the base price; seconds beyond it cost 20% more. */
+export const HEYGEN_BASE_SECONDS = 60;
+export const HEYGEN_OVER_BASE_SURCHARGE = 1.2;
+/** Mirrors videoStudioConfig.ts: USD_TO_BRL and the cheapest credit package (CREDIT_VALUE_BRL.min). Tests keep them in sync. */
+const USD_TO_BRL = 5.6;
+const CREDIT_VALUE_BRL_MIN = 0.3;
+/** Credits per second inside the base window (≈2.66). Priced on the cheapest package so the margin holds for every package. */
+export const HEYGEN_CREDITS_PER_SECOND = (HEYGEN_USD_PER_SECOND * HEYGEN_PRICE_MULTIPLIER * USD_TO_BRL) / CREDIT_VALUE_BRL_MIN;
+
+/** Credits for a HeyGen talking-photo video: base rate up to 60 s, +20% per second beyond that. */
+export function heygenVideoCredits(seconds: number): number {
+  const s = Math.max(0, seconds);
+  const base = Math.min(s, HEYGEN_BASE_SECONDS) * HEYGEN_CREDITS_PER_SECOND;
+  const extra = Math.max(s - HEYGEN_BASE_SECONDS, 0) * HEYGEN_CREDITS_PER_SECOND * HEYGEN_OVER_BASE_SURCHARGE;
+  return Math.max(5, Math.ceil(base + extra));
+}
+
+/** Estimate shown before generating. With a photo the video is HeyGen (voice included); without one it is only the narration. */
 export function quoteAvatar(text: string, withPhoto: boolean): { seconds: number; credits: number } {
-  const chars = text.trim().length;
-  const seconds = Math.max(1, Math.ceil(chars / CHARS_PER_SECOND));
-  const credits = avatarVoiceCredits(chars) + (withPhoto ? avatarVideoCredits(seconds) : 0);
+  const seconds = estimateAvatarSeconds(text);
+  const credits = withPhoto ? heygenVideoCredits(seconds) : avatarVoiceCredits(text.trim().length);
+  return { seconds, credits };
+}
+
+/** Estimate for the legacy fal.ai path (AVATAR_PROVIDER=fal): narration plus Kling lip-sync billed on the audio length. */
+export function quoteAvatarFal(text: string, withPhoto: boolean): { seconds: number; credits: number } {
+  const seconds = estimateAvatarSeconds(text);
+  const credits = avatarVoiceCredits(text.trim().length) + (withPhoto ? avatarVideoCredits(seconds) : 0);
   return { seconds, credits };
 }

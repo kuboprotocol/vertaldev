@@ -56,7 +56,7 @@ const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: strin
   { key: "chat", title: "Vertal Chat", desc: "Conversas, resumos, traduções, geração de textos", icon: MessageSquare, cost: "1 crédito/msg" },
   { key: "downloader", title: "Downloader Universal", desc: "YouTube, Instagram, TikTok, Facebook, Kwai", icon: Download, cost: "2 créditos" },
   { key: "clips", title: "Vertal Clips", desc: "IA acha os momentos virais, reenquadra em 9:16 e legenda palavra por palavra", icon: Scissors, cost: "1 crédito a cada 5 min" },
-  { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes com narração IA", icon: User2, cost: "4 créditos/s de vídeo" },
+  { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes com narração IA", icon: User2, cost: `~${HEYGEN_CREDITS_PER_SECOND.toFixed(1).replace(".", ",")} créditos/s de vídeo` },
   { key: "shorts", title: "Vertal Shorts", desc: "Vídeos curtos verticais a partir de texto", icon: Video, cost: "3 créditos" },
   { key: "music", title: "Vertal Music AI", desc: "Música original via MusKAI", icon: Music, cost: "1 crédito" },
   { key: "ebook", title: "Vertal Ebook AI", desc: "eBooks completos com capa e capítulos", icon: BookOpen, cost: `a partir de ${ebookCost(EBOOK_MIN_CHAPTERS).credits} créditos` },
@@ -136,6 +136,7 @@ function handleFnError(d: any, fallback = "Erro") {
 }
 
 import CSVExportModal from "@/components/builder/CSVExportModal";
+import { HEYGEN_CREDITS_PER_SECOND } from "@/config/avatarPricing";
 
 function CSVExportModalWrapper() {
   const [open, setOpen] = useState(false);
