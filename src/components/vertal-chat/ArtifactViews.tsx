@@ -25,6 +25,8 @@ const KIND_ICON: Record<ArtifactKind, typeof FileText> = {
   music: Music,
   ebook: BookOpen,
   notebook: BookMarked,
+  notebook_feed: FileText,
+  notebook_to_podcast: Radio,
   video_studio: Film,
   clips: Scissors,
   emo: Sparkles,
@@ -118,6 +120,8 @@ function summary(a: Artifact): string {
     case 'music': return `${a.tracks.length} faixa${a.tracks.length === 1 ? '' : 's'}`;
     case 'ebook': return `${Math.max(1, Math.round(a.content.split(/\s+/).length / 250))} páginas aprox.`;
     case 'notebook': return 'Notas, PDFs e links';
+    case 'notebook_feed': return `${a.documentCount || 0} documentos carregados`;
+    case 'notebook_to_podcast': return `${a.duration || 20}min · ${a.focus ? a.focus : 'resumo'}`;
     case 'video_studio': return `${a.aspect} · ${a.style}`;
     case 'clips': return `${a.theme} · ${a.mood}`;
     case 'emo': return 'Animar foto com movimento';
@@ -621,6 +625,28 @@ export function ArtifactViewer({ artifact, actions }: { artifact: Artifact; acti
           <h3 className="text-lg font-semibold">{a.title}</h3>
           {a.description && <p className="max-w-xs text-sm text-muted-foreground">{a.description}</p>}
           <p className="mt-4 text-sm text-muted-foreground">Abra o painel EMO para carregar uma foto e um vídeo de referência de movimento.</p>
+        </div>
+      );
+      break;
+    case 'notebook_feed':
+      body = (
+        <div className="flex flex-col items-center gap-3 py-10 text-center">
+          <div className="text-5xl">📥</div>
+          <h3 className="text-lg font-semibold">{a.title}</h3>
+          <p className="text-sm text-muted-foreground">{a.documentCount || 0} documentos carregados</p>
+          {a.instructions && <p className="max-w-xs text-sm text-muted-foreground">{a.instructions}</p>}
+          <p className="mt-4 text-sm text-muted-foreground">Abra o painel Notebook para fazer upload de PDFs, documentos, imagens ou links. Depois você pode criar podcasts a partir deste conteúdo.</p>
+        </div>
+      );
+      break;
+    case 'notebook_to_podcast':
+      body = (
+        <div className="flex flex-col items-center gap-3 py-10 text-center">
+          <div className="text-5xl">🎙️✨</div>
+          <h3 className="text-lg font-semibold">{a.title}</h3>
+          <p className="text-sm text-muted-foreground">Podcast de {a.duration || 20} minutos</p>
+          {a.focus && <p className="max-w-xs text-sm text-muted-foreground">Foco: {a.focus}</p>}
+          <p className="mt-4 text-sm text-muted-foreground">Abra o painel Podcast Studio para gerar seu episódio a partir do conteúdo do Notebook.</p>
         </div>
       );
       break;

@@ -562,6 +562,23 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
           result: { tool: 'emo', ok: true, summary: `EMO (animação de foto com movimento) aberto.` },
         };
       }
+      case 'notebook_feed': {
+        const title = action.instructions ? titleFrom(action.instructions, 50) : 'Alimentando Notebook';
+        return {
+          artifact: { id: ctx.newId(), kind: 'notebook_feed', title, instructions: action.instructions, notebookId: action.notebook_id },
+          panel: 'notebook',
+          result: { tool: 'notebook_feed', ok: true, summary: `Notebook aberto para upload de PDFs, documentos e links. Faça upload para alimentar o notebook com novo conteúdo.` },
+        };
+      }
+      case 'notebook_to_podcast': {
+        const focus = action.focus ? titleFrom(action.focus, 40) : 'Podcast do Notebook';
+        const duration = action.duration ?? 20;
+        return {
+          artifact: { id: ctx.newId(), kind: 'notebook_to_podcast', title: focus, focus: action.focus, duration, notebookId: action.notebook_id },
+          panel: 'music',
+          result: { tool: 'notebook_to_podcast', ok: true, summary: `Podcast Studio aberto para converter conteúdo do notebook em episódio (${duration}min). O AI vai processar o material e criar o podcast automaticamente.` },
+        };
+      }
       case 'podcast_studio': {
         const title = titleFrom(action.topic, 50);
         const duration = action.duration ?? 20;
@@ -622,6 +639,8 @@ export function actionLabel(action: AgentAction): string {
     case 'music': return 'Compondo música (1 a 3 min)';
     case 'ebook': return 'Escrevendo ebook (pode levar alguns minutos)';
     case 'notebook': return 'Criando notebook';
+    case 'notebook_feed': return 'Abrindo Notebook para alimentar com documentos';
+    case 'notebook_to_podcast': return 'Convertendo conteúdo do Notebook em Podcast';
     case 'video_studio': return 'Abrindo Estúdio de Vídeo';
     case 'clips': return 'Abrindo painel de Cortes';
     case 'emo': return 'Abrindo EMO';

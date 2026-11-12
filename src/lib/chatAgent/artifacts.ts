@@ -33,6 +33,8 @@ export type Artifact =
   | (Base & { kind: 'music'; tracks: Array<{ title: string; audioUrl: string; imageUrl?: string }>; prompt: string })
   | (Base & { kind: 'ebook'; content: string; cover?: string })
   | (Base & { kind: 'notebook'; description: string; emoji?: string; notebookId?: string })
+  | (Base & { kind: 'notebook_feed'; documentCount?: number; instructions?: string; notebookId?: string })
+  | (Base & { kind: 'notebook_to_podcast'; focus?: string; duration?: number; podcastId?: string; notebookId?: string })
   | (Base & { kind: 'video_studio'; description?: string; tier: string; style: string; aspect: string })
   | (Base & { kind: 'clips'; description?: string; theme: string; mood: string })
   | (Base & { kind: 'emo'; description?: string })
@@ -121,6 +123,8 @@ export const KIND_LABEL: Record<ArtifactKind, string> = {
   music: 'Música',
   ebook: 'Ebook',
   notebook: 'Notebook',
+  notebook_feed: 'Notebook Alimentado',
+  notebook_to_podcast: 'Podcast do Notebook',
   video_studio: 'Vídeo',
   clips: 'Cortes',
   emo: 'Animação',

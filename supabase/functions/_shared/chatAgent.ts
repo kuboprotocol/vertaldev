@@ -54,6 +54,8 @@ export type AgentAction =
   | { tool: "music"; prompt: string; instrumental: boolean }
   | { tool: "ebook"; topic: string; chapters: number }
   | { tool: "notebook"; name: string; description: string; emoji?: string }
+  | { tool: "notebook_feed"; notebook_id?: string; instructions?: string }
+  | { tool: "notebook_to_podcast"; notebook_id?: string; focus?: string; duration?: number }
   | { tool: "video_studio"; tier: string; style: string; aspect: string; description?: string }
   | { tool: "clips"; theme: string; mood: string; description?: string }
   | { tool: "emo"; description?: string }
@@ -118,6 +120,8 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   music: "1 crédito",
   ebook: "varia com o número de capítulos",
   notebook: "grátis",
+  notebook_feed: "grátis (upload ilimitado de PDFs e documentos)",
+  notebook_to_podcast: "2-4 créditos (varia com duração e conteúdo)",
   video_studio: "varia com o tier (Express grátis, AI 2-5 créditos/clipe)",
   clips: "varia com o tema (1-3 créditos/corte)",
   emo: "1 crédito por animação",
@@ -168,6 +172,8 @@ export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
     `- {"tool":"music","prompt":"estilo e tema","instrumental":false} → música original (${TOOL_COSTS.music}).`,
     `- {"tool":"ebook","topic":"tema","chapters":5} → ebook completo, ${AGENT_LIMITS.ebookMinChapters} a ${AGENT_LIMITS.ebookMaxChapters} capítulos (${TOOL_COSTS.ebook}).`,
     `- {"tool":"notebook","name":"Nome do notebook","description":"descrição ou tópico"} → cria um notebook do Vertal Notebook para o usuário guardar notas, PDFs e links, e conversar com a IA sobre eles (${TOOL_COSTS.notebook}). Opcionalmente, "emoji" para o ícone (ex.: "🧬" para ciência).`,
+    `- {"tool":"notebook_feed","instructions":"o que fazer com PDFs/docs"} → abre o painel notebook para o usuário fazer upload de PDFs, documentos, imagens ou links. O AI assimila o conteúdo e o notebook fica pronto para conversas sobre aquele material (${TOOL_COSTS.notebook_feed}). Opcionalmente, "notebook_id" para alimentar um notebook existente.`,
+    `- {"tool":"notebook_to_podcast","focus":"qual parte do notebook quer em podcast","duration":20} → converte o conteúdo do notebook em um episódio de podcast original, direto do chat (${TOOL_COSTS.notebook_to_podcast}). "duration" em minutos (padrão 15-30), "focus" pode ser um tópico específico (ex.: "resumo dos principais insights"). Opcionalmente, "notebook_id" para processar um notebook existente. O podcast é criado e salvo automaticamente.`,
     `- {"tool":"video_studio","tier":"express|standard|professional","style":"estilo de animação","aspect":"9:16|16:9|1:1","description":"descrição opcional"} → transforma imagens em vídeos animados usando o Vertal Video Studio (${TOOL_COSTS.video_studio}). O usuário faz upload das imagens no painel. Tiers: express (rápido, grátis), standard e professional (IA, mais qualidade).`,
     `- {"tool":"clips","theme":"tema do corte (viral|romance|ação|comédia|educativo)","mood":"tom (energético|melancólico|inspirador|engraçado)","description":"descrição opcional"} → cria cortes virais em 9:16 com legenda automática (${TOOL_COSTS.clips}). O usuário faz upload do vídeo ou fornece link no painel.`,
     `- {"tool":"emo","description":"descrição opcional"} → anima uma foto estática usando movimento de vídeo (${TOOL_COSTS.emo}). O usuário carrega uma foto e um vídeo de referência de movimento no painel.`,
