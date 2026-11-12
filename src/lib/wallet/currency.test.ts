@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { toMinorUnits, formatMinor, PLATFORM_FEE_MINOR, CHARGE_CURRENCIES } from './currency'
+import { toMinorUnits, formatMinor, platformFeeFor, PLATFORM_FEE_RATE, CHARGE_CURRENCIES } from './currency'
 
 describe('wallet currency', () => {
   it('converte para a menor unidade', () => {
@@ -16,10 +16,12 @@ describe('wallet currency', () => {
     expect(toMinorUnits(0.01, 'BRL')).toBeNull()
     expect(toMinorUnits(10, 'XYZ')).toBeNull()
   })
-  it('taxa fixa de 1 unidade mínima', () => {
-    expect(PLATFORM_FEE_MINOR).toBe(1)
-    expect(formatMinor(PLATFORM_FEE_MINOR, 'BRL')).toMatch(/0,01/)
-    expect(formatMinor(PLATFORM_FEE_MINOR, 'JPY')).toMatch(/1/)
+  it('taxa de 1% por cobrança, mínimo 1 unidade', () => {
+    expect(PLATFORM_FEE_RATE).toBe(0.01)
+    expect(platformFeeFor(10000)).toBe(100) // R$ 100,00 -> R$ 1,00
+    expect(platformFeeFor(1234)).toBe(12)   // R$ 12,34 -> R$ 0,12
+    expect(platformFeeFor(50)).toBe(1)      // piso
+    expect(formatMinor(platformFeeFor(10000), 'BRL')).toMatch(/1,00/)
   })
   it('tem BRL e USD', () => {
     expect(CHARGE_CURRENCIES.map((c) => c.code)).toEqual(expect.arrayContaining(['BRL', 'USD']))

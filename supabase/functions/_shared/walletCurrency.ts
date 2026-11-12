@@ -1,6 +1,6 @@
 // Moedas aceitas nas cobranças da Carteira (Stripe) e conversão para a
-// menor unidade. A taxa da plataforma é sempre 1 unidade mínima da moeda
-// da cobrança: R$ 0,01, US$ 0,01, € 0,01, ¥ 1...
+// menor unidade. A taxa da plataforma é 1% de cada cobrança, na moeda
+// cobrada, arredondada e nunca menor que 1 unidade mínima.
 // Espelho de src/lib/wallet/currency.ts (teste garante igualdade).
 
 export interface ChargeCurrency { code: string; name: string; flag: string; decimals: 0 | 2 }
@@ -24,8 +24,15 @@ export const CHARGE_CURRENCIES: ChargeCurrency[] = [
   { code: 'INR', name: 'Rúpia indiana', flag: '🇮🇳', decimals: 2 },
 ]
 
-/** Taxa fixa da plataforma por cobrança, na menor unidade da moeda. */
-export const PLATFORM_FEE_MINOR = 1
+/** Taxa da plataforma: 1% de cada cobrança. */
+export const PLATFORM_FEE_RATE = 0.01
+/** Piso da taxa, na menor unidade da moeda. */
+export const PLATFORM_FEE_MIN_MINOR = 1
+
+/** 1% do valor (em menor unidade), arredondado, mínimo 1. */
+export function platformFeeFor(amountMinor: number): number {
+  return Math.max(PLATFORM_FEE_MIN_MINOR, Math.round(amountMinor * PLATFORM_FEE_RATE))
+}
 
 export function findCurrency(code: string): ChargeCurrency | undefined {
   return CHARGE_CURRENCIES.find((c) => c.code === code.toUpperCase())
@@ -36,7 +43,7 @@ export function toMinorUnits(amount: number, code: string): number | null {
   const c = findCurrency(code)
   if (!c || !Number.isFinite(amount) || amount <= 0) return null
   const minor = Math.round(amount * 10 ** c.decimals)
-  if (minor <= PLATFORM_FEE_MINOR || minor > 99_999_999) return null
+  if (minor <= PLATFORM_FEE_MIN_MINOR || minor > 99_999_999) return null
   return minor
 }
 

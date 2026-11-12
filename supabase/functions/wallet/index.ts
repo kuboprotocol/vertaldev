@@ -18,7 +18,7 @@ import { createClient } from "npm:@supabase/supabase-js@^2";
 import Stripe from "npm:stripe@^14";
 import { createStaticPix, hasError } from "npm:pix-utils@^2.8.2";
 import { encryptSecret, decryptSecret } from "../_shared/connectorCrypto.ts";
-import { findCurrency, toMinorUnits, PLATFORM_FEE_MINOR } from "../_shared/walletCurrency.ts";
+import { findCurrency, toMinorUnits, platformFeeFor, PLATFORM_FEE_RATE } from "../_shared/walletCurrency.ts";
 import {
   normalizePixKey,
   validatePixKey,
@@ -415,7 +415,7 @@ Deno.serve(async (req) => {
       }
       const { data: charges } = await db.from("wallet_charges").select("*")
         .eq("user_id", user.id).order("created_at", { ascending: false }).limit(20);
-      return json({ account, charges: (charges ?? []).map(toCharge), platformFeeMinor: PLATFORM_FEE_MINOR });
+      return json({ account, charges: (charges ?? []).map(toCharge), platformFeeRate: PLATFORM_FEE_RATE });
     }
 
     if (action === "connect-onboard") {
@@ -465,9 +465,10 @@ Deno.serve(async (req) => {
       const acct = await stripe.accounts.retrieve(accountId);
       if (!acct.charges_enabled) return json({ error: "connect_not_ready" }, 400);
 
+      const feeMinor = platformFeeFor(amountMinor);
       const origin = appOrigin(req);
       // Direct charge na conta conectada: tarifas do Stripe ficam com o
-      // recebedor e a plataforma recebe exatamente PLATFORM_FEE_MINOR.
+      // recebedor e a plataforma recebe exatamente 1% da cobrança.
       const session = await stripe.checkout.sessions.create({
         mode: "payment",
         line_items: [{
@@ -479,9 +480,9 @@ Deno.serve(async (req) => {
           },
         }],
         payment_intent_data: {
-          application_fee_amount: PLATFORM_FEE_MINOR,
+          application_fee_amount: feeMinor,
           description: description ?? undefined,
-          metadata: { wallet_user_id: user.id, platform_cnpj: PLATFORM_CNPJ, platform_fee_minor: String(PLATFORM_FEE_MINOR) },
+          metadata: { wallet_user_id: user.id, platform_cnpj: PLATFORM_CNPJ, platform_fee_minor: String(feeMinor), platform_fee_rate: String(PLATFORM_FEE_RATE) },
         },
         metadata: { wallet_user_id: user.id, source: "wallet" },
         success_url: `${origin}/?pagamento=concluido`,
@@ -496,7 +497,7 @@ Deno.serve(async (req) => {
         description,
         amount_minor: amountMinor,
         currency: currency.toLowerCase(),
-        platform_fee_minor: PLATFORM_FEE_MINOR,
+        platform_fee_minor: feeMinor,
       }).select("*").single();
       if (error) throw error;
       return json({ charge: toCharge(row) });
