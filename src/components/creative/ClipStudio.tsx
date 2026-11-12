@@ -1,3 +1,4 @@
+import { DOWNLOADER_ERRORS } from "./downloaderErrors";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Captions, Check, Coins, Copy, Crosshair, Download, Flame, Link2, Loader2, Pause, Play, RotateCw, Scissors, Sparkles,
@@ -42,6 +43,7 @@ const ERRORS: Record<string, string> = {
   no_supported_video_format: "Seu navegador não suporta gravação de vídeo. Use Chrome, Edge ou Safari atualizados.",
   video_load_failed: "Não foi possível abrir o vídeo.",
   import_blocked: "A plataforma bloqueou a importação direta. Baixe pelo link e envie o arquivo.",
+  ...DOWNLOADER_ERRORS,
 };
 const friendly = (code: string) => ERRORS[code] ?? (code.startsWith("rate_limit") ? "Muitas solicitações. Aguarde um minuto." : code);
 
