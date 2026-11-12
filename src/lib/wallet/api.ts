@@ -28,7 +28,32 @@ export interface WalletPix {
   createdAt: string
 }
 
+export interface ConnectAccount {
+  id: string
+  country: string | null
+  defaultCurrency: string | null
+  chargesEnabled: boolean
+  payoutsEnabled: boolean
+  detailsSubmitted: boolean
+  pendingRequirements: number
+}
+
+export interface WalletCharge {
+  id: string
+  description: string | null
+  amountMinor: number
+  currency: string
+  platformFeeMinor: number
+  status: 'open' | 'paid' | 'expired' | 'failed'
+  url: string | null
+  paidAt: string | null
+  createdAt: string
+}
+
 const ERRORS: Record<string, string> = {
+  connect_not_started: 'Ative os recebimentos com Stripe primeiro',
+  connect_not_ready: 'Sua conta Stripe ainda está em verificação',
+  invalid_currency: 'Moeda não suportada',
   limit_reached: 'Limite de 10 itens deste tipo na carteira',
   duplicate_card: 'Este cartão já está na sua carteira',
   duplicate_pix_key: 'Esta chave Pix já está na sua carteira',
@@ -69,6 +94,12 @@ export const walletApi = {
     call<{ brCode: string }>('pix-brcode', p),
   setDefault: (id: string) => call<{ ok: true }>('set-default', { id }),
   remove: (id: string) => call<{ ok: true }>('remove', { id }),
+  connectStatus: () =>
+    call<{ account: ConnectAccount | null; charges: WalletCharge[]; platformFeeMinor: number }>('connect-status'),
+  connectOnboard: () => call<{ url: string }>('connect-onboard'),
+  connectDashboard: () => call<{ url: string }>('connect-dashboard'),
+  connectCharge: (p: { amount: number; currency: string; description?: string }) =>
+    call<{ charge: WalletCharge }>('connect-charge', p),
 }
 
 export { FUNDING_LABEL, brandLabel, isExpired } from './format'

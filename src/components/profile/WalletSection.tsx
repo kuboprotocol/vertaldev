@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   CreditCard, Wallet, QrCode, Plus, Star, Trash2, Loader2, ShieldCheck, Globe2, Copy, Check, HandCoins,
-  Lock, BadgeCheck, Fingerprint, MoreHorizontal,
+  Lock, BadgeCheck, Fingerprint, MoreHorizontal, ArrowUpRight, Link2, Clock, CircleCheck, CircleX, Sparkles,
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
@@ -22,7 +22,8 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { walletApi, brandLabel, isExpired, FUNDING_LABEL, type WalletCard, type WalletPix } from '@/lib/wallet/api'
+import { walletApi, brandLabel, isExpired, FUNDING_LABEL, type WalletCard, type WalletPix, type ConnectAccount, type WalletCharge } from '@/lib/wallet/api'
+import { CHARGE_CURRENCIES, PLATFORM_FEE_MINOR, formatMinor, toMinorUnits, findCurrency } from '@/lib/wallet/currency'
 import { loadStripe, type StripeJs } from '@/lib/wallet/stripe'
 import { PIX_KEY_TYPES, PIX_COUNTRIES, validatePixKey, type PixKeyType } from '@/lib/wallet/pix'
 
@@ -223,9 +224,10 @@ export default function WalletSection() {
       </header>
 
       <Tabs defaultValue="cards" className="relative">
-        <TabsList className="grid h-11 w-full grid-cols-2 rounded-xl">
+        <TabsList className="grid h-11 w-full grid-cols-3 rounded-xl">
           <TabsTrigger value="cards" className="gap-2 rounded-lg"><CreditCard className="h-4 w-4" />Cartões</TabsTrigger>
           <TabsTrigger value="pix" className="gap-2 rounded-lg"><PixLogo className="h-4 w-4" />Pix</TabsTrigger>
+          <TabsTrigger value="receive" className="gap-2 rounded-lg"><HandCoins className="h-4 w-4" />Receber</TabsTrigger>
         </TabsList>
 
         {/* ── Cartões ───────────────────────────────────────────── */}
@@ -351,6 +353,10 @@ export default function WalletSection() {
             </p>
           </div>
         </TabsContent>
+        {/* ── Receber com Stripe ───────────────────────────────── */}
+        <TabsContent value="receive" className="pt-5">
+          <ReceiveTab />
+        </TabsContent>
       </Tabs>
 
       <TrustStrip />
@@ -383,6 +389,250 @@ export default function WalletSection() {
         </AlertDialogContent>
       </AlertDialog>
     </motion.section>
+  )
+}
+
+// ── Receber com Stripe Connect (qualquer moeda) ────────────────────────────
+const CHARGE_STATUS: Record<WalletCharge['status'], { label: string; icon: typeof Clock; cls: string }> = {
+  open: { label: 'Aguardando', icon: Clock, cls: 'text-amber-400 bg-amber-400/10' },
+  paid: { label: 'Pago', icon: CircleCheck, cls: 'text-emerald-400 bg-emerald-400/10' },
+  expired: { label: 'Expirado', icon: CircleX, cls: 'text-muted-foreground bg-muted/40' },
+  failed: { label: 'Falhou', icon: CircleX, cls: 'text-destructive bg-destructive/10' },
+}
+
+function ReceiveTab() {
+  const [loading, setLoading] = useState(true)
+  const [account, setAccount] = useState<ConnectAccount | null>(null)
+  const [charges, setCharges] = useState<WalletCharge[]>([])
+  const [busy, setBusy] = useState<'onboard' | 'dashboard' | null>(null)
+  const [newOpen, setNewOpen] = useState(false)
+  const [shown, setShown] = useState<WalletCharge | null>(null)
+
+  const refresh = useCallback(async () => {
+    try {
+      const d = await walletApi.connectStatus()
+      setAccount(d.account)
+      setCharges(d.charges)
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+  useEffect(() => { refresh() }, [refresh])
+
+  const go = async (kind: 'onboard' | 'dashboard') => {
+    setBusy(kind)
+    try {
+      const { url } = kind === 'onboard' ? await walletApi.connectOnboard() : await walletApi.connectDashboard()
+      window.location.assign(url)
+    } catch (e) {
+      toast.error((e as Error).message)
+      setBusy(null)
+    }
+  }
+
+  if (loading) return <div className="h-40 animate-pulse rounded-2xl bg-muted/50" />
+
+  const ready = !!account?.chargesEnabled
+  const paidTotals = charges.filter((c) => c.status === 'paid').reduce<Record<string, number>>((acc, c) => {
+    acc[c.currency] = (acc[c.currency] ?? 0) + c.amountMinor
+    return acc
+  }, {})
+
+  return (
+    <div className="space-y-4">
+      {/* Estado da conta */}
+      <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-br from-[#635bff]/20 via-background/40 to-background/20 p-5">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-[#635bff]/30 blur-2xl" />
+        <div className="relative flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#635bff] text-lg font-bold text-white shadow-lg">S</span>
+            <div>
+              <p className="font-display font-semibold text-foreground">
+                {ready ? 'Recebimentos ativos' : account ? 'Verificação em andamento' : 'Receba em qualquer moeda'}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {ready
+                  ? `Conta ${account?.country ?? ''} · repasse em ${account?.defaultCurrency ?? 'BRL'}${account?.payoutsEnabled ? '' : ' · saque pendente'}`
+                  : account
+                    ? `Faltam ${account.pendingRequirements || 'alguns'} dados no Stripe para liberar as cobranças`
+                    : 'Real, dólar, euro e mais 13 moedas, com cartão e carteiras digitais'}
+              </p>
+            </div>
+          </div>
+          {ready ? (
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className="gap-1.5" disabled={busy !== null} onClick={() => go('dashboard')}>
+                {busy === 'dashboard' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}Painel
+              </Button>
+              <Button size="sm" className="gap-1.5 gradient-primary text-primary-foreground" onClick={() => setNewOpen(true)}>
+                <Plus className="h-4 w-4" />Nova cobrança
+              </Button>
+            </div>
+          ) : (
+            <Button className="gap-1.5 bg-[#635bff] text-white hover:bg-[#5249e0]" disabled={busy !== null} onClick={() => go('onboard')}>
+              {busy === 'onboard' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {account ? 'Continuar verificação' : 'Ativar com Stripe'}
+            </Button>
+          )}
+        </div>
+        {Object.keys(paidTotals).length > 0 && (
+          <div className="relative mt-4 flex flex-wrap gap-2">
+            {Object.entries(paidTotals).map(([cur, minor]) => (
+              <span key={cur} className="rounded-xl bg-background/60 px-3 py-1.5 text-sm font-semibold text-foreground">
+                {findCurrency(cur)?.flag} {formatMinor(minor, cur)}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Cobranças */}
+      {charges.length > 0 && (
+        <div className="divide-y divide-border/50 overflow-hidden rounded-2xl border border-border/60 bg-background/40">
+          {charges.map((c) => {
+            const st = CHARGE_STATUS[c.status]
+            const Icon = st.icon
+            return (
+              <button
+                key={c.id}
+                disabled={!c.url}
+                onClick={() => setShown(c)}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors enabled:hover:bg-primary/5"
+              >
+                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${st.cls}`}><Icon className="h-4 w-4" /></span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-foreground">{c.description || 'Pagamento'}</p>
+                  <p className="text-[11px] text-muted-foreground">{new Date(c.createdAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })} · {st.label}</p>
+                </div>
+                <span className="shrink-0 font-mono text-sm font-semibold text-foreground">{formatMinor(c.amountMinor, c.currency)}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      <p className="flex items-start gap-2 rounded-xl bg-secondary/40 p-3 text-[11px] leading-relaxed text-muted-foreground">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+        Taxa da plataforma: 1 centavo por cobrança, na moeda cobrada ({formatMinor(PLATFORM_FEE_MINOR, 'BRL')}, {formatMinor(PLATFORM_FEE_MINOR, 'USD')}, {formatMinor(PLATFORM_FEE_MINOR, 'EUR')}). As tarifas do Stripe aparecem no seu painel. O valor cai na sua conta Stripe e é repassado ao seu banco.
+      </p>
+
+      <NewChargeDialog open={newOpen} onOpenChange={setNewOpen} onCreated={(c) => { setShown(c); refresh() }} />
+      <ChargeLinkDialog charge={shown} onClose={() => setShown(null)} />
+    </div>
+  )
+}
+
+function NewChargeDialog({ open, onOpenChange, onCreated }: {
+  open: boolean; onOpenChange: (o: boolean) => void; onCreated: (c: WalletCharge) => void
+}) {
+  const [amount, setAmount] = useState('')
+  const [currency, setCurrency] = useState('BRL')
+  const [description, setDescription] = useState('')
+  const [saving, setSaving] = useState(false)
+  useEffect(() => { if (open) { setAmount(''); setDescription('') } }, [open])
+
+  const value = Number(amount.replace(/\./g, '').replace(',', '.'))
+  const minor = toMinorUnits(value, currency)
+
+  const submit = async () => {
+    if (minor === null) return toast.error('Informe um valor válido')
+    setSaving(true)
+    try {
+      const { charge } = await walletApi.connectCharge({ amount: value, currency, description: description.trim() || undefined })
+      onOpenChange(false)
+      onCreated(charge)
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><HandCoins className="h-5 w-5 text-primary" />Nova cobrança</DialogTitle>
+          <DialogDescription>Gere um link de pagamento seguro do Stripe. Seu cliente paga com cartão, Apple Pay ou Google Pay.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="charge-amount">Valor</Label>
+              <Input id="charge-amount" inputMode="decimal" placeholder="0,00" value={amount} onChange={(e) => setAmount(e.target.value)} className="h-12 font-mono text-lg" autoFocus />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="charge-currency">Moeda</Label>
+              <select
+                id="charge-currency"
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                className="h-12 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                {CHARGE_CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.flag} {c.code}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="charge-desc">Descrição (opcional)</Label>
+            <Input id="charge-desc" maxLength={120} placeholder="Ex.: Consultoria de novembro" value={description} onChange={(e) => setDescription(e.target.value)} />
+          </div>
+          {minor !== null && (
+            <div className="space-y-1 rounded-xl bg-secondary/40 p-3 text-sm">
+              <div className="flex justify-between"><span className="text-muted-foreground">Cliente paga</span><span className="font-mono">{formatMinor(minor, currency)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Taxa da plataforma</span><span className="font-mono">− {formatMinor(PLATFORM_FEE_MINOR, currency)}</span></div>
+              <p className="pt-1 text-[11px] text-muted-foreground">Mais as tarifas do Stripe, descontadas na sua conta.</p>
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button onClick={submit} disabled={saving || minor === null} className="gradient-primary text-primary-foreground">
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Link2 className="mr-2 h-4 w-4" />}Gerar link
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function ChargeLinkDialog({ charge, onClose }: { charge: WalletCharge | null; onClose: () => void }) {
+  const [copied, setCopied] = useState(false)
+  useEffect(() => { setCopied(false) }, [charge])
+  const copy = async () => {
+    if (!charge?.url) return
+    await navigator.clipboard.writeText(charge.url)
+    setCopied(true)
+    toast.success('Link copiado')
+    setTimeout(() => setCopied(false), 2000)
+  }
+  return (
+    <Dialog open={!!charge} onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Cobrança de {charge ? formatMinor(charge.amountMinor, charge.currency) : ''}</DialogTitle>
+          <DialogDescription>{charge?.description || 'Envie o link ou mostre o QR Code para o cliente.'}</DialogDescription>
+        </DialogHeader>
+        {charge?.url && (
+          <div className="space-y-4">
+            <div className="mx-auto w-fit rounded-2xl bg-white p-5 shadow-lg ring-1 ring-black/5">
+              <QRCodeSVG value={charge.url} size={200} level="M" fgColor="#1a1446" />
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1 gap-2" onClick={copy}>
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{copied ? 'Copiado' : 'Copiar link'}
+              </Button>
+              <Button asChild className="flex-1 gap-2 bg-[#635bff] text-white hover:bg-[#5249e0]">
+                <a href={charge.url} target="_blank" rel="noopener noreferrer"><ArrowUpRight className="h-4 w-4" />Abrir</a>
+              </Button>
+            </div>
+            <p className="text-center text-[11px] text-muted-foreground">O link expira em 24 horas.</p>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }
 
