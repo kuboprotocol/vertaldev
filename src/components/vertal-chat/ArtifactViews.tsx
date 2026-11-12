@@ -2,8 +2,8 @@
 import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import {
-  AppWindow, BookMarked, BookOpen, Check, Code2, Copy, Download, ExternalLink, FileText, Film, Sparkles, Globe, Image as ImageIcon,
-  LayoutTemplate, Loader2, Mail, Music, Palette, Presentation, Radio, Scissors, Table2,
+  AppWindow, BookMarked, BookOpen, Check, Cloud, Code2, Copy, Download, ExternalLink, FileText, Film, Sparkles, Globe, Image as ImageIcon,
+  LayoutTemplate, Loader2, Mail, Music, Newspaper, Palette, Presentation, Radio, Scissors, Table2, Thermometer,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -27,6 +27,8 @@ const KIND_ICON: Record<ArtifactKind, typeof FileText> = {
   notebook: BookMarked,
   notebook_feed: FileText,
   notebook_to_podcast: Radio,
+  news_feed: Newspaper,
+  news_weather: Cloud,
   video_studio: Film,
   clips: Scissors,
   emo: Sparkles,
@@ -122,6 +124,8 @@ function summary(a: Artifact): string {
     case 'notebook': return 'Notas, PDFs e links';
     case 'notebook_feed': return `${a.documentCount || 0} documentos carregados`;
     case 'notebook_to_podcast': return `${a.duration || 20}min · ${a.focus ? a.focus : 'resumo'}`;
+    case 'news_feed': return `${a.category || 'geral'} · ${a.timeRange || 'hoje'}`;
+    case 'news_weather': return `${a.location || 'sua localização'}`;
     case 'video_studio': return `${a.aspect} · ${a.style}`;
     case 'clips': return `${a.theme} · ${a.mood}`;
     case 'emo': return 'Animar foto com movimento';
@@ -647,6 +651,31 @@ export function ArtifactViewer({ artifact, actions }: { artifact: Artifact; acti
           <p className="text-sm text-muted-foreground">Podcast de {a.duration || 20} minutos</p>
           {a.focus && <p className="max-w-xs text-sm text-muted-foreground">Foco: {a.focus}</p>}
           <p className="mt-4 text-sm text-muted-foreground">Abra o painel Podcast Studio para gerar seu episódio a partir do conteúdo do Notebook.</p>
+        </div>
+      );
+      break;
+    case 'news_feed':
+      body = (
+        <div className="flex flex-col items-center gap-3 py-10 text-center">
+          <div className="text-5xl">📰</div>
+          <h3 className="text-lg font-semibold">{a.title}</h3>
+          <div className="flex flex-wrap justify-center gap-2 text-xs text-muted-foreground">
+            <span className="rounded-full border border-border/60 px-3 py-1">{a.category || 'geral'}</span>
+            <span className="rounded-full border border-border/60 px-3 py-1">{a.timeRange || 'hoje'}</span>
+            <span className="rounded-full border border-border/60 px-3 py-1">{a.location || 'local'}</span>
+          </div>
+          <p className="mt-4 text-sm text-muted-foreground">{a.articleCount || 0} artigos encontrados com geolocalização automática. Clique para ler as notícias do seu bairro, cidade, estado e país.</p>
+        </div>
+      );
+      break;
+    case 'news_weather':
+      body = (
+        <div className="flex flex-col items-center gap-3 py-10 text-center">
+          <div className="text-5xl">🌤️</div>
+          <h3 className="text-lg font-semibold">{a.title}</h3>
+          {a.temperature && <p className="text-3xl font-bold">{a.temperature}°C</p>}
+          {a.condition && <p className="text-sm text-muted-foreground">{a.condition}</p>}
+          <p className="mt-4 text-sm text-muted-foreground">Previsão detalhada do tempo, alertas climáticos e recomendações baseadas na sua localização.</p>
         </div>
       );
       break;
