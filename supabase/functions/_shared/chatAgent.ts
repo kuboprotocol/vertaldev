@@ -77,7 +77,8 @@ export type AgentAction =
   | { tool: "gmail_send"; to: string; subject: string; body: string }
   | { tool: "slack_send"; channel: string; text: string }
   | { tool: "mcp_call"; server: string; method: "list_tools" | "call_tool"; name?: string; arguments?: Record<string, unknown> }
-  | { tool: "set_layout"; mode: "chat_only" | "split" };
+  | { tool: "set_layout"; mode: "chat_only" | "split" }
+  | { tool: "voice_input"; language?: "pt-BR" | "en-US" | "es-ES" | "fr-FR"; provider?: "web_speech" | "whisper" };
 
 /** Conexão que o próprio cliente adicionou (API ou servidor MCP). Só nome, endereço e NOME do segredo. */
 export interface UserConnection {
@@ -140,6 +141,10 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   slack_send: "grátis",
   mcp_call: "grátis",
   set_layout: "grátis",
+  voice_input: "grátis (captura de voz com transcrição em tempo real)",
+  world_time: "grátis",
+  alarm: "grátis",
+  timer: "grátis",
 };
 
 export interface AgentPromptContext {

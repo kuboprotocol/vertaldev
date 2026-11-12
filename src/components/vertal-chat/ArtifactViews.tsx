@@ -3,7 +3,7 @@ import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import {
   AppWindow, BookMarked, BookOpen, Check, Cloud, Code2, Copy, Download, ExternalLink, FileText, Film, Sparkles, Globe, Image as ImageIcon,
-  LayoutTemplate, Loader2, Mail, Music, Newspaper, Palette, Presentation, Radio, Scissors, Table2, Thermometer,
+  LayoutTemplate, Loader2, Mail, Mic, Music, Newspaper, Palette, Presentation, Radio, Scissors, Table2, Thermometer,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -29,6 +29,7 @@ const KIND_ICON: Record<ArtifactKind, typeof FileText> = {
   notebook_to_podcast: Radio,
   news_feed: Newspaper,
   news_weather: Cloud,
+  voice_input: Mic,
   video_studio: Film,
   clips: Scissors,
   emo: Sparkles,
@@ -126,6 +127,7 @@ function summary(a: Artifact): string {
     case 'notebook_to_podcast': return `${a.duration || 20}min · ${a.focus ? a.focus : 'resumo'}`;
     case 'news_feed': return `${a.category || 'geral'} · ${a.timeRange || 'hoje'}`;
     case 'news_weather': return `${a.location || 'sua localização'}`;
+    case 'voice_input': return `${a.duration || 0}s · ${a.language || 'pt-BR'}`;
     case 'video_studio': return `${a.aspect} · ${a.style}`;
     case 'clips': return `${a.theme} · ${a.mood}`;
     case 'emo': return 'Animar foto com movimento';
@@ -676,6 +678,20 @@ export function ArtifactViewer({ artifact, actions }: { artifact: Artifact; acti
           {a.temperature && <p className="text-3xl font-bold">{a.temperature}°C</p>}
           {a.condition && <p className="text-sm text-muted-foreground">{a.condition}</p>}
           <p className="mt-4 text-sm text-muted-foreground">Previsão detalhada do tempo, alertas climáticos e recomendações baseadas na sua localização.</p>
+        </div>
+      );
+      break;
+    case 'voice_input':
+      body = (
+        <div className="flex flex-col items-center gap-3 py-10 text-center">
+          <div className="text-5xl">🎤</div>
+          <h3 className="text-lg font-semibold">{a.title}</h3>
+          <div className="max-w-md p-4 bg-blue-50 rounded-lg border border-blue-200 mt-4">
+            <p className="text-sm text-gray-900">{a.transcript || 'Nenhuma transcrição disponível'}</p>
+          </div>
+          {a.duration && <p className="text-xs text-muted-foreground">Duração: {a.duration}s</p>}
+          {a.confidence && <p className="text-xs text-muted-foreground">Confiança: {Math.round((a.confidence || 0) * 100)}%</p>}
+          <p className="mt-4 text-sm text-muted-foreground">Sua mensagem de voz foi transcrida e adicionada ao chat. Você pode editá-la antes de enviar.</p>
         </div>
       );
       break;
