@@ -12,6 +12,7 @@ import { useAvatarUrl } from '@/hooks/useAvatarUrl'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 import { AFFILIATE_RATE, formatCents, referralLink } from '@/lib/referral'
+import WalletSection from '@/components/profile/WalletSection'
 
 export default function ProfilePage() {
   const navigate = useNavigate()
@@ -273,6 +274,9 @@ export default function ProfilePage() {
               Salvar alterações
             </Button>
           </motion.div>
+
+          {/* Wallet Section */}
+          <WalletSection />
 
           {/* Referral Section */}
           <motion.div
