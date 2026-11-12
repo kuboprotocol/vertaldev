@@ -50,7 +50,7 @@ async function transcribe(req: Request, user: User, idempotencyKey?: string) {
   const ded = await deductCredits(user.id, COST_TRANSCRIBE_CHUNK, "creative_clips_transcribe", { size: file.size }, user.email, idempotencyKey);
   if (!ded.ok) return j((ded as any).status ?? 402, { error: ded.error });
 
-  let lastError = "transcribe_failed";
+  let rateLimited = false;
   for (const p of providers) {
     const up = new FormData();
     up.append("file", file, file.name || "audio.wav");
@@ -59,10 +59,18 @@ async function transcribe(req: Request, user: User, idempotencyKey?: string) {
     up.append("timestamp_granularities[]", "word");
     up.append("timestamp_granularities[]", "segment");
     if (language) up.append("language", language);
-    const r = await fetch(p.url, { method: "POST", headers: { Authorization: `Bearer ${p.key}` }, body: up });
-    const data = await r.json().catch(() => null);
+    let r: Response;
+    let data: any = null;
+    try {
+      r = await fetch(p.url, { method: "POST", headers: { Authorization: `Bearer ${p.key}` }, body: up });
+      data = await r.json().catch(() => null);
+    } catch (e) {
+      console.warn("[creative-clips] transcription provider unreachable:", p.model, e);
+      continue;
+    }
     if (!r.ok || !data) {
-      lastError = data?.error?.message ?? `transcribe_${r.status}`;
+      if (r.status === 429) rateLimited = true;
+      console.warn("[creative-clips] transcription failed:", p.model, r.status, data?.error?.message);
       continue;
     }
     return j(200, {
@@ -73,7 +81,8 @@ async function transcribe(req: Request, user: User, idempotencyKey?: string) {
       segments: (data.segments ?? []).map((s: any) => ({ text: s.text, start: s.start, end: s.end })),
     });
   }
-  return j(502, { error: lastError });
+  // 429 tells the client to wait and retry this chunk; the charge above is refunded either way.
+  return rateLimited ? j(429, { error: "rate_limit_transcription" }) : j(502, { error: "transcribe_failed" });
 }
 
 async function analyze(body: any, user: User, idempotencyKey?: string) {

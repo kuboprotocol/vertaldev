@@ -2,7 +2,7 @@
 // frame drawing (reframe + animated captions + hook title) shared by the live preview and the export,
 // and the real-time MediaRecorder export. Runs on the client, so cutting costs Vertal nothing per clip.
 import {
-  CLIP_ASPECTS, TRANSCRIBE_SAMPLE_RATE, captionPages, chunkPlan, cropRect, emojiFor, encodeWav, focusAt, pageAt,
+  CLIP_ASPECTS, TRANSCRIBE_SAMPLE_RATE, captionPages, chunkPlan, cropRect, emojiFor, encodeWav, focusAt, mixDown, pageAt,
   type CaptionPage, type ClipAspectKey, type FocusKey, type Word,
 } from "./clipEngine";
 import { pickMimeType, wrapText } from "./videoComposer";
@@ -11,29 +11,34 @@ import { pickMimeType, wrapText } from "./videoComposer";
 
 export interface AudioChunk {
   offset: number;
-  blob: Blob;
+  /** Encodes this chunk's WAV on demand, so a long video never holds every chunk in memory at once. */
+  blob: () => Blob;
 }
 
-/** Decodes the file's audio track at 16 kHz mono and slices it into WAV chunks for Whisper. */
+/** Decodes the file's audio track at 16 kHz and slices it into mono WAV chunks for Whisper. */
 export async function extractAudioChunks(file: Blob, chunkSec: number): Promise<{ duration: number; chunks: AudioChunk[] }> {
   const Offline = window.OfflineAudioContext ?? (window as unknown as { webkitOfflineAudioContext: typeof OfflineAudioContext }).webkitOfflineAudioContext;
   if (!Offline) throw new Error("audio_unsupported");
   const ctx = new Offline(1, 1, TRANSCRIBE_SAMPLE_RATE);
+  let bytes: ArrayBuffer;
+  try {
+    bytes = await file.arrayBuffer();
+  } catch {
+    throw new Error("file_too_large_for_browser");
+  }
   let audio: AudioBuffer;
   try {
-    audio = await ctx.decodeAudioData(await file.arrayBuffer());
+    audio = await ctx.decodeAudioData(bytes);
   } catch {
     throw new Error("no_audio_track");
   }
-  const mono = new Float32Array(audio.length);
-  for (let c = 0; c < audio.numberOfChannels; c++) {
-    const data = audio.getChannelData(c);
-    for (let i = 0; i < data.length; i++) mono[i] += data[i] / audio.numberOfChannels;
-  }
+  if (!audio.length || !audio.duration) throw new Error("no_audio_track");
+  // Keep only references to the decoded channels; the mono mix is built per chunk.
+  const channels = Array.from({ length: audio.numberOfChannels }, (_, c) => audio.getChannelData(c));
   const rate = audio.sampleRate;
   const chunks = chunkPlan(audio.duration, chunkSec).map(({ start, end }) => ({
     offset: start,
-    blob: new Blob([encodeWav(mono.subarray(Math.floor(start * rate), Math.floor(end * rate)), rate)], { type: "audio/wav" }),
+    blob: () => new Blob([encodeWav(mixDown(channels, Math.floor(start * rate), Math.min(audio.length, Math.floor(end * rate))), rate)], { type: "audio/wav" }),
   }));
   return { duration: audio.duration, chunks };
 }
@@ -258,6 +263,31 @@ export interface RenderClipOptions extends FrameOptions {
   words: Word[];
   onProgress?: (fraction: number) => void;
   signal?: AbortSignal;
+  /** Media unlocked inside the click handler (see `unlockExportMedia`); Safari blocks play() after awaits otherwise. */
+  media?: ExportMedia;
+}
+
+export interface ExportMedia {
+  video: HTMLVideoElement;
+  audioCtx: AudioContext;
+  /** Settles once the priming play()/pause() is over, so it can't pause the real recording. */
+  primed: Promise<void>;
+}
+
+/**
+ * Call synchronously inside the user's click, before any await: creates the export <video> and
+ * AudioContext and primes playback so the browser's autoplay policy lets the export start later.
+ */
+export function unlockExportMedia(src: string): ExportMedia {
+  const video = document.createElement("video");
+  video.playsInline = true;
+  video.preload = "auto";
+  video.src = src;
+  const audioCtx = new AudioContext();
+  void audioCtx.resume().catch(() => {});
+  // Once the export starts playing for real (dataset.recording), the priming pause must not run.
+  const primed = video.play().then(() => { if (!video.dataset.recording) video.pause(); }, () => {});
+  return { video, audioCtx, primed };
 }
 
 export interface RenderResult {
@@ -266,29 +296,59 @@ export interface RenderResult {
   mimeType: string;
 }
 
-function waitFor(el: HTMLMediaElement, event: string): Promise<void> {
+/** Waits for a media event, failing on an error event or after `timeoutMs` (some browsers never fire it). */
+export function waitForMedia(el: HTMLMediaElement, event: string, timeoutMs = 15_000): Promise<void> {
   return new Promise((res, rej) => {
-    const ok = () => { el.removeEventListener("error", bad); res(); };
-    const bad = () => { el.removeEventListener(event, ok); rej(new Error("video_load_failed")); };
-    el.addEventListener(event, ok, { once: true });
-    el.addEventListener("error", bad, { once: true });
+    const done = (fn: () => void) => () => {
+      clearTimeout(timer);
+      el.removeEventListener(event, ok);
+      el.removeEventListener("error", bad);
+      fn();
+    };
+    const ok = done(res);
+    const bad = done(() => rej(new Error("video_load_failed")));
+    const timer = setTimeout(done(() => rej(new Error("video_load_failed"))), timeoutMs);
+    el.addEventListener(event, ok);
+    el.addEventListener("error", bad);
   });
+}
+
+/**
+ * Seeks and resolves once the frame is decoded. Setting currentTime to the value it already has
+ * doesn't fire "seeked" in every browser, so a same-time seek is nudged by a few milliseconds.
+ */
+export async function seekMedia(el: HTMLMediaElement, t: number): Promise<void> {
+  const same = Math.abs(el.currentTime - t) < 0.005;
+  if (same && el.readyState >= 2) return;
+  const seeked = waitForMedia(el, "seeked");
+  el.currentTime = same ? t + 0.01 : t;
+  await seeked;
 }
 
 /** Records the clip in real time (cut + reframe + captions) into an MP4 or WebM blob. */
 export async function renderClip(o: RenderClipOptions): Promise<RenderResult> {
   if (typeof MediaRecorder === "undefined") throw new Error("media_recorder_unsupported");
+  if (typeof HTMLCanvasElement.prototype.captureStream !== "function") throw new Error("media_recorder_unsupported");
   const mimeType = pickMimeType((t) => MediaRecorder.isTypeSupported(t));
   if (!mimeType) throw new Error("no_supported_video_format");
 
   const { width: W, height: H } = CLIP_ASPECTS[o.aspect];
-  const video = document.createElement("video");
-  video.playsInline = true;
-  video.preload = "auto";
-  video.src = o.src;
-  await waitFor(video, "loadedmetadata");
-  video.currentTime = o.start;
-  await waitFor(video, "seeked");
+  const { video, audioCtx, primed } = o.media ?? unlockExportMedia(o.src);
+  const release = () => {
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+    void audioCtx.close().catch(() => {});
+  };
+  try {
+    if (video.readyState < 1) await waitForMedia(video, "loadedmetadata");
+    await Promise.race([primed, new Promise((r) => setTimeout(r, 3000))]);
+    video.pause();
+    await seekMedia(video, o.start);
+  } catch (e) {
+    release();
+    throw e;
+  }
 
   const canvas = document.createElement("canvas");
   canvas.width = W;
@@ -296,61 +356,84 @@ export async function renderClip(o: RenderClipOptions): Promise<RenderResult> {
   const ctx = canvas.getContext("2d")!;
   const stream = canvas.captureStream(30);
 
-  // Route the source audio into the recording only (not to the speakers).
-  const audioCtx = new AudioContext();
-  const dest = audioCtx.createMediaStreamDestination();
-  audioCtx.createMediaElementSource(video).connect(dest);
-  dest.stream.getAudioTracks().forEach((tr) => stream.addTrack(tr));
+  // Route the source audio into the recording only (not to the speakers). A file without an
+  // audio track still exports (silent) instead of failing.
+  try {
+    const dest = audioCtx.createMediaStreamDestination();
+    audioCtx.createMediaElementSource(video).connect(dest);
+    dest.stream.getAudioTracks().forEach((tr) => stream.addTrack(tr));
+  } catch (e) {
+    console.warn("[clipRenderer] audio routing failed, exporting without sound", e);
+  }
 
-  const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8_000_000 });
+  let recorder: MediaRecorder;
+  try {
+    recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8_000_000 });
+  } catch {
+    stream.getTracks().forEach((tr) => tr.stop());
+    release();
+    throw new Error("no_supported_video_format");
+  }
   const chunks: Blob[] = [];
   recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
-  const stopped = new Promise<void>((res) => (recorder.onstop = () => res()));
 
   const pages = captionPages(o.words, o.start, o.end);
   const state: FrameState = { t: o.start, clipStart: o.start, clipEnd: o.end, pages };
   let raf = 0;
-  const cleanup = () => {
+  let finished = false;
+  // Stop the recorder first and release the tracks only once it has flushed its last chunk.
+  const finish = () => {
+    if (finished) return;
+    finished = true;
     cancelAnimationFrame(raf);
     video.pause();
-    video.removeAttribute("src");
-    void audioCtx.close();
-    stream.getTracks().forEach((tr) => tr.stop());
+    if (recorder.state !== "inactive") recorder.stop();
+    else recorder.onstop?.(new Event("stop"));
   };
 
   return new Promise<RenderResult>((resolve, reject) => {
+    let failure: unknown = null;
     const abort = () => {
-      cleanup();
-      if (recorder.state !== "inactive") recorder.stop();
-      reject(new DOMException("aborted", "AbortError"));
+      failure = new DOMException("aborted", "AbortError");
+      finish();
     };
     o.signal?.addEventListener("abort", abort, { once: true });
 
-    const frame = () => {
-      state.t = video.currentTime;
-      drawClipFrame(ctx, video, o, state);
-      o.onProgress?.(Math.min(1, (state.t - o.start) / (o.end - o.start)));
-      if (state.t >= o.end || video.ended) {
-        cleanup();
-        if (recorder.state !== "inactive") recorder.stop();
-        return;
-      }
-      raf = requestAnimationFrame(frame);
-    };
-
-    drawClipFrame(ctx, video, o, state);
-    recorder.start(250);
-    void audioCtx.resume();
-    video.play().then(() => (raf = requestAnimationFrame(frame)), (e) => { cleanup(); reject(e); });
-
-    stopped.then(() => {
+    recorder.onstop = () => {
       o.signal?.removeEventListener("abort", abort);
-      if (o.signal?.aborted) return;
+      stream.getTracks().forEach((tr) => tr.stop());
+      release();
+      if (failure) return reject(failure);
+      if (!chunks.length) return reject(new Error("export_empty"));
       resolve({
         blob: new Blob(chunks, { type: mimeType.split(";")[0] }),
         mimeType,
         extension: mimeType.startsWith("video/mp4") ? "mp4" : "webm",
       });
-    }, reject);
+    };
+    recorder.onerror = (e) => {
+      failure = (e as unknown as { error?: unknown }).error ?? new Error("export_failed");
+      finish();
+    };
+
+    const frame = () => {
+      state.t = video.currentTime;
+      drawClipFrame(ctx, video, o, state);
+      o.onProgress?.(Math.min(1, (state.t - o.start) / (o.end - o.start)));
+      if (state.t >= o.end || video.ended) return finish();
+      raf = requestAnimationFrame(frame);
+    };
+
+    drawClipFrame(ctx, video, o, state);
+    recorder.start(250);
+    void audioCtx.resume().catch(() => {});
+    video.dataset.recording = "1";
+    video.play().then(
+      () => { if (!finished) raf = requestAnimationFrame(frame); },
+      (e: Error) => {
+        failure = e?.name === "NotAllowedError" ? new Error("playback_blocked") : e;
+        finish();
+      },
+    );
   });
 }
