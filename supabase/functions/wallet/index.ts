@@ -18,6 +18,7 @@ import { createClient } from "npm:@supabase/supabase-js@^2";
 import Stripe from "npm:stripe@^14";
 import { createStaticPix, hasError } from "npm:pix-utils@^2.8.2";
 import { encryptSecret, decryptSecret } from "../_shared/connectorCrypto.ts";
+import { findCurrency, toMinorUnits, PLATFORM_FEE_MINOR } from "../_shared/walletCurrency.ts";
 import {
   normalizePixKey,
   validatePixKey,
@@ -33,6 +34,15 @@ const corsHeaders = {
 };
 
 const MAX_ITEMS_PER_KIND = 10;
+// Conta recebedora da taxa: a conta Stripe da plataforma (dona do STRIPE_SECRET_KEY).
+const PLATFORM_CNPJ = Deno.env.get("PLATFORM_CNPJ") ?? "65.822.139/0001-66";
+
+// Só redireciona de volta para origens do próprio app.
+const ALLOWED_ORIGIN = /^(https:\/\/([a-z0-9-]+\.)*(kubovibe\.dev|vertal\.dev|lovable\.app|lovableproject\.com|workers\.dev)|http:\/\/localhost(:\d+)?)$/;
+function appOrigin(req: Request) {
+  const o = req.headers.get("Origin") ?? "";
+  return ALLOWED_ORIGIN.test(o) ? o : "https://kubovibe.dev";
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -71,6 +81,20 @@ function toCard(r: Row) {
     funding: r.card_funding,
     country: r.card_country,
     holderName: r.holder_name,
+    createdAt: r.created_at,
+  };
+}
+
+function toCharge(r: Row) {
+  return {
+    id: r.id,
+    description: r.description,
+    amountMinor: Number(r.amount_minor),
+    currency: String(r.currency).toUpperCase(),
+    platformFeeMinor: r.platform_fee_minor,
+    status: r.status,
+    url: r.status === "open" ? r.checkout_url : null,
+    paidAt: r.paid_at,
     createdAt: r.created_at,
   };
 }
@@ -345,6 +369,137 @@ Deno.serve(async (req) => {
         }
       }
       return json({ ok: true });
+    }
+
+    // ── Stripe Connect: receber em qualquer moeda ────────────────────────
+    const getConnected = async () => {
+      const { data } = await db.from("connected_accounts").select("stripe_account_id")
+        .eq("user_id", user.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      return (data?.stripe_account_id as string | undefined) ?? null;
+    };
+
+    if (action === "connect-status") {
+      const stripe = stripeClient();
+      const accountId = await getConnected();
+      let account = null;
+      if (accountId) {
+        const a = await stripe.accounts.retrieve(accountId);
+        account = {
+          id: a.id,
+          country: a.country,
+          defaultCurrency: a.default_currency?.toUpperCase() ?? null,
+          chargesEnabled: a.charges_enabled,
+          payoutsEnabled: a.payouts_enabled,
+          detailsSubmitted: a.details_submitted,
+          pendingRequirements: (a.requirements?.currently_due?.length ?? 0) + (a.requirements?.past_due?.length ?? 0),
+        };
+      }
+
+      // Sincroniza cobranças em aberto com o Stripe (até 10 por chamada).
+      const { data: open } = await db.from("wallet_charges").select("*")
+        .eq("user_id", user.id).eq("status", "open").order("created_at", { ascending: false }).limit(10);
+      for (const c of open ?? []) {
+        try {
+          const sess = await stripe.checkout.sessions.retrieve(c.checkout_session_id, { stripeAccount: c.stripe_account_id });
+          const status = sess.payment_status === "paid" ? "paid" : sess.status === "expired" ? "expired" : "open";
+          if (status !== "open") {
+            await db.from("wallet_charges").update({
+              status,
+              payment_intent_id: typeof sess.payment_intent === "string" ? sess.payment_intent : sess.payment_intent?.id ?? null,
+              paid_at: status === "paid" ? new Date().toISOString() : null,
+            }).eq("id", c.id);
+          }
+        } catch (e) {
+          console.warn("wallet: sync da cobrança falhou", c.id, e);
+        }
+      }
+      const { data: charges } = await db.from("wallet_charges").select("*")
+        .eq("user_id", user.id).order("created_at", { ascending: false }).limit(20);
+      return json({ account, charges: (charges ?? []).map(toCharge), platformFeeMinor: PLATFORM_FEE_MINOR });
+    }
+
+    if (action === "connect-onboard") {
+      const stripe = stripeClient();
+      let accountId = await getConnected();
+      if (!accountId) {
+        const a = await stripe.accounts.create({
+          type: "express",
+          country: "BR",
+          email: user.email ?? undefined,
+          capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
+          metadata: { supabase_user_id: user.id, platform_cnpj: PLATFORM_CNPJ, source: "wallet" },
+        });
+        accountId = a.id;
+        const { error } = await db.from("connected_accounts").insert({
+          user_id: user.id, stripe_account_id: a.id, contact_email: user.email ?? null,
+        });
+        if (error) throw error;
+      }
+      const origin = appOrigin(req);
+      const link = await stripe.accountLinks.create({
+        account: accountId,
+        type: "account_onboarding",
+        refresh_url: `${origin}/profile?wallet=connect-refresh`,
+        return_url: `${origin}/profile?wallet=connect-return`,
+      });
+      return json({ url: link.url });
+    }
+
+    if (action === "connect-dashboard") {
+      const accountId = await getConnected();
+      if (!accountId) return json({ error: "connect_not_started" }, 400);
+      const link = await stripeClient().accounts.createLoginLink(accountId);
+      return json({ url: link.url });
+    }
+
+    if (action === "connect-charge") {
+      const accountId = await getConnected();
+      if (!accountId) return json({ error: "connect_not_started" }, 400);
+      const currency = String(body.currency ?? "").toUpperCase();
+      if (!findCurrency(currency)) return json({ error: "invalid_currency" }, 400);
+      const amountMinor = toMinorUnits(Number(body.amount), currency);
+      if (amountMinor === null) return json({ error: "invalid_amount" }, 400);
+      const description = body.description ? String(body.description).trim().slice(0, 120) : null;
+
+      const stripe = stripeClient();
+      const acct = await stripe.accounts.retrieve(accountId);
+      if (!acct.charges_enabled) return json({ error: "connect_not_ready" }, 400);
+
+      const origin = appOrigin(req);
+      // Direct charge na conta conectada: tarifas do Stripe ficam com o
+      // recebedor e a plataforma recebe exatamente PLATFORM_FEE_MINOR.
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        line_items: [{
+          quantity: 1,
+          price_data: {
+            currency: currency.toLowerCase(),
+            unit_amount: amountMinor,
+            product_data: { name: description || "Pagamento" },
+          },
+        }],
+        payment_intent_data: {
+          application_fee_amount: PLATFORM_FEE_MINOR,
+          description: description ?? undefined,
+          metadata: { wallet_user_id: user.id, platform_cnpj: PLATFORM_CNPJ, platform_fee_minor: String(PLATFORM_FEE_MINOR) },
+        },
+        metadata: { wallet_user_id: user.id, source: "wallet" },
+        success_url: `${origin}/?pagamento=concluido`,
+        cancel_url: `${origin}/`,
+      }, { stripeAccount: accountId });
+
+      const { data: row, error } = await db.from("wallet_charges").insert({
+        user_id: user.id,
+        stripe_account_id: accountId,
+        checkout_session_id: session.id,
+        checkout_url: session.url,
+        description,
+        amount_minor: amountMinor,
+        currency: currency.toLowerCase(),
+        platform_fee_minor: PLATFORM_FEE_MINOR,
+      }).select("*").single();
+      if (error) throw error;
+      return json({ charge: toCharge(row) });
     }
 
     return json({ error: "invalid_action" }, 400);
