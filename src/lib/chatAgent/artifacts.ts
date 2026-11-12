@@ -36,6 +36,7 @@ export type Artifact =
   | (Base & { kind: 'video_studio'; description?: string; tier: string; style: string; aspect: string })
   | (Base & { kind: 'clips'; description?: string; theme: string; mood: string })
   | (Base & { kind: 'emo'; description?: string })
+  | (Base & { kind: 'podcast_studio'; topic: string; duration?: number; style?: string; podcastId?: string })
   | (Base & { kind: 'download'; url: string; format: string })
   | (Base & { kind: 'api'; method: string; host: string; status: number; ok: boolean; body: string });
 
@@ -123,6 +124,7 @@ export const KIND_LABEL: Record<ArtifactKind, string> = {
   video_studio: 'Vídeo',
   clips: 'Cortes',
   emo: 'Animação',
+  podcast_studio: 'Podcast',
   download: 'Download',
   api: 'Resposta da API',
 };

@@ -3,7 +3,7 @@ import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import {
   AppWindow, BookMarked, BookOpen, Check, Code2, Copy, Download, ExternalLink, FileText, Film, Sparkles, Globe, Image as ImageIcon,
-  LayoutTemplate, Loader2, Mail, Music, Palette, Presentation, Scissors, Table2,
+  LayoutTemplate, Loader2, Mail, Music, Palette, Presentation, Radio, Scissors, Table2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -28,6 +28,7 @@ const KIND_ICON: Record<ArtifactKind, typeof FileText> = {
   video_studio: Film,
   clips: Scissors,
   emo: Sparkles,
+  podcast_studio: Radio,
   download: Download,
   api: Globe,
 };
@@ -120,6 +121,7 @@ function summary(a: Artifact): string {
     case 'video_studio': return `${a.aspect} · ${a.style}`;
     case 'clips': return `${a.theme} · ${a.mood}`;
     case 'emo': return 'Animar foto com movimento';
+    case 'podcast_studio': return `${a.duration}min · ${a.style}`;
     case 'api': return `HTTP ${a.status}`;
     case 'download': return a.format.toUpperCase();
     case 'email': return 'Rascunho';
@@ -619,6 +621,16 @@ export function ArtifactViewer({ artifact, actions }: { artifact: Artifact; acti
           <h3 className="text-lg font-semibold">{a.title}</h3>
           {a.description && <p className="max-w-xs text-sm text-muted-foreground">{a.description}</p>}
           <p className="mt-4 text-sm text-muted-foreground">Abra o painel EMO para carregar uma foto e um vídeo de referência de movimento.</p>
+        </div>
+      );
+      break;
+    case 'podcast_studio':
+      body = (
+        <div className="flex flex-col items-center gap-3 py-10 text-center">
+          <div className="text-5xl">🎙️</div>
+          <h3 className="text-lg font-semibold">{a.title}</h3>
+          <p className="text-sm text-muted-foreground">Duração: {a.duration || 20} min · Estilo: {a.style || 'conversacional'}</p>
+          <p className="mt-4 text-sm text-muted-foreground">Abra o painel Podcast Studio para gerar seu episódio original com IA.</p>
         </div>
       );
       break;

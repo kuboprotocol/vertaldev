@@ -68,6 +68,7 @@ export type AgentAction =
   | { tool: "timer"; op: "start" | "cancel"; seconds?: number; minutes?: number; label?: string; id?: string }
   | { tool: "weather"; place?: string }
   | { tool: "web_search"; query: string; max?: number }
+  | { tool: "podcast_studio"; topic: string; duration?: number; style?: string }
   | { tool: "gmail_search"; query: string; max: number }
   | { tool: "gmail_send"; to: string; subject: string; body: string }
   | { tool: "slack_send"; channel: string; text: string }
@@ -125,6 +126,7 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   open_panel: "grátis",
   weather: "grátis",
   web_search: "grátis",
+  podcast_studio: "2-4 créditos por episódio (varia com duração e qualidade)",
   gmail_search: "grátis",
   gmail_send: "grátis",
   slack_send: "grátis",
@@ -169,6 +171,7 @@ export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
     `- {"tool":"video_studio","tier":"express|standard|professional","style":"estilo de animação","aspect":"9:16|16:9|1:1","description":"descrição opcional"} → transforma imagens em vídeos animados usando o Vertal Video Studio (${TOOL_COSTS.video_studio}). O usuário faz upload das imagens no painel. Tiers: express (rápido, grátis), standard e professional (IA, mais qualidade).`,
     `- {"tool":"clips","theme":"tema do corte (viral|romance|ação|comédia|educativo)","mood":"tom (energético|melancólico|inspirador|engraçado)","description":"descrição opcional"} → cria cortes virais em 9:16 com legenda automática (${TOOL_COSTS.clips}). O usuário faz upload do vídeo ou fornece link no painel.`,
     `- {"tool":"emo","description":"descrição opcional"} → anima uma foto estática usando movimento de vídeo (${TOOL_COSTS.emo}). O usuário carrega uma foto e um vídeo de referência de movimento no painel.`,
+    `- {"tool":"podcast_studio","topic":"tema do podcast","duration":15,"style":"conversacional|educativo|entrevista"} → cria um episódio de podcast original (${TOOL_COSTS.podcast_studio}). "duration" em minutos (padrão 15-30). "style" é opcional (padrão: conversacional).`,
     `- {"tool":"download","url":"https://...","format":"mp4|mp3"} → baixa vídeo de rede social (${TOOL_COSTS.download}).`,
     `- {"tool":"api_request","method":"GET|POST|PUT|PATCH|DELETE","url":"https://...","headers":{},"body":"texto ou JSON em string","reason":"por que esta chamada"} → chama uma API externa quando nenhuma ferramenta acima resolve. O usuário aprova cada chamada. Para autenticar, escreva {{NOME_DO_SEGREDO}} no valor do cabeçalho, na query ou no corpo; o servidor troca pelo valor do cofre. Nunca peça para o usuário colar chaves no chat. Segredos disponíveis: ${secrets}. Se faltar um segredo, explique qual nome criar e use {"tool":"open_panel","panel":"secrets"}.`,
     `- {"tool":"open_panel","panel":"${PANELS.join("|")}"} → abre um painel dentro do chat para o usuário trabalhar à mão. Use quando o pedido precisa de arquivos do usuário (video_studio: fotos viram vídeo; clips: cortes de vídeo longo; avatar: avatar falante; emo: animar foto; notebook: conversar com PDFs e links; office/design/canvas: edição manual).`,

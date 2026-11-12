@@ -562,6 +562,16 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
           result: { tool: 'emo', ok: true, summary: `EMO (animação de foto com movimento) aberto.` },
         };
       }
+      case 'podcast_studio': {
+        const title = titleFrom(action.topic, 50);
+        const duration = action.duration ?? 20;
+        const style = action.style ?? 'conversacional';
+        return {
+          artifact: { id: ctx.newId(), kind: 'podcast_studio', title, topic: action.topic, duration, style },
+          panel: 'music',
+          result: { tool: 'podcast_studio', ok: true, summary: `Podcast Studio (${duration}min, ${style}) aberto para criar episódio.` },
+        };
+      }
       case 'download': {
         const { data, error } = await supabase.functions.invoke('creative-download', {
           body: { url: action.url, format: action.format },
@@ -615,6 +625,7 @@ export function actionLabel(action: AgentAction): string {
     case 'video_studio': return 'Abrindo Estúdio de Vídeo';
     case 'clips': return 'Abrindo painel de Cortes';
     case 'emo': return 'Abrindo EMO';
+    case 'podcast_studio': return 'Abrindo Podcast Studio';
     case 'download': return 'Buscando link de download';
     case 'api_request': return 'Chamando API externa';
     case 'open_panel': return 'Abrindo painel';
