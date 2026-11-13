@@ -38,6 +38,7 @@ export type Artifact =
   | (Base & { kind: 'news_feed'; category?: string; timeRange?: string; location?: string; articleCount?: number })
   | (Base & { kind: 'news_weather'; location?: string; temperature?: number; condition?: string })
   | (Base & { kind: 'voice_input'; transcript: string; duration?: number; language?: string; confidence?: number; recordingId?: string })
+  | (Base & { kind: 'scheduled_alarm'; time: string; soundName: string; label?: string; repeatDays?: number[]; alarmId?: string })
   | (Base & { kind: 'video_studio'; description?: string; tier: string; style: string; aspect: string })
   | (Base & { kind: 'clips'; description?: string; theme: string; mood: string })
   | (Base & { kind: 'emo'; description?: string })
@@ -131,6 +132,7 @@ export const KIND_LABEL: Record<ArtifactKind, string> = {
   news_feed: 'Notícias',
   news_weather: 'Clima',
   voice_input: 'Mensagem de Voz',
+  scheduled_alarm: 'Alarme Agendado',
   video_studio: 'Vídeo',
   clips: 'Cortes',
   emo: 'Animação',

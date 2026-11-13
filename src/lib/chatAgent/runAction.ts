@@ -629,6 +629,19 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
           result: { tool: 'voice_input', ok: true, summary: `🎤 Painel de gravação de voz aberto (${provider}). O usuário pode falar, editar e enviar a mensagem.` },
         };
       }
+      case 'schedule_alarm': {
+        const time = action.time;
+        const soundId = action.soundId ?? 'alarm-1';
+        const label = action.label ?? `Alarme às ${time}`;
+        const repeatText = action.repeatDays && action.repeatDays.length > 0
+          ? `(repetir: ${['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'].filter((_, i) => action.repeatDays!.includes(i)).join(', ')})`
+          : '';
+        return {
+          artifact: { id: ctx.newId(), kind: 'scheduled_alarm', title: label, time, soundName: soundId, label, repeatDays: action.repeatDays, alarmId: `alarm_${Date.now()}` },
+          panel: 'clock',
+          result: { tool: 'schedule_alarm', ok: true, summary: `⏰ Alarme agendado para ${time} ${repeatText}. O usuário pode escolher entre 18 sons pré-definidos ou sons da galeria personalizada.` },
+        };
+      }
       case 'api_request':
         return await runApi(action, ctx);
       case 'weather':
@@ -678,6 +691,7 @@ export function actionLabel(action: AgentAction): string {
     case 'podcast_studio': return 'Abrindo Podcast Studio';
     case 'download': return 'Buscando link de download';
     case 'voice_input': return 'Abrindo gravador de voz para capturar sua mensagem';
+    case 'schedule_alarm': return 'Agendando alarme com som personalizado';
     case 'api_request': return 'Chamando API externa';
     case 'open_panel': return 'Abrindo painel';
     case 'weather': return 'Consultando o clima';

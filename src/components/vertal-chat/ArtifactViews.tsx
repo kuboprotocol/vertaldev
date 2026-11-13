@@ -3,7 +3,7 @@ import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import {
   AppWindow, BookMarked, BookOpen, Check, Cloud, Code2, Copy, Download, ExternalLink, FileText, Film, Sparkles, Globe, Image as ImageIcon,
-  LayoutTemplate, Loader2, Mail, Mic, Music, Newspaper, Palette, Presentation, Radio, Scissors, Table2, Thermometer,
+  LayoutTemplate, Loader2, Mail, Mic, Music, Newspaper, Palette, Presentation, Radio, Scissors, Table2, Thermometer, Clock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -30,6 +30,7 @@ const KIND_ICON: Record<ArtifactKind, typeof FileText> = {
   news_feed: Newspaper,
   news_weather: Cloud,
   voice_input: Mic,
+  scheduled_alarm: Clock,
   video_studio: Film,
   clips: Scissors,
   emo: Sparkles,
@@ -128,6 +129,7 @@ function summary(a: Artifact): string {
     case 'news_feed': return `${a.category || 'geral'} · ${a.timeRange || 'hoje'}`;
     case 'news_weather': return `${a.location || 'sua localização'}`;
     case 'voice_input': return `${a.duration || 0}s · ${a.language || 'pt-BR'}`;
+    case 'scheduled_alarm': return `${a.time} · ${a.soundName || 'som padrão'}`;
     case 'video_studio': return `${a.aspect} · ${a.style}`;
     case 'clips': return `${a.theme} · ${a.mood}`;
     case 'emo': return 'Animar foto com movimento';
@@ -692,6 +694,24 @@ export function ArtifactViewer({ artifact, actions }: { artifact: Artifact; acti
           {a.duration && <p className="text-xs text-muted-foreground">Duração: {a.duration}s</p>}
           {a.confidence && <p className="text-xs text-muted-foreground">Confiança: {Math.round((a.confidence || 0) * 100)}%</p>}
           <p className="mt-4 text-sm text-muted-foreground">Sua mensagem de voz foi transcrida e adicionada ao chat. Você pode editá-la antes de enviar.</p>
+        </div>
+      );
+      break;
+    case 'scheduled_alarm':
+      body = (
+        <div className="flex flex-col items-center gap-3 py-10 text-center">
+          <div className="text-5xl">⏰</div>
+          <h3 className="text-lg font-semibold">{a.title}</h3>
+          <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+            <p><strong>Horário:</strong> {a.time}</p>
+            <p><strong>Som:</strong> {a.soundName || 'Padrão'}</p>
+            {a.repeatDays && a.repeatDays.length > 0 && (
+              <p><strong>Repetir:</strong> {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab']
+                .filter((_, i) => a.repeatDays!.includes(i))
+                .join(', ')}</p>
+            )}
+          </div>
+          <p className="mt-4 text-sm text-muted-foreground">Alarme agendado com sucesso. Você pode escolher entre 18 sons pré-definidos ou sons da sua galeria personalizada.</p>
         </div>
       );
       break;
