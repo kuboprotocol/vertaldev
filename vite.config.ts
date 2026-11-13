@@ -78,6 +78,16 @@ export default defineConfig(({ command, mode }) => {
           ],
           runtimeCaching: [
             {
+              // Toques do Vertal Clock: depois da primeira vez, tocam mesmo sem internet.
+              urlPattern: /\/sounds\/clock\/[a-z0-9]+\.mp3$/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'clock-sounds',
+                expiration: { maxEntries: 40, maxAgeSeconds: 365 * 24 * 60 * 60 },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
+            {
               urlPattern: /^https:\/\/(api\.kubovibe\.dev|cdn\.jsdelivr\.net)\/.*/i,
               handler: 'NetworkFirst',
               options: {

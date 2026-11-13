@@ -4,7 +4,7 @@
 // Um site não acorda um aparelho fechado: o alarme toca enquanto o Vertal (ou a
 // página com o widget) estiver aberto, em primeiro plano ou em outra aba.
 import { nextRing } from './alarms';
-import { installAudioUnlock, startAlarmSound, stopAlarmSound } from './sound';
+import { installAudioUnlock, preloadAlarmSound, startAlarmSound, stopAlarmSound } from './sound';
 import {
   getClockState, refreshClockState, resetTimer, updateClockState, type ClockState,
 } from './store';
@@ -118,6 +118,9 @@ export function startClockEngine(): () => void {
   if (!interval) {
     lastTick = Date.now();
     installAudioUnlock();
+    // Deixa prontas as gravações que podem tocar, para o alarme não esperar a rede.
+    const s = getClockState();
+    new Set([s.settings.sound, ...s.alarms.filter((a) => a.enabled).map((a) => a.sound ?? s.settings.sound)]).forEach(preloadAlarmSound);
     interval = setInterval(tick, 1000);
     // Ao voltar para a aba, confere na hora (o navegador atrasa timers em segundo plano).
     document.addEventListener('visibilitychange', tick);
