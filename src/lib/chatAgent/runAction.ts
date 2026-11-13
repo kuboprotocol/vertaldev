@@ -625,7 +625,7 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
         const provider = action.provider ?? 'web_speech';
         const title = `Mensagem de Voz (${language === 'pt-BR' ? 'Português' : language === 'en-US' ? 'English' : language})`;
         return {
-          panel: 'history',
+          panel: 'voice',
           result: { tool: 'voice_input', ok: true, summary: `🎤 Painel de gravação de voz aberto (${provider}). O usuário pode falar, editar e enviar a mensagem.` },
         };
       }

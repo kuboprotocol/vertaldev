@@ -3,6 +3,7 @@ import { lazy } from 'react';
 import type { PanelKey } from '@/lib/chatAgent/contract';
 import type { PanelRequest } from './panelList';
 import { HistoryPanel } from './HistoryPanel';
+import { VoicePanel } from './VoicePanel';
 
 const OfficeSuite = lazy(() => import('@/components/office/OfficeSuite').then((m) => ({ default: m.OfficeSuite })));
 const CreativeDesign = lazy(() => import('@/components/CreativeDesign').then((m) => ({ default: m.CreativeDesign })));
@@ -46,6 +47,7 @@ export function PanelHost({ request, credits, userId }: { request: PanelRequest;
   }
   if (key === 'notebook') return <VertalNotebook />;
   if (key === 'clock') return <div className="mx-auto max-w-3xl p-3 sm:p-4"><VertalClock /></div>;
+  if (key === 'voice') return <div className="mx-auto max-w-2xl p-3 sm:p-4"><VoicePanel onSend={(text) => console.log('Voice:', text)} onClose={() => {}} /></div>;
   if (key === 'sheet') return <div className="mx-auto max-w-6xl p-4"><CreativeSheets creditsAvailable={credits} /></div>;
   if (isToolPanel(key)) return <div className="mx-auto max-w-5xl p-4 sm:p-6"><CreativeToolInterface toolKey={key} /></div>;
   return null;
