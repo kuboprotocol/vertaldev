@@ -21,7 +21,7 @@ import {
   CITIES, findCityByTz, flagEmoji, isDaytime, isValidTimeZone, localTimeZone, offsetLabel,
   searchCities, zoneDiff, zoneParts, type City,
 } from '@/lib/clock/zones';
-import { previewAlarmSound, stopSoundPreview, unlockAudio } from '@/lib/clock/sound';
+import { forgetCustomSound, preloadAlarmSound, previewAlarmSound, stopSoundPreview, unlockAudio } from '@/lib/clock/sound';
 
 type Tab = 'clock' | 'alarm' | 'stopwatch' | 'timer';
 
@@ -417,6 +417,7 @@ export class VertalClockElement extends HTMLElement {
       return;
     }
     msg.hidden = true;
+    preloadAlarmSound(result.sound);
     if (this.sheet?.type === 'settings') {
       updateSettings({ sound: result.sound });
       this.renderSheet();
@@ -588,6 +589,7 @@ export class VertalClockElement extends HTMLElement {
       case 'upload-sound': this.sheetEl.querySelector<HTMLInputElement>('[data-field="sound-file"]')?.click(); break;
       case 'remove-sound':
         stopSoundPreview();
+        forgetCustomSound(id);
         void removeSoundFile(id).then(() => {
           if (this.sheet?.type === 'settings') this.renderSheet();
         });

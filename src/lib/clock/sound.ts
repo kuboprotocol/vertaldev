@@ -122,28 +122,64 @@ function playFallback(repeat: boolean, mine: number): void {
   }
 }
 
-const buffers = new Map<BuiltinSound, Promise<AudioBuffer>>();
+const buffers = new Map<string, Promise<AudioBuffer>>();
+/** Músicas enviadas podem ser grandes: guarda só as últimas decodificadas. */
+const MAX_CUSTOM_BUFFERS = 3;
+
+function remember(key: string, pending: Promise<AudioBuffer>): Promise<AudioBuffer> {
+  pending.catch(() => buffers.delete(key)); // tenta de novo na próxima vez
+  buffers.set(key, pending);
+  const customs = [...buffers.keys()].filter((k) => k.startsWith('custom:'));
+  if (customs.length > MAX_CUSTOM_BUFFERS) buffers.delete(customs[0]);
+  return pending;
+}
 
 /** Baixa e decodifica a gravação uma vez; as próximas vezes saem da memória (e do cache do service worker). */
 function loadBuiltin(c: AudioContext, sound: BuiltinSound): Promise<AudioBuffer> {
-  let pending = buffers.get(sound);
-  if (!pending) {
-    pending = fetch(builtinSoundUrl(sound))
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.arrayBuffer();
-      })
-      .then((data) => c.decodeAudioData(data));
-    pending.catch(() => buffers.delete(sound)); // tenta de novo na próxima vez
-    buffers.set(sound, pending);
-  }
-  return pending;
+  return buffers.get(sound) ?? remember(sound, fetch(builtinSoundUrl(sound))
+    .then((res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.arrayBuffer();
+    })
+    .then((data) => c.decodeAudioData(data)));
+}
+
+/** Lê o arquivo enviado do IndexedDB e decodifica (MP3, M4A, WAV, OGG... o que o navegador souber abrir). */
+function loadCustom(c: AudioContext, id: string): Promise<AudioBuffer> {
+  const key = `custom:${id}`;
+  return buffers.get(key) ?? remember(key, getSoundFile(id).then(async (blob) => {
+    if (!blob) throw new Error('som apagado');
+    return c.decodeAudioData(await blob.arrayBuffer());
+  }));
 }
 
 /** Deixa a gravação pronta antes do alarme tocar (chamar ao escolher o toque ou agendar um alarme). */
 export function preloadAlarmSound(sound: AlarmSound): void {
   const c = audio();
-  if (c && isBuiltinSound(sound)) void loadBuiltin(c, sound).catch(() => undefined);
+  if (!c) return;
+  const custom = customSoundId(sound);
+  if (custom) void loadCustom(c, custom).catch(() => undefined);
+  else if (isBuiltinSound(sound)) void loadBuiltin(c, sound).catch(() => undefined);
+}
+
+/** Toca um áudio já decodificado; em repetição, recomeça depois de `gapMs` (0 = emenda direto). */
+function playBuffer(c: AudioContext, buffer: AudioBuffer, repeat: boolean, gapMs: number): void {
+  out = c.createGain();
+  out.connect(c.destination);
+  const gain = out;
+  const once = () => {
+    const src = c.createBufferSource();
+    src.buffer = buffer;
+    src.loop = repeat && gapMs === 0;
+    src.connect(gain);
+    src.start(c.currentTime + 0.02);
+  };
+  once();
+  if (repeat && gapMs > 0) {
+    loop = setInterval(() => {
+      if (c.state === 'running') once();
+    }, Math.round(buffer.duration * 1000) + gapMs);
+  }
 }
 
 /**
@@ -161,27 +197,27 @@ async function playBuiltin(sound: BuiltinSound, repeat: boolean, mine: number): 
     return mine !== turn;
   }
   if (mine !== turn) return true;
-  out = c.createGain();
-  out.connect(c.destination);
-  const gain = out;
-  const once = () => {
-    const src = c.createBufferSource();
-    src.buffer = buffer;
-    src.loop = repeat && GAP_MS[sound] === 0;
-    src.connect(gain);
-    src.start(c.currentTime + 0.02);
-  };
-  once();
-  if (repeat && GAP_MS[sound] > 0) {
-    loop = setInterval(() => {
-      if (c.state === 'running') once();
-    }, Math.round(buffer.duration * 1000) + GAP_MS[sound]);
-  }
+  playBuffer(c, buffer, repeat, GAP_MS[sound]);
   return true;
 }
 
-/** Toca o arquivo enviado pelo usuário. Devolve false se não deu (arquivo apagado, formato não suportado, som bloqueado). */
+/**
+ * Toca o arquivo enviado pelo usuário. Primeiro pelo Web Audio (funciona quando o alarme
+ * dispara sozinho, sem toque na tela); se o navegador não decodificar o formato, tenta o
+ * player de mídia. Devolve false se não deu (arquivo apagado, formato não suportado, som bloqueado).
+ */
 async function playFile(id: string, repeat: boolean, mine: number): Promise<boolean> {
+  const c = audio();
+  if (c) {
+    unlockAudio();
+    try {
+      const buffer = await loadCustom(c, id);
+      if (mine === turn) playBuffer(c, buffer, repeat, 0);
+      return true;
+    } catch {
+      if (mine !== turn) return true;
+    }
+  }
   const blob = await getSoundFile(id);
   if (!blob || mine !== turn) return mine !== turn;
   try {
@@ -193,6 +229,11 @@ async function playFile(id: string, repeat: boolean, mine: number): Promise<bool
   } catch {
     return mine !== turn;
   }
+}
+
+/** Esquece o áudio decodificado de um som enviado que foi removido. */
+export function forgetCustomSound(id: string): void {
+  buffers.delete(`custom:${id}`);
 }
 
 function play(sound: AlarmSound, repeat: boolean, maxMs: number): void {

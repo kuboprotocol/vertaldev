@@ -46,7 +46,9 @@ export async function addSoundFile(file: File, count: number): Promise<AddSoundR
   const id = newClockId();
   const name = file.name.replace(/\.[A-Za-z0-9]{1,5}$/, '').trim() || file.name;
   try {
-    await run('readwrite', (s) => s.put(file, id));
+    // Guarda uma cópia em Blob simples: o Safari do iPhone às vezes perde um File guardado direto no IndexedDB.
+    const data = new Blob([await file.arrayBuffer()], { type: file.type || 'audio/mpeg' });
+    await run('readwrite', (s) => s.put(data, id));
   } catch {
     return { ok: false, reason: 'storage' }; // sem espaço, aba anônima ou IndexedDB bloqueado
   }
