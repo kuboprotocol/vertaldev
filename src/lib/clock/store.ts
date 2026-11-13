@@ -37,12 +37,21 @@ export interface Stopwatch {
   laps: number[];
 }
 
-/** Toques que vêm com o relógio (sintetizados, sem arquivo). */
+/** Toques que vêm com o relógio: gravações reais em public/sounds/clock (créditos em CREDITS.md). */
 export const ALARM_SOUNDS = [
-  'classic', 'rooster', 'digital', 'gentle', 'beep', 'bell', 'chime', 'radar', 'siren', 'birds', 'harp',
-  'marimba', 'piano', 'xylophone', 'buzzer', 'phone', 'cuckoo', 'sonar', 'flute', 'musicbox', 'bugle',
+  'classic', 'vintage', 'ring', 'digital', 'rooster', 'rooster2', 'birds', 'cuckoo', 'bell', 'phone',
+  'bugle', 'gentle', 'chime', 'musicbox', 'harp', 'sea',
 ] as const;
 export type BuiltinSound = (typeof ALARM_SOUNDS)[number];
+
+/** Toques sintetizados que saíram da lista: quem tinha um deles passa para a gravação mais parecida. */
+const RETIRED_SOUNDS: Record<string, BuiltinSound> = {
+  beep: 'digital', radar: 'digital', sonar: 'gentle', siren: 'classic', buzzer: 'ring',
+  marimba: 'musicbox', piano: 'musicbox', xylophone: 'musicbox', flute: 'birds',
+};
+/** Troca um toque aposentado pelo substituto; os demais valores passam como vieram. */
+export const migrateSound = (sound: unknown): unknown =>
+  typeof sound === 'string' && Object.prototype.hasOwnProperty.call(RETIRED_SOUNDS, sound) ? RETIRED_SOUNDS[sound] : sound;
 /** Um toque embutido ou um som enviado pelo usuário ("custom:<id>"). */
 export type AlarmSound = string;
 
@@ -115,7 +124,7 @@ export function sanitizeAlarm(raw: unknown): Alarm | null {
     enabled: a.enabled !== false,
     ...(tz ? { tz, tzLabel: text(a.tzLabel, 60) || findCityByTz(tz).city } : {}),
     ...(snooze ? { snoozeUntil: snooze } : {}),
-    ...(isSound(a.sound) ? { sound: a.sound } : {}),
+    ...(isSound(migrateSound(a.sound)) ? { sound: migrateSound(a.sound) as AlarmSound } : {}),
     createdAt: finite(a.createdAt, 0, Number.MAX_SAFE_INTEGER, 0),
   };
 }
@@ -182,7 +191,7 @@ export function sanitizeState(raw: unknown): ClockState {
     },
     settings: {
       hour12: settings.hour12 === true,
-      sound: known(settings.sound) ? settings.sound : base.settings.sound,
+      sound: known(migrateSound(settings.sound)) ? (migrateSound(settings.sound) as AlarmSound) : base.settings.sound,
       snoozeMinutes: Math.round(finite(settings.snoozeMinutes, 1, 60, base.settings.snoozeMinutes)),
     },
     customSounds,

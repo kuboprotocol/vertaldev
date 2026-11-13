@@ -1,3 +1,6 @@
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { STRINGS } from '@/embed/clock/strings';
 import { describe, expect, it } from 'vitest';
 import { describeDays, nextRing, parseClockTime } from '@/lib/clock/alarms';
 import { dueRings } from '@/lib/clock/engine';
@@ -58,7 +61,26 @@ describe('Vertal Clock', () => {
     });
     expect(state.alarms.map((a) => a.sound)).toEqual(['rooster', 'custom:abc', undefined, undefined]);
     expect(state.settings.sound).toBe('classic');
-    expect(ALARM_SOUNDS).toHaveLength(21);
+    expect(ALARM_SOUNDS).toHaveLength(16);
     expect(dueRings(state, NOW - 60_000, NOW, SP).map((r) => r.sound)).toEqual(['rooster', 'custom:abc', undefined, undefined]);
+  });
+
+  it('troca os toques sintetizados antigos pela gravação real mais parecida', () => {
+    const alarm = (id: string, sound: unknown) => ({ id, time: '07:00', label: '', days: [], enabled: true, createdAt: 0, sound });
+    const state = sanitizeState({
+      ...defaultState(),
+      settings: { hour12: false, sound: 'siren', snoozeMinutes: 9 },
+      alarms: [alarm('a', 'radar'), alarm('b', 'piano'), alarm('c', 'buzzer')],
+    });
+    expect(state.settings.sound).toBe('classic');
+    expect(state.alarms.map((a) => a.sound)).toEqual(['digital', 'musicbox', 'ring']);
+  });
+
+  it('cada toque embutido tem gravação em public/sounds/clock e nome nas duas línguas', () => {
+    for (const sound of ALARM_SOUNDS) {
+      expect(existsSync(resolve(__dirname, '../../public/sounds/clock', `${sound}.mp3`))).toBe(true);
+      expect(STRINGS.pt.sounds[sound]).toBeTruthy();
+      expect(STRINGS.en.sounds[sound]).toBeTruthy();
+    }
   });
 });
