@@ -313,11 +313,32 @@ export function useVertalChat(options: {
     );
   }, []);
 
+  /** Executa uma ação diretamente (sem passar por conversação com agente). */
+  const execute = useCallback(async (action: AgentAction) => {
+    const outcome = await runAction(action, {
+      userId: user?.id ?? '',
+      artifacts: messagesRef.current.flatMap((m) => m.extras.artifacts),
+      newId: () => nextArtifactId(messagesRef.current.flatMap((m) => m.extras.artifacts)),
+      approveApi,
+      onAppPreview: setLivePreview,
+      appBlockedReason: () => {
+        const plan = planRef.current;
+        if (!plan.subscription?.is_active && !plan.canEdit) return 'Construir aplicativos precisa de um plano ativo. Veja os planos em Preços.';
+        if (!plan.canEdit) return 'Suas edições do plano acabaram. Recarregue para continuar construindo.';
+        return null;
+      },
+      chargeAppEdit: () => planRef.current.incrementEdit(),
+      setChatOnly: (value) => optionsRef.current.onChatOnly(value),
+    });
+    if (outcome.panel) optionsRef.current.onOpenPanel(outcome.panel);
+    if (outcome.artifact) optionsRef.current.onArtifact(outcome.artifact);
+  }, [approveApi, user?.id]);
+
   return {
     messages, busy, error, clearError: () => setError(null),
     conversationId, conversations, loadingConversation,
     newConversation, openConversation, removeConversation, renameConversation, pinConversation,
-    send, approval, livePreview, replaceArtifact,
+    send, approval, livePreview, replaceArtifact, execute,
     credits: editsRemaining,
   };
 }
