@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   Brain,
   FileCode2,
@@ -25,6 +25,9 @@ import {
   Palette,
   ChevronDown,
   KeyRound,
+  Sparkles,
+  Bug,
+  Terminal,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Link } from "react-router-dom";
@@ -45,6 +48,17 @@ import type { VibeChatMessage, VibeStep, VibeStepKind } from "@/lib/vibeCodeAgen
 import type { VibeConversationsApi } from "@/hooks/useVibeConversations";
 import { VibeConversationList } from "./VibeConversationList";
 import { VibeRequirementsCard } from "./VibeRequirementsCard";
+import { VibeFixQueueCard } from "./VibeFixQueueCard";
+import { SEVERITY_LABEL, type DevContext, type ReviewCommand, type ReviewFinding, type ReviewPayload } from "@/lib/vibeReview/engine";
+import {
+  currentFixItem,
+  emptyFixQueue,
+  fixQueueReducer,
+  isQueueActive,
+  prepareApply,
+} from "@/lib/vibeReview/fixQueue";
+import { matchSlashHints, parseSlashCommand, SLASH_COMMANDS } from "@/lib/vibeReview/slashCommands";
+import { errorsFromMessages, previewErrorStore, usePreviewErrors } from "@/lib/vibeReview/previewErrors";
 
 const AGENT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/vibe-code-agent`;
 
@@ -65,6 +79,7 @@ const STEP_ICON: Record<VibeStepKind, typeof Brain> = {
   requirements: Plug,
   question: HelpCircle,
   review: ShieldCheck,
+  review_findings: ShieldCheck,
   design: Palette,
   reply: MessageSquare,
   error: AlertCircle,
@@ -159,6 +174,43 @@ export function VibeCodeAgentChat({
   const [autoApply, setAutoApply] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
+  // Vibe Reviewer (PR-Agent): fila de correções "um a um, conversando com o Dev".
+  const [queue, dispatchQueue] = useReducer(fixQueueReducer, emptyFixQueue);
+  const queueRef = useRef(queue);
+  queueRef.current = queue;
+  const previewErrors = usePreviewErrors();
+  const slashHints = useMemo(() => matchSlashHints(input), [input]);
+  /** Recebe os resultados "review_findings" do stream. */
+  const reviewEventRef = useRef<(payload: ReviewPayload) => void>(() => {});
+
+  // Trocar de conversa fecha a fila da conversa anterior.
+  useEffect(() => {
+    dispatchQueue({ type: "close" });
+  }, [conversations.activeId]);
+
+  /** Arquivos que o agente tocou nesta conversa: o "PR" que o revisor olha primeiro. */
+  const conversationFiles = useMemo(() => {
+    const paths = new Set<string>();
+    for (const m of messages) for (const f of collectCodeFiles(m.steps)) paths.add(f.path);
+    return [...paths];
+  }, [messages]);
+
+  const knownErrors = useCallback(
+    () => [...previewErrorStore.list().map((e) => e.message), ...errorsFromMessages(messages)],
+    [messages],
+  );
+
+  /** Contexto do Dev que vai em todo pedido: erros, arquivo aberto e decisões da fila. */
+  const buildDevContext = useCallback(
+    (): DevContext => ({
+      recentErrors: knownErrors().slice(-5),
+      openedPath: openedPath ?? null,
+      decisions: queueRef.current.decisions,
+      conversationFiles,
+    }),
+    [knownErrors, openedPath, conversationFiles],
+  );
+
   const pendingEdits = useMemo(() => {
     const last = messages[messages.length - 1];
     return (last?.steps ?? []).filter((s) => s.kind === "diff" && s.proposedContent);
@@ -183,8 +235,8 @@ export function VibeCodeAgentChat({
     async (payload: Record<string, unknown>, assistantId: string) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
-        toast.error("You must be signed in to run the agent.");
-        return;
+        toast.error("Entre na sua conta para usar o agente.");
+        return { ok: false };
       }
       const controller = new AbortController();
       abortRef.current = controller;
@@ -210,12 +262,13 @@ export function VibeCodeAgentChat({
           detail: text || `HTTP ${resp.status}`,
           startedAt: Date.now(),
         });
-        return;
+        return { ok: false };
       }
 
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let failed = false;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -231,6 +284,10 @@ export function VibeCodeAgentChat({
               activeIdRef.current = evt.conversationId;
               setActiveId(evt.conversationId);
             }
+            if (evt.kind === "error") failed = true;
+            if (evt.kind === "review_findings" && evt.review && typeof evt.review === "object") {
+              reviewEventRef.current(evt.review as ReviewPayload);
+            }
             pushStep(assistantId, {
               id: crypto.randomUUID(),
               startedAt: Date.now(),
@@ -241,13 +298,174 @@ export function VibeCodeAgentChat({
           }
         }
       }
+      return { ok: !failed };
     },
     [projectId, pushStep, setActiveId],
+  );
+
+  /** Roda um comando do Vibe Reviewer e mostra o pedido do Dev como mensagem. */
+  const runReview = useCallback(
+    async (
+      command: ReviewCommand,
+      label: string,
+      extra: { focus?: string; question?: string; errors?: string[]; finding?: ReviewFinding; comment?: string; fileContent?: string } = {},
+    ) => {
+      const assistantId = crypto.randomUUID();
+      setRunning(true);
+      setMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), role: "user", content: label, createdAt: Date.now() },
+        { id: assistantId, role: "assistant", content: "", steps: [], createdAt: Date.now() },
+      ]);
+      try {
+        return await runStream(
+          {
+            prompt: label,
+            review: { command, paths: conversationFiles, ...extra },
+            devContext: buildDevContext(),
+          },
+          assistantId,
+        );
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "O revisor falhou");
+        return { ok: false };
+      } finally {
+        setRunning(false);
+        abortRef.current = null;
+        void refresh();
+      }
+    },
+    [buildDevContext, conversationFiles, refresh, runStream, setMessages],
+  );
+
+  const startReview = useCallback(
+    (command: "review" | "improve" | "describe", focus = "") => {
+      const name = SLASH_COMMANDS.find((c) => c.command === command)?.name ?? `/${command}`;
+      reviewEventRef.current = (payload) => dispatchQueue({ type: "start", payload });
+      return runReview(command, focus ? `${name} ${focus}` : name, { focus: focus || undefined });
+    },
+    [runReview],
+  );
+
+  const fixErrors = useCallback(
+    (pasted = "") => {
+      const errors = [...(pasted ? [pasted] : []), ...knownErrors()].slice(0, 10);
+      if (!errors.length) {
+        setInput("/fix ");
+        toast.info("Não vi erros no preview nem nas últimas respostas. Cole o erro depois de /fix e envie.");
+        return;
+      }
+      if (pasted) previewErrorStore.add(pasted, "manual");
+      reviewEventRef.current = (payload) => dispatchQueue({ type: "start", payload });
+      const label = pasted ? `/fix ${pasted}` : `/fix — corrigir ${errors.length} erro(s) um a um`;
+      return runReview("fix_errors", label, { errors });
+    },
+    [knownErrors, runReview],
+  );
+
+  const askAboutCurrent = useCallback(
+    (question: string) => {
+      const item = currentFixItem(queueRef.current);
+      reviewEventRef.current = () => {};
+      return runReview("ask", question, { question, finding: item?.finding });
+    },
+    [runReview],
+  );
+
+  const applyCurrentFix = useCallback(async () => {
+    if (running) return;
+    const item = currentFixItem(queueRef.current);
+    const prepared = prepareApply(queueRef.current);
+    if (!item) return;
+    if ("reason" in prepared) {
+      dispatchQueue({ type: "apply_start" });
+      dispatchQueue({ type: "apply_failed", error: `Não consegui aplicar: ${prepared.reason}. Use Ajustar para eu refazer, ou Pular.` });
+      return;
+    }
+    dispatchQueue({ type: "apply_start" });
+    setRunning(true);
+    const assistantId = crypto.randomUUID();
+    const { position, total } = { position: queueRef.current.index + 1, total: queueRef.current.items.length };
+    setMessages((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), role: "user", content: `Aplicar ${position}/${total}: ${item.finding.title} (${item.finding.path})`, createdAt: Date.now() },
+      { id: assistantId, role: "assistant", content: "", steps: [], createdAt: Date.now() },
+    ]);
+    try {
+      const res = await runStream({ apply: [{ path: prepared.path, content: prepared.content }] }, assistantId);
+      if (res?.ok) dispatchQueue({ type: "apply_success", content: prepared.content });
+      else dispatchQueue({ type: "apply_failed", error: "O commit falhou. Veja o que o agente fez acima e tente de novo, ajuste ou pule." });
+    } catch (e) {
+      dispatchQueue({ type: "apply_failed", error: e instanceof Error ? e.message : "Falha ao aplicar" });
+    } finally {
+      setRunning(false);
+      abortRef.current = null;
+    }
+  }, [running, runStream, setMessages]);
+
+  const adjustCurrentFix = useCallback(
+    async (comment: string) => {
+      const state = queueRef.current;
+      const item = currentFixItem(state);
+      if (!item || running) return;
+      dispatchQueue({ type: "adjust_start", comment });
+      let got = false;
+      reviewEventRef.current = (payload) => {
+        if (payload.command !== "adjust" || !payload.findings[0]) return;
+        got = true;
+        dispatchQueue({ type: "adjust_result", finding: payload.findings[0], fileContent: payload.files?.[item.finding.path] });
+      };
+      await runReview("adjust", `Ajustar ${state.index + 1}/${state.items.length}: ${comment}`, {
+        finding: item.finding,
+        comment,
+        fileContent: state.files[item.finding.path],
+      });
+      if (!got) dispatchQueue({ type: "adjust_failed", error: "Não consegui refazer a correção. Tente explicar de outro jeito, ou pule este item." });
+    },
+    [running, runReview],
+  );
+
+  const openQueueFile = useCallback(
+    (path: string) => {
+      onOpenFile?.({
+        path,
+        content: queueRef.current.files[path] ?? null,
+        diff: null,
+        reason: null,
+        status: "committed",
+        commitSha: null,
+        repoUrl: null,
+        stepId: "vibe-review",
+      });
+    },
+    [onOpenFile],
   );
 
   const send = async () => {
     const prompt = input.trim();
     if (!prompt || running) return;
+
+    // Comandos de barra do Vibe Reviewer (/review, /improve, /fix, /describe, /ask).
+    const slash = parseSlashCommand(prompt);
+    if (slash) {
+      if (slash.def.argRequired && !slash.arg) {
+        toast.info(`Escreva ${slash.def.argHint ?? "o texto"} depois de ${slash.def.name}.`);
+        return;
+      }
+      setInput("");
+      if (slash.def.command === "fix_errors") await fixErrors(slash.arg);
+      else if (slash.def.command === "ask") await askAboutCurrent(slash.arg);
+      else await startReview(slash.def.command, slash.arg);
+      return;
+    }
+
+    // Fila ativa: a mensagem do Dev vira uma pergunta sobre o item da vez.
+    if (isQueueActive(queueRef.current)) {
+      setInput("");
+      await askAboutCurrent(prompt);
+      return;
+    }
+
     setInput("");
     setRunning(true);
 
@@ -259,7 +477,7 @@ export function VibeCodeAgentChat({
     ]);
 
     try {
-      await runStream({ prompt, mode: autoApply ? "apply" : "preview" }, assistantId);
+      await runStream({ prompt, mode: autoApply ? "apply" : "preview", devContext: buildDevContext() }, assistantId);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Agent failed");
     } finally {
@@ -419,6 +637,30 @@ export function VibeCodeAgentChat({
                   </div>
                 )}
 
+                {(() => {
+                  const reviewStep = [...(m.steps ?? [])].reverse().find(
+                    (s) => s.kind === "review_findings" && s.review && s.review.command !== "adjust" && s.review.findings.length,
+                  );
+                  if (!reviewStep?.review) return null;
+                  return (
+                    <div className="space-y-1 pl-8" data-testid="vibe-review-findings">
+                      {reviewStep.review.findings.map((f, i) => (
+                        <div key={f.id + i} className="flex items-center gap-2 rounded-lg border border-border/30 bg-card/30 px-2.5 py-1.5 text-[11px]">
+                          <span className="font-mono text-muted-foreground/70">{i + 1}.</span>
+                          <Badge variant="outline" className="h-4 rounded px-1 text-[9px] uppercase text-muted-foreground">
+                            {SEVERITY_LABEL[f.severity]}
+                          </Badge>
+                          <span className="truncate text-foreground/85">{f.title}</span>
+                          <span className="ml-auto truncate font-mono text-[10px] text-muted-foreground/60">
+                            {f.path.split("/").pop()}
+                            {f.startLine ? `:${f.startLine}` : ""}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+
                 {requirementsStep?.requirements && (
                   <div className="pl-8">
                     <p className="flex items-center gap-1.5 text-xs font-medium text-amber-400">
@@ -525,6 +767,18 @@ export function VibeCodeAgentChat({
         </div>
       </ScrollArea>
 
+      <VibeFixQueueCard
+        state={queue}
+        busy={running}
+        onApply={() => void applyCurrentFix()}
+        onSkip={() => dispatchQueue({ type: "skip" })}
+        onAdjust={(comment) => void adjustCurrentFix(comment)}
+        onAskAbout={() => void askAboutCurrent("Explique melhor este item: o que acontece se eu não corrigir, e a correção proposta é segura?")}
+        onOpenFile={openQueueFile}
+        onRestart={() => void startReview(queue.command === "improve" ? "improve" : "review")}
+        onClose={() => dispatchQueue({ type: "close" })}
+      />
+
       {pendingEdits.length > 0 && (
         <div className="flex animate-in fade-in slide-in-from-bottom-2 items-center justify-between border-t border-border/40 bg-primary/5 px-4 py-3 backdrop-blur-md">
           <div className="flex items-center gap-2">
@@ -547,7 +801,60 @@ export function VibeCodeAgentChat({
       )}
 
       <div className="border-t border-border/40 bg-white/[0.01] p-4">
+        <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5" data-testid="vibe-quick-actions">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 shrink-0 gap-1.5 rounded-full border-border/30 bg-black/40 px-2.5 text-[10px] hover:border-primary/40 hover:text-primary"
+            onClick={() => void startReview("review")}
+            disabled={running}
+          >
+            <ShieldCheck className="h-3 w-3" /> Revisar código
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 shrink-0 gap-1.5 rounded-full border-border/30 bg-black/40 px-2.5 text-[10px] hover:border-primary/40 hover:text-primary"
+            onClick={() => void startReview("improve")}
+            disabled={running}
+          >
+            <Sparkles className="h-3 w-3" /> Sugerir melhorias
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 shrink-0 gap-1.5 rounded-full border-border/30 bg-black/40 px-2.5 text-[10px] hover:border-primary/40 hover:text-primary"
+            onClick={() => void fixErrors()}
+            disabled={running}
+          >
+            <Bug className="h-3 w-3" /> Corrigir erros um a um
+            {previewErrors.length > 0 && (
+              <span className="ml-0.5 rounded-full bg-rose-500/20 px-1.5 font-mono text-[9px] text-rose-300">{previewErrors.length}</span>
+            )}
+          </Button>
+        </div>
         <div className="relative group">
+          {slashHints.length > 0 && !running && (
+            <div className="absolute bottom-full left-0 right-0 z-20 mb-2 overflow-hidden rounded-xl border border-border/40 bg-[#0b0b0b]/95 shadow-2xl backdrop-blur-xl" role="listbox" aria-label="Comandos">
+              {slashHints.map((c) => (
+                <button
+                  key={c.name}
+                  type="button"
+                  role="option"
+                  aria-selected={false}
+                  onClick={() => setInput(`${c.name} `)}
+                  className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-white/5"
+                >
+                  <Terminal className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                  <span className="min-w-0">
+                    <span className="font-mono text-xs text-primary">{c.name}</span>
+                    {c.argHint && <span className="ml-1.5 text-[10px] text-muted-foreground/60">{c.argHint}</span>}
+                    <span className="block truncate text-[11px] text-muted-foreground">{c.description}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -557,7 +864,11 @@ export function VibeCodeAgentChat({
                 void send();
               }
             }}
-            placeholder="Ask Vibe Agent to build, fix or refactor..."
+            placeholder={
+              isQueueActive(queue)
+                ? "Pergunte sobre o item da vez, ou use os botões da fila…"
+                : "Peça para criar, corrigir ou refatorar… ou digite / para comandos"
+            }
             className="min-h-[60px] w-full resize-none border-border/20 bg-black/60 pl-3 pr-12 pt-3 text-xs font-medium placeholder:text-muted-foreground/40 focus:border-primary/50 focus:ring-primary/20 rounded-xl transition-all"
             disabled={running}
           />
@@ -571,7 +882,7 @@ export function VibeCodeAgentChat({
           </Button>
         </div>
         <p className="mt-2 text-center text-[9px] font-medium tracking-tight text-muted-foreground/40 uppercase">
-          Cada conversa guarda memória e código · commits reais via GitHub quando conectado
+          Cada conversa guarda memória e código · /review /improve /fix /describe /ask · commits reais via GitHub quando conectado
         </p>
       </div>
 
