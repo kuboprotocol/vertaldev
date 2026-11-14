@@ -90,4 +90,12 @@ describe('ConnectorIcon', () => {
     expect(container.querySelector('svg')).toBeTruthy()
     expect(container.querySelector('img')).toBeNull()
   })
+
+  it('Mais Retorno mostra o logo e expõe a URL MCP com OAuth', () => {
+    const mr = connectors.find((c) => c.slug === 'mais-retorno')!
+    expect(mr.mcpUrl).toBe('https://data.maisretorno.com/mr-data/v4/mcp/oauth')
+    expect(mr.authType).toBe('oauth')
+    render(<ConnectorIcon connector={mr} className="h-6 w-6" />)
+    expect(screen.getByRole('img', { name: 'Mais Retorno' }).getAttribute('src')).toBe('/connectors/mais-retorno.png')
+  })
 })

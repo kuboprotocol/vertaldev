@@ -1,4 +1,4 @@
-import { Github, CreditCard, Globe, Figma, Server, Smartphone, Cloud, Database, Mail, MessageSquare, Shield, Container, Wallet, Zap, Leaf, Rocket, Terminal } from 'lucide-react'
+import { Github, CreditCard, Globe, Figma, Server, Smartphone, Cloud, Database, Mail, MessageSquare, Shield, Container, Wallet, Zap, Leaf, Rocket, Terminal, TrendingUp } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 export interface ConnectorSetupStep {
@@ -27,6 +27,8 @@ export interface ConnectorConfig {
   apiKeyPlaceholder: string
   apiKeyHelp: string
   apiKeyDocsUrl?: string
+  /** URL de um servidor MCP remoto (Streamable HTTP) que o usuário cola no cliente de IA. */
+  mcpUrl?: string
   setupSteps: ConnectorSetupStep[]
 }
 
@@ -147,6 +149,30 @@ export const connectors: ConnectorConfig[] = [
       { title: 'Abra Settings no Figma', description: 'Account → Personal access tokens.' },
       { title: 'Gere um token', description: 'Dê um nome (ex.: "Vertal") e copie o valor exibido.' },
       { title: 'Cole o token aqui', description: 'Você poderá importar arquivos sem mais autenticação.' },
+    ],
+  },
+  {
+    name: 'Mais Retorno',
+    slug: 'mais-retorno',
+    icon: TrendingUp,
+    logoUrl: '/connectors/mais-retorno.png',
+    color: '#1B2340',
+    authType: 'oauth',
+    category: 'analytics',
+    description: 'Dados do mercado financeiro brasileiro para a sua IA, via MCP.',
+    longDescription: 'Conecte o servidor MCP da Mais Retorno ao seu agente para consultar fundos, ações, FIIs, ETFs, Tesouro e composição de carteiras (dados CVM) em linguagem natural. A autenticação é por OAuth: o cliente abre o login da Mais Retorno, sem API key nem headers. As consultas consomem os créditos do seu plano.',
+    features: ['Servidor MCP remoto com OAuth', '+690 mil ativos: fundos, ações, FIIs, ETFs e Tesouro', 'Cotações, rentabilidade e indicadores (Sharpe, volatilidade, drawdown)', 'Composição de carteiras de fundos (CVM)'],
+    docsUrl: 'https://developers.maisretorno.com/',
+    status: 'available',
+    apiKeyLabel: 'Conta Mais Retorno',
+    apiKeyPlaceholder: '',
+    apiKeyHelp: 'A conexão MCP usa OAuth: o cliente registra-se sozinho e abre o login da Mais Retorno. Não há Client ID.',
+    apiKeyDocsUrl: 'https://maisretorno.com/app/meu-perfil/api',
+    mcpUrl: 'https://data.maisretorno.com/mr-data/v4/mcp/oauth',
+    setupSteps: [
+      { title: 'Confira seu plano', description: 'É preciso um plano da API de dados (o Free dá 500 créditos/mês), Retorno Prime ou RetornoPRO.' },
+      { title: 'Adicione o MCP', description: 'Cole a URL https://data.maisretorno.com/mr-data/v4/mcp/oauth no seu cliente MCP.' },
+      { title: 'Entre com a sua conta', description: 'Autorize o acesso no login da Mais Retorno e pronto.' },
     ],
   },
   {
