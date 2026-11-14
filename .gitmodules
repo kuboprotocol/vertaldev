@@ -1,0 +1,3 @@
+[submodule "vendor/figcraft"]
+	path = vendor/figcraft
+	url = https://github.com/storytold/figcraft

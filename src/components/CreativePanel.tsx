@@ -8,6 +8,7 @@ import { CreativeImages } from './CreativeImages';
 import { CreativeSheets } from './CreativeSheets';
 import { CreativeMusic } from './CreativeMusic';
 import { CreativeDesign } from './CreativeDesign';
+import { FigcraftEditor } from './creative/FigcraftEditor';
 import { DesignWorld, PREMIUM_BACKGROUND, PendingPage } from './creative/DesignWorld';
 import { useAuth } from '@/hooks/useAuth';
 import { SponsoredSlot } from './creative/SponsoredSlot';
@@ -16,7 +17,7 @@ type CategoryId = 'design' | 'content' | 'media' | 'digital';
 
 interface CreativeItem {
   id: string;
-  type: 'text' | 'image' | 'audio' | 'code' | 'video' | 'slides' | 'spreadsheet' | 'music' | 'design' | 'office';
+  type: 'text' | 'image' | 'audio' | 'code' | 'video' | 'slides' | 'spreadsheet' | 'music' | 'design' | 'office' | 'figcraft';
   title: string;
   description: string;
   icon: React.ReactNode;
@@ -98,6 +99,16 @@ const CREATIVE_ITEMS: CreativeItem[] = [
     status: 'available',
   },
   {
+    id: 'figcraft',
+    type: 'figcraft',
+    title: 'figCraft',
+    description: 'Telas, componentes e protótipos de app e site, salvos na sua conta',
+    icon: <Layout className="h-5 w-5" />,
+    color: 'from-emerald-500 to-teal-500',
+    category: 'design',
+    status: 'available',
+  },
+  {
     id: 'spreadsheet',
     type: 'spreadsheet',
     title: 'Gerador de Planilhas',
@@ -167,6 +178,8 @@ function renderTool(type: CreativeItem['type'], creditsAvailable: number) {
       return <OfficeSuite creditsAvailable={creditsAvailable} />;
     case 'music':
       return <CreativeMusic creditsAvailable={creditsAvailable} />;
+    case 'figcraft':
+      return <FigcraftEditor />;
     default:
       return null;
   }

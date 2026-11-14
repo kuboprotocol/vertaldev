@@ -1,5 +1,5 @@
 // Conteúdo do painel aberto dentro do Vertal Chat. Cada painel só é baixado quando abre.
-import { lazy } from 'react';
+import { lazy, Suspense } from 'react';
 import type { PanelKey } from '@/lib/chatAgent/contract';
 import type { PanelRequest } from './panelList';
 import { HistoryPanel } from './HistoryPanel';
@@ -10,6 +10,7 @@ const CreativeDesign = lazy(() => import('@/components/CreativeDesign').then((m)
 const VertalNotebook = lazy(() => import('@/components/notebook/VertalNotebook').then((m) => ({ default: m.VertalNotebook })));
 const VertalClock = lazy(() => import('@/components/clock/VertalClock'));
 const CreativeSheets = lazy(() => import('@/components/CreativeSheets').then((m) => ({ default: m.CreativeSheets })));
+const FigcraftEditor = lazy(() => import('@/components/creative/FigcraftEditor').then((m) => ({ default: m.FigcraftEditor })));
 const CreativeToolInterface = lazy(() =>
   import('@/components/creative/CreativeToolInterface').then((m) => ({ default: m.CreativeToolInterface })),
 );
@@ -43,6 +44,13 @@ export function PanelHost({ request, credits, userId }: { request: PanelRequest;
         creditsAvailable={credits}
         open={request.designOpen ?? (key === 'canvas' ? OPEN_CANVAS : OPEN_AI)}
       />
+    );
+  }
+  if (key === 'figcraft') {
+    return (
+      <Suspense fallback={null}>
+        <FigcraftEditor key={request.nonce} openDesignId={request.figcraft?.designId ?? null} openNonce={request.nonce} />
+      </Suspense>
     );
   }
   if (key === 'notebook') return <VertalNotebook />;

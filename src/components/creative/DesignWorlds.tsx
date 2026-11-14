@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { DesignWorld, PendingPage, StartCard } from './DesignWorld';
 import { DesignGalleryFeed, MyPublishedDesigns, type DesignCopy } from './DesignGallery';
 import { DeckcraftEditor } from './DeckcraftEditor';
+import { FigcraftEditor } from './FigcraftEditor';
 import { FilmcraftEditor } from './FilmcraftEditor';
 import { FreeCreativeTools } from './FreeCreativeTools';
 import { GridcraftEditor } from './GridcraftEditor';
@@ -224,6 +225,11 @@ export function StudioWorld({ onExit, jumpTo }: WorldProps & { jumpTo?: { key: S
           key: 'deckcraft',
           label: 'DeckCraft',
           render: () => <DeckcraftEditor />,
+        },
+        {
+          key: 'figcraft',
+          label: 'figCraft',
+          render: () => <FigcraftEditor />,
         },
         {
           key: 'nano_banana',
