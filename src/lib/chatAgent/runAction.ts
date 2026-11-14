@@ -371,6 +371,15 @@ async function runWebSearch(action: Extract<AgentAction, { tool: 'web_search' }>
   }
 }
 
+async function runMarketQuote(action: Extract<AgentAction, { tool: 'market_quote' }>): Promise<ActionOutcome> {
+  const { data, error } = await supabase.functions.invoke('creative-router', {
+    body: { tool: 'market_quote', market: { market: action.market, assets: action.assets, currency: action.currency } },
+  });
+  if (error || !data) return followUp('market_quote', false, 'O serviço de cotações não respondeu agora.');
+  const d = data as { ok?: boolean; summary?: string; error?: string };
+  return followUp('market_quote', Boolean(d.ok), d.summary ?? d.error ?? 'Sem cotação para esses ativos.');
+}
+
 const NOT_CONNECTED = (name: string) => `${name} não está conectado. O usuário conecta em Conectores.`;
 
 async function gmailAccount(): Promise<{ id: string; email: string } | null> {
@@ -648,6 +657,8 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
         return await runWeather(action);
       case 'web_search':
         return await runWebSearch(action);
+      case 'market_quote':
+        return await runMarketQuote(action);
       case 'gmail_search':
         return await runGmailSearch(action);
       case 'gmail_send':
@@ -696,6 +707,7 @@ export function actionLabel(action: AgentAction): string {
     case 'open_panel': return 'Abrindo painel';
     case 'weather': return 'Consultando o clima';
     case 'web_search': return 'Buscando na web';
+    case 'market_quote': return action.market === 'crypto' ? 'Consultando cotações cripto' : 'Consultando cotações na Mais Retorno';
     case 'gmail_search': return 'Lendo o Gmail';
     case 'gmail_send': return 'Enviando e-mail pelo Gmail';
     case 'slack_send': return 'Enviando mensagem no Slack';
