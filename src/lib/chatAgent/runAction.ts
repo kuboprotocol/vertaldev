@@ -9,6 +9,8 @@ import type { AgentAction, PanelKey, ToolResult } from './contract';
 import { secretPlaceholders } from './contract';
 import { artifactSourceText, type Artifact, type StoredImage } from './artifacts';
 import { loadConnections, parseMcpBody, weatherText } from './connections';
+import { describeDays } from '@/lib/clock/alarms';
+import { scheduleChatAlarm } from '@/lib/clock/chatAlarm';
 
 export interface ApiApprovalRequest {
   method: string;
@@ -630,16 +632,15 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
         };
       }
       case 'schedule_alarm': {
-        const time = action.time;
-        const soundId = action.soundId ?? 'alarm-1';
-        const label = action.label ?? `Alarme às ${time}`;
-        const repeatText = action.repeatDays && action.repeatDays.length > 0
-          ? `(repetir: ${['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'].filter((_, i) => action.repeatDays!.includes(i)).join(', ')})`
-          : '';
+        const res = scheduleChatAlarm({ time: action.time, soundId: action.soundId, label: action.label, repeatDays: action.repeatDays });
+        if (!res.ok || !res.alarm) return fail(action.tool, res.reason ?? 'Não consegui agendar o alarme.');
+        const { alarm, soundNote } = res;
+        const soundName = res.soundName ?? 'toque padrão';
+        const repeatText = alarm.days.length > 0 ? ` (${describeDays(alarm.days)})` : '';
         return {
-          artifact: { id: ctx.newId(), kind: 'scheduled_alarm', title: label, time, soundName: soundId, label, repeatDays: action.repeatDays, alarmId: `alarm_${Date.now()}` },
+          artifact: { id: ctx.newId(), kind: 'scheduled_alarm', title: alarm.label, time: alarm.time, soundName, label: alarm.label, repeatDays: alarm.days, alarmId: alarm.id },
           panel: 'clock',
-          result: { tool: 'schedule_alarm', ok: true, summary: `⏰ Alarme agendado para ${time} ${repeatText}. O usuário pode escolher entre 18 sons pré-definidos ou sons da galeria personalizada.` },
+          result: { tool: 'schedule_alarm', ok: true, summary: `⏰ Alarme agendado para ${alarm.time}${repeatText} com o som "${soundName}".${soundNote ? ` ${soundNote}` : ''}` },
         };
       }
       case 'api_request':
