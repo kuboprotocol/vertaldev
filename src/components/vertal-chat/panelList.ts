@@ -1,7 +1,7 @@
 // Todos os painéis do Painel Criativo que o Vertal Chat abre dentro do próprio layout.
 import type { ComponentType } from 'react';
 import {
-  BookOpen, Clapperboard, Clock, Code2, Download, FileText, History, KeyRound, LayoutTemplate, Music, NotebookPen,
+  BookOpen, Clapperboard, Clock, Code2, Download, FileText, History, KeyRound, Layout, LayoutTemplate, Music, NotebookPen,
   Palette, Plug, Puzzle, Scissors, Sparkles, Table2, User2, Video,
 } from 'lucide-react';
 import type { PanelKey } from '@/lib/chatAgent/contract';
@@ -12,6 +12,8 @@ export interface PanelRequest {
   key: PanelKey;
   /** Office: abre no aplicativo certo e, se houver, no item salvo na galeria. */
   office?: { app: 'doc' | 'sheet' | 'slides'; recordId?: string };
+  /** figCraft: o design a abrir (sem ele, o editor abre na tela inicial). */
+  figcraft?: { designId?: string };
   /**
    * Design Premium/Canvas: onde abrir. O objeto é criado uma vez por pedido
    * (o painel reage à identidade dele), nunca a cada render.
@@ -36,6 +38,7 @@ export const PANEL_LIST: PanelInfo[] = [
   { key: 'history', label: 'Histórico', hint: 'Tudo que você criou em todas as conversas', icon: History, group: 'criar' },
   { key: 'office', label: 'Vertal Office', hint: 'Documentos, planilhas, slides e PDF', icon: FileText, group: 'criar' },
   { key: 'design', label: 'Design Premium', hint: 'Artes com IA, slides, estúdio e avatares', icon: Palette, group: 'criar' },
+  { key: 'figcraft', label: 'figCraft', hint: 'Telas, componentes e protótipos salvos na sua conta', icon: Layout, group: 'criar' },
   { key: 'canvas', label: 'Canvas', hint: 'Canvas infinito para montar artes', icon: LayoutTemplate, group: 'criar' },
   { key: 'notebook', label: 'Vertal Notebook', hint: 'Converse com PDFs, links e vídeos', icon: NotebookPen, group: 'criar' },
   { key: 'sheet', label: 'Planilha IA', hint: 'Planilhas geradas por IA', icon: Table2, group: 'criar' },

@@ -10,6 +10,11 @@
 // navegador, pelas mesmas funções que os painéis usam: cobrança, limites e
 // permissões continuam sendo os de cada ferramenta.
 
+import {
+  FIGCRAFT_MAX_COMMANDS, FIGCRAFT_TEMPLATE_IDS, designTitleFromFileName, isDesignId, isFigcraftTemplate,
+  parseFigcraftCommands, type FigcraftCommandInput,
+} from "./figcraft.ts";
+
 export type Msg = { role: "system" | "user" | "assistant"; content: string };
 
 /** Cores do Canvas (paleta do tldraw): o que o agente desenha abre igual no editor. */
@@ -36,11 +41,24 @@ export interface CanvasSpec {
 
 /** Painéis que o chat abre dentro do próprio layout. */
 export const PANELS = [
-  "history", "office", "design", "canvas", "notebook", "video_studio", "clips", "avatar",
+  "history", "office", "design", "figcraft", "canvas", "notebook", "video_studio", "clips", "avatar",
   "shorts", "emo", "sheet", "ebook", "music", "downloader", "builder", "clock", "voice",
   "connectors", "secrets", "agents",
 ] as const;
 export type PanelKey = (typeof PANELS)[number];
+
+/** Comandos do engine que o agente pode usar, com o que cada um recebe (confirmados no build). */
+export const FIGCRAFT_COMMAND_HINT = [
+  "template.list {}",
+  "file.newFromTemplate {template, name?}",
+  "node.create {type: frame|rectangle|ellipse|text|vector, name?, x?, y?, width?, height?, text?, parent?: id} (devolve {id})",
+  "node.set {id, name?, x?, y?, width?, height?, opacity?, fills?}",
+  "node.find {name?, type?, text?} (devolve {ids}; busque pelo nome que você deu)",
+  "text.set {id, text}",
+  "fill.set {ids, color}",
+  "layout.add {ids, direction: horizontal|vertical|grid} (auto layout)",
+  "component.create {ids}",
+].join("; ");
 
 export const DESIGN_FORMATS = ["post", "story", "banner", "poster"] as const;
 export const API_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
@@ -64,6 +82,10 @@ export type AgentAction =
     tool: "api_request"; method: (typeof API_METHODS)[number]; url: string;
     headers: Record<string, string>; body?: string; reason: string;
   }
+  | { tool: "figcraft"; op: "new"; title: string; template?: string }
+  | { tool: "figcraft"; op: "open"; design_id: string }
+  | { tool: "figcraft"; op: "list" }
+  | { tool: "figcraft"; op: "run"; design_id?: string; commands: FigcraftCommandInput[] }
   | { tool: "open_panel"; panel: PanelKey }
   | { tool: "world_time"; places: string[] }
   | { tool: "alarm"; op: "set" | "list" | "remove"; time?: string; label?: string; days?: number[]; place?: string; id?: string }
@@ -132,6 +154,7 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   download: "2 créditos",
   api_request: "grátis",
   open_panel: "grátis",
+  figcraft: "grátis (o design fica salvo na sua conta)",
   weather: "grátis",
   web_search: "grátis",
   podcast_studio: "2-4 créditos por episódio (varia com duração e qualidade)",
@@ -201,6 +224,10 @@ export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
     `- {"tool":"slack_send","channel":"#canal ou id","text":"..."} → envia mensagem no Slack conectado (o usuário confirma antes).`,
     `- {"tool":"mcp_call","server":"nome da conexão","method":"list_tools|call_tool","name":"ferramenta","arguments":{}} → usa um servidor MCP que o cliente conectou. Primeiro "list_tools" para ver o que existe, depois "call_tool".`,
     `- {"tool":"set_layout","mode":"chat_only|split"} → "chat_only" quando o usuário pedir para ficar só na tela do chat (nada abre ao lado); "split" para voltar a abrir ao lado.`,
+    `- {"tool":"figcraft","op":"new","title":"nome do design","template":"${FIGCRAFT_TEMPLATE_IDS.join("|")}"} → cria um design no figCraft (editor de telas, componentes, auto layout e protótipos), salvo na conta do usuário, e abre ao lado. "template" é opcional: sem ele, o editor abre na tela inicial (${TOOL_COSTS.figcraft}).`,
+    `- {"tool":"figcraft","op":"open","design_id":"uuid"} → abre um design salvo no figCraft.`,
+    `- {"tool":"figcraft","op":"list"} → lista os designs do usuário. Você recebe a lista na rodada seguinte e responde com ela.`,
+    `- {"tool":"figcraft","op":"run","design_id":"uuid (opcional: o design aberto)","commands":[{"command":"nome.do.comando","params":{}}]} → executa comandos do engine do figCraft no design, em ordem, até ${FIGCRAFT_MAX_COMMANDS} por pedido. Comandos: ${FIGCRAFT_COMMAND_HINT}. Se o design não estiver aberto, o figCraft abre ao lado e aplica os comandos.`,
     connectionsBlock(ctx.connections ?? []),
     "Se Gmail ou Slack não estiverem conectados, a ferramenta avisa: oriente a conectar em Conectores ({\"tool\":\"open_panel\",\"panel\":\"connectors\"}).",
     "",
@@ -418,6 +445,29 @@ export function parseAgentAction(raw: unknown): AgentAction | null {
     }
     case "set_layout":
       return { tool: "set_layout", mode: a.mode === "chat_only" ? "chat_only" : "split" };
+    case "figcraft": {
+      if (a.op === "list") return { tool: "figcraft", op: "list" };
+      if (a.op === "open") {
+        const id = str(a.design_id, 40);
+        return isDesignId(id) ? { tool: "figcraft", op: "open", design_id: id } : null;
+      }
+      if (a.op === "new") {
+        const title = designTitleFromFileName(str(a.title, 120), "");
+        if (!title) return null;
+        const template = isFigcraftTemplate(a.template) ? a.template : undefined;
+        return template ? { tool: "figcraft", op: "new", title, template } : { tool: "figcraft", op: "new", title };
+      }
+      if (a.op === "run") {
+        const parsed = parseFigcraftCommands(a.commands);
+        if ("error" in parsed) return null;
+        const designId = str(a.design_id, 40);
+        if (designId && !isDesignId(designId)) return null;
+        return designId
+          ? { tool: "figcraft", op: "run", design_id: designId, commands: parsed.commands }
+          : { tool: "figcraft", op: "run", commands: parsed.commands };
+      }
+      return null;
+    }
     default:
       return null;
   }

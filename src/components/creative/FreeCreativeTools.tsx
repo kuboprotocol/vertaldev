@@ -2,7 +2,7 @@
 // Vertal; as Craft são projetos de código aberto (MIT ou Apache-2.0) da storytold/ArtCraft,
 // servidos em /<nome>craft/ (veja os componentes *craftEditor).
 
-export type FreeToolMode = 'manual' | 'photocraft' | 'vectorcraft' | 'filmcraft' | 'wordcraft' | 'gridcraft' | 'deckcraft';
+export type FreeToolMode = 'manual' | 'photocraft' | 'vectorcraft' | 'filmcraft' | 'wordcraft' | 'gridcraft' | 'deckcraft' | 'figcraft';
 
 interface FreeTool {
   id: string;
@@ -61,6 +61,13 @@ const FREE_TOOLS: FreeTool[] = [
     summary: 'Apresentações e slides.',
     mode: 'deckcraft',
     actionLabel: 'Abrir DeckCraft',
+  },
+  {
+    id: 'figcraft',
+    name: 'figCraft',
+    summary: 'Telas, componentes, auto layout e protótipos. Salvos na sua conta.',
+    mode: 'figcraft',
+    actionLabel: 'Abrir figCraft',
   },
 ];
 

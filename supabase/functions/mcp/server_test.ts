@@ -30,11 +30,11 @@ Deno.test("notificação não tem resposta", async () => {
   assertEquals(await handleMessage({ jsonrpc: "2.0", method: "notifications/initialized" }, { db, userId: "u", ...READ_WRITE }), null);
 });
 
-Deno.test("tools/list com leitura e escrita expõe as 6 ferramentas", async () => {
+Deno.test("tools/list com leitura e escrita expõe as 10 ferramentas (6 originais + 4 do figCraft)", async () => {
   const { db } = fakeDb([]);
   const r: any = await handleMessage({ jsonrpc: "2.0", id: 3, method: "tools/list" }, { db, userId: "u", ...READ_WRITE });
   assertEquals(r.result.tools.map((t: any) => t.name).sort(), TOOLS.map((t) => t.name).sort());
-  assertEquals(r.result.tools.length, 6);
+  assertEquals(r.result.tools.length, 10);
 });
 
 Deno.test("chave só de leitura não vê ferramentas de escrita", async () => {
@@ -44,7 +44,7 @@ Deno.test("chave só de leitura não vê ferramentas de escrita", async () => {
   assert(!names.includes("create_project"));
   assert(!names.includes("update_project"));
   assert(names.includes("list_projects"));
-  assertEquals(names.length, 4);
+  assertEquals(names.length, 6, "4 originais + list_design_files e get_design_file");
 });
 
 Deno.test("chave só de leitura é recusada em ferramenta de escrita", async () => {
