@@ -14,6 +14,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
+import { toast } from 'sonner'
 import { getConnectorBySlug } from '@/lib/connectorsConfig'
 import { ConnectorIcon } from '@/components/connectors/ConnectorIcon'
 
@@ -349,6 +350,35 @@ export default function ConnectorAboutPage({ navLockMs = DEFAULT_NAV_LOCK_MS }: 
             ))}
           </div>
         </Card>
+
+        {connector.mcpUrl && (
+          <Card className="p-6 space-y-3" data-testid="connector-mcp-url">
+            <div className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold">Servidor MCP</h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Cole esta URL no seu cliente MCP (Claude, ChatGPT, Cursor ou o Vertal Chat).
+            </p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 min-w-0 truncate rounded-md border border-border bg-muted/30 px-3 py-2 font-mono text-xs">
+                {connector.mcpUrl}
+              </code>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  navigator.clipboard?.writeText(connector.mcpUrl!).then(
+                    () => toast.success('URL do MCP copiada'),
+                    () => toast.error('Não foi possível copiar'),
+                  )
+                }}
+              >
+                Copiar
+              </Button>
+            </div>
+          </Card>
+        )}
 
         {/* Setup steps */}
         <Card className="p-6 space-y-4">
