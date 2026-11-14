@@ -5,7 +5,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle, ArrowLeft, ArrowUp, Check, ChevronDown, Coins, Columns2, ExternalLink, LayoutGrid, Loader2,
-  Maximize2, MessageSquare, MessageSquarePlus, Cable, MoreHorizontal, PanelLeft, Pencil, Pin, PinOff, Plus, ShieldCheck, Trash2, X,
+  Maximize2, MessageSquare, MessageSquarePlus, Cable, MoreHorizontal, PanelLeft, Pencil, Pin, PinOff, Plus, ShieldCheck, Trash2, X, Mic,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useVertalChat, type VertalMessage } from '@/hooks/useVertalChat';
@@ -200,6 +200,10 @@ export function VertalChat() {
     });
   };
 
+  const voiceInput = () => {
+    void chat.execute({ tool: 'voice_input' });
+  };
+
   const viewerActions: ViewerActions = useMemo(
     () => ({
       openInOffice: (a) => openPanel('office', { office: { app: a.kind, recordId: a.officeId } }),
@@ -252,6 +256,7 @@ export function VertalChat() {
       onFill={fill}
       busy={chat.busy}
       inputRef={inputRef}
+      onVoice={voiceInput}
     />
   );
 
@@ -738,7 +743,7 @@ function MessageRow({
 // ─── Compositor ──────────────────────────────────────────────────────────
 
 function Composer({
-  value, onChange, onSubmit, onFill, busy, inputRef,
+  value, onChange, onSubmit, onFill, busy, inputRef, onVoice,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -746,6 +751,7 @@ function Composer({
   onFill: (text: string) => void;
   busy: boolean;
   inputRef: React.RefObject<HTMLTextAreaElement>;
+  onVoice?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   return (
@@ -796,6 +802,15 @@ function Composer({
             </ul>
           </PopoverContent>
         </Popover>
+        <button
+          type="button"
+          onClick={() => onVoice?.()}
+          aria-label="Abrir gravador de voz"
+          title="Gravador de voz (🎤)"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition hover:border-primary/50 hover:text-foreground"
+        >
+          <Mic className="h-4 w-4" />
+        </button>
         <span className="flex-1" />
         <button
           type="button"
