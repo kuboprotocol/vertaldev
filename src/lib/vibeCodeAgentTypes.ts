@@ -1,5 +1,6 @@
 // Shared types between the Vibe Code Agent UI and the `vibe-code-agent` edge function.
 import type { DetectedRequirement } from "@/config/connectorCatalog";
+import type { DevContext, ReviewCommand, ReviewFinding, ReviewPayload } from "@/lib/vibeReview/engine";
 
 export type VibeRequirement = DetectedRequirement;
 
@@ -21,6 +22,8 @@ export type VibeStepKind =
   | "question"
   | "review"
   | "design"
+  /** Resultado do Vibe Reviewer (PR-Agent): alimenta a fila de correções do chat. */
+  | "review_findings"
   /** Resposta em texto do agente ao usuário (o balão do chat). */
   | "reply"
   | "error"
@@ -53,6 +56,8 @@ export interface VibeStep {
   isNew?: boolean;
   /** Conectores e APIs que a aplicação precisa (kind "requirements"). */
   requirements?: VibeRequirement[];
+  /** Findings do Vibe Reviewer (kind "review_findings"). */
+  review?: ReviewPayload;
   /** Model tier chosen by the DeepSeek router for this cycle. */
   tier?: VibeModelTier;
   estimatedCost?: number;
@@ -103,6 +108,19 @@ export interface VibeAgentRequest {
   designIntelligence?: boolean;
   /** Força o perfil de design em vez de detectar pelo pedido. */
   designSurface?: "web_app" | "saas_dashboard" | "mobile_app" | "landing_page";
+  /** Comando do Vibe Reviewer (PR-Agent) em vez de um pedido de código. */
+  review?: {
+    command: ReviewCommand;
+    focus?: string;
+    question?: string;
+    paths?: string[];
+    errors?: string[];
+    finding?: ReviewFinding;
+    comment?: string;
+    fileContent?: string;
+  };
+  /** Contexto do Dev: erros recentes, arquivo aberto, decisões da fila. */
+  devContext?: DevContext;
 }
 
 export interface VibeConnectorState {
