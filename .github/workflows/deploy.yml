@@ -38,6 +38,25 @@ jobs:
         with:
           version: latest
 
+      # Chaves de mercado guardadas nos secrets do GitHub → secrets das edge functions.
+      # O GitHub grava os nomes em maiúsculas (MAISRETORNO, COINGENKO); os nomes canônicos também valem.
+      - name: Sync market data API keys to Supabase
+        if: env.SUPABASE_ACCESS_TOKEN != ''
+        env:
+          MR_KEY: ${{ secrets.MAISRETORNO_API_KEY || secrets.MAISRETORNO }}
+          CG_KEY: ${{ secrets.COINGECKO_API_KEY || secrets.COINGENKO || secrets.COINGECKO }}
+        run: |
+          set -euo pipefail
+          args=()
+          [[ -n "${MR_KEY:-}" ]] && args+=("MAISRETORNO_API_KEY=$MR_KEY")
+          [[ -n "${CG_KEY:-}" ]] && args+=("COINGECKO_API_KEY=$CG_KEY")
+          if (( ${#args[@]} )); then
+            supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" "${args[@]}" >/dev/null
+            echo "Chaves de mercado sincronizadas: ${#args[@]}."
+          else
+            echo "::warning::Secrets MAISRETORNO/COINGENKO não encontrados no GitHub."
+          fi
+
       # O plano do Supabase limita o número de funções do projeto (criar uma nova
       # dá 402 "Max number of functions reached" e derruba o deploy inteiro).
       # Por isso atualizamos só as que já existem; as novas aparecem como aviso

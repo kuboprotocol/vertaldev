@@ -70,6 +70,7 @@ export type AgentAction =
   | { tool: "timer"; op: "start" | "cancel"; seconds?: number; minutes?: number; label?: string; id?: string }
   | { tool: "weather"; place?: string }
   | { tool: "web_search"; query: string; max?: number }
+  | { tool: "market_quote"; market: "crypto" | "securities"; assets: string[]; currency?: "brl" | "usd" | "eur" }
   | { tool: "podcast_studio"; topic: string; duration?: number; style?: string }
   | { tool: "news_feed"; category?: string; timeRange?: "ultima_hora" | "hoje" | "ultima_semana"; location?: "local" | "regional" | "nacional" | "internacional" }
   | { tool: "news_weather"; location?: string }
@@ -134,6 +135,7 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   open_panel: "grátis",
   weather: "grátis",
   web_search: "grátis",
+  market_quote: "grátis",
   podcast_studio: "2-4 créditos por episódio (varia com duração e qualidade)",
   news_feed: "grátis (notícias em tempo real com geolocalização)",
   news_weather: "grátis (previsão do tempo localizada)",
@@ -196,6 +198,7 @@ export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
     `- {"tool":"open_panel","panel":"${PANELS.join("|")}"} → abre um painel dentro do chat para o usuário trabalhar à mão. Use quando o pedido precisa de arquivos do usuário (video_studio: fotos viram vídeo; clips: cortes de vídeo longo; avatar: avatar falante; emo: animar foto; notebook: conversar com PDFs e links; office/design/canvas: edição manual).`,
     `- {"tool":"weather","place":"bairro ou cidade"} → clima atual e previsão de 3 dias. Sem "place", usa a localização do aparelho do usuário (ele autoriza). Nunca invente o clima: use sempre esta ferramenta.`,
     `- {"tool":"web_search","query":"o que procurar","max":5} → busca na web por informações atuais. Retorna URLs com títulos e resumos. Use para responder sobre eventos recentes, notícias, preços, horários, ou qualquer coisa que mude frequentemente. "max" é opcional (padrão 5 resultados).`,
+    `- {"tool":"market_quote","market":"crypto|securities","assets":["btc","eth"],"currency":"brl|usd|eur"} → cotação real de mercado (${TOOL_COSTS.market_quote}). "crypto" usa a CoinGecko (bitcoin, eth, sol…; "currency" padrão brl). "securities" usa a Mais Retorno: ações, FIIs, ETFs e BDRs da B3 (PETR4, HGLG11), fundos por CNPJ ("38000706000126:fi"), EUA ("aapl.us:us"), índices ("cdi:idx", "ibov:idx") e Tesouro; aceita ticker, nome ou identificador. Até 10 ativos por chamada. Nunca invente preço: use sempre esta ferramenta.`,
     `- {"tool":"gmail_search","query":"busca no formato do Gmail","max":10} → lê os e-mails da conta Gmail conectada.`,
     `- {"tool":"gmail_send","to":"email","subject":"...","body":"..."} → envia e-mail pelo Gmail conectado (o usuário confirma antes).`,
     `- {"tool":"slack_send","channel":"#canal ou id","text":"..."} → envia mensagem no Slack conectado (o usuário confirma antes).`,
@@ -387,6 +390,20 @@ export function parseAgentAction(raw: unknown): AgentAction | null {
     case "weather": {
       const place = str(a.place, 120);
       return place ? { tool: "weather", place } : { tool: "weather" };
+    }
+    case "market_quote": {
+      const list = Array.isArray(a.assets) ? a.assets : typeof a.assets === "string" ? a.assets.split(",") : [];
+      const assets: string[] = [];
+      for (const item of list) {
+        const v = str(item, 80);
+        if (v && !assets.some((x) => x.toLowerCase() === v.toLowerCase())) assets.push(v);
+        if (assets.length >= 10) break;
+      }
+      if (assets.length === 0) return null;
+      const market = a.market === "crypto" ? "crypto" : a.market === "securities" ? "securities" : null;
+      if (!market) return null;
+      const currency = oneOf(a.currency, ["brl", "usd", "eur"] as const, "brl");
+      return market === "crypto" ? { tool: "market_quote", market, assets, currency } : { tool: "market_quote", market, assets };
     }
     case "gmail_search":
       return { tool: "gmail_search", query: str(a.query, 400), max: num(a.max, 1, 20, 10) };
