@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  captionPages, centerToFocus, chunkPlan, columnFocus, combineScores, emojiFor, focusAt, isSkin, smoothFocusTrack, cropRect, encodeWav, findClips, formatTime, mergeTranscripts,
+  captionPages, centerToFocus, chunkPlan, isRetryableClipError, mixDown, columnFocus, combineScores, emojiFor, focusAt, isSkin, smoothFocusTrack, cropRect, encodeWav, findClips, formatTime, mergeTranscripts,
   normalizeAiClips, parseTimestamp, quoteClips, snapToSentences, transcriptForPrompt, type Transcript,
 } from "./clipEngine";
 
@@ -175,5 +175,27 @@ describe("auto emojis", () => {
     expect(emojiFor("bitcoin")).toBe("🪙");
     expect(emojiFor("casa")).toBeNull();
     expect(emojiFor("a")).toBeNull();
+  });
+});
+
+describe("audio + retry helpers", () => {
+  it("mixes channels down only for the requested slice", () => {
+    const l = new Float32Array([1, 1, 1, 1]);
+    const r = new Float32Array([0, 0, -1, -1]);
+    expect(Array.from(mixDown([l, r], 1, 3))).toEqual([0.5, 0]);
+    const mono = mixDown([l], 0, 2);
+    expect(mono.length).toBe(2);
+    expect(mono.buffer).toBe(l.buffer); // mono is a view, not a copy
+  });
+
+  it("retries only transient failures", () => {
+    expect(isRetryableClipError("rate_limit_exceeded:creative_clips_transcribe:20/60s")).toBe(true);
+    expect(isRetryableClipError("rate_limit_transcription")).toBe(true);
+    expect(isRetryableClipError("Failed to send a request to the Edge Function")).toBe(true);
+    expect(isRetryableClipError("Edge Function returned a non-2xx status code (503)")).toBe(true);
+    expect(isRetryableClipError("internal_server_error")).toBe(true);
+    expect(isRetryableClipError("deduction_failed")).toBe(false);
+    expect(isRetryableClipError("transcription_unavailable")).toBe(false);
+    expect(isRetryableClipError("duplicate_request")).toBe(false);
   });
 });

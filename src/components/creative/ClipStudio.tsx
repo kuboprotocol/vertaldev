@@ -7,13 +7,13 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/hooks/useSubscription";
 import {
-  CLIP_ASPECTS, CLIP_LENGTHS, TRANSCRIBE_CHUNK_SECONDS, captionPages, findClips, formatTime, mergeTranscripts,
-  normalizeAiClips, pickNonOverlapping, quoteClips, transcriptForPrompt,
+  CLIP_ASPECTS, CLIP_LENGTHS, TRANSCRIBE_CHUNK_SECONDS, captionPages, findClips, formatTime, isRetryableClipError,
+  mergeTranscripts, normalizeAiClips, pickNonOverlapping, quoteClips, transcriptForPrompt,
   type Clip, type ClipAspectKey, type ClipLengthKey, type FocusKey, type Transcript,
 } from "@/lib/clipEngine";
 import { trackSubject } from "@/lib/clipTracker";
 import {
-  CAPTION_STYLES, drawClipFrame, extractAudioChunks, renderClip,
+  CAPTION_STYLES, drawClipFrame, extractAudioChunks, renderClip, unlockExportMedia,
   type CaptionStyleKey, type FrameLayout, type FrameOptions,
 } from "@/lib/clipRenderer";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,8 @@ import { cn } from "@/lib/utils";
 const MAX_FILE_GB = 2;
 const MAX_DURATION_MIN = 180;
 const TRANSCRIBE_CONCURRENCY = 3;
+/** Waits between retries of a failed call (rate limits reset per minute on the server). */
+const RETRY_DELAYS_MS = [3_000, 10_000, 30_000, 60_000];
 
 type Phase = "idle" | "extracting" | "transcribing" | "analyzing" | "ready";
 
@@ -42,17 +44,51 @@ const ERRORS: Record<string, string> = {
   no_supported_video_format: "Seu navegador não suporta gravação de vídeo. Use Chrome, Edge ou Safari atualizados.",
   video_load_failed: "Não foi possível abrir o vídeo.",
   import_blocked: "A plataforma bloqueou a importação direta. Baixe pelo link e envie o arquivo.",
+  import_unavailable: "A importação por link não está disponível agora. Baixe o vídeo e envie o arquivo.",
+  file_too_large_for_browser: "O vídeo é grande demais para o navegador processar. Envie um arquivo menor ou só o trecho que interessa.",
+  playback_blocked: "O navegador bloqueou a reprodução. Clique em “Exportar” novamente.",
+  export_empty: "A exportação não gerou vídeo. Mantenha a aba visível durante a exportação e tente de novo.",
+  export_failed: "Falha ao gravar o corte. Tente novamente.",
+  duplicate_request: "Essa solicitação já foi processada. Tente novamente.",
+  transcribe_failed: "Falha na transcrição. Tente novamente em instantes.",
+  analysis_failed: "A IA não conseguiu analisar o vídeo.",
+  internal_server_error: "Erro temporário no servidor. Tente novamente.",
+  Unauthorized: "Sua sessão expirou. Entre novamente.",
 };
 const friendly = (code: string) => ERRORS[code] ?? (code.startsWith("rate_limit") ? "Muitas solicitações. Aguarde um minuto." : code);
+
+const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((res, rej) => {
+  const t = setTimeout(res, ms);
+  signal?.addEventListener("abort", () => { clearTimeout(t); rej(new DOMException("aborted", "AbortError")); }, { once: true });
+});
 
 async function invokeClips<T>(body: Record<string, unknown> | FormData, idempotencyKey: string): Promise<T> {
   const { data, error } = await supabase.functions.invoke("creative-clips", { body, headers: { "X-Idempotency-Key": idempotencyKey } });
   if (error) {
-    const ctx = (error as { context?: Response }).context;
-    const detail = await ctx?.json?.().catch(() => null);
-    throw new Error(detail?.error ?? error.message);
+    const ctx = (error as { context?: unknown }).context;
+    const res = ctx instanceof Response ? ctx : null;
+    const detail = await res?.clone().json().catch(() => null);
+    const code = String(detail?.error ?? (res?.status === 429 ? "rate_limit" : error.message));
+    throw new Error(res && res.status >= 500 && !detail?.error ? `${code} (${res.status})` : code);
   }
   return data as T;
+}
+
+/**
+ * Retries rate limits and transient failures. Each attempt needs a fresh idempotency key: the server
+ * refunds a failed call and answers a reused key with 409 duplicate_request.
+ */
+async function invokeClipsWithRetry<T>(body: () => Record<string, unknown> | FormData, key: string, signal?: AbortSignal): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    if (signal?.aborted) throw new DOMException("aborted", "AbortError");
+    try {
+      return await invokeClips<T>(body(), attempt ? `${key}-r${attempt}` : key);
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (attempt >= RETRY_DELAYS_MS.length || !isRetryableClipError(msg)) throw e;
+      await sleep(RETRY_DELAYS_MS[attempt], signal);
+    }
+  }
 }
 
 function readDuration(url: string): Promise<number> {
@@ -125,7 +161,8 @@ function ClipPreview({ src, clip, transcript, frame }: { src: string; clip: Clip
 
   return (
     <div className="relative mx-auto w-full" style={{ maxWidth: W >= H ? 560 : 300 }}>
-      <video ref={videoRef} src={src} playsInline preload="auto" className="hidden" />
+      {/* Not display:none — Safari stops decoding frames of hidden videos, which leaves the canvas black. */}
+      <video ref={videoRef} src={src} playsInline preload="auto" aria-hidden className="pointer-events-none absolute h-px w-px opacity-0" />
       <canvas ref={canvasRef} width={W} height={H} onClick={toggle}
         className="w-full cursor-pointer rounded-2xl bg-black shadow-2xl shadow-primary/10 ring-1 ring-white/10" />
       <button type="button" onClick={toggle} aria-label={playing ? "Pausar" : "Reproduzir"}
@@ -170,6 +207,8 @@ export function ClipStudio() {
   const [exporting, setExporting] = useState<{ id: string; progress: number } | null>(null);
   const [exported, setExported] = useState<Set<string>>(new Set());
   const abortRef = useRef<AbortController | null>(null);
+  /** Chunks already transcribed for the current file, so a retry after a failure doesn't pay for them again. */
+  const partsRef = useRef<Map<number, Partial<Transcript>>>(new Map());
 
   useEffect(() => () => { if (src) URL.revokeObjectURL(src); abortRef.current?.abort(); }, [src]);
 
@@ -266,6 +305,7 @@ export function ClipStudio() {
       setSelected(null);
       setExported(new Set());
       setTracks({});
+      partsRef.current = new Map();
       setPhase("idle");
     } catch {
       URL.revokeObjectURL(url);
@@ -275,6 +315,7 @@ export function ClipStudio() {
 
   const reset = () => {
     abortRef.current?.abort();
+    partsRef.current = new Map();
     if (src) URL.revokeObjectURL(src);
     setFile(null); setSrc(null); setDuration(0); setTranscript(null); setClips([]); setSelected(null); setPhase("idle");
   };
@@ -292,8 +333,11 @@ export function ClipStudio() {
 
   const run = async () => {
     if (!file || !quote) return;
-    if (editsRemaining < quote.total) return toast.error(`Você precisa de ${quote.total} créditos para este vídeo.`);
+    const needed = transcript ? quote.analyze : quote.total - partsRef.current.size;
+    if (editsRemaining < needed) return toast.error(`Você precisa de ${needed} créditos para este vídeo.`);
     const runId = crypto.randomUUID();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     try {
       let t = transcript;
       if (!t) {
@@ -301,21 +345,31 @@ export function ClipStudio() {
         setProgress(5);
         const { duration: audioDuration, chunks } = await extractAudioChunks(file, TRANSCRIBE_CHUNK_SECONDS);
         setPhase("transcribing");
-        let done = 0;
-        const parts: Array<{ offset: number; transcript: Partial<Transcript> }> = [];
-        const queue = chunks.map((c, i) => ({ ...c, i }));
+        const parts = partsRef.current;
+        const progressNow = () => setProgress(10 + (parts.size / chunks.length) * 70);
+        progressNow();
+        const queue = chunks.map((c, i) => ({ ...c, i })).filter((c) => !parts.has(c.i));
         const worker = async () => {
           for (let next = queue.shift(); next; next = queue.shift()) {
-            const form = new FormData();
-            form.append("file", next.blob, `chunk-${next.i}.wav`);
-            const data = await invokeClips<Partial<Transcript>>(form, `${runId}-t${next.i}`);
-            parts.push({ offset: next.offset, transcript: data });
-            done++;
-            setProgress(10 + (done / chunks.length) * 70);
+            const chunk = next;
+            const data = await invokeClipsWithRetry<Partial<Transcript>>(() => {
+              const form = new FormData();
+              form.append("file", chunk.blob(), `chunk-${chunk.i}.wav`);
+              return form;
+            }, `${runId}-t${chunk.i}`, ctrl.signal);
+            parts.set(chunk.i, data);
+            progressNow();
           }
         };
-        await Promise.all(Array.from({ length: Math.min(TRANSCRIBE_CONCURRENCY, chunks.length) }, worker));
-        t = mergeTranscripts(parts, audioDuration);
+        try {
+          await Promise.all(Array.from({ length: Math.min(TRANSCRIBE_CONCURRENCY, queue.length) }, worker));
+        } catch (e) {
+          // Stop the other workers so they don't keep spending credits after the run has failed.
+          queue.length = 0;
+          ctrl.abort();
+          throw e;
+        }
+        t = mergeTranscripts(chunks.map((c, i) => ({ offset: c.offset, transcript: parts.get(i) ?? {} })), audioDuration);
         if (!t.segments.length) throw new Error("Não detectamos fala neste vídeo.");
         setTranscript(t);
       }
@@ -325,15 +379,18 @@ export function ClipStudio() {
       const range = CLIP_LENGTHS[lengthKey];
       let aiClips: unknown = null;
       try {
-        const data = await invokeClips<{ clips: unknown }>({
-          action: "analyze", transcript: transcriptForPrompt(t), duration: t.duration, count,
-          min_sec: range.min, max_sec: range.max, language: t.language ?? "pt-BR", title: file.name.replace(/\.[^.]+$/, ""),
-        }, `${runId}-a`);
-        aiClips = data.clips;
+        const tr = t;
+        const data = await invokeClipsWithRetry<{ clips: unknown }>(() => ({
+          action: "analyze", transcript: transcriptForPrompt(tr), duration: tr.duration, count,
+          min_sec: range.min, max_sec: range.max, language: tr.language ?? "pt-BR", title: file.name.replace(/\.[^.]+$/, ""),
+        }), `${runId}-a`, ctrl.signal);
+        aiClips = data?.clips;
       } catch (e) {
+        if ((e as Error).name === "AbortError") throw e;
         toast.info("IA indisponível — usando o motor Vertal offline", { description: friendly((e as Error).message) });
       }
       const n = selectClips(t, aiClips);
+      if (!n) throw new Error("Não encontramos trechos com a duração escolhida. Tente uma duração menor.");
       setPhase("ready");
       setProgress(100);
       void refetch?.();
@@ -341,7 +398,11 @@ export function ClipStudio() {
     } catch (e) {
       setPhase(transcript ? "ready" : "idle");
       void refetch?.();
-      toast.error("Não foi possível gerar os cortes", { description: friendly((e as Error).message) });
+      if ((e as Error).name === "AbortError") return;
+      const done = partsRef.current.size;
+      toast.error("Não foi possível gerar os cortes", {
+        description: friendly((e as Error).message) + (done && !transcript ? " Os trechos já transcritos ficam salvos — tentar de novo não cobra por eles." : ""),
+      });
     }
   };
 
@@ -351,11 +412,18 @@ export function ClipStudio() {
     if (!src || !transcript) return;
     const ctrl = new AbortController();
     abortRef.current = ctrl;
+    // Must run before the first await: browsers only allow playback with sound from a user click.
+    const media = unlockExportMedia(src);
     setExporting({ id: c.id, progress: 0 });
     try {
-      const focusTrack = await ensureTrack(c, ctrl.signal);
+      // Auto-reframe is a nice-to-have: if tracking fails, export with the manual framing instead.
+      const focusTrack = await ensureTrack(c, ctrl.signal).catch((e: Error) => {
+        if (e.name === "AbortError") throw e;
+        console.warn("[ClipStudio] auto-reframe failed, using manual framing", e);
+        return undefined;
+      });
       const res = await renderClip({
-        ...frame, focusTrack, hookTitle: hookTitle ? c.title : undefined,
+        ...frame, focusTrack, hookTitle: hookTitle ? c.title : undefined, media,
         src, start: c.start, end: c.end, words: transcript.words, signal: ctrl.signal,
         onProgress: (p) => setExporting({ id: c.id, progress: p }),
       });
@@ -366,6 +434,9 @@ export function ClipStudio() {
       setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
       setExported((prev) => new Set(prev).add(c.id));
     } catch (e) {
+      // renderClip releases the media itself; this covers a failure before it ran.
+      media.video.removeAttribute("src");
+      void media.audioCtx.close().catch(() => {});
       if ((e as Error).name !== "AbortError") toast.error("Falha ao exportar", { description: friendly((e as Error).message) });
       throw e;
     } finally {
@@ -470,7 +541,7 @@ export function ClipStudio() {
                 </div>
               ) : (
                 <Button className="w-full h-11 font-bold" onClick={() => void run()}>
-                  {phase === "ready" ? <><RotateCw className="h-4 w-4 mr-2" /> Gerar novamente (1 crédito)</> : <><Wand2 className="h-4 w-4 mr-2" /> Gerar cortes virais</>}
+                  {transcript ? <><RotateCw className="h-4 w-4 mr-2" /> Gerar novamente (1 crédito)</> : <><Wand2 className="h-4 w-4 mr-2" /> Gerar cortes virais</>}
                 </Button>
               )}
             </Card>

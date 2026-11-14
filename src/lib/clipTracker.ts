@@ -2,6 +2,7 @@
 // returns a smoothed horizontal focus track that the renderer follows. Uses the browser's native
 // FaceDetector when it exists and, everywhere else, our own skin-tone + motion saliency, so it runs
 // on the user's device with no model download and no per-clip cost.
+import { seekMedia, waitForMedia } from "./clipRenderer";
 import {
   CLIP_ASPECTS, centerToFocus, columnFocus, isSkin, smoothFocusTrack,
   type ClipAspectKey, type FocusKey,
@@ -22,16 +23,6 @@ function nativeDetector(): NativeFaceDetector | null {
   } catch {
     return null;
   }
-}
-
-function seek(v: HTMLVideoElement, t: number): Promise<void> {
-  return new Promise((res, rej) => {
-    const ok = () => { v.removeEventListener("error", bad); res(); };
-    const bad = () => { v.removeEventListener("seeked", ok); rej(new Error("video_load_failed")); };
-    v.addEventListener("seeked", ok, { once: true });
-    v.addEventListener("error", bad, { once: true });
-    v.currentTime = t;
-  });
 }
 
 /** Per-column saliency: skin pixels (weighted to the upper body) plus motion against the previous sample. */
@@ -71,11 +62,9 @@ export async function trackSubject(o: TrackOptions): Promise<FocusKey[]> {
   v.muted = true;
   v.playsInline = true;
   v.preload = "auto";
+  const loaded = waitForMedia(v, "loadedmetadata");
   v.src = o.src;
-  await new Promise<void>((res, rej) => {
-    v.onloadedmetadata = () => res();
-    v.onerror = () => rej(new Error("video_load_failed"));
-  });
+  await loaded;
 
   const vw = v.videoWidth || 16;
   const vh = v.videoHeight || 9;
@@ -98,7 +87,7 @@ export async function trackSubject(o: TrackOptions): Promise<FocusKey[]> {
     for (let k = 0; k <= steps; k++) {
       if (o.signal?.aborted) throw new DOMException("aborted", "AbortError");
       const t = Math.min(o.end, o.start + k * SAMPLE_EVERY);
-      await seek(v, t);
+      await seekMedia(v, t);
       let center: number | null = null;
       if (detector) {
         try {

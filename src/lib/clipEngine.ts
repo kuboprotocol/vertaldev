@@ -371,6 +371,23 @@ export function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffe
   return buf;
 }
 
+/** Averages the channels of [from, to) into one mono buffer (only that slice is allocated). */
+export function mixDown(channels: Float32Array[], from: number, to: number): Float32Array {
+  const len = Math.max(0, to - from);
+  if (channels.length === 1) return channels[0].subarray(from, from + len);
+  const out = new Float32Array(len);
+  for (const data of channels) {
+    for (let i = 0; i < len; i++) out[i] += data[from + i] / channels.length;
+  }
+  return out;
+}
+
+/** Errors worth retrying (rate limits, upstream/network hiccups) vs. ones that will fail again. */
+export function isRetryableClipError(code: string): boolean {
+  return /^rate_limit|^transcribe_(failed|429|5\d\d)|^Failed to send|^internal_server_error|network|timeout|fetch/i.test(code)
+    || /\b(429|500|502|503|504)\b/.test(code);
+}
+
 /** Credits a full run costs: one per transcription chunk plus one for the AI analysis. */
 export function quoteClips(durationSec: number): { transcribe: number; analyze: number; total: number } {
   const transcribe = Math.max(1, Math.ceil(durationSec / TRANSCRIBE_CHUNK_SECONDS));
