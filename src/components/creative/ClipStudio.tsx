@@ -173,7 +173,7 @@ export function ClipStudio() {
 
   useEffect(() => () => { if (src) URL.revokeObjectURL(src); abortRef.current?.abort(); }, [src]);
 
-  const quote = duration ? quoteClips(duration) : null;
+  const quote = quoteClips(count);
   const busy = phase === "extracting" || phase === "transcribing" || phase === "analyzing";
   const clip = clips.find((c) => c.id === selected) ?? null;
   const useTrack = autoTrack && layout === "fill";
@@ -291,8 +291,8 @@ export function ClipStudio() {
   };
 
   const run = async () => {
-    if (!file || !quote) return;
-    if (editsRemaining < quote.total) return toast.error(`Você precisa de ${quote.total} créditos para este vídeo.`);
+    if (!file) return;
+    if (editsRemaining < quote) return toast.error(`Você precisa de até ${quote} créditos para ${count} cortes (1 crédito por corte).`);
     const runId = crypto.randomUUID();
     try {
       let t = transcript;
@@ -324,12 +324,14 @@ export function ClipStudio() {
       setProgress(85);
       const range = CLIP_LENGTHS[lengthKey];
       let aiClips: unknown = null;
+      let charged = 0;
       try {
-        const data = await invokeClips<{ clips: unknown }>({
+        const data = await invokeClips<{ clips: unknown; credits_charged?: number }>({
           action: "analyze", transcript: transcriptForPrompt(t), duration: t.duration, count,
           min_sec: range.min, max_sec: range.max, language: t.language ?? "pt-BR", title: file.name.replace(/\.[^.]+$/, ""),
         }, `${runId}-a`);
         aiClips = data.clips;
+        charged = data.credits_charged ?? 0;
       } catch (e) {
         toast.info("IA indisponível — usando o motor Vertal offline", { description: friendly((e as Error).message) });
       }
@@ -337,7 +339,9 @@ export function ClipStudio() {
       setPhase("ready");
       setProgress(100);
       void refetch?.();
-      toast.success(`${n} cortes prontos`, { description: "Revise, ajuste e exporte." });
+      toast.success(`${n} cortes prontos`, {
+        description: charged ? `${charged} crédito${charged > 1 ? "s" : ""} usado${charged > 1 ? "s" : ""} (1 por corte da IA). Revise e exporte.` : "Revise, ajuste e exporte.",
+      });
     } catch (e) {
       setPhase(transcript ? "ready" : "idle");
       void refetch?.();
@@ -445,7 +449,7 @@ export function ClipStudio() {
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate font-semibold">{file?.name}</p>
-                  <p className="text-xs text-muted-foreground">{formatTime(duration)} · {quote?.total} créditos</p>
+                  <p className="text-xs text-muted-foreground">{formatTime(duration)} · 1 crédito por corte</p>
                 </div>
                 <Button size="icon" variant="ghost" disabled={busy} onClick={reset} aria-label="Trocar vídeo"><X className="h-4 w-4" /></Button>
               </div>
@@ -470,7 +474,7 @@ export function ClipStudio() {
                 </div>
               ) : (
                 <Button className="w-full h-11 font-bold" onClick={() => void run()}>
-                  {phase === "ready" ? <><RotateCw className="h-4 w-4 mr-2" /> Gerar novamente (1 crédito)</> : <><Wand2 className="h-4 w-4 mr-2" /> Gerar cortes virais</>}
+                  {phase === "ready" ? <><RotateCw className="h-4 w-4 mr-2" /> Gerar novamente (até {quote} créditos)</> : <><Wand2 className="h-4 w-4 mr-2" /> Gerar {count} cortes virais · até {quote} créditos</>}
                 </Button>
               )}
             </Card>
