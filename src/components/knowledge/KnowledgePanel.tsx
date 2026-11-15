@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, FolderPlus, FilePlus, Folder, Trash2 } from 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { containsSecret } from "@/lib/payments/policy";
 import {
   buildFolderTree,
   canCreateChild,
@@ -130,6 +131,11 @@ export function KnowledgePanel({ userId }: { userId?: string }) {
     if (!userId || !selectedId || !editing) return;
     const title = editing.title.trim();
     if (!title) return;
+    // Chave ou token numa nota seria lido pelo agente e poderia sair para clientes.
+    if (containsSecret(`${title}\n${editing.body}`)) {
+      setError(labels.secretBlocked);
+      return;
+    }
     try {
       await saveNote({ userId, folderId: selectedId, id: editing.id, title, body: editing.body });
       setEditing(null);

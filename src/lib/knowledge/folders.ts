@@ -110,6 +110,7 @@ export interface KnowledgeLabels {
   customersNotice: string;
   cancel: string;
   invalidName: string;
+  secretBlocked: string;
 }
 
 const LABELS: Record<"pt" | "es" | "en", KnowledgeLabels> = {
@@ -130,6 +131,7 @@ const LABELS: Record<"pt" | "es" | "en", KnowledgeLabels> = {
     customersNotice: "Conteúdo desta pasta pode ser usado nas respostas a clientes.",
     cancel: "Cancelar",
     invalidName: "Nome inválido: use de 1 a 80 caracteres, sem barras.",
+    secretBlocked: "Esta nota parece conter uma chave ou senha. Remova antes de salvar: segredos vão no cofre de segredos.",
   },
   es: {
     personalRoot: "Mis ideas y otras empresas",
@@ -148,6 +150,7 @@ const LABELS: Record<"pt" | "es" | "en", KnowledgeLabels> = {
     customersNotice: "El contenido de esta carpeta puede usarse en respuestas a clientes.",
     cancel: "Cancelar",
     invalidName: "Nombre inválido: usa de 1 a 80 caracteres, sin barras.",
+    secretBlocked: "Esta nota parece contener una clave o contraseña. Quítala antes de guardar: los secretos van en la bóveda de secretos.",
   },
   en: {
     personalRoot: "My ideas and other companies",
@@ -166,6 +169,7 @@ const LABELS: Record<"pt" | "es" | "en", KnowledgeLabels> = {
     customersNotice: "Content in this folder may be used in replies to customers.",
     cancel: "Cancel",
     invalidName: "Invalid name: use 1 to 80 characters, no slashes.",
+    secretBlocked: "This note looks like it contains a key or password. Remove it before saving: secrets belong in the secrets vault.",
   },
 };
 
