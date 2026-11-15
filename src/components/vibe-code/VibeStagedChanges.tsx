@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ClientStagedChange } from "@/lib/vibePlan/engine";
+import { surfaceCard } from "@/components/vibe-code/surface";
 
 /** Cor por linha do diff unificado. */
 function DiffBlock({ diff }: { diff: string }) {
@@ -65,7 +66,7 @@ export function VibeStagedChanges({ staged, busy, onApply, onReject }: VibeStage
         {staged.map((s) => {
           const expanded = open.has(s.path);
           return (
-            <li key={s.path} className="rounded-lg border border-border/30 bg-card/40 px-2.5 py-1.5">
+            <li key={s.path} className={`${surfaceCard} px-2.5 py-1.5`}>
               <div className="flex items-center gap-2 text-[11px]">
                 <button
                   type="button"

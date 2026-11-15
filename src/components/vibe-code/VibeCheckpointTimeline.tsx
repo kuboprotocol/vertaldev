@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { VibeCheckpoint } from "@/lib/vibeCodeAgentTypes";
+import { surfaceCard } from "@/components/vibe-code/surface";
 
 const AGENT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/vibe-code-agent`;
 
@@ -94,7 +95,7 @@ export function VibeCheckpointTimeline({ projectRepo }: { projectRepo?: string }
           {checkpoints.map((cp) => (
             <div
               key={cp.id}
-              className="group rounded-lg border border-border/30 bg-card/30 p-2.5 transition-colors hover:bg-card/50"
+              className={`${surfaceCard} p-2.5`}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-1.5">

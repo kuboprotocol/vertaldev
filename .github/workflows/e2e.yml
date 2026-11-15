@@ -260,7 +260,7 @@ jobs:
   redirect-cache-cross-browser:
     name: Redirect cache (${{ matrix.project }})
     timeout-minutes: 15
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     env:
       JOB_LABEL: redirect-cache-${{ matrix.browser }}
     strategy:
@@ -269,8 +269,12 @@ jobs:
         include:
           - project: firefox-redirect-cache
             browser: firefox
+            os: ubuntu-latest
+          # WebKit's Playwright build needs libicu74 (Ubuntu 24.04); the
+          # ubuntu-latest image no longer ships it -> pin the runner.
           - project: webkit-redirect-cache
             browser: webkit
+            os: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -320,7 +324,9 @@ jobs:
       - name: Install Playwright browser (${{ matrix.browser }})
         run: |
           echo "::group::[${JOB_LABEL}] playwright install ${{ matrix.browser }}"
-          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+          # WebKit needs system libs (e.g. libicudata.so.74) that a cache hit
+          # does not install: always run the full install for webkit.
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ] && [ "${{ matrix.browser }}" != "webkit" ]; then
             echo "[${JOB_LABEL}] playwright browsers cache: HIT — installing system deps only"
             npx playwright install-deps ${{ matrix.browser }}
           else

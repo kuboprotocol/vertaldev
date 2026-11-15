@@ -34,7 +34,7 @@ export function VibeDomainsPanel() {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="group relative overflow-hidden border-primary/20 bg-primary/5 p-4 transition-all hover:bg-primary/10">
+        <Card className={`${surfaceCard} border-primary/30 bg-primary/[0.06] p-4`}>
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20 text-primary">
             <Search className="h-5 w-5" />
           </div>
@@ -45,7 +45,7 @@ export function VibeDomainsPanel() {
           </Button>
         </Card>
 
-        <Card className="group relative overflow-hidden border-border/60 bg-card/30 p-4 transition-all hover:bg-card/50">
+        <Card className={`${surfaceCard} p-4`}>
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-white/5 text-foreground">
             <ArrowRightLeft className="h-5 w-5" />
           </div>
@@ -56,7 +56,7 @@ export function VibeDomainsPanel() {
           </Button>
         </Card>
 
-        <Card className="group relative overflow-hidden border-border/60 bg-card/30 p-4 transition-all hover:bg-card/50">
+        <Card className={`${surfaceCard} p-4`}>
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-white/5 text-foreground">
             <Link2 className="h-5 w-5" />
           </div>
@@ -76,7 +76,7 @@ export function VibeDomainsPanel() {
 
         <div className="space-y-3">
           {DOMAINS.map((domain) => (
-            <div key={domain.name} className="flex items-center justify-between rounded-lg border border-border/40 bg-background/40 p-3">
+            <div key={domain.name} className={`${surfaceCard} flex items-center justify-between p-3`}>
               <div className="flex items-center gap-3">
                 <div className={cn(
                   "flex h-8 w-8 items-center justify-center rounded-full",
@@ -114,3 +114,4 @@ function ChevronRight({ className }: { className?: string }) {
   return <ArrowRightLeft className={cn("rotate-[-90deg]", className)} />;
 }
 import { cn } from "@/lib/utils";
+import { surfaceCard } from "@/components/vibe-code/surface";

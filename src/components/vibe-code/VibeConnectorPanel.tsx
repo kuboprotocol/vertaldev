@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { VibeConnectorState } from "@/lib/vibeCodeAgentTypes";
 import { fetchPlanForKeys } from "@/hooks/useKuboSecrets";
 import { newSecretPath, SECRETS_PATH } from "@/lib/secretsVaultLinks";
+import { surfaceCard, surfaceCardConnected } from "@/components/vibe-code/surface";
 
 const ICONS = {
   github: Github,
@@ -49,6 +50,8 @@ export function VibeConnectorPanel({ projectId }: { projectId?: string }) {
   const [pending, setPending] = useState<PendingRequirement[]>([]);
   // Chaves exigidas que já estão no Cofre de segredos (null = cofre não respondeu).
   const [inVault, setInVault] = useState<Set<string> | null>(null);
+  // false enquanto a checagem do GitHub não terminou: o contador mostra "…" em vez de um número provisório.
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     const keys = [...new Set(pending.flatMap((r) => r.secrets))].slice(0, 50);
@@ -96,17 +99,21 @@ export function VibeConnectorPanel({ projectId }: { projectId?: string }) {
   useEffect(() => {
     let active = true;
     (async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!active || !data?.user) return;
-      const { data: rows } = await supabase
-        .from("github_connections_safe")
-        .select("id")
-        .limit(1);
-      const githubConnected = (rows ?? []).length > 0;
-      if (!active) return;
-      setConnectors((prev) =>
-        prev.map((c) => (c.slug === "github" ? { ...c, connected: githubConnected } : c)),
-      );
+      try {
+        const { data } = await supabase.auth.getUser();
+        if (!active || !data?.user) return;
+        const { data: rows } = await supabase
+          .from("github_connections_safe")
+          .select("id")
+          .limit(1);
+        const githubConnected = (rows ?? []).length > 0;
+        if (!active) return;
+        setConnectors((prev) =>
+          prev.map((c) => (c.slug === "github" ? { ...c, connected: githubConnected } : c)),
+        );
+      } finally {
+        if (active) setLoaded(true);
+      }
     })();
     return () => {
       active = false;
@@ -119,8 +126,13 @@ export function VibeConnectorPanel({ projectId }: { projectId?: string }) {
         <h3 className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
           Connectors
         </h3>
-        <Badge variant="outline" className="text-[10px]">
-          {connectors.filter((c) => c.connected).length}/{connectors.length}
+        <Badge
+          variant="outline"
+          className="text-[10px]"
+          title={loaded ? undefined : "Verificando conectores…"}
+          data-testid="connectors-count"
+        >
+          {loaded ? connectors.filter((c) => c.connected).length : "…"}/{connectors.length}
         </Badge>
       </div>
 
@@ -179,7 +191,7 @@ export function VibeConnectorPanel({ projectId }: { projectId?: string }) {
           return (
             <div
               key={c.slug}
-              className="flex items-start gap-3 rounded-lg border border-border/50 bg-background/40 p-3"
+              className={`flex items-start gap-3 p-3 ${surfaceCard} ${c.connected ? surfaceCardConnected : ""}`}
             >
               <Icon className="h-4 w-4 mt-0.5 text-primary shrink-0" />
               <div className="min-w-0 flex-1">

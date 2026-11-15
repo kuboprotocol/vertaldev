@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   Bug,
@@ -21,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { findingDiff, SEVERITY_LABEL, type Severity } from "@/lib/vibeReview/engine";
 import { currentFixItem, queueProgress, type FixQueueState } from "@/lib/vibeReview/fixQueue";
+import { surfaceInset } from "@/components/vibe-code/surface";
 
 const SEVERITY_STYLE: Record<Severity, string> = {
   critical: "border-rose-500/40 bg-rose-500/10 text-rose-300",
@@ -87,6 +88,27 @@ export function VibeFixQueueCard({
   const item = currentFixItem(state);
   const meta = COMMAND_TITLE[state.command ?? "review"] ?? COMMAND_TITLE.review;
   const Icon = meta.icon;
+
+  // Atalhos de teclado: A aplica, S pula. Ignorados enquanto o agente trabalha,
+  // com o campo de ajuste aberto ou quando o foco está em um campo de texto.
+  useEffect(() => {
+    if (!item || progress.done) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (busy || adjusting || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      const key = e.key.toLowerCase();
+      if (key === "a" && item.finding.applicable) {
+        e.preventDefault();
+        onApply();
+      } else if (key === "s") {
+        e.preventDefault();
+        onSkip();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [item, progress.done, busy, adjusting, onApply, onSkip]);
 
   if (!state.items.length) return null;
 
@@ -184,7 +206,7 @@ export function VibeFixQueueCard({
           )}
 
           {item.finding.existingCode !== undefined && (
-            <div className="overflow-x-auto rounded-lg border border-border/40 bg-black/60 py-1.5 font-mono text-[11px] leading-5" data-testid="vibe-fix-diff">
+            <div className={`${surfaceInset} py-1.5 font-mono text-[11px] leading-5`} data-testid="vibe-fix-diff">
               {findingDiff(item.finding).map((l, i) => (
                 <div
                   key={i}
@@ -262,7 +284,9 @@ export function VibeFixQueueCard({
               </Button>
             </div>
           )}
-          <p className="text-[10px] text-muted-foreground/60">Dúvida? Escreva no chat: a pergunta vai sobre este item.</p>
+          <p className="text-[10px] text-muted-foreground/60">
+            Atalhos: <kbd className="font-mono">A</kbd> aplicar · <kbd className="font-mono">S</kbd> pular. Dúvida? Escreva no chat: a pergunta vai sobre este item.
+          </p>
         </div>
       )}
     </div>

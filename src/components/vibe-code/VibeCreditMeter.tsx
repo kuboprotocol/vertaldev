@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Zap } from "lucide-react";
+import { animate, useReducedMotion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -16,7 +17,25 @@ interface SubscriptionRow {
  */
 export function VibeCreditMeter() {
   const [balance, setBalance] = useState<number | null>(null);
+  const [display, setDisplay] = useState<number | null>(null);
   const [low, setLow] = useState(false);
+  const reduce = useReducedMotion();
+
+  // Conta de forma animada do saldo exibido até o novo valor (sem animação se reduced motion).
+  useEffect(() => {
+    if (balance === null) return;
+    if (reduce) {
+      setDisplay(balance);
+      return;
+    }
+    const controls = animate(display ?? balance, balance, {
+      duration: 0.6,
+      ease: "easeOut",
+      onUpdate: (v) => setDisplay(Math.round(v)),
+    });
+    return () => controls.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [balance, reduce]);
 
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -66,7 +85,7 @@ export function VibeCreditMeter() {
       title="Saldo de créditos — atualiza ao vivo a cada débito"
     >
       <Zap className={`h-3 w-3 ${low ? "text-rose-400" : "text-primary"}`} />
-      {balance === null ? "—" : balance.toLocaleString("pt-BR")} créditos
+      {display === null ? "—" : display.toLocaleString("pt-BR")} créditos
     </Badge>
   );
 }
