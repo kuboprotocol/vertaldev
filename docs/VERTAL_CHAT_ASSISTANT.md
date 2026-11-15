@@ -1,15 +1,15 @@
-# Virtual Chat — assistente de tarefas multicanal
+# Vertal Chat — assistente de tarefas multicanal
 
 Status: **base implementada** (precificação, política de acesso, conectores Telegram e WhatsApp, testes).
 Pendente: edge functions de webhook, agente de dispositivo, canal Messenger, interface.
 
-Código: `src/lib/virtualChat/`. Testes: `npx vitest run src/lib/virtualChat`.
+Código: `src/lib/vertalChat/`. Testes: `npx vitest run src/lib/vertalChat`.
 
 ---
 
 ## 1. O que o produto faz
 
-O Virtual Chat é um assistente que trabalha com os arquivos e as conversas do usuário:
+O Vertal Chat é um assistente que trabalha com os arquivos e as conversas do usuário:
 
 1. **Responde no próprio chat** do KUBO Vibe, com acesso às pastas que o dono liberou no PC ou no celular.
 2. **Responde por canais de mensagem** (Telegram, WhatsApp Business, Messenger). Um cliente pergunta
@@ -33,7 +33,7 @@ Regra de ouro: **o assistente só enxerga o que foi concedido, para quem foi con
    Canais ──► Conectores (telegram.ts, whatsapp.ts) ──► normalizam mensagens
                    │
                    ▼
-        Orquestrador do Virtual Chat (edge function, service role)
+        Orquestrador do Vertal Chat (edge function, service role)
           · valida assinatura do webhook
           · consulta a política de acesso
           · lê/indexa arquivo, chama o modelo
@@ -150,7 +150,7 @@ Enquanto as premissas não forem trocadas, os números acima são **estimativas*
 ## 7. Roadmap
 
 1. **Feito (esta base):** precificação, política de acesso, parse e envio de Telegram e WhatsApp, testes.
-2. Edge function `virtual-chat-webhook`: verificação de assinatura, download de mídia, debite de créditos, resposta.
+2. Edge function `vertal-chat-webhook`: verificação de assinatura, download de mídia, debite de créditos, resposta.
 3. Tabelas: concessões de arquivo, log de acesso, canais conectados por usuário (com RLS).
 4. Agente local: rota de leitura com `realpath` e concessão por pasta; indexação com cache.
 5. Messenger e Instagram DM (após revisão de permissões da Meta).

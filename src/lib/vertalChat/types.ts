@@ -1,5 +1,5 @@
 /**
- * Virtual Chat — tipos compartilhados entre canais, política de acesso e cobrança.
+ * Vertal Chat — tipos compartilhados entre canais, política de acesso e cobrança.
  */
 
 export type ChannelId = "telegram" | "whatsapp" | "messenger";
