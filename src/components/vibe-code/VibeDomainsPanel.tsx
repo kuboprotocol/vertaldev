@@ -34,7 +34,7 @@ export function VibeDomainsPanel() {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="group relative overflow-hidden border-primary/20 bg-primary/5 p-4 transition-all hover:bg-primary/10">
+        <Card className={`${surfaceCard} border-primary/30 bg-primary/[0.06] p-4`}>
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20 text-primary">
             <Search className="h-5 w-5" />
           </div>
@@ -45,7 +45,7 @@ export function VibeDomainsPanel() {
           </Button>
         </Card>
 
-        <Card className="group relative overflow-hidden border-border/60 bg-card/30 p-4 transition-all hover:bg-card/50">
+        <Card className={`${surfaceCard} p-4`}>
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-white/5 text-foreground">
             <ArrowRightLeft className="h-5 w-5" />
           </div>
@@ -56,7 +56,7 @@ export function VibeDomainsPanel() {
           </Button>
         </Card>
 
-        <Card className="group relative overflow-hidden border-border/60 bg-card/30 p-4 transition-all hover:bg-card/50">
+        <Card className={`${surfaceCard} p-4`}>
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-white/5 text-foreground">
             <Link2 className="h-5 w-5" />
           </div>
