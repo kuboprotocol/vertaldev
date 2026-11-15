@@ -41,6 +41,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { GlowPromptFrame } from "@/components/vibe-code/GlowPromptFrame";
+import { surfaceCard } from "@/components/vibe-code/surface";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -955,7 +956,7 @@ export function VibeCodeAgentChat({
                   return (
                     <div className="space-y-1 pl-8" data-testid="vibe-review-findings">
                       {reviewStep.review.findings.map((f, i) => (
-                        <div key={f.id + i} className="flex items-center gap-2 rounded-lg border border-border/30 bg-card/30 px-2.5 py-1.5 text-[11px]">
+                        <div key={f.id + i} className={`${surfaceCard} flex items-center gap-2 px-2.5 py-1.5 text-[11px]`}>
                           <span className="font-mono text-muted-foreground/70">{i + 1}.</span>
                           <Badge variant="outline" className="h-4 rounded px-1 text-[9px] uppercase text-muted-foreground">
                             {SEVERITY_LABEL[f.severity]}
@@ -1002,7 +1003,7 @@ export function VibeCodeAgentChat({
                   return (
                     <div
                       key={step.id}
-                      className="group relative rounded-xl border border-border/40 bg-card/40 px-3 py-3 transition-all hover:bg-card/60"
+                      className={`${surfaceCard} rounded-xl px-3 py-3`}
                     >
                       <div className="flex items-center gap-2">
                         {step.status === "running" ? (
