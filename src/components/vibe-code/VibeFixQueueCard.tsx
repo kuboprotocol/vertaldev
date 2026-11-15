@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   Bug,
@@ -87,6 +87,27 @@ export function VibeFixQueueCard({
   const item = currentFixItem(state);
   const meta = COMMAND_TITLE[state.command ?? "review"] ?? COMMAND_TITLE.review;
   const Icon = meta.icon;
+
+  // Atalhos de teclado: A aplica, S pula. Ignorados enquanto o agente trabalha,
+  // com o campo de ajuste aberto ou quando o foco está em um campo de texto.
+  useEffect(() => {
+    if (!item || progress.done) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (busy || adjusting || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      const key = e.key.toLowerCase();
+      if (key === "a" && item.finding.applicable) {
+        e.preventDefault();
+        onApply();
+      } else if (key === "s") {
+        e.preventDefault();
+        onSkip();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [item, progress.done, busy, adjusting, onApply, onSkip]);
 
   if (!state.items.length) return null;
 
@@ -262,7 +283,9 @@ export function VibeFixQueueCard({
               </Button>
             </div>
           )}
-          <p className="text-[10px] text-muted-foreground/60">Dúvida? Escreva no chat: a pergunta vai sobre este item.</p>
+          <p className="text-[10px] text-muted-foreground/60">
+            Atalhos: <kbd className="font-mono">A</kbd> aplicar · <kbd className="font-mono">S</kbd> pular. Dúvida? Escreva no chat: a pergunta vai sobre este item.
+          </p>
         </div>
       )}
     </div>
