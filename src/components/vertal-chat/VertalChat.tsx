@@ -55,7 +55,7 @@ const GROUPS: Array<{ id: 'criar' | 'midia' | 'conectar'; label: string }> = [
 ];
 
 /** Painéis que ocupam bem a tela inteira; o chat fica a um toque de distância. */
-const WIDE_PANELS: PanelKey[] = ['office', 'design', 'figcraft', 'canvas', 'notebook'];
+const WIDE_PANELS: PanelKey[] = ['office', 'design', 'figcraft', 'canvas', 'notebook', 'knowledge'];
 
 /** Artefatos que abrem sozinhos ao lado quando ficam prontos (em telas largas). */
 const AUTO_OPEN: Artifact['kind'][] = ['doc', 'sheet', 'slides', 'canvas', 'app', 'ebook', 'email'];

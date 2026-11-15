@@ -43,7 +43,7 @@ export interface CanvasSpec {
 export const PANELS = [
   "history", "office", "design", "figcraft", "canvas", "notebook", "video_studio", "clips", "avatar",
   "shorts", "emo", "sheet", "ebook", "music", "downloader", "builder", "clock", "voice",
-  "connectors", "secrets", "agents",
+  "connectors", "secrets", "agents", "knowledge",
 ] as const;
 export type PanelKey = (typeof PANELS)[number];
 
