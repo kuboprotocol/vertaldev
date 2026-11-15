@@ -8,6 +8,10 @@
 // chave nem aparecem em tools/list e são recusadas em tools/call.
 // Todas as consultas filtram pelo usuário dono da chave/sessão.
 // deno-lint-ignore-file no-explicit-any
+import {
+  checkDesignBase64, designStoragePath, designTitleFromFileName, isFigcraftTemplate,
+} from "../_shared/figcraft.ts";
+import { FIGCRAFT_TEMPLATE_BYTES_B64 } from "../_shared/figcraftTemplates.generated.ts";
 
 export const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 export const SERVER_INFO = { name: "vertal-vibe-dev", title: "Vertal Vibe Dev", version: "1.1.0" };
@@ -16,11 +20,19 @@ export const INSTRUCTIONS =
   "Use list_projects e get_project para ver os projetos do usuário, create_project para criar um " +
   "e update_project para mudar título ou descrição (exige acesso de escrita), " +
   "list_agent_jobs para acompanhar execuções dos agentes e credit_summary para saldo e uso de créditos. " +
+  "Para o figCraft (editor de telas e protótipos): list_design_files, get_design_file, create_design_file " +
+  "(com template ou base64) e update_design_file. Os designs aparecem no Painel Criativo e no Vertal Chat. " +
   "Todas as ferramentas agem como o usuário dono da chave.";
 
 export type Scope = "read" | "write";
 
-type Db = { from: (table: string) => any };
+type Db = { from: (table: string) => any; storage?: { from: (bucket: string) => any } };
+
+/** Bucket do storage. Um banco sem storage (testes) falha com mensagem clara. */
+function bucket(db: Db, name: string): any {
+  if (!db.storage) throw new Error("storage indisponível");
+  return db.storage.from(name);
+}
 
 export interface ToolContext {
   db: Db;
@@ -39,6 +51,13 @@ interface ToolDef {
 }
 
 const PROJECT_COLUMNS = "id,title,description,is_published,published_url,created_at,updated_at";
+const DESIGN_COLUMNS = "id,title,engine,size_bytes,created_at,updated_at";
+const DESIGN_BUCKET = "design-files";
+/** Link temporário para baixar o arquivo de um design. */
+const DESIGN_LINK_SECONDS = 900;
+/** Base64 de um arquivo, em caracteres: o corpo de uma chamada MCP não passa de alguns MB. */
+const DESIGN_BASE64_MAX_CHARS = 6_000_000;
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 class ToolInputError extends Error {}
@@ -224,7 +243,168 @@ export const TOOLS: ToolDef[] = [
       return { balance: transactions[0]?.balance_after ?? null, transactions };
     },
   },
+  {
+    name: "list_design_files",
+    title: "Listar designs do figCraft",
+    description: "Lista os designs do figCraft salvos na conta do usuário, do mais recente para o mais antigo.",
+    scope: "read",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: { type: "integer", minimum: 1, maximum: 50, default: 10, description: "Quantos designs retornar." },
+      },
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+    run: async (args, { db, userId }) => {
+      const q = db.from("design_files").select(DESIGN_COLUMNS).eq("user_id", userId)
+        .order("updated_at", { ascending: false }).limit(intArg(args.limit, 10, 1, 50));
+      return { designs: (await rows(q)) ?? [] };
+    },
+  },
+  {
+    name: "get_design_file",
+    title: "Ver design do figCraft",
+    description:
+      "Busca um design do figCraft do usuário pelo id e devolve um link temporário (15 minutos) para baixar o arquivo .figcraft.",
+    scope: "read",
+    inputSchema: {
+      type: "object",
+      properties: { designId: { type: "string", format: "uuid", description: "Id do design." } },
+      required: ["designId"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+    run: async (args, { db, userId }) => {
+      const id = uuidArg(args.designId, "designId");
+      const design = await rows(
+        db.from("design_files").select(`${DESIGN_COLUMNS},file_path`).eq("id", id).eq("user_id", userId).maybeSingle(),
+      );
+      if (!design) throw new ToolInputError("Design não encontrado");
+      const { file_path, ...meta } = design;
+      const { data, error } = await bucket(db, DESIGN_BUCKET).createSignedUrl(file_path, DESIGN_LINK_SECONDS);
+      if (error || !data?.signedUrl) throw new Error("Não foi possível gerar o link do arquivo");
+      return { design: meta, downloadUrl: data.signedUrl, expiresInSeconds: DESIGN_LINK_SECONDS };
+    },
+  },
+  {
+    name: "create_design_file",
+    title: "Criar design no figCraft",
+    description:
+      "Cria um design do figCraft na conta do usuário, que aparece no Painel Criativo e no Vertal Chat. " +
+      "Use `template` para começar de um modelo pronto (mobile-app, landing-page, dashboard, design-system, " +
+      "wireframe-kit, social-posts, slides, icon-set), ou `base64` com um arquivo .figcraft pronto (até ~4 MB). " +
+      "Informe um dos dois.",
+    scope: "write",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string", minLength: 1, maxLength: 120, description: "Nome do design." },
+        template: {
+          type: "string",
+          enum: ["mobile-app", "landing-page", "dashboard", "design-system", "wireframe-kit", "social-posts", "slides", "icon-set"],
+          description: "Modelo inicial pronto.",
+        },
+        base64: { type: "string", description: "Conteúdo do arquivo .figcraft em base64." },
+      },
+      required: ["title"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    run: async (args, { db, userId }) => {
+      const title = designTitleFromFileName(strArg(args.title, "title", { required: true, max: 120 })!, "");
+      if (!title) throw new ToolInputError("title é obrigatório");
+      const hasTemplate = args.template !== undefined && args.template !== null && args.template !== "";
+      const hasBase64 = args.base64 !== undefined && args.base64 !== null && args.base64 !== "";
+      if (hasTemplate === hasBase64) throw new ToolInputError("Informe template ou base64 (um dos dois)");
+      const bytes = hasTemplate ? templateBytes(args.template) : decodeDesignBase64(args.base64);
+      const id = crypto.randomUUID();
+      const path = designStoragePath(userId, id);
+      const upload = await bucket(db, DESIGN_BUCKET).upload(path, bytes, {
+        contentType: "application/octet-stream",
+        upsert: false,
+      });
+      if (upload.error) throw new Error(`Não foi possível guardar o arquivo: ${upload.error.message}`);
+      const design = await rows(
+        db.from("design_files")
+          .insert({ id, user_id: userId, title, engine: "figcraft", file_path: path, size_bytes: bytes.byteLength })
+          .select(DESIGN_COLUMNS).maybeSingle(),
+      ).catch(async (e: Error) => {
+        await bucket(db, DESIGN_BUCKET).remove([path]);
+        throw e;
+      });
+      return { design };
+    },
+  },
+  {
+    name: "update_design_file",
+    title: "Editar design do figCraft",
+    description:
+      "Muda o título e/ou substitui o arquivo .figcraft de um design do usuário (base64, até ~4 MB). " +
+      "Não altera o desenho por comandos: para isso, o usuário abre o design no Painel Criativo ou no Vertal Chat.",
+    scope: "write",
+    inputSchema: {
+      type: "object",
+      properties: {
+        designId: { type: "string", format: "uuid", description: "Id do design." },
+        title: { type: "string", minLength: 1, maxLength: 120, description: "Novo nome (opcional)." },
+        base64: { type: "string", description: "Novo conteúdo do arquivo .figcraft em base64 (opcional)." },
+      },
+      required: ["designId"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    run: async (args, { db, userId }) => {
+      const id = uuidArg(args.designId, "designId");
+      const hasTitle = args.title !== undefined;
+      const hasBase64 = args.base64 !== undefined && args.base64 !== null && args.base64 !== "";
+      if (!hasTitle && !hasBase64) throw new ToolInputError("Informe title ou base64");
+      const current = await rows(
+        db.from("design_files").select(`${DESIGN_COLUMNS},file_path`).eq("id", id).eq("user_id", userId).maybeSingle(),
+      );
+      if (!current) throw new ToolInputError("Design não encontrado");
+      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (hasTitle) patch.title = strArg(args.title, "title", { required: true, max: 120 });
+      if (hasBase64) {
+        const bytes = decodeDesignBase64(args.base64);
+        const upload = await bucket(db, DESIGN_BUCKET).upload(current.file_path, bytes, {
+          contentType: "application/octet-stream",
+          upsert: true,
+        });
+        if (upload.error) throw new Error(`Não foi possível guardar o arquivo: ${upload.error.message}`);
+        patch.size_bytes = bytes.byteLength;
+      }
+      const design = await rows(
+        db.from("design_files").update(patch).eq("id", id).eq("user_id", userId).select(DESIGN_COLUMNS).maybeSingle(),
+      );
+      return { design };
+    },
+  },
 ];
+
+/** Bytes de um modelo do figCraft, gerados pelo próprio engine (figcraftTemplates.generated.ts). */
+function templateBytes(template: unknown): Uint8Array {
+  if (!isFigcraftTemplate(template)) throw new ToolInputError("Modelo desconhecido");
+  const b64 = FIGCRAFT_TEMPLATE_BYTES_B64[template];
+  if (!b64) throw new Error("Modelo indisponível agora");
+  return decodeBase64(b64);
+}
+
+function decodeBase64(clean: string): Uint8Array {
+  const bin = atob(clean);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+/** Decodifica base64 de um .figcraft enviado pelo cliente, com os mesmos limites do bucket. */
+function decodeDesignBase64(value: unknown): Uint8Array {
+  if (typeof value !== "string") throw new ToolInputError("base64 deve ser texto");
+  if (value.length > DESIGN_BASE64_MAX_CHARS) throw new ToolInputError("arquivo grande demais para o MCP (até ~4 MB)");
+  const problem = checkDesignBase64(value);
+  if (problem) throw new ToolInputError(problem);
+  return decodeBase64(value.replace(/\s+/g, ""));
+}
 
 /** Ferramentas que a chave pode usar. */
 export function toolsForScopes(scopes: readonly Scope[]): ToolDef[] {

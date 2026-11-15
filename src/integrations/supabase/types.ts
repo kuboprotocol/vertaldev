@@ -53,6 +53,39 @@ export type Database = {
         }
         Relationships: []
       }
+      design_files: {
+        Row: {
+          created_at: string
+          engine: "figcraft"
+          file_path: string
+          id: string
+          size_bytes: number
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          engine?: "figcraft"
+          file_path: string
+          id?: string
+          size_bytes?: number
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          engine?: "figcraft"
+          file_path?: string
+          id?: string
+          size_bytes?: number
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       creative_conversations: {
         Row: {
           archived: boolean | null

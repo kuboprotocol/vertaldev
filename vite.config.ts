@@ -75,6 +75,8 @@ export default defineConfig(({ command, mode }) => {
             /\/[^/]+\.[a-z0-9]+$/i,
             new RegExp(`^/(${LOCALE_CODES.join('|')})(/|$)`),
             /^\/photocraft(\/|$)/,
+            // figCraft: mesmo motivo do photocraft (editor WebAssembly em public/figcraft).
+            /^\/figcraft(\/|$)/,
           ],
           runtimeCaching: [
             {

@@ -87,7 +87,8 @@ const titleOf = (text: string) => {
 };
 
 export function useVertalChat(options: {
-  onOpenPanel: (panel: PanelKey) => void;
+  /** `extra` leva o que o painel precisa abrir (o design do figCraft). */
+  onOpenPanel: (panel: PanelKey, extra?: { designId?: string }) => void;
   onArtifact: (artifact: Artifact) => void;
   onChatOnly: (chatOnly: boolean) => void;
 }) {
@@ -279,7 +280,7 @@ export function useVertalChat(options: {
             steps: (m.steps ?? []).map((s, i, all) => (i === all.length - 1 ? { ...s, state: outcome.error ? 'error' : 'done' } : s)),
             extras: { artifacts: [...made], panels: [...panels], errors: [...errors] },
           }));
-          if (outcome.panel) optionsRef.current.onOpenPanel(outcome.panel);
+          if (outcome.panel) optionsRef.current.onOpenPanel(outcome.panel, outcome.figcraft);
         }
         if (!followUp) break;
       }
