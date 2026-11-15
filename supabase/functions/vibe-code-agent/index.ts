@@ -15,6 +15,12 @@
 //
 // Vibe Reviewer (body.review): /review, /improve, /describe, /ask, fila de
 // erros e "Ajustar" — estrutura portada do PR-Agent (MIT), ver ./review.ts.
+//
+// Plano (body.plan): grafo de tarefas (conceito à la Task Master, código
+// próprio) + executor estilo Plandex (MIT) com mudanças staged, revisão do
+// diff pelo Vibe Reviewer e aplicação pelo caminho de "apply" abaixo. Uma
+// trava de escritor por conversa impede que executor, fila de correções e
+// aplicações manuais gravem ao mesmo tempo. Ver ./plan.ts.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { classifyComplexity } from "../_shared/deepseekRouter.ts";
 import { inferTaskKind, providersFromProfiles, runGateway, type Provider } from "../_shared/aiGateway.ts";
@@ -56,8 +62,28 @@ import {
   formatAuditSummary,
   resolveDesignConfig,
 } from "../_shared/designIntelligence.ts";
-import { type DevContext, formatDevContext } from "../_shared/vibeReviewEngine.ts";
+import { type DevContext, formatDevContext, hashText } from "../_shared/vibeReviewEngine.ts";
 import { parseReviewRequest, runReviewCommand } from "./review.ts";
+import { formatTaskGraphForPrompt, TaskGraphError } from "../_shared/vibeTaskGraph.ts";
+import {
+  compactAgentState,
+  lockBusyMessage,
+  type ModelTier,
+  normalizeAgentState,
+  parseLockOwner,
+  readKnobs,
+  type WriterKind,
+} from "../_shared/vibePlandexEngine.ts";
+import { type PlanActionName, PlanError, parsePlanRequest, READ_ONLY_PLAN_ACTIONS, runPlanAction } from "./plan.ts";
+
+/** Erro com mensagem já pronta para o Dev (pt-BR). */
+class UserFacingError extends Error {}
+
+const WRITER_FOR_ACTION: Partial<Record<PlanActionName, WriterKind>> = {
+  debug: "debug",
+  rewind: "rewind",
+  stage_edit: "fix_queue",
+};
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
@@ -423,7 +449,12 @@ Deno.serve(async (req) => {
     conversationId?: string;
     prompt?: string;
     mode?: "preview" | "apply";
-    apply?: Array<{ path: string; content: string }>;
+    /** baseHash: hash do arquivo quando a correção foi calculada (recusa se mudou por baixo). */
+    apply?: Array<{ path: string; content: string; baseHash?: string }>;
+    /** Quem está gravando (trava de escritor por conversa): fix_queue | manual. */
+    lockKind?: string;
+    /** Ação do plano/executor (grafo de tarefas + mudanças staged). */
+    plan?: unknown;
     revertSha?: string;
     revertCheckpointId?: string;
     /** false desliga o Vertal Design Intelligence só neste pedido. */
@@ -467,6 +498,8 @@ Deno.serve(async (req) => {
             ...full,
             // A cópia dos arquivos da fila serve só ao stream ao vivo; não vai para o histórico.
             ...(review && typeof review === "object" && review.files ? { review: { ...review, files: undefined } } : {}),
+            // O estado do plano vive em vibe_conversations.agent_state; não duplica no histórico.
+            ...(full.planState ? { planState: undefined } : {}),
             ...(typeof full.proposedContent === "string"
               ? { proposedContent: (full.proposedContent as string).slice(0, MAX_STEP_CONTENT) }
               : {}),
@@ -522,6 +555,132 @@ Deno.serve(async (req) => {
         return data as { id: string; title: string; summary: string | null; message_count: number; project_id: string | null };
       };
 
+      const knobs = readKnobs((k) => Deno.env.get(k));
+      let releaseLock: () => Promise<void> = async () => {};
+      /** false = não grava esta troca na conversa (ex.: só carregar o estado do plano). */
+      let persist = true;
+
+      /**
+       * Trava de escritor único por conversa (vibe_conversations.writer_lock_*):
+       * executor, fila de correções, aplicações manuais, auto-debug e rewind
+       * nunca gravam ao mesmo tempo. Sem a migração, segue sem trava no servidor
+       * (o chat ainda serializa as escritas do lado do cliente).
+       */
+      const acquireWriterLock = async (convId: string | null, kind: WriterKind) => {
+        if (!convId) return;
+        const owner = `${kind}:${crypto.randomUUID()}`;
+        const nowIso = new Date().toISOString();
+        const until = new Date(Date.now() + knobs.lockTtlSeconds * 1000).toISOString();
+        const { data, error } = await admin
+          .from("vibe_conversations")
+          .update({ writer_lock_owner: owner, writer_lock_until: until })
+          .eq("id", convId)
+          .eq("user_id", userId)
+          .or(`writer_lock_until.is.null,writer_lock_until.lt."${nowIso}"`)
+          .select("id");
+        if (error) {
+          console.warn("[vibe-code-agent] writer lock unavailable:", error.message);
+          return;
+        }
+        if (!data?.length) {
+          const { data: row } = await admin.from("vibe_conversations").select("writer_lock_owner").eq("id", convId).eq("user_id", userId).maybeSingle();
+          if (!row) return;
+          const held = parseLockOwner(row.writer_lock_owner as string | null);
+          throw new UserFacingError(lockBusyMessage({ kind: held?.kind ?? "executor" }));
+        }
+        releaseLock = async () => {
+          await admin
+            .from("vibe_conversations")
+            .update({ writer_lock_owner: null, writer_lock_until: null })
+            .eq("id", convId)
+            .eq("writer_lock_owner", owner);
+        };
+      };
+
+      /** Resumo do plano da conversa, para o agente e o revisor saberem o que está em andamento. */
+      const loadPlanSummary = async (convId: string | null) => {
+        if (!convId) return "";
+        const { data, error } = await admin.from("vibe_conversations").select("agent_state").eq("id", convId).maybeSingle();
+        if (error || !data?.agent_state) return "";
+        const st = normalizeAgentState(data.agent_state, knobs);
+        const current = st.graph?.tasks.find((t) => t.status === "in-progress")?.id;
+        const text = formatTaskGraphForPrompt(st.graph, current, 1500);
+        return text ? `\n\n${text}` : "";
+      };
+
+      /**
+       * O caminho de "apply": checagem estática, conferência de hash (o arquivo
+       * não pode ter mudado desde que a correção foi calculada), créditos,
+       * commit e checkpoint. Usado pelo "Aplicar" do chat, pela fila de
+       * correções e pelo executor do plano.
+       */
+      const applyFiles = async (store: FileStore, files: Array<{ path: string; content: string; baseHash?: string }>, meta: { summary?: string; reason: string }) => {
+        for (const f of files) {
+          if (!isSafePath(f.path)) throw new Error(`arquivo_recusado:${f.path}: caminho não permitido`);
+          let problems = lintGeneratedFile(f.path, f.content).filter((p) => !p.startsWith("sintaxe"));
+          const needsCurrent = problems.length > 0 || typeof f.baseHash === "string";
+          const current = needsCurrent ? await store.read(f.path).catch(() => ({ content: "" })) : { content: "" };
+          if (typeof f.baseHash === "string") {
+            const currentHash = current.content === "" ? "" : hashText(current.content);
+            if (currentHash !== f.baseHash) {
+              throw new UserFacingError(`${f.path} mudou depois que esta correção foi calculada (outra ação gravou nele). Rode a revisão de novo para recalcular em cima da versão atual.`);
+            }
+          }
+          if (problems.length && current.content) {
+            // Correção pontual (fila do revisor) num arquivo que JÁ tinha o problema
+            // (ex.: um TODO antigo): não barra pelo que não foi introduzido agora.
+            const before = new Set(lintGeneratedFile(f.path, current.content));
+            problems = problems.filter((p) => !before.has(p));
+          }
+          if (problems.length) throw new Error(`arquivo_recusado:${f.path}: ${problems.join("; ")}`);
+        }
+
+        const tier = classifyComplexity(files.map((f) => f.path).join(" "));
+        const cost = CREDIT_COST[tier];
+        await chargeCredits(cost, meta.reason, { tier, files: files.length });
+
+        const committedFiles: string[] = [];
+        const fileShas: Record<string, string> = {};
+        let lastSha: string | undefined;
+        for (const file of files) {
+          send({ kind: "commit", status: "running", title: `Commitando ${file.path}`, path: file.path });
+          const sha = await store.write(file.path, file.content, `vibe: ${meta.summary ? meta.summary.slice(0, 120) : `update ${file.path}`}`);
+          lastSha = sha ?? lastSha;
+          if (sha) fileShas[file.path] = sha;
+          committedFiles.push(file.path);
+          const repoUrl = store.mode === "github" && sha ? `https://github.com/${store.label}/blob/${sha}/${file.path}` : undefined;
+          send({
+            kind: "commit",
+            status: "success",
+            title: `Commitado ${file.path}`,
+            path: file.path,
+            commitSha: sha,
+            proposedContent: file.content,
+            repoUrl,
+          });
+        }
+
+        let checkpointId: string | undefined;
+        if (lastSha) {
+          const { data: checkpoint } = await admin
+            .from("vibe_checkpoints")
+            .insert({
+              user_id: userId,
+              project_repo: store.label,
+              commit_sha: lastSha,
+              summary: meta.summary ?? `Aplicado: ${committedFiles.join(", ")}`,
+              files_changed: committedFiles,
+              credits_spent: cost,
+              model_used: tier,
+            })
+            .select("id")
+            .single();
+          checkpointId = checkpoint?.id as string | undefined;
+          send({ kind: "checkpoint", status: "success", title: "Checkpoint salvo", checkpointId, commitSha: lastSha });
+        }
+        return { checkpointId, commitSha: lastSha, fileShas, files: committedFiles, cost };
+      };
+
       try {
         if (typeof body.projectId === "string" && UUID_RE.test(body.projectId)) {
           const { data: proj } = await userClient.from("projects").select("id").eq("id", body.projectId).maybeSingle();
@@ -534,6 +693,7 @@ Deno.serve(async (req) => {
         if (body.revertCheckpointId || body.revertSha) {
           const conv = await resolveConversation(false);
           conversationId = conv?.id ?? null;
+          await acquireWriterLock(conversationId, "rewind");
           const store = makeStore(admin, userId, projectId, conversationId);
 
           let sha = body.revertSha;
@@ -579,71 +739,148 @@ Deno.serve(async (req) => {
         if (body.apply?.length) {
           const conv = await resolveConversation(false);
           conversationId = conv?.id ?? null;
+          await acquireWriterLock(conversationId, body.lockKind === "fix_queue" ? "fix_queue" : "manual");
           const store = makeStore(admin, userId, projectId, conversationId);
 
-          for (const f of body.apply) {
-            let problems = lintGeneratedFile(f.path, f.content).filter((p) => !p.startsWith("sintaxe"));
-            if (problems.length && isSafePath(f.path)) {
-              // Correção pontual (fila do revisor) num arquivo que JÁ tinha o problema
-              // (ex.: um TODO antigo): não barra pelo que não foi introduzido agora.
-              const current = await store.read(f.path).catch(() => ({ content: "" }));
-              if (current.content) {
-                const before = new Set(lintGeneratedFile(f.path, current.content));
-                problems = problems.filter((p) => !before.has(p));
-              }
-            }
-            if (problems.length) throw new Error(`arquivo_recusado:${f.path}: ${problems.join("; ")}`);
-          }
-
-          const tier = classifyComplexity(body.apply.map((f) => f.path).join(" "));
-          const cost = CREDIT_COST[tier];
-          await chargeCredits(cost, "vibe_code_agent:apply", { tier, files: body.apply.length });
-
-          const committedFiles: string[] = [];
-          let lastSha: string | undefined;
-          for (const file of body.apply) {
-            send({ kind: "commit", status: "running", title: `Commitando ${file.path}`, path: file.path });
-            const sha = await store.write(file.path, file.content, `vibe: update ${file.path}`);
-            lastSha = sha ?? lastSha;
-            committedFiles.push(file.path);
-            const repoUrl = store.mode === "github" && sha ? `https://github.com/${store.label}/blob/${sha}/${file.path}` : undefined;
-            send({
-              kind: "commit",
-              status: "success",
-              title: `Commitado ${file.path}`,
-              path: file.path,
-              commitSha: sha,
-              proposedContent: file.content,
-              repoUrl,
-            });
-          }
-
-          if (lastSha) {
-            const { data: checkpoint } = await admin
-              .from("vibe_checkpoints")
-              .insert({
-                user_id: userId,
-                project_repo: store.label,
-                commit_sha: lastSha,
-                summary: `Aplicado: ${committedFiles.join(", ")}`,
-                files_changed: committedFiles,
-                credits_spent: cost,
-                model_used: tier,
-              })
-              .select("id")
-              .single();
-            send({ kind: "checkpoint", status: "success", title: "Checkpoint salvo", checkpointId: checkpoint?.id, commitSha: lastSha });
-          }
+          const result = await applyFiles(store, body.apply, { reason: "vibe_code_agent:apply" });
           replyText = composeAgentReply({
             notes: [],
             questions: [],
-            files: committedFiles.map((path) => ({ path })),
+            files: result.files.map((path) => ({ path })),
             mode: "apply",
             rejected: [],
             pendingRequirements: [],
           });
           send({ kind: "reply", status: "success", title: "Resposta do agente", detail: replyText });
           send({ kind: "done", status: "success", title: "Alterações aplicadas" });
+          return;
+        }
+
+        // ------------------------------------------------------------------
+        // Plano: grafo de tarefas ─► executor (staged) ─► revisão do diff ─►
+        // aprovação ─► apply + checkpoint ─► próxima tarefa. Ver ./plan.ts.
+        // ------------------------------------------------------------------
+        if (body.plan !== undefined) {
+          const planReq = parsePlanRequest(body.plan);
+          if (!planReq) throw new Error("plan_invalid_action");
+          const label = (body.prompt ?? "").trim().slice(0, MAX_PROMPT_CHARS) || `/plano ${planReq.action}`;
+          persist = planReq.action !== "state";
+          userPrompt = label;
+          const conv = await resolveConversation(planReq.action === "create", planReq.prompt ?? label);
+          conversationId = conv?.id ?? null;
+          if (!conversationId) throw new UserFacingError("Não consegui abrir uma conversa para guardar o plano. Abra ou crie uma conversa e tente de novo.");
+
+          const { data: stateRow, error: stateErr } = await admin
+            .from("vibe_conversations")
+            .select("agent_state")
+            .eq("id", conversationId)
+            .eq("user_id", userId)
+            .maybeSingle();
+          if (stateErr) {
+            throw new UserFacingError("O plano precisa da migração 20261114030000_vibe_agent_state (colunas agent_state e writer_lock_*) aplicada no Supabase.");
+          }
+          if (!READ_ONLY_PLAN_ACTIONS.has(planReq.action)) {
+            await acquireWriterLock(conversationId, WRITER_FOR_ACTION[planReq.action] ?? "executor");
+          }
+          const store = makeStore(admin, userId, projectId, conversationId);
+          const memories = planReq.action === "create" || planReq.action === "next" || planReq.action === "debug" || planReq.action === "expand"
+            ? await loadMemories(admin, userId, projectId).catch(() => [])
+            : [];
+
+          // Roteador de modelos por tier, resolvido uma vez por pedido.
+          const routes = new Map<ModelTier, ReturnType<typeof routeModels>>();
+          const routeFor = (tier: ModelTier) => {
+            if (!routes.has(tier)) routes.set(tier, routeModels(admin, label, tier));
+            return routes.get(tier)!;
+          };
+
+          const result = await runPlanAction(planReq, {
+            knobs,
+            state: normalizeAgentState(stateRow?.agent_state, knobs),
+            list: () => store.list(),
+            read: (path) => store.read(path),
+            lint: lintGeneratedFile,
+            send,
+            shared: {
+              memories: formatMemoriesForPrompt(memories),
+              dev: formatDevContext(body.devContext),
+              conversationSummary: conv?.summary ?? null,
+            },
+            callModel: async (messages, { tier, maxTokens, label: step, role }) => {
+              const { routedProviders, chosen } = await routeFor(tier);
+              send({ kind: "thinking", status: "running", title: `${role === "reviewer" ? "Vibe Reviewer" : "Executor"}: ${step}` });
+              let llm;
+              try {
+                llm = await runGateway(
+                  {
+                    kind: "code",
+                    tier,
+                    ...(routedProviders?.length ? { providers: routedProviders } : { deepseekOnly: true }),
+                    json: true,
+                    maxTokens,
+                    temperature: 0.2,
+                    noCache: true,
+                    messages,
+                  },
+                  { cache: supabaseGatewayCache(admin) },
+                );
+              } catch (err) {
+                await recordGatewayFailure(admin, userId, projectId, "code", err).catch(() => {});
+                throw err;
+              }
+              await recordGatewayRun(admin, userId, projectId, llm).catch(() => null);
+              send({
+                kind: "thinking",
+                status: "success",
+                title: `${role === "reviewer" ? "Vibe Reviewer" : "Executor"}: ${step}`,
+                detail: `${chosen ? `${chosen.label} · ` : ""}${llm.provider} · ${llm.model} (${llm.tier}) · ~$${llm.costUsd.toFixed(4)}`,
+                tier: llm.tier,
+              });
+              return llm.content;
+            },
+            applyFiles: (files, meta) => applyFiles(store, files, { summary: meta.summary, reason: "vibe_code_agent:plan_apply" }),
+            revert: async (entry) => {
+              const shas = entry.fileShas && Object.keys(entry.fileShas).length
+                ? Object.values(entry.fileShas)
+                : entry.commitSha
+                  ? [entry.commitSha]
+                  : [];
+              if (!shas.length) throw new UserFacingError("Esta aplicação não tem commit registrado; não dá para desfazer pelo plano.");
+              const files: string[] = [];
+              for (const sha of [...shas].reverse()) {
+                send({ kind: "commit", status: "running", title: `Revertendo ${sha.replace(/^vault:/, "").slice(0, 7)}` });
+                for (const f of await store.revert(sha)) if (!files.includes(f)) files.push(f);
+              }
+              send({ kind: "commit", status: "success", title: `Revertido ${files.length} arquivo(s)`, detail: files.join(", ") });
+              if (entry.checkpointId) {
+                await admin.from("vibe_checkpoints").insert({
+                  user_id: userId,
+                  project_repo: store.label,
+                  commit_sha: entry.commitSha ?? shas[shas.length - 1],
+                  parent_sha: null,
+                  summary: "Revertido pelo plano (/voltar)",
+                  files_changed: files,
+                  credits_spent: 0,
+                  reverted_checkpoint_id: entry.checkpointId,
+                });
+              }
+              return files;
+            },
+            saveState: async (next) => {
+              const { error } = await admin
+                .from("vibe_conversations")
+                .update({ agent_state: compactAgentState(next) })
+                .eq("id", conversationId)
+                .eq("user_id", userId);
+              if (error) throw new Error(`plan_state_save_failed: ${error.message}`);
+            },
+            chargeCredits: async (amount, reason) => {
+              await chargeCredits(amount, reason, { action: planReq.action });
+            },
+          });
+          replyText = result.reply;
+          send({ kind: "reply", status: "success", title: "Resposta do agente", detail: replyText });
+          send({ kind: "done", status: "success", title: result.continueNext ? "Tarefa concluída — seguindo para a próxima" : "Plano atualizado" });
           return;
         }
 
@@ -692,7 +929,7 @@ Deno.serve(async (req) => {
             read: (path) => store.read(path),
             readPrevious,
             send,
-            context: formatMemoriesForPrompt(memories) + formatDevContext(body.devContext),
+            context: formatMemoriesForPrompt(memories) + formatDevContext(body.devContext) + (await loadPlanSummary(conversationId).catch(() => "")),
             scoreThreshold: Number.parseInt(Deno.env.get("VIBE_IMPROVE_SCORE_THRESHOLD") ?? "", 10) || undefined,
             callModel: async (messages, { maxTokens, label: step }) => {
               send({ kind: "thinking", status: "running", title: `Vibe Reviewer: ${step}` });
@@ -740,7 +977,9 @@ Deno.serve(async (req) => {
 
         const conv = await resolveConversation(true, prompt);
         conversationId = conv?.id ?? null;
+        if (mode === "apply") await acquireWriterLock(conversationId, "manual");
         const store = makeStore(admin, userId, projectId, conversationId);
+        const planSummary = await loadPlanSummary(conversationId).catch(() => "");
 
         // Memória: o que o usuário pediu para lembrar + tudo o que já foi lembrado.
         const explicit = await saveMemories(admin, userId, projectId, extractMemories(prompt, !!projectId)).catch(() => []);
@@ -792,6 +1031,7 @@ Deno.serve(async (req) => {
           formatMemoriesForPrompt(memories) +
           formatConnectorsForPrompt(connected) +
           formatDevContext(body.devContext) +
+          planSummary +
           (conv?.summary ? `\n\nResumo da conversa até aqui:\n${conv.summary}` : "");
 
         const tier = classifyComplexity(prompt);
@@ -1174,15 +1414,19 @@ Deno.serve(async (req) => {
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : "internal_error";
+        const friendly = err instanceof UserFacingError || err instanceof PlanError || err instanceof TaskGraphError;
         console.error("[vibe-code-agent]", message);
-        send({ kind: "error", status: "failed", title: "Agente parou", detail: message });
+        send({ kind: "error", status: "failed", title: friendly ? message : "Agente parou", detail: message });
         if (!replyText) {
-          replyText = "Não consegui terminar este pedido. Os detalhes estão em \"o que o agente fez\". Tente de novo ou reformule o pedido.";
+          replyText = friendly
+            ? message
+            : "Não consegui terminar este pedido. Os detalhes estão em \"o que o agente fez\". Tente de novo ou reformule o pedido.";
           send({ kind: "reply", status: "failed", title: "Resposta do agente", detail: replyText });
         }
       } finally {
+        await releaseLock().catch((e) => console.warn("[vibe-code-agent] lock release failed:", e instanceof Error ? e.message : e));
         // Persistência da conversa (não bloqueia o fim do stream em caso de falha).
-        if (conversationId) {
+        if (conversationId && persist) {
           try {
             const rows: any[] = [];
             const now = Date.now();

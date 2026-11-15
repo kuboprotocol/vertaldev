@@ -73,6 +73,13 @@ export interface ReviewPayload {
   describe?: DescribeResult;
   /** Quantos itens a validação ou a autorreflexão descartou. */
   dropped?: number;
+  /**
+   * Onde as correções se aplicam: no projeto (padrão) ou nas mudanças staged
+   * do executor do plano, que ainda não foram aplicadas.
+   */
+  target?: "project" | "staged";
+  /** Tarefa do plano cujas mudanças staged foram revisadas. */
+  taskId?: number;
 }
 
 export interface FixDecision {
@@ -480,6 +487,42 @@ export function formatFileForReview(path: string, content: string, previous?: st
       ? `## Arquivo: '${path}' (${marks.size} linha(s) nova(s)/alterada(s) marcadas com +)`
       : `## Arquivo: '${path}' (sem mudanças desde a versão anterior)`;
   return `${header}\n__new hunk__\n${out.join("\n")}${cut ? `\n... (${cut} linha(s) cortadas por tamanho)` : ""}`;
+}
+
+/**
+ * Só o diff (mais barato que o arquivo inteiro): linhas novas/alteradas com "+"
+ * e `contextLines` linhas em volta, com os números de linha reais, e as linhas
+ * removidas num bloco "__old hunk__". Arquivo novo (sem versão anterior) vai
+ * inteiro.
+ */
+export function formatDiffForReview(path: string, content: string, previous: string | null, contextLines = 5, maxChars = 12000): string {
+  if (previous == null) return formatFileForReview(path, content, null, maxChars);
+  const marks = changedLines(previous, content);
+  const removed = [...changedLines(content, previous)].sort((a, b) => a - b);
+  if (!marks.size && !removed.length) return `## Arquivo: '${path}' (sem mudanças)`;
+  const lines = content.split("\n");
+  const width = String(lines.length).length;
+  const keep = new Set<number>();
+  for (const i of marks) for (let k = Math.max(0, i - contextLines); k <= Math.min(lines.length - 1, i + contextLines); k++) keep.add(k);
+  const out: string[] = [];
+  let used = 0;
+  let last = -2;
+  let cut = false;
+  for (const i of [...keep].sort((a, b) => a - b)) {
+    if (last >= 0 && i > last + 1) out.push("...");
+    const row = `${String(i + 1).padStart(width, " ")} ${marks.has(i) ? "+" : " "} ${lines[i]}`;
+    if (used + row.length > maxChars) {
+      cut = true;
+      break;
+    }
+    used += row.length + 1;
+    out.push(row);
+    last = i;
+  }
+  const prevLines = previous.split("\n");
+  const old = removed.slice(0, 40).map((i) => `- ${prevLines[i]}`);
+  const header = `## Arquivo: '${path}' (só o diff: ${marks.size} linha(s) nova(s)/alterada(s) marcadas com +, ${removed.length} removida(s); números de linha reais)`;
+  return `${header}\n__new hunk__\n${out.join("\n")}${cut ? "\n... (cortado por tamanho)" : ""}${old.length ? `\n__old hunk__\n${old.join("\n")}${removed.length > old.length ? "\n..." : ""}` : ""}`;
 }
 
 /** Diff legível de um finding, para o chat ("- " linha antiga, "+ " linha nova). */

@@ -18,6 +18,8 @@ import {
   applyReflection,
   composeReviewReply,
   type CodeSuggestion,
+  changedLines,
+  formatDiffForReview,
   formatFileForReview,
   normalizeIssue,
   parseAdjustOutput,
@@ -78,6 +80,13 @@ export interface ReviewDeps {
   context: string;
   /** Nota mínima da autorreflexão (padrão 5). */
   scoreThreshold?: number;
+  /** Manda só o diff (linhas alteradas + vizinhas) em vez do arquivo inteiro. */
+  diffOnly?: boolean;
+  /**
+   * Economia: /improve pula a autorreflexão (uma chamada a menos) quando o diff
+   * da conversa tem até N linhas alteradas. 0/undefined = sempre reflete.
+   */
+  tinyDiffLines?: number;
 }
 
 const MAX_FILES = 8;
@@ -115,17 +124,22 @@ async function loadCode(deps: ReviewDeps, paths: string[]) {
   const files: Record<string, string> = {};
   const blocks: string[] = [];
   let used = 0;
+  /** Linhas alteradas em relação à versão anterior; -1 quando algum arquivo não tem versão anterior. */
+  let changed = 0;
   for (const path of paths.slice(0, MAX_FILES)) {
     if (used >= MAX_TOTAL_CHARS) break;
     const file = await deps.read(path).catch(() => ({ content: "", sha: undefined }));
     if (!file.content) continue;
     files[path] = file.content;
     const previous = await deps.readPrevious(path, file.content).catch(() => null);
-    const block = formatFileForReview(path, file.content, previous, Math.min(MAX_FILE_CHARS, MAX_TOTAL_CHARS - used));
+    if (previous == null) changed = -1;
+    else if (changed >= 0) changed += changedLines(previous, file.content).size;
+    const budget = Math.min(MAX_FILE_CHARS, MAX_TOTAL_CHARS - used);
+    const block = deps.diffOnly ? formatDiffForReview(path, file.content, previous, 5, budget) : formatFileForReview(path, file.content, previous, budget);
     used += block.length;
     blocks.push(block);
   }
-  return { files, code: blocks.join("\n\n") };
+  return { files, code: blocks.join("\n\n"), changed };
 }
 
 /** Uma chamada JSON com uma segunda chance quando o modelo sai do formato. */
@@ -228,7 +242,7 @@ export async function runReviewCommand(req: ReviewRequestBody, deps: ReviewDeps)
     title: `${verb[req.command]} ${targets.length} arquivo(s)`,
     detail: targets.join(", "),
   });
-  const { files, code } = await loadCode(deps, targets);
+  const { files, code, changed } = await loadCode(deps, targets);
   for (const path of Object.keys(files)) deps.send({ kind: "read_file", status: "success", title: `Lido ${path}`, path });
   const prompt = { code: code || "(nenhum arquivo legível)", context: deps.context, focus: req.focus };
 
@@ -254,7 +268,11 @@ export async function runReviewCommand(req: ReviewRequestBody, deps: ReviewDeps)
   if (req.command === "improve") {
     const suggestions = await askJson(deps, buildImproveMessages(prompt, 6), (raw) => parseCodeSuggestions(raw, 8), 5000, "improve");
     let feedback: ReflectionFeedback[] | null = null;
-    if (suggestions.length) {
+    const tiny = !!deps.tinyDiffLines && changed > 0 && changed <= deps.tinyDiffLines;
+    if (tiny && suggestions.length) {
+      deps.send({ kind: "review", status: "skipped", title: `Diff pequeno (${changed} linha(s)): autorrevisão pulada para economizar` });
+    }
+    if (suggestions.length && !tiny) {
       deps.send({ kind: "review", status: "success", title: `Autorrevisão: dando nota a ${suggestions.length} sugestão(ões)` });
       feedback = await askJson(deps, buildReflectMessages(prompt, suggestions as CodeSuggestion[]), parseReflection, 2500, "reflect")
         .catch((e) => {
@@ -269,7 +287,7 @@ export async function runReviewCommand(req: ReviewRequestBody, deps: ReviewDeps)
       kind: "review_findings",
       status: "success",
       title: findings.length ? `${findings.length} melhoria(s) aprovada(s) na autorrevisão` : "Nenhuma melhoria relevante",
-      detail: feedback ? `${reflected.dropped} descartada(s) por nota baixa` : "autorreflexão indisponível: notas padrão",
+      detail: feedback ? `${reflected.dropped} descartada(s) por nota baixa` : tiny ? "diff pequeno: sem autorreflexão" : "autorreflexão indisponível: notas padrão",
       review: payload,
     });
     return composeReviewReply(payload);

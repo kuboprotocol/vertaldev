@@ -4343,6 +4343,7 @@ export type Database = {
       }
       vibe_conversations: {
         Row: {
+          agent_state: Json
           archived: boolean
           created_at: string
           id: string
@@ -4353,8 +4354,11 @@ export type Database = {
           title: string
           updated_at: string
           user_id: string
+          writer_lock_owner: string | null
+          writer_lock_until: string | null
         }
         Insert: {
+          agent_state?: Json
           archived?: boolean
           created_at?: string
           id?: string
@@ -4365,8 +4369,11 @@ export type Database = {
           title?: string
           updated_at?: string
           user_id: string
+          writer_lock_owner?: string | null
+          writer_lock_until?: string | null
         }
         Update: {
+          agent_state?: Json
           archived?: boolean
           created_at?: string
           id?: string
@@ -4377,6 +4384,8 @@ export type Database = {
           title?: string
           updated_at?: string
           user_id?: string
+          writer_lock_owner?: string | null
+          writer_lock_until?: string | null
         }
         Relationships: [
           {
