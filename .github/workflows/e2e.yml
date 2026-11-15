@@ -260,7 +260,7 @@ jobs:
   redirect-cache-cross-browser:
     name: Redirect cache (${{ matrix.project }})
     timeout-minutes: 15
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     env:
       JOB_LABEL: redirect-cache-${{ matrix.browser }}
     strategy:
@@ -269,8 +269,12 @@ jobs:
         include:
           - project: firefox-redirect-cache
             browser: firefox
+            os: ubuntu-latest
+          # WebKit's Playwright build needs libicu74 (Ubuntu 24.04); the
+          # ubuntu-latest image no longer ships it -> pin the runner.
           - project: webkit-redirect-cache
             browser: webkit
+            os: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
