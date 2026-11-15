@@ -3,6 +3,7 @@ import { Play, Square, RefreshCw, Loader2, MonitorPlay } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { normalizePreviewMessage, previewErrorStore } from "@/lib/vibeReview/previewErrors";
 
 const E2B_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/vibe-e2b-preview`;
 const HEARTBEAT_MS = 60_000;
@@ -44,11 +45,24 @@ export function VibeLivePreview() {
   const [status, setStatus] = useState<"idle" | "starting" | "running" | "stopping">("idle");
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
     return () => {
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
     };
+  }, []);
+
+  // Erros que o app do preview reporta (postMessage do iframe) vão para a fila
+  // "Corrigir erros um a um" do chat. Só aceita mensagens do próprio iframe.
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      if (!iframeRef.current || e.source !== iframeRef.current.contentWindow) return;
+      const text = normalizePreviewMessage(e.data);
+      if (text) previewErrorStore.add(text, "preview");
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
   }, []);
 
   const start = async () => {
@@ -139,6 +153,7 @@ export function VibeLivePreview() {
               </div>
             )}
             <iframe
+              ref={iframeRef}
               src={previewUrl}
               title="Vibe Code Live Preview"
               className="h-full w-full border-0"

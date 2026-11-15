@@ -21,6 +21,7 @@ import { VibeConnectorPanel } from "./VibeConnectorPanel";
 import { VibeDomainsPanel } from "./VibeDomainsPanel";
 import { VibeCloudSessionPanel } from "./VibeCloudSessionPanel";
 import { VibeLivePreview } from "./VibeLivePreview";
+import { VibePreviewConsole } from "./VibePreviewConsole";
 import { VibeCheckpointTimeline } from "./VibeCheckpointTimeline";
 import { VibeAgentActivityPanel } from "./VibeAgentActivityPanel";
 import { VibePrimeMemoryPanel } from "./VibePrimeMemoryPanel";
@@ -188,8 +189,8 @@ function DesktopView({
             <TabsContent value="preview" className="mt-4 flex-1 rounded-2xl border border-border/40 bg-card/20 backdrop-blur-sm relative overflow-hidden">
               <VibeLivePreview />
             </TabsContent>
-            <TabsContent value="console" className="mt-4 flex-1 rounded-2xl border border-dashed border-border/40 flex items-center justify-center">
-              <p className="text-xs text-muted-foreground/60">Console do sandbox em breve.</p>
+            <TabsContent value="console" className="mt-4 min-h-0 flex-1 overflow-hidden rounded-2xl border border-border/40 bg-card/20">
+              <VibePreviewConsole />
             </TabsContent>
             <TabsContent value="network" className="mt-4 flex-1 rounded-2xl border border-dashed border-border/40 flex items-center justify-center">
               <p className="text-xs text-muted-foreground/60">Aba de rede em breve.</p>

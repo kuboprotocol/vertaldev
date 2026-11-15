@@ -12,6 +12,9 @@
 // DeepSeek-only (sem fallback), com roteador de complexidade e cobrança de
 // créditos em tempo real. O código vive no GitHub (quando configurado) E num
 // cofre versionado (vibe_project_files); sem GitHub o cofre é a fonte única.
+//
+// Vibe Reviewer (body.review): /review, /improve, /describe, /ask, fila de
+// erros e "Ajustar" — estrutura portada do PR-Agent (MIT), ver ./review.ts.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { classifyComplexity } from "../_shared/deepseekRouter.ts";
 import { inferTaskKind, providersFromProfiles, runGateway, type Provider } from "../_shared/aiGateway.ts";
@@ -53,6 +56,8 @@ import {
   formatAuditSummary,
   resolveDesignConfig,
 } from "../_shared/designIntelligence.ts";
+import { type DevContext, formatDevContext } from "../_shared/vibeReviewEngine.ts";
+import { parseReviewRequest, runReviewCommand } from "./review.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
@@ -355,6 +360,38 @@ function lessonsFromProblems(problems: string[]): string[] {
   return out;
 }
 
+/**
+ * Orquestrador de modelos: o mais adequado (custo x qualidade x saúde) para o pedido.
+ * VIBE_AGENT_MODEL_POLICY=deepseek_only volta ao comportamento antigo sem deploy.
+ */
+async function routeModels(admin: any, prompt: string, tier: "flash" | "pro") {
+  const policy = parsePolicy(Deno.env.get("VIBE_AGENT_MODEL_POLICY"));
+  let routedProviders: Provider[] | undefined;
+  let chosen: ModelProfile | null = null;
+  let chosenReason = "";
+  if (policy !== "deepseek_only") {
+    const catalog = applyOverrides(MODEL_CATALOG, Deno.env.get("VIBE_MODEL_OVERRIDES"));
+    const availableKeys = new Set(catalog.map((p) => p.keyEnv).filter((k) => !!Deno.env.get(k)));
+    const health = await loadModelHealth(admin).catch(() => ({}));
+    const routingKind = inferTaskKind(prompt);
+    const ranked = rankModels({
+      kind: routingKind === "chat" || routingKind === "marketing" || routingKind === "classify" ? "code" : routingKind,
+      tier,
+      policy,
+      availableKeys,
+      health,
+      needJson: true,
+      catalog,
+    });
+    if (ranked.length) {
+      chosen = ranked[0].profile;
+      chosenReason = ranked[0].reason;
+      routedProviders = providersFromProfiles(ranked.slice(0, 3).map((r) => r.profile), tier);
+    }
+  }
+  return { routedProviders, chosen, chosenReason };
+}
+
 // ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
@@ -393,6 +430,10 @@ Deno.serve(async (req) => {
     designIntelligence?: boolean;
     /** Força o perfil de design (web_app | saas_dashboard | mobile_app | landing_page). */
     designSurface?: string;
+    /** Comando do Vibe Reviewer (PR-Agent): review | improve | describe | ask | fix_errors | adjust. */
+    review?: unknown;
+    /** Contexto do Dev: erros recentes, arquivo aberto, decisões da fila de correções. */
+    devContext?: DevContext;
   };
   try {
     body = await req.json();
@@ -421,8 +462,11 @@ Deno.serve(async (req) => {
         const full: Record<string, unknown> = { id: `s${++seq}`, ...event };
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(full)}\n\n`));
         if (recorded.length < MAX_STORED_STEPS) {
+          const review = full.review as { files?: unknown } | undefined;
           recorded.push({
             ...full,
+            // A cópia dos arquivos da fila serve só ao stream ao vivo; não vai para o histórico.
+            ...(review && typeof review === "object" && review.files ? { review: { ...review, files: undefined } } : {}),
             ...(typeof full.proposedContent === "string"
               ? { proposedContent: (full.proposedContent as string).slice(0, MAX_STEP_CONTENT) }
               : {}),
@@ -538,7 +582,16 @@ Deno.serve(async (req) => {
           const store = makeStore(admin, userId, projectId, conversationId);
 
           for (const f of body.apply) {
-            const problems = lintGeneratedFile(f.path, f.content).filter((p) => !p.startsWith("sintaxe"));
+            let problems = lintGeneratedFile(f.path, f.content).filter((p) => !p.startsWith("sintaxe"));
+            if (problems.length && isSafePath(f.path)) {
+              // Correção pontual (fila do revisor) num arquivo que JÁ tinha o problema
+              // (ex.: um TODO antigo): não barra pelo que não foi introduzido agora.
+              const current = await store.read(f.path).catch(() => ({ content: "" }));
+              if (current.content) {
+                const before = new Set(lintGeneratedFile(f.path, current.content));
+                problems = problems.filter((p) => !before.has(p));
+              }
+            }
             if (problems.length) throw new Error(`arquivo_recusado:${f.path}: ${problems.join("; ")}`);
           }
 
@@ -591,6 +644,89 @@ Deno.serve(async (req) => {
           });
           send({ kind: "reply", status: "success", title: "Resposta do agente", detail: replyText });
           send({ kind: "done", status: "success", title: "Alterações aplicadas" });
+          return;
+        }
+
+        // ------------------------------------------------------------------
+        // Vibe Reviewer (PR-Agent): revisão, melhorias, descrição, perguntas,
+        // fila de erros e ajuste de uma correção. Não grava nada: as correções
+        // são aplicadas uma a uma pelo Dev pelo caminho "apply" acima.
+        // ------------------------------------------------------------------
+        if (body.review !== undefined) {
+          const reviewReq = parseReviewRequest(body.review);
+          if (!reviewReq) throw new Error("review_invalid_command");
+          const label = (body.prompt ?? "").trim().slice(0, MAX_PROMPT_CHARS) || `/${reviewReq.command}`;
+          userPrompt = label;
+          const conv = await resolveConversation(true, label);
+          conversationId = conv?.id ?? null;
+          const store = makeStore(admin, userId, projectId, conversationId);
+
+          const memories = await loadMemories(admin, userId, projectId).catch(() => []);
+          const reviewTier: "flash" | "pro" = Deno.env.get("VIBE_REVIEW_TIER") === "pro" ? "pro" : "flash";
+          const { routedProviders, chosen } = await routeModels(admin, label, reviewTier);
+          send({
+            kind: "estimate",
+            status: "success",
+            title: `Vibe Reviewer (PR-Agent) · ${chosen ? chosen.label : `modelo ${reviewTier}`}`,
+            tier: reviewTier,
+          });
+
+          const reviewCost = Math.max(0, Number.parseInt(Deno.env.get("VIBE_REVIEW_CREDIT_COST") ?? "0", 10) || 0);
+          if (reviewCost > 0 && reviewReq.command !== "adjust" && reviewReq.command !== "ask") {
+            await chargeCredits(reviewCost, `vibe_code_agent:${reviewReq.command}`, { tier: reviewTier });
+          }
+
+          const readPrevious = async (path: string, current: string) => {
+            const scoped = (q: any) => (projectId ? q.eq("project_id", projectId) : q.is("project_id", null));
+            const { data } = await scoped(
+              admin.from("vibe_project_files").select("content").eq("user_id", userId).eq("path", path)
+                .order("version", { ascending: false }).limit(2),
+            );
+            const rows = (data ?? []) as Array<{ content: string }>;
+            if (!rows.length) return null;
+            return rows[0].content === current ? rows[1]?.content ?? null : rows[0].content;
+          };
+
+          replyText = await runReviewCommand(reviewReq, {
+            list: () => store.list(),
+            read: (path) => store.read(path),
+            readPrevious,
+            send,
+            context: formatMemoriesForPrompt(memories) + formatDevContext(body.devContext),
+            scoreThreshold: Number.parseInt(Deno.env.get("VIBE_IMPROVE_SCORE_THRESHOLD") ?? "", 10) || undefined,
+            callModel: async (messages, { maxTokens, label: step }) => {
+              send({ kind: "thinking", status: "running", title: `Vibe Reviewer: ${step}` });
+              let llm;
+              try {
+                llm = await runGateway(
+                  {
+                    kind: "code",
+                    tier: reviewTier,
+                    ...(routedProviders?.length ? { providers: routedProviders } : { deepseekOnly: true }),
+                    json: true,
+                    maxTokens,
+                    temperature: 0.2,
+                    noCache: true,
+                    messages,
+                  },
+                  { cache: supabaseGatewayCache(admin) },
+                );
+              } catch (err) {
+                await recordGatewayFailure(admin, userId, projectId, "code", err).catch(() => {});
+                throw err;
+              }
+              await recordGatewayRun(admin, userId, projectId, llm).catch(() => null);
+              send({
+                kind: "thinking",
+                status: "success",
+                title: `Vibe Reviewer: ${step}`,
+                detail: `${llm.provider} · ${llm.model} (${llm.tier}) · ~$${llm.costUsd.toFixed(4)}`,
+              });
+              return llm.content;
+            },
+          });
+          send({ kind: "reply", status: "success", title: "Resposta do agente", detail: replyText });
+          send({ kind: "done", status: "success", title: "Revisão concluída" });
           return;
         }
 
@@ -655,36 +791,14 @@ Deno.serve(async (req) => {
           (design.enabled ? buildDesignPrompt(design.surface, { target: "react" }) : "") +
           formatMemoriesForPrompt(memories) +
           formatConnectorsForPrompt(connected) +
+          formatDevContext(body.devContext) +
           (conv?.summary ? `\n\nResumo da conversa até aqui:\n${conv.summary}` : "");
 
         const tier = classifyComplexity(prompt);
 
         // Orquestrador de modelos: o mais adequado (custo x qualidade x saúde) para este pedido.
         // VIBE_AGENT_MODEL_POLICY=deepseek_only volta ao comportamento antigo sem deploy.
-        const policy = parsePolicy(Deno.env.get("VIBE_AGENT_MODEL_POLICY"));
-        let routedProviders: Provider[] | undefined;
-        let chosen: ModelProfile | null = null;
-        let chosenReason = "";
-        if (policy !== "deepseek_only") {
-          const catalog = applyOverrides(MODEL_CATALOG, Deno.env.get("VIBE_MODEL_OVERRIDES"));
-          const availableKeys = new Set(catalog.map((p) => p.keyEnv).filter((k) => !!Deno.env.get(k)));
-          const health = await loadModelHealth(admin).catch(() => ({}));
-          const routingKind = inferTaskKind(prompt);
-          const ranked = rankModels({
-            kind: routingKind === "chat" || routingKind === "marketing" || routingKind === "classify" ? "code" : routingKind,
-            tier,
-            policy,
-            availableKeys,
-            health,
-            needJson: true,
-            catalog,
-          });
-          if (ranked.length) {
-            chosen = ranked[0].profile;
-            chosenReason = ranked[0].reason;
-            routedProviders = providersFromProfiles(ranked.slice(0, 3).map((r) => r.profile), tier);
-          }
-        }
+        const { routedProviders, chosen, chosenReason } = await routeModels(admin, prompt, tier);
         const estimatedCost = creditsFor(CREDIT_COST[tier], chosen);
         send({
           kind: "estimate",
