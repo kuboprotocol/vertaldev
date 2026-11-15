@@ -40,6 +40,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { GlowPromptFrame } from "@/components/vibe-code/GlowPromptFrame";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -1164,6 +1165,7 @@ export function VibeCodeAgentChat({
             )}
           </Button>
         </div>
+        <GlowPromptFrame active={running}>
         <div className="relative group">
           {slashHints.length > 0 && !running && (
             <div className="absolute bottom-full left-0 right-0 z-20 mb-2 overflow-hidden rounded-xl border border-border/40 bg-[#0b0b0b]/95 shadow-2xl backdrop-blur-xl" role="listbox" aria-label="Comandos">
@@ -1212,6 +1214,7 @@ export function VibeCodeAgentChat({
             {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </div>
+        </GlowPromptFrame>
         <p className="mt-2 text-center text-[9px] font-medium tracking-tight text-muted-foreground/40 uppercase">
           Cada conversa guarda memória e código · /plano /proxima /aplicar · /review /fix · commits reais via GitHub quando conectado
         </p>
