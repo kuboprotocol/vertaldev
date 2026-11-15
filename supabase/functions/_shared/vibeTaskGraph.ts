@@ -300,7 +300,8 @@ export function validateTaskGraph(graph: TaskGraph): { ok: boolean; issues: Grap
         }
       }
     }
-    for (const cycle of findCycles(t.subtasks)) {
+    // Autodependência (ciclo [x, x]) já foi reportada acima; não repete como ciclo.
+    for (const cycle of findCycles(t.subtasks).filter((c) => c.length > 2)) {
       const [from, to] = cycleBreakEdge(cycle);
       issues.push({
         type: "subtask_cycle",
@@ -310,7 +311,7 @@ export function validateTaskGraph(graph: TaskGraph): { ok: boolean; issues: Grap
       });
     }
   }
-  for (const cycle of findCycles(graph.tasks)) {
+  for (const cycle of findCycles(graph.tasks).filter((c) => c.length > 2)) {
     const [from, to] = cycleBreakEdge(cycle);
     issues.push({
       type: "cycle",

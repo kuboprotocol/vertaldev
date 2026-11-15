@@ -508,8 +508,9 @@ export function checkFreshness(change: StagedChange, currentContent: string): Fr
     return { state: "stale", reason: `${change.path} foi criado por outra ação depois que esta mudança foi gerada` };
   }
   const rebased = rebaseContent(change.baseContent, change.content, currentContent);
-  if (rebased.ok) return { state: "rebased", content: rebased.content };
-  return { state: "stale", reason: `${change.path} mudou depois que esta mudança foi gerada: ${rebased.reason}` };
+  // `in` estreita o tipo também com strict: false (tsconfig.app.json), onde `ok` não discrimina.
+  if ("reason" in rebased) return { state: "stale", reason: `${change.path} mudou depois que esta mudança foi gerada: ${rebased.reason}` };
+  return { state: "rebased", content: rebased.content };
 }
 
 // ---------------------------------------------------------------------------

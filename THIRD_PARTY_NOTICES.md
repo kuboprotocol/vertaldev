@@ -40,3 +40,47 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Plandex
+
+- Projeto: Plandex — https://github.com/plandex-ai/plandex
+- Versão de referência: commit `e2d772072efadbe41d2946d97d79be55532dbab5`
+- Licença: MIT
+- O que foi adaptado (reescrito em TypeScript, sem copiar o código Go):
+  - Níveis de autonomia (`app/shared/plan_config.go`), pacotes de modelos por papel
+    (`app/shared/ai_models_packs.go`), mudanças pendentes revisadas antes de aplicar, rewind e
+    auto-debug com limite de tentativas → `supabase/functions/_shared/vibePlandexEngine.ts`,
+    `supabase/functions/vibe-code-agent/plan.ts` e `src/lib/vibePlan/`
+
+```
+MIT License
+
+Copyright (c) 2025 PlandexAI Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## Grafo de tarefas (inspirado no Task Master — sem código de terceiros)
+
+O grafo de tarefas (`supabase/functions/_shared/vibeTaskGraph.ts`, prompts do planejador em
+`supabase/functions/_shared/vibePlanPrompts.ts`) é uma implementação própria (clean-room) inspirada no
+**conceito** do Task Master (https://github.com/eyaltoledano/claude-task-master): tarefas com prioridade,
+dependências, subtarefas e "próxima tarefa". Não contém código, prompts nem texto do Task Master. Nada
+dele foi copiado porque a licença do Task Master é MIT acrescida da Commons Clause, que proíbe vender o
+software ou um serviço cujo valor venha substancialmente dele.
