@@ -1,6 +1,10 @@
 // Shared types between the Vibe Code Agent UI and the `vibe-code-agent` edge function.
 import type { DetectedRequirement } from "@/config/connectorCatalog";
 import type { DevContext, ReviewCommand, ReviewFinding, ReviewPayload } from "@/lib/vibeReview/engine";
+import type { AutonomyLevel, ClientAgentState, ModelPack, TaskStatus } from "@/lib/vibePlan/engine";
+
+/** Estado do plano/executor como o navegador recebe (sem a cópia da base; diff pronto). */
+export type VibePlanState = ClientAgentState;
 
 export type VibeRequirement = DetectedRequirement;
 
@@ -24,6 +28,10 @@ export type VibeStepKind =
   | "design"
   /** Resultado do Vibe Reviewer (PR-Agent): alimenta a fila de correções do chat. */
   | "review_findings"
+  /** Estado do plano/executor (grafo de tarefas + mudanças staged) depois de uma ação. */
+  | "plan_state"
+  /** Mudanças staged atualizadas (sem gravar no projeto). */
+  | "staged"
   /** Resposta em texto do agente ao usuário (o balão do chat). */
   | "reply"
   | "error"
@@ -58,6 +66,10 @@ export interface VibeStep {
   requirements?: VibeRequirement[];
   /** Findings do Vibe Reviewer (kind "review_findings"). */
   review?: ReviewPayload;
+  /** Estado do plano (kind "plan_state" / "staged"). */
+  planState?: VibePlanState;
+  /** O cliente deve seguir sozinho para a próxima tarefa (autonomia semi/full). */
+  continueNext?: boolean;
   /** Model tier chosen by the DeepSeek router for this cycle. */
   tier?: VibeModelTier;
   estimatedCost?: number;
@@ -99,7 +111,7 @@ export interface VibeAgentRequest {
   projectId?: string;
   mode: VibeAgentMode;
   /** Apply an already-previewed set of file writes. */
-  apply?: Array<{ path: string; content: string }>;
+  apply?: Array<{ path: string; content: string; baseHash?: string }>;
   /** Revert a single commit produced by a previous step (legacy). */
   revertSha?: string;
   /** Revert to a persisted checkpoint (preferred — powers the timeline UI). */
@@ -119,8 +131,38 @@ export interface VibeAgentRequest {
     comment?: string;
     fileContent?: string;
   };
+  /** Ação do plano/executor (grafo de tarefas + mudanças staged). */
+  plan?: VibePlanRequest;
   /** Contexto do Dev: erros recentes, arquivo aberto, decisões da fila. */
   devContext?: DevContext;
+}
+
+export type VibePlanAction =
+  | "create"
+  | "next"
+  | "apply"
+  | "reject"
+  | "stage_edit"
+  | "debug"
+  | "status"
+  | "config"
+  | "expand"
+  | "rewind"
+  | "state"
+  | "validate";
+
+export interface VibePlanRequest {
+  action: VibePlanAction;
+  prompt?: string;
+  taskId?: number;
+  subtaskId?: number;
+  status?: TaskStatus;
+  paths?: string[];
+  path?: string;
+  content?: string;
+  errors?: string[];
+  autonomy?: AutonomyLevel;
+  modelPack?: ModelPack;
 }
 
 export interface VibeConnectorState {
