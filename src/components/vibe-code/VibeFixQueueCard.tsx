@@ -21,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { findingDiff, SEVERITY_LABEL, type Severity } from "@/lib/vibeReview/engine";
 import { currentFixItem, queueProgress, type FixQueueState } from "@/lib/vibeReview/fixQueue";
+import { surfaceInset } from "@/components/vibe-code/surface";
 
 const SEVERITY_STYLE: Record<Severity, string> = {
   critical: "border-rose-500/40 bg-rose-500/10 text-rose-300",
@@ -205,7 +206,7 @@ export function VibeFixQueueCard({
           )}
 
           {item.finding.existingCode !== undefined && (
-            <div className="overflow-x-auto rounded-lg border border-border/40 bg-black/60 py-1.5 font-mono text-[11px] leading-5" data-testid="vibe-fix-diff">
+            <div className={`${surfaceInset} py-1.5 font-mono text-[11px] leading-5`} data-testid="vibe-fix-diff">
               {findingDiff(item.finding).map((l, i) => (
                 <div
                   key={i}

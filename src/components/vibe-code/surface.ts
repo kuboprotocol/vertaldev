@@ -8,3 +8,7 @@ export const surfaceCard =
 
 export const surfaceCardConnected =
   "border-primary/30 bg-primary/[0.05] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]";
+
+/** Bloco de conteúdo (ex.: diff) com brilho interno suave e realce no hover. */
+export const surfaceInset =
+  "overflow-x-auto rounded-lg border border-border/40 bg-black/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-shadow duration-300 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_20px_-12px_rgba(201,148,26,0.45)]";
