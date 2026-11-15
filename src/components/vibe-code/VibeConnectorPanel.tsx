@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { VibeConnectorState } from "@/lib/vibeCodeAgentTypes";
 import { fetchPlanForKeys } from "@/hooks/useKuboSecrets";
 import { newSecretPath, SECRETS_PATH } from "@/lib/secretsVaultLinks";
+import { surfaceCard, surfaceCardConnected } from "@/components/vibe-code/surface";
 
 const ICONS = {
   github: Github,
@@ -190,7 +191,7 @@ export function VibeConnectorPanel({ projectId }: { projectId?: string }) {
           return (
             <div
               key={c.slug}
-              className="flex items-start gap-3 rounded-lg border border-border/50 bg-background/40 p-3"
+              className={`flex items-start gap-3 p-3 ${surfaceCard} ${c.connected ? surfaceCardConnected : ""}`}
             >
               <Icon className="h-4 w-4 mt-0.5 text-primary shrink-0" />
               <div className="min-w-0 flex-1">
