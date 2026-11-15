@@ -79,7 +79,7 @@ export type AgentAction =
   | { tool: "mcp_call"; server: string; method: "list_tools" | "call_tool"; name?: string; arguments?: Record<string, unknown> }
   | { tool: "set_layout"; mode: "chat_only" | "split" }
   | { tool: "voice_input"; language?: "pt-BR" | "en-US" | "es-ES" | "fr-FR"; provider?: "web_speech" | "whisper" }
-  | { tool: "schedule_alarm"; time: string; soundId?: string; label?: string; repeatDays?: number[] };
+  | { tool: "schedule_alarm"; time: string; soundId?: string; label?: string; repeatDays?: number[]; ringTimes?: 1 | 2 | 3 | 4 | 5 | 10 };
 
 /** Conexão que o próprio cliente adicionou (API ou servidor MCP). Só nome, endereço e NOME do segredo. */
 export interface UserConnection {

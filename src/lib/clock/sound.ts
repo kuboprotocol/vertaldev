@@ -162,23 +162,42 @@ export function preloadAlarmSound(sound: AlarmSound): void {
   else if (isBuiltinSound(sound)) void loadBuiltin(c, sound).catch(() => undefined);
 }
 
-/** Toca um áudio já decodificado; em repetição, recomeça depois de `gapMs` (0 = emenda direto). */
-function playBuffer(c: AudioContext, buffer: AudioBuffer, repeat: boolean, gapMs: number): void {
+/** Duração de cada "toque" do alarme, em segundos. Cada toque embutido ocupa exatamente este tempo. */
+export const CLIP_SECONDS = 15;
+
+/**
+ * Onde começa cada repetição de uma gravação dentro de uma unidade de `unitSec` segundos.
+ * Uma gravação que não cabe inteira no fim da unidade não entra (o galo não é cortado no meio
+ * do canto); uma gravação maior que a unidade é cortada na própria unidade.
+ */
+export function clipOffsets(durSec: number, unitSec: number, gapSec: number): number[] {
+  const offsets: number[] = [];
+  if (!(durSec > 0) || !(unitSec > 0)) return offsets;
+  for (let off = 0; off < unitSec - 0.01; off += durSec + gapSec) {
+    if (off > 0 && off + durSec > unitSec) break;
+    offsets.push(off);
+  }
+  return offsets;
+}
+
+/**
+ * Agenda `times` unidades de `unitSec` segundos, uma depois da outra, com o áudio decodificado.
+ * Toque embutido: cada unidade tem 15 s e a gravação repete dentro dela. Arquivo enviado:
+ * a unidade é a própria música (gapSec = 0).
+ */
+function playBuffer(c: AudioContext, buffer: AudioBuffer, times: number, unitSec: number, gapSec: number): void {
   out = c.createGain();
   out.connect(c.destination);
   const gain = out;
-  const once = () => {
-    const src = c.createBufferSource();
-    src.buffer = buffer;
-    src.loop = repeat && gapMs === 0;
-    src.connect(gain);
-    src.start(c.currentTime + 0.02);
-  };
-  once();
-  if (repeat && gapMs > 0) {
-    loop = setInterval(() => {
-      if (c.state === 'running') once();
-    }, Math.round(buffer.duration * 1000) + gapMs);
+  const start = c.currentTime + 0.02;
+  const offsets = clipOffsets(buffer.duration, unitSec, gapSec);
+  for (let n = 0; n < times; n++) {
+    for (const off of offsets) {
+      const src = c.createBufferSource();
+      src.buffer = buffer;
+      src.connect(gain);
+      src.start(start + n * unitSec + off, 0, Math.min(buffer.duration, unitSec - off));
+    }
   }
 }
 
@@ -186,7 +205,7 @@ function playBuffer(c: AudioContext, buffer: AudioBuffer, repeat: boolean, gapMs
  * Toca a gravação pelo Web Audio (o mesmo contexto liberado no primeiro toque, então
  * funciona quando o alarme dispara sozinho). Em repetição: toca, espera a pausa do toque e recomeça.
  */
-async function playBuiltin(sound: BuiltinSound, repeat: boolean, mine: number): Promise<boolean> {
+async function playBuiltin(sound: BuiltinSound, times: number, mine: number): Promise<boolean> {
   const c = audio();
   if (!c) return false;
   unlockAudio();
@@ -197,7 +216,7 @@ async function playBuiltin(sound: BuiltinSound, repeat: boolean, mine: number): 
     return mine !== turn;
   }
   if (mine !== turn) return true;
-  playBuffer(c, buffer, repeat, GAP_MS[sound]);
+  playBuffer(c, buffer, times, CLIP_SECONDS, GAP_MS[sound] / 1000);
   return true;
 }
 
@@ -206,13 +225,13 @@ async function playBuiltin(sound: BuiltinSound, repeat: boolean, mine: number): 
  * dispara sozinho, sem toque na tela); se o navegador não decodificar o formato, tenta o
  * player de mídia. Devolve false se não deu (arquivo apagado, formato não suportado, som bloqueado).
  */
-async function playFile(id: string, repeat: boolean, mine: number): Promise<boolean> {
+async function playFile(id: string, times: number, mine: number): Promise<boolean> {
   const c = audio();
   if (c) {
     unlockAudio();
     try {
       const buffer = await loadCustom(c, id);
-      if (mine === turn) playBuffer(c, buffer, repeat, 0);
+      if (mine === turn) playBuffer(c, buffer, times, buffer.duration, 0);
       return true;
     } catch {
       if (mine !== turn) return true;
@@ -223,7 +242,15 @@ async function playFile(id: string, repeat: boolean, mine: number): Promise<bool
   try {
     mediaUrl = URL.createObjectURL(blob);
     media = new Audio(mediaUrl);
-    media.loop = repeat;
+    // Plano B sem Web Audio: toca de novo a cada fim, até completar `times` vezes.
+    let left = times;
+    media.onended = () => {
+      left -= 1;
+      if (left > 0 && mine === turn && media) {
+        media.currentTime = 0;
+        void media.play().catch(() => undefined);
+      }
+    };
     await media.play();
     return true;
   } catch {
@@ -236,19 +263,19 @@ export function forgetCustomSound(id: string): void {
   buffers.delete(`custom:${id}`);
 }
 
-function play(sound: AlarmSound, repeat: boolean, maxMs: number): void {
+function play(sound: AlarmSound, times: number, maxMs: number, alarm: boolean): void {
   silence();
   const mine = turn;
   const custom = customSoundId(sound);
   // Se o arquivo não tocar (apagado, sem rede, formato), o alarme não fica mudo: cai no bipe.
-  const started = custom ? playFile(custom, repeat, mine) : playBuiltin(isBuiltinSound(sound) ? sound : 'classic', repeat, mine);
+  const started = custom ? playFile(custom, times, mine) : playBuiltin(isBuiltinSound(sound) ? sound : 'classic', times, mine);
   void started.then((ok) => {
     if (!ok && mine === turn) {
       if (media) {
         media.pause();
         media = null;
       }
-      playFallback(repeat, mine);
+      playFallback(alarm, mine);
     }
   });
   stopAt = setTimeout(() => {
@@ -262,16 +289,22 @@ export function stopAlarmSound(): void {
   silence();
 }
 
-/** Toca em repetição até `stopAlarmSound` (ou até `maxMs`). */
-export function startAlarmSound(sound: AlarmSound, maxMs = 60_000): void {
+/**
+ * Toca o alarme `times` vezes (1, 2, 3, 4, 5 ou 10; cada vez é um toque de 15 s para toque embutido,
+ * ou a música inteira para arquivo enviado). Depois disso fica em silêncio até `stopAlarmSound`.
+ */
+export function startAlarmSound(sound: AlarmSound, times = 1): void {
   alarmActive = true;
-  play(sound, true, maxMs);
+  const n = Math.max(1, Math.round(times));
+  // Limite de segurança: o áudio agendado termina sozinho; isto só impede um arquivo travado de tocar para sempre.
+  const cap = customSoundId(sound) ? n * 600_000 : n * CLIP_SECONDS * 1000 + 1000;
+  play(sound, n, cap, true);
 }
 
-/** Toca uma amostra, para o usuário ouvir o toque que escolheu (embutido: até 8 s; enviado: até 15 s). */
+/** Toca uma amostra (um toque de 15 s) para o usuário ouvir o que escolheu. */
 export function previewAlarmSound(sound: AlarmSound): void {
   if (alarmActive) return; // não cala um alarme que está tocando
-  play(sound, false, customSoundId(sound) ? 15_000 : 8000);
+  play(sound, 1, CLIP_SECONDS * 1000, false);
 }
 
 /** Para a amostra (ao fechar a folha, por exemplo). Não mexe em alarme tocando. */

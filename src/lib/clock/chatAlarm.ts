@@ -1,6 +1,6 @@
 // Alarme pedido pelo Vertal Chat: grava no mesmo relógio do painel "Vertal Clock",
 // então toca no horário certo, com o som da galeria ("Meus sons") quando houver.
-import { describeDays, parseClockTime, parseDays, type Alarm } from './alarms';
+import { describeDays, parseClockTime, parseDays, parseRingTimes, type Alarm } from './alarms';
 import { CLOCK_LIMITS, customSoundId, getClockState, isBuiltinSound, saveAlarm, soundRef } from './store';
 
 const normalize = (v: string): string =>
@@ -11,6 +11,8 @@ export interface ChatAlarmRequest {
   soundId?: string;
   label?: string;
   repeatDays?: unknown;
+  /** Quantas vezes o toque toca: 1, 2, 3, 4, 5 ou 10. */
+  ringTimes?: unknown;
 }
 
 export interface ChatAlarmResult {
@@ -58,7 +60,8 @@ export function scheduleChatAlarm(req: ChatAlarmRequest): ChatAlarmResult {
   const sound = resolveSound(req.soundId);
   const label = (req.label ?? '').trim();
   const days = parseDays(req.repeatDays);
-  const alarm = saveAlarm({ time, label: label || `Alarme às ${time}`, days, sound: sound.ref });
+  const repeat = parseRingTimes(req.ringTimes);
+  const alarm = saveAlarm({ time, label: label || `Alarme às ${time}`, days, sound: sound.ref, repeat });
   if (!alarm) return { ok: false, reason: `A lista de alarmes está cheia (máximo ${CLOCK_LIMITS.alarms}).` };
 
   return { ok: true, alarm, soundName: sound.name, soundNote: sound.note };

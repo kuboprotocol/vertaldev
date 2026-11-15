@@ -18,7 +18,19 @@ export interface Alarm {
   snoozeUntil?: number;
   /** Toque deste alarme (embutido ou "custom:<id>"). Sem ele, vale o toque padrão. */
   sound?: string;
+  /** Quantas vezes o toque é tocado (ver RING_TIMES). Sem ele, uma vez. */
+  repeat?: number;
   createdAt: number;
+}
+
+/** Vezes que o toque pode tocar, escolhidas na hora de criar o alarme. */
+export const RING_TIMES = [1, 2, 3, 4, 5, 10] as const;
+export const isRingTimes = (v: unknown): v is number => typeof v === 'number' && (RING_TIMES as readonly number[]).includes(v);
+
+/** Lê "5", "5x", 5 ou "10×". Valor inválido vira 1. */
+export function parseRingTimes(input: unknown): number {
+  const n = typeof input === 'number' ? input : typeof input === 'string' ? Number(input.trim().toLowerCase().replace(/[x×]$/, '')) : NaN;
+  return isRingTimes(n) ? n : 1;
 }
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;

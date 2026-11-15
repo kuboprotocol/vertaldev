@@ -5,7 +5,7 @@
 // trocados, para não apagar o que o usuário está digitando.
 import { STRINGS, type ClockStrings } from './strings';
 import { CLOCK_CSS } from './styles';
-import { dayNames, describeDays, describeWait, nextRing, parseClockTime, type Alarm, type ClockLang } from '@/lib/clock/alarms';
+import { dayNames, describeDays, describeWait, nextRing, parseClockTime, RING_TIMES, type Alarm, type ClockLang } from '@/lib/clock/alarms';
 import { CLOCK_PLACE_KEY } from '@/lib/clock/keys';
 import {
   CLOCK_LIMITS, addCity, formatDuration, formatStopwatch, getClockState, pauseTimer, removeAlarm, removeCity,
@@ -261,7 +261,7 @@ export class VertalClockElement extends HTMLElement {
       : `<div class="summary"><div class="k">${esc(next ? this.t.nextAlarm : this.t.alarmOff)}</div>` +
         (next ? `<div class="v"><span class="num">${this.alarmTime(next.alarm.time)}</span> · <span data-next-wait>${esc(describeWait(next.at - now, this.language))}</span></div>` : '') + `</div>`;
     const rows = [...alarms].sort((a, b) => a.time.localeCompare(b.time)).map((a) => {
-      const sub = [a.label, describeDays(a.days, this.language), a.tzLabel, a.sound ? this.soundName(a.sound) : ''].filter(Boolean).join(' · ');
+      const sub = [a.label, describeDays(a.days, this.language), a.tzLabel, a.sound ? this.soundName(a.sound) : '', a.repeat && a.repeat > 1 ? `${a.repeat}×` : ''].filter(Boolean).join(' · ');
       return `<li class="row click${a.enabled ? '' : ' off'}" data-act="edit-alarm" data-id="${esc(a.id)}">` +
         `<div class="grow"><div class="big num">${this.alarmTime(a.time)}</div><div class="sub">${esc(sub)}</div></div>` +
         `<button class="switch" role="switch" data-act="toggle-alarm" data-id="${esc(a.id)}" aria-checked="${a.enabled}" aria-label="${esc(this.t.alarm)} ${esc(a.time)}"></button></li>`;
@@ -467,6 +467,8 @@ export class VertalClockElement extends HTMLElement {
         `<option value="-1">${esc(this.t.deviceZone)}</option>${zones.map((z, i) =>
           `<option value="${i}" data-tz="${esc(z.tz)}" data-label="${esc(z.label)}" ${i === selected ? 'selected' : ''}>${esc(z.label)} (${esc(offsetLabel(z.tz, Date.now()))})</option>`).join('')}</select></div>` +
         `<div class="form-row"><label for="vc-alarm-sound">${esc(this.t.sound)}</label>${this.soundPickerHtml('alarm-sound', alarm?.sound ?? '', true)}</div>` +
+        `<div class="form-row"><label for="vc-alarm-repeat">${esc(this.t.ringTimes)}</label><select id="vc-alarm-repeat" class="field" data-field="alarm-repeat">${RING_TIMES.map((n) =>
+          `<option value="${n}"${n === (alarm?.repeat ?? 1) ? ' selected' : ''}>${n}×</option>`).join('')}</select></div>` + +
         (sheet.error ? `<div class="err" role="alert">${esc(sheet.error)}</div>` : '') + `</div>` +
         `<div class="sheet-foot">${alarm ? `<button class="pill danger" data-act="delete-alarm">${ICON.trash}${esc(this.t.delete)}</button>` : ''}<span class="spacer"></span>` +
         `<button class="pill" data-act="close-sheet">${esc(this.t.cancel)}</button><button class="pill primary" data-act="save-alarm">${esc(this.t.save)}</button></div>`;
@@ -667,6 +669,7 @@ export class VertalClockElement extends HTMLElement {
       {
         time, label, days: this.sheet.days, tz: option?.dataset.tz, tzLabel: option?.dataset.label, enabled: true,
         sound: get<HTMLSelectElement>('alarm-sound')?.value || undefined,
+        repeat: Number(get<HTMLSelectElement>('alarm-repeat')?.value) || 1,
       },
       this.sheet.id || undefined,
     );
