@@ -162,3 +162,24 @@ Enquanto as premissas não forem trocadas, os números acima são **estimativas*
 - Valor real do crédito em dólar e margem alvo (hoje 50%, piso 40%).
 - Provedor de LLM e de OCR, para trocar as taxas premissa pelas reais.
 - Confirmar que o canal de WhatsApp será conta **de negócio**, não pessoal.
+
+---
+
+## 9. Carteira de pagamentos (decisão de arquitetura, ainda não implementada)
+
+Visão do dono: uma carteira centralizada no estilo banco. Stripe cobre o lado global (contas em moeda estrangeira e cripto onde o Stripe permitir). Asaas cobre o Brasil, em real: Pix, boleto, cartão, envio e recebimento.
+
+**Ponto que decide a arquitetura: quem fica com o dinheiro.**
+
+| Opção | O que é | Consequência |
+|---|---|---|
+| A. Vertal recebe e guarda o dinheiro numa conta própria, e repassa | A Vertal vira custodiante | Exige autorização do Banco Central como instituição de pagamento. Não é só código. |
+| B. Cada usuário tem conta própria no Asaas (ou no Stripe), e a Vertal só orquestra | A Vertal não custodia o dinheiro | Mais simples e mais seguro. Depende de o Asaas oferecer subcontas via API para marketplace. Confirmar na documentação do Asaas. |
+
+**Recomendação:** começar pela opção B. Antes de escolher A, consultar advogado de pagamentos.
+
+**Regras que valem nas duas opções:**
+1. Enviar ou pagar só por pedido do dono, com confirmação mostrando valor e destinatário (ver `paymentPolicy.ts`).
+2. Chave de API nunca em texto de pasta; fica em Conexões (conta do usuário) ou em variável de ambiente da edge function (conta da plataforma).
+3. Cliente de canal nunca dispara pagamento.
+4. Cripto: depende do que o Stripe libera por país. Fora de escopo até validar.
