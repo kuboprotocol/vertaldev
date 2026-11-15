@@ -3,7 +3,7 @@
 // Fica no aparelho (localStorage), como o relógio de um celular. O painel, o
 // Vertal Chat e o widget incorporável leem e gravam aqui; quem estiver aberto
 // (inclusive em outra aba) é avisado na hora.
-import { isClockTime, parseDays, type Alarm } from './alarms';
+import { isClockTime, isRingTimes, parseDays, type Alarm } from './alarms';
 import { findCityByTz, isValidTimeZone } from './zones';
 import { CLOCK_CHANGE_EVENT, CLOCK_STORAGE_KEY } from './keys';
 
@@ -125,6 +125,7 @@ export function sanitizeAlarm(raw: unknown): Alarm | null {
     ...(tz ? { tz, tzLabel: text(a.tzLabel, 60) || findCityByTz(tz).city } : {}),
     ...(snooze ? { snoozeUntil: snooze } : {}),
     ...(isSound(migrateSound(a.sound)) ? { sound: migrateSound(a.sound) as AlarmSound } : {}),
+    ...(isRingTimes(a.repeat) ? { repeat: a.repeat } : {}),
     createdAt: finite(a.createdAt, 0, Number.MAX_SAFE_INTEGER, 0),
   };
 }
@@ -310,6 +311,8 @@ export interface AlarmInput {
   enabled?: boolean;
   /** Toque só deste alarme. Vazio = usa o toque padrão das preferências. */
   sound?: AlarmSound;
+  /** Quantas vezes tocar (1, 2, 3, 4, 5 ou 10). */
+  repeat?: number;
 }
 
 /** Cria (ou, com `id`, altera) um alarme. Devolve o alarme gravado, ou null se o horário for inválido ou a lista estiver cheia. */
@@ -326,6 +329,7 @@ export function saveAlarm(input: AlarmInput, id?: string): Alarm | null {
     tz: input.tz,
     tzLabel: input.tzLabel,
     sound: 'sound' in input ? input.sound : previous?.sound,
+    repeat: input.repeat ?? previous?.repeat,
     createdAt: previous?.createdAt ?? Date.now(),
   });
   if (!alarm) return null;

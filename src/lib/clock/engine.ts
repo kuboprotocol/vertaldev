@@ -21,6 +21,8 @@ export interface Ring {
   tzLabel?: string;
   /** Alarme com toque próprio. Sem ele, toca o padrão das preferências. */
   sound?: string;
+  /** Quantas vezes o toque toca (1, 2, 3, 4, 5 ou 10). Sem ele, uma vez. */
+  repeat?: number;
 }
 
 /** Atraso máximo para ainda tocar (aba dormindo, aparelho suspenso). Depois disso o alarme é pulado. */
@@ -32,7 +34,7 @@ export function dueRings(state: ClockState, since: number, now: number, deviceTz
   for (const a of state.alarms) {
     const at = a.snoozeUntil ?? (a.enabled ? nextRing(a, since, deviceTz) : null);
     if (at === null || at > now) continue;
-    rings.push({ kind: 'alarm', id: a.id, label: a.label, at, time: a.time, ...(a.tzLabel ? { tzLabel: a.tzLabel } : {}), ...(a.sound ? { sound: a.sound } : {}) });
+    rings.push({ kind: 'alarm', id: a.id, label: a.label, at, time: a.time, ...(a.tzLabel ? { tzLabel: a.tzLabel } : {}), ...(a.sound ? { sound: a.sound } : {}), ...(a.repeat && a.repeat !== 1 ? { repeat: a.repeat } : {}) });
   }
   for (const t of state.timers) {
     if (t.endsAt !== null && !t.done && t.endsAt <= now) rings.push({ kind: 'timer', id: t.id, label: t.label, at: t.endsAt });
@@ -93,7 +95,7 @@ function fire(ring: Ring, now: number): void {
 
   if (alreadyHandled || tooLate || ringing.some((r) => firedKey(r) === key)) return;
   ringing = [...ringing, ring];
-  startAlarmSound(ring.sound ?? getClockState().settings.sound);
+  startAlarmSound(ring.sound ?? getClockState().settings.sound, ring.repeat ?? 1);
   void notify(ring);
   try {
     window.dispatchEvent(new CustomEvent('vertal-clock:ring', { detail: ring }));

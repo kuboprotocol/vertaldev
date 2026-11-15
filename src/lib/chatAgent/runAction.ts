@@ -637,7 +637,7 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
         };
       }
       case 'schedule_alarm': {
-        const res = scheduleChatAlarm({ time: action.time, soundId: action.soundId, label: action.label, repeatDays: action.repeatDays });
+        const res = scheduleChatAlarm({ time: action.time, soundId: action.soundId, label: action.label, repeatDays: action.repeatDays, ringTimes: action.ringTimes });
         if (!res.ok || !res.alarm) return fail(action.tool, res.reason ?? 'Não consegui agendar o alarme.');
         const { alarm, soundNote } = res;
         const soundName = res.soundName ?? 'toque padrão';
