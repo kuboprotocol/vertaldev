@@ -76,7 +76,7 @@ export function VibeDomainsPanel() {
 
         <div className="space-y-3">
           {DOMAINS.map((domain) => (
-            <div key={domain.name} className="flex items-center justify-between rounded-lg border border-border/40 bg-background/40 p-3">
+            <div key={domain.name} className={`${surfaceCard} flex items-center justify-between p-3`}>
               <div className="flex items-center gap-3">
                 <div className={cn(
                   "flex h-8 w-8 items-center justify-center rounded-full",
@@ -114,3 +114,4 @@ function ChevronRight({ className }: { className?: string }) {
   return <ArrowRightLeft className={cn("rotate-[-90deg]", className)} />;
 }
 import { cn } from "@/lib/utils";
+import { surfaceCard } from "@/components/vibe-code/surface";

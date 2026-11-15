@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import type { VibeRequirement } from "@/lib/vibeCodeAgentTypes";
 import { saveSecretValue } from "@/hooks/useKuboSecrets";
 import { SECRETS_PATH } from "@/lib/secretsVaultLinks";
+import { surfaceCard } from "@/components/vibe-code/surface";
 
 function ExternalHint({ href, children, suggested }: { href: string; children: string; suggested?: boolean }) {
   return (
@@ -102,7 +103,7 @@ export function VibeRequirementsCard({ requirements }: { requirements: VibeRequi
         const connected = r.status === "connected" || allSaved;
         const suggested = r.linkSource === "agent";
         return (
-          <li key={r.slug} className="rounded-lg border border-border/50 bg-background/50 p-3">
+          <li key={r.slug} className={`${surfaceCard} p-3`}>
             <div className="flex items-start gap-2">
               {connected ? (
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
