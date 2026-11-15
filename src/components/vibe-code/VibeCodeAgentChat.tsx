@@ -28,6 +28,8 @@ import {
   Sparkles,
   Bug,
   Terminal,
+  ListChecks,
+  FileDiff,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Link } from "react-router-dom";
@@ -44,12 +46,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import type { VibeChatMessage, VibeStep, VibeStepKind } from "@/lib/vibeCodeAgentTypes";
+import type { VibeChatMessage, VibePlanRequest, VibePlanState, VibeStep, VibeStepKind } from "@/lib/vibeCodeAgentTypes";
 import type { VibeConversationsApi } from "@/hooks/useVibeConversations";
 import { VibeConversationList } from "./VibeConversationList";
 import { VibeRequirementsCard } from "./VibeRequirementsCard";
 import { VibeFixQueueCard } from "./VibeFixQueueCard";
-import { SEVERITY_LABEL, type DevContext, type ReviewCommand, type ReviewFinding, type ReviewPayload } from "@/lib/vibeReview/engine";
+import { VibePlanPanel } from "./VibePlanPanel";
+import { VibeStagedChanges } from "./VibeStagedChanges";
+import { hashText, SEVERITY_LABEL, type DevContext, type ReviewCommand, type ReviewFinding, type ReviewPayload } from "@/lib/vibeReview/engine";
 import {
   currentFixItem,
   emptyFixQueue,
@@ -59,8 +63,42 @@ import {
 } from "@/lib/vibeReview/fixQueue";
 import { matchSlashHints, parseSlashCommand, SLASH_COMMANDS } from "@/lib/vibeReview/slashCommands";
 import { errorsFromMessages, previewErrorStore, usePreviewErrors } from "@/lib/vibeReview/previewErrors";
+import { matchPlanSlashHints, parsePlanSlash, type ParsedPlanSlash } from "@/lib/vibePlan/planSlashCommands";
+import { runAllDecision } from "@/lib/vibePlan/runAll";
+import { createWriterLock, WriterBusyError } from "@/lib/vibePlan/writerLock";
+import type { WriterKind } from "@/lib/vibePlan/engine";
 
 const AGENT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/vibe-code-agent`;
+
+/** Passos que "Executar todas" dá antes de parar para o Dev conferir. */
+const RUN_ALL_MAX_STEPS = 20;
+
+/** Quem grava em cada ação do plano (a trava do navegador espelha a do servidor). */
+const PLAN_WRITER: Partial<Record<VibePlanRequest["action"], WriterKind>> = {
+  apply: "manual",
+  reject: "manual",
+  stage_edit: "fix_queue",
+  debug: "debug",
+  rewind: "rewind",
+};
+
+/** Hash da versão que a correção usou como base ("" = arquivo novo), igual ao do servidor. */
+const baseHashOf = (content: string | undefined) => (content ? hashText(content) : "");
+
+/** Lê as linhas "data: {...}" de um corpo SSE já completo. */
+function parseSseEvents(text: string): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+  for (const raw of text.split("\n")) {
+    const line = raw.replace(/\r$/, "");
+    if (!line.startsWith("data: ")) continue;
+    try {
+      out.push(JSON.parse(line.slice(6)));
+    } catch {
+      /* quadro parcial */
+    }
+  }
+  return out;
+}
 
 const STEP_ICON: Record<VibeStepKind, typeof Brain> = {
   thinking: Brain,
@@ -80,6 +118,8 @@ const STEP_ICON: Record<VibeStepKind, typeof Brain> = {
   question: HelpCircle,
   review: ShieldCheck,
   review_findings: ShieldCheck,
+  plan_state: ListChecks,
+  staged: FileDiff,
   design: Palette,
   reply: MessageSquare,
   error: AlertCircle,
@@ -179,14 +219,97 @@ export function VibeCodeAgentChat({
   const queueRef = useRef(queue);
   queueRef.current = queue;
   const previewErrors = usePreviewErrors();
-  const slashHints = useMemo(() => matchSlashHints(input), [input]);
+  const slashHints = useMemo(
+    () => [
+      ...matchPlanSlashHints(input).map((c) => ({ name: c.name, argHint: c.argHint, description: c.description })),
+      ...matchSlashHints(input),
+    ],
+    [input],
+  );
   /** Recebe os resultados "review_findings" do stream. */
   const reviewEventRef = useRef<(payload: ReviewPayload) => void>(() => {});
 
-  // Trocar de conversa fecha a fila da conversa anterior.
+  /** Alvo da fila atual: correções da revisão do diff staged vão para o staged, não para o projeto. */
+  const queueTargetRef = useRef<"project" | "staged">("project");
+  const startQueue = useCallback((payload: ReviewPayload) => {
+    queueTargetRef.current = payload.target === "staged" ? "staged" : "project";
+    dispatchQueue({ type: "start", payload });
+  }, []);
+
+  // Plano/executor: grafo de tarefas + mudanças staged desta conversa.
+  const [planState, setPlanStateRaw] = useState<VibePlanState | null>(null);
+  const planStateRef = useRef<VibePlanState | null>(null);
+  const setPlanState = useCallback((s: VibePlanState | null) => {
+    planStateRef.current = s;
+    setPlanStateRaw(s);
+  }, []);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [runningAll, setRunningAll] = useState(false);
+  const runAllCancelRef = useRef(false);
+  /** "Executar todas" parou esperando o Dev aplicar as mudanças staged; segue depois do Aplicar. */
+  const runAllResumeRef = useRef(false);
+  /** Um escritor por vez nesta conversa (executor, fila de correções, aplicar manual). */
+  const writerLock = useMemo(() => createWriterLock(), []);
+
+  /** Roda `fn` como único escritor; ocupado = aviso em pt-BR e nada é enviado. */
+  const withWriter = useCallback(
+    async <T,>(kind: WriterKind, fn: () => Promise<T>, opts?: { wait?: boolean }): Promise<T | undefined> => {
+      try {
+        return await writerLock.run(kind, fn, opts?.wait ? { wait: true, timeoutMs: 120_000 } : undefined);
+      } catch (e) {
+        if (e instanceof WriterBusyError) {
+          toast.error(e.message);
+          return undefined;
+        }
+        throw e;
+      }
+    },
+    [writerLock],
+  );
+
+  /** Conversa aberta pelo próprio stream (ex.: /plano numa conversa nova): o estado chega pelo stream. */
+  const streamOpenedRef = useRef<string | null>(null);
+
+  // Trocar de conversa fecha a fila da conversa anterior e recarrega o plano dela.
   useEffect(() => {
+    if (conversations.activeId && conversations.activeId === streamOpenedRef.current) return;
     dispatchQueue({ type: "close" });
-  }, [conversations.activeId]);
+    runAllCancelRef.current = true;
+    runAllResumeRef.current = false;
+    setPlanState(null);
+    const convId = conversations.activeId;
+    if (!convId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const token = data?.session?.access_token;
+        if (!token) return;
+        const resp = await fetch(AGENT_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({ projectId, conversationId: convId, plan: { action: "state" } satisfies VibePlanRequest }),
+        });
+        if (!resp.ok) return;
+        const events = parseSseEvents(await resp.text());
+        const last = [...events].reverse().find((e) => (e.kind === "plan_state" || e.kind === "staged") && e.planState);
+        if (!cancelled && last && activeIdRef.current === convId) {
+          const loaded = last.planState as VibePlanState;
+          setPlanState(loaded);
+          if (loaded.graph?.tasks.length) setPlanOpen(true);
+        }
+      } catch {
+        /* sem plano: o painel só aparece com /plano */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [conversations.activeId, projectId, setPlanState]);
 
   /** Arquivos que o agente tocou nesta conversa: o "PR" que o revisor olha primeiro. */
   const conversationFiles = useMemo(() => {
@@ -269,6 +392,7 @@ export function VibeCodeAgentChat({
       const decoder = new TextDecoder();
       let buffer = "";
       let failed = false;
+      let continueNext = false;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -282,11 +406,16 @@ export function VibeCodeAgentChat({
             const evt = JSON.parse(line.slice(6));
             if (evt.kind === "conversation" && typeof evt.conversationId === "string") {
               activeIdRef.current = evt.conversationId;
+              streamOpenedRef.current = evt.conversationId;
               setActiveId(evt.conversationId);
             }
             if (evt.kind === "error") failed = true;
             if (evt.kind === "review_findings" && evt.review && typeof evt.review === "object") {
               reviewEventRef.current(evt.review as ReviewPayload);
+            }
+            if ((evt.kind === "plan_state" || evt.kind === "staged") && evt.planState && typeof evt.planState === "object") {
+              setPlanState(evt.planState as VibePlanState);
+              if (evt.continueNext === true) continueNext = true;
             }
             pushStep(assistantId, {
               id: crypto.randomUUID(),
@@ -298,9 +427,9 @@ export function VibeCodeAgentChat({
           }
         }
       }
-      return { ok: !failed };
+      return { ok: !failed, continueNext };
     },
-    [projectId, pushStep, setActiveId],
+    [projectId, pushStep, setActiveId, setPlanState],
   );
 
   /** Roda um comando do Vibe Reviewer e mostra o pedido do Dev como mensagem. */
@@ -341,10 +470,10 @@ export function VibeCodeAgentChat({
   const startReview = useCallback(
     (command: "review" | "improve" | "describe", focus = "") => {
       const name = SLASH_COMMANDS.find((c) => c.command === command)?.name ?? `/${command}`;
-      reviewEventRef.current = (payload) => dispatchQueue({ type: "start", payload });
+      reviewEventRef.current = startQueue;
       return runReview(command, focus ? `${name} ${focus}` : name, { focus: focus || undefined });
     },
-    [runReview],
+    [runReview, startQueue],
   );
 
   const fixErrors = useCallback(
@@ -356,11 +485,11 @@ export function VibeCodeAgentChat({
         return;
       }
       if (pasted) previewErrorStore.add(pasted, "manual");
-      reviewEventRef.current = (payload) => dispatchQueue({ type: "start", payload });
+      reviewEventRef.current = startQueue;
       const label = pasted ? `/fix ${pasted}` : `/fix — corrigir ${errors.length} erro(s) um a um`;
       return runReview("fix_errors", label, { errors });
     },
-    [knownErrors, runReview],
+    [knownErrors, runReview, startQueue],
   );
 
   const askAboutCurrent = useCallback(
@@ -391,17 +520,29 @@ export function VibeCodeAgentChat({
       { id: crypto.randomUUID(), role: "user", content: `Aplicar ${position}/${total}: ${item.finding.title} (${item.finding.path})`, createdAt: Date.now() },
       { id: assistantId, role: "assistant", content: "", steps: [], createdAt: Date.now() },
     ]);
+    const toStaged = queueTargetRef.current === "staged";
     try {
-      const res = await runStream({ apply: [{ path: prepared.path, content: prepared.content }] }, assistantId);
-      if (res?.ok) dispatchQueue({ type: "apply_success", content: prepared.content });
-      else dispatchQueue({ type: "apply_failed", error: "O commit falhou. Veja o que o agente fez acima e tente de novo, ajuste ou pule." });
+      // Correção da revisão do diff staged: edita a mudança staged (o projeto fica intacto).
+      // Correção no projeto: vai com o hash da versão que o revisor leu (recusa se mudou por baixo).
+      const baseHash = baseHashOf(queueRef.current.files[prepared.path]);
+      const res = await withWriter("fix_queue", () =>
+        runStream(
+          toStaged
+            ? { prompt: `Correção staged: ${prepared.path}`, plan: { action: "stage_edit", path: prepared.path, content: prepared.content } satisfies VibePlanRequest }
+            : { apply: [{ path: prepared.path, content: prepared.content, baseHash }] },
+          assistantId,
+        ),
+      );
+      if (!res) dispatchQueue({ type: "apply_failed", error: "Outra ação está gravando nesta conversa. Espere terminar e tente de novo." });
+      else if (res.ok) dispatchQueue({ type: "apply_success", content: prepared.content });
+      else dispatchQueue({ type: "apply_failed", error: toStaged ? "Não consegui corrigir a mudança staged. Veja acima e tente de novo, ajuste ou pule." : "O commit falhou. Veja o que o agente fez acima e tente de novo, ajuste ou pule." });
     } catch (e) {
       dispatchQueue({ type: "apply_failed", error: e instanceof Error ? e.message : "Falha ao aplicar" });
     } finally {
       setRunning(false);
       abortRef.current = null;
     }
-  }, [running, runStream, setMessages]);
+  }, [running, runStream, setMessages, withWriter]);
 
   const adjustCurrentFix = useCallback(
     async (comment: string) => {
@@ -425,6 +566,142 @@ export function VibeCodeAgentChat({
     [running, runReview],
   );
 
+  /** Uma ação do plano/executor: mostra o pedido do Dev e segue o stream (plan_state, staged, revisão). */
+  const runPlan = useCallback(
+    async (req: VibePlanRequest, label: string, opts: { wait?: boolean } = {}): Promise<{ ok: boolean; continueNext?: boolean }> => {
+      const exec = async () => {
+        const assistantId = crypto.randomUUID();
+        setRunning(true);
+        setMessages((prev) => [
+          ...prev,
+          { id: crypto.randomUUID(), role: "user", content: label, createdAt: Date.now() },
+          { id: assistantId, role: "assistant", content: "", steps: [], createdAt: Date.now() },
+        ]);
+        // A revisão do diff staged chega como review_findings com alvo "staged".
+        reviewEventRef.current = startQueue;
+        try {
+          return await runStream({ prompt: label, plan: req, devContext: buildDevContext() }, assistantId);
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : "O plano falhou");
+          return { ok: false };
+        } finally {
+          setRunning(false);
+          abortRef.current = null;
+          void refresh();
+        }
+      };
+      if (req.action === "state") return exec();
+      const res = await withWriter(PLAN_WRITER[req.action] ?? "executor", exec, opts);
+      return res ?? { ok: false };
+    },
+    [buildDevContext, refresh, runStream, setMessages, startQueue, withWriter],
+  );
+
+  /** "Executar todas (semi-autônomo)": uma tarefa por pedido, parando pela regra de runAll.ts. */
+  const runAll = useCallback(async () => {
+    if (runningAll) return;
+    runAllCancelRef.current = false;
+    runAllResumeRef.current = false;
+    setRunningAll(true);
+    setPlanOpen(true);
+    let iterations = 0;
+    let lastOk = true;
+    try {
+      for (;;) {
+        const decision = runAllDecision(planStateRef.current, { iterations, maxIterations: RUN_ALL_MAX_STEPS, lastOk, cancelled: runAllCancelRef.current });
+        if (decision.stop) {
+          if (decision.reason === "awaiting_approval") runAllResumeRef.current = true;
+          if (decision.reason === "error" || decision.reason === "blocked") toast.error(decision.message);
+          else toast.info(decision.message);
+          break;
+        }
+        const res = await runPlan({ action: "next" }, iterations ? "/proxima (sequência)" : "/executar", { wait: true });
+        iterations++;
+        lastOk = res.ok;
+      }
+    } finally {
+      setRunningAll(false);
+    }
+  }, [runPlan, runningAll]);
+
+  const stopAll = useCallback(() => {
+    runAllCancelRef.current = true;
+    runAllResumeRef.current = false;
+    abortRef.current?.abort();
+  }, []);
+
+  const applyStaged = useCallback(
+    async (paths?: string[]) => {
+      const res = await runPlan({ action: "apply", ...(paths?.length ? { paths } : {}) }, paths?.length ? `/aplicar ${paths.join(" ")}` : "/aplicar");
+      // A sequência segue sozinha quando o Dev aprovou tudo que estava staged.
+      if (res.ok && runAllResumeRef.current && !planStateRef.current?.staged.length) void runAll();
+      return res;
+    },
+    [runAll, runPlan],
+  );
+
+  const rejectStaged = useCallback(
+    (paths?: string[]) => {
+      runAllResumeRef.current = false;
+      return runPlan({ action: "reject", ...(paths?.length ? { paths } : {}) }, paths?.length ? `/rejeitar ${paths.join(" ")}` : "/rejeitar");
+    },
+    [runPlan],
+  );
+
+  const setPlanConfig = useCallback(
+    (patch: { autonomy?: VibePlanRequest["autonomy"]; modelPack?: VibePlanRequest["modelPack"] }) => {
+      const label = patch.autonomy ? `/autonomia ${patch.autonomy}` : `/pacote ${patch.modelPack}`;
+      return runPlan({ action: "config", ...patch }, label);
+    },
+    [runPlan],
+  );
+
+  /** Comandos de barra do plano (/plano /tarefas /proxima /executar /aplicar …). */
+  const runPlanSlash = useCallback(
+    async (cmd: ParsedPlanSlash, raw: string) => {
+      const fileArg = cmd.arg && !cmd.all && !cmd.taskId ? cmd.arg.split(/\s+/).filter(Boolean) : undefined;
+      switch (cmd.def.kind) {
+        case "plan":
+          setPlanOpen(true);
+          return runPlan({ action: "create", prompt: cmd.arg }, raw);
+        case "tasks":
+          setPlanOpen(true);
+          if (!planStateRef.current) return runPlan({ action: "state" }, raw);
+          return;
+        case "next":
+          setPlanOpen(true);
+          return runPlan({ action: "next", ...(cmd.taskId ? { taskId: cmd.taskId } : {}) }, raw);
+        case "run":
+          return runAll();
+        case "apply":
+          return applyStaged(fileArg);
+        case "reject":
+          return rejectStaged(fileArg);
+        case "rewind":
+          return runPlan({ action: "rewind" }, raw);
+        case "debug": {
+          const errors = [...(cmd.arg ? [cmd.arg] : []), ...knownErrors()].slice(0, 8);
+          return runPlan({ action: "debug", ...(errors.length ? { errors } : {}) }, raw);
+        }
+        case "autonomy":
+          if (!cmd.autonomy) {
+            toast.info("Use /autonomia manual | basico | basico+ | semi | autonomo.");
+            return;
+          }
+          return runPlan({ action: "config", autonomy: cmd.autonomy }, raw);
+        case "pack":
+          if (!cmd.modelPack) {
+            toast.info("Use /pacote economico | equilibrado | forte.");
+            return;
+          }
+          return runPlan({ action: "config", modelPack: cmd.modelPack }, raw);
+        case "expand":
+          return runPlan({ action: "expand", ...(cmd.taskId ? { taskId: cmd.taskId } : {}) }, raw);
+      }
+    },
+    [applyStaged, knownErrors, rejectStaged, runAll, runPlan],
+  );
+
   const openQueueFile = useCallback(
     (path: string) => {
       onOpenFile?.({
@@ -444,6 +721,18 @@ export function VibeCodeAgentChat({
   const send = async () => {
     const prompt = input.trim();
     if (!prompt || running) return;
+
+    // Comandos de barra do plano/executor (/plano, /proxima, /aplicar …).
+    const planSlash = parsePlanSlash(prompt);
+    if (planSlash) {
+      if (planSlash.def.argRequired && !planSlash.arg) {
+        toast.info(`Escreva ${planSlash.def.argHint ?? "o texto"} depois de ${planSlash.def.name}.`);
+        return;
+      }
+      setInput("");
+      await runPlanSlash(planSlash, prompt);
+      return;
+    }
 
     // Comandos de barra do Vibe Reviewer (/review, /improve, /fix, /describe, /ask).
     const slash = parseSlashCommand(prompt);
@@ -477,7 +766,9 @@ export function VibeCodeAgentChat({
     ]);
 
     try {
-      await runStream({ prompt, mode: autoApply ? "apply" : "preview", devContext: buildDevContext() }, assistantId);
+      const call = () => runStream({ prompt, mode: autoApply ? "apply" : "preview", devContext: buildDevContext() }, assistantId);
+      if (autoApply) await withWriter("manual", call);
+      else await call();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Agent failed");
     } finally {
@@ -496,13 +787,15 @@ export function VibeCodeAgentChat({
       { id: assistantId, role: "assistant", content: "", steps: [], createdAt: Date.now() },
     ]);
     try {
-      await runStream(
-        {
-          apply: pendingEdits.map((s) => ({ path: s.path!, content: s.proposedContent! })),
-        },
-        assistantId,
+      const res = await withWriter("manual", () =>
+        runStream(
+          {
+            apply: pendingEdits.map((s) => ({ path: s.path!, content: s.proposedContent! })),
+          },
+          assistantId,
+        ),
       );
-      toast.success("Changes committed to GitHub.");
+      if (res?.ok) toast.success("Alterações commitadas.");
     } finally {
       setRunning(false);
     }
@@ -517,10 +810,13 @@ export function VibeCodeAgentChat({
       { id: assistantId, role: "assistant", content: "", steps: [], createdAt: Date.now() },
     ]);
     try {
-      await runStream(
-        step.checkpointId ? { revertCheckpointId: step.checkpointId } : { revertSha: step.commitSha },
-        assistantId,
+      const res = await withWriter("rewind", () =>
+        runStream(
+          step.checkpointId ? { revertCheckpointId: step.checkpointId } : { revertSha: step.commitSha },
+          assistantId,
+        ),
       );
+      if (!res?.ok) return;
       setMessages((prev) =>
         prev.map((m) => ({
           ...m,
@@ -548,6 +844,19 @@ export function VibeCodeAgentChat({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {planState?.graph && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1.5 border-border/30 px-2 text-[10px]"
+              onClick={() => setPlanOpen((v) => !v)}
+              aria-pressed={planOpen}
+              aria-label="Plano"
+            >
+              <ListChecks className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Plano</span>
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -767,6 +1076,28 @@ export function VibeCodeAgentChat({
         </div>
       </ScrollArea>
 
+      {planState && planOpen && (
+        <VibePlanPanel
+          state={planState}
+          busy={running}
+          runningAll={runningAll}
+          onRunNext={() => void runPlan({ action: "next" }, "/proxima")}
+          onRunAll={() => void runAll()}
+          onStopAll={stopAll}
+          onConfig={(patch) => void setPlanConfig(patch)}
+          onClose={() => setPlanOpen(false)}
+        />
+      )}
+
+      {planState && planState.staged.length > 0 && (
+        <VibeStagedChanges
+          staged={planState.staged}
+          busy={running}
+          onApply={(paths) => void applyStaged(paths)}
+          onReject={(paths) => void rejectStaged(paths)}
+        />
+      )}
+
       <VibeFixQueueCard
         state={queue}
         busy={running}
@@ -882,7 +1213,7 @@ export function VibeCodeAgentChat({
           </Button>
         </div>
         <p className="mt-2 text-center text-[9px] font-medium tracking-tight text-muted-foreground/40 uppercase">
-          Cada conversa guarda memória e código · /review /improve /fix /describe /ask · commits reais via GitHub quando conectado
+          Cada conversa guarda memória e código · /plano /proxima /aplicar · /review /fix · commits reais via GitHub quando conectado
         </p>
       </div>
 
