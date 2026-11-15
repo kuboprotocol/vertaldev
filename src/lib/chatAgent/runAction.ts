@@ -9,6 +9,11 @@ import type { AgentAction, PanelKey, ToolResult } from './contract';
 import { secretPlaceholders } from './contract';
 import { artifactSourceText, type Artifact, type StoredImage } from './artifacts';
 import { loadConnections, parseMcpBody, weatherText } from './connections';
+import { describeDays } from '@/lib/clock/alarms';
+import { scheduleChatAlarm } from '@/lib/clock/chatAlarm';
+import { FIGCRAFT_BASE } from '@/lib/figcraft/bridge';
+import { createDesign, getDesign, listDesigns } from '@/lib/figcraft/designStore';
+import { activeFigcraftDesignId, sendFigcraftCommands } from '@/lib/figcraft/activeEditor';
 
 export interface ApiApprovalRequest {
   method: string;
@@ -40,6 +45,8 @@ export interface ActionContext {
 export interface ActionOutcome {
   artifact?: Artifact;
   panel?: PanelKey;
+  /** Com `panel: 'figcraft'`: o design a abrir (sem ele, o editor abre na tela inicial). */
+  figcraft?: { designId?: string };
   /** Mensagem de erro para o usuário (em português). */
   error?: string;
   /** Resumo que volta para o agente. */
@@ -630,16 +637,15 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
         };
       }
       case 'schedule_alarm': {
-        const time = action.time;
-        const soundId = action.soundId ?? 'alarm-1';
-        const label = action.label ?? `Alarme às ${time}`;
-        const repeatText = action.repeatDays && action.repeatDays.length > 0
-          ? `(repetir: ${['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'].filter((_, i) => action.repeatDays!.includes(i)).join(', ')})`
-          : '';
+        const res = scheduleChatAlarm({ time: action.time, soundId: action.soundId, label: action.label, repeatDays: action.repeatDays, ringTimes: action.ringTimes });
+        if (!res.ok || !res.alarm) return fail(action.tool, res.reason ?? 'Não consegui agendar o alarme.');
+        const { alarm, soundNote } = res;
+        const soundName = res.soundName ?? 'toque padrão';
+        const repeatText = alarm.days.length > 0 ? ` (${describeDays(alarm.days)})` : '';
         return {
-          artifact: { id: ctx.newId(), kind: 'scheduled_alarm', title: label, time, soundName: soundId, label, repeatDays: action.repeatDays, alarmId: `alarm_${Date.now()}` },
+          artifact: { id: ctx.newId(), kind: 'scheduled_alarm', title: alarm.label, time: alarm.time, soundName, label: alarm.label, repeatDays: alarm.days, alarmId: alarm.id },
           panel: 'clock',
-          result: { tool: 'schedule_alarm', ok: true, summary: `⏰ Alarme agendado para ${time} ${repeatText}. O usuário pode escolher entre 18 sons pré-definidos ou sons da galeria personalizada.` },
+          result: { tool: 'schedule_alarm', ok: true, summary: `⏰ Alarme agendado para ${alarm.time}${repeatText} com o som "${soundName}".${soundNote ? ` ${soundNote}` : ''}` },
         };
       }
       case 'api_request':
@@ -661,10 +667,83 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
         return { result: { tool: 'set_layout', ok: true, summary: action.mode === 'chat_only' ? 'Agora tudo fica só na tela do chat.' : 'Criações voltam a abrir ao lado.' } };
       case 'open_panel':
         return { panel: action.panel, result: { tool: 'open_panel', ok: true, summary: `Painel ${action.panel} aberto para o usuário.` } };
+      case 'figcraft':
+        return await runFigcraft(action, ctx);
     }
   } catch (e) {
     return fail(action.tool, e instanceof Error && e.message ? 'Algo deu errado ao executar esta ferramenta.' : 'Algo deu errado.');
   }
+}
+
+/** figCraft: cria, abre, lista e edita designs salvos na conta do usuário. */
+async function runFigcraft(action: Extract<AgentAction, { tool: 'figcraft' }>, ctx: ActionContext): Promise<ActionOutcome> {
+  const tool = 'figcraft' as const;
+  if (action.op === 'list') {
+    const designs = await listDesigns(20);
+    if (designs.length === 0) {
+      return { result: { tool, ok: true, summary: 'O usuário ainda não tem designs salvos no figCraft.' }, needsFollowUp: true };
+    }
+    const lines = designs.map((d) => `- ${d.id} · ${d.title} (atualizado em ${new Date(d.updatedAt).toLocaleDateString('pt-BR')})`);
+    return { result: { tool, ok: true, summary: `Designs do usuário no figCraft:\n${lines.join('\n')}` }, needsFollowUp: true };
+  }
+  if (action.op === 'new') {
+    let bytes: Uint8Array | null = null;
+    if (action.template) {
+      try {
+        const res = await fetch(`${FIGCRAFT_BASE.replace(/\/?$/, '/')}templates/${action.template}.figcraft`);
+        if (res.ok) bytes = new Uint8Array(await res.arrayBuffer());
+      } catch {
+        bytes = null;
+      }
+    }
+    if (!bytes) {
+      return {
+        panel: 'figcraft',
+        figcraft: {},
+        result: { tool, ok: true, summary: 'O figCraft abriu na tela inicial, sem design salvo. Peça ao usuário para salvar com Ctrl+S quando quiser guardar.' },
+      };
+    }
+    const record = await createDesign(ctx.userId, action.title, bytes);
+    return {
+      panel: 'figcraft',
+      figcraft: { designId: record.id },
+      result: { tool, ok: true, summary: `Design "${record.title}" criado no figCraft (id ${record.id}) e aberto ao lado.` },
+    };
+  }
+  if (action.op === 'open') {
+    const record = await getDesign(action.design_id);
+    if (!record) return fail(tool, 'Não encontrei esse design. Ele pode ter sido apagado.');
+    return {
+      panel: 'figcraft',
+      figcraft: { designId: record.id },
+      result: { tool, ok: true, summary: `Design "${record.title}" aberto no figCraft.` },
+    };
+  }
+  // run: comandos no design. Se ele já está aberto, roda agora; senão abre e aplica ao montar.
+  const designId = action.design_id ?? activeFigcraftDesignId();
+  if (!designId) return fail(tool, 'Abra ou crie um design no figCraft antes de editar.');
+  if (!(await getDesign(designId))) return fail(tool, 'Não encontrei esse design. Ele pode ter sido apagado.');
+  const sent = await sendFigcraftCommands(designId, action.commands);
+  if (sent.status === 'queued') {
+    return {
+      panel: 'figcraft',
+      figcraft: { designId },
+      result: { tool, ok: true, summary: `${action.commands.length} comando(s) enviados. O figCraft abriu ao lado e aplica em seguida.` },
+    };
+  }
+  const failed = sent.results.filter((r) => !r.ok);
+  const okCount = sent.results.length - failed.length;
+  const detail = failed.length ? ` Falhas: ${failed.map((f) => `${f.command} (${f.error ?? 'erro'})`).join('; ')}.` : '';
+  // Devolve o que os comandos retornaram (ex.: ids das camadas criadas), para a próxima rodada.
+  const returned = sent.results
+    .filter((r) => r.ok && r.result !== undefined && r.result !== null)
+    .slice(0, 10)
+    .map((r) => `${r.command} → ${JSON.stringify(r.result).slice(0, 160)}`);
+  const values = returned.length ? ` Retornos: ${returned.join(' | ')}.` : '';
+  return {
+    result: { tool, ok: failed.length === 0, summary: `${okCount} de ${sent.results.length} comando(s) aplicados no design aberto.${detail}${values}` },
+    needsFollowUp: failed.length > 0,
+  };
 }
 
 /** Texto curto do que o agente está fazendo (cartão de progresso). */
@@ -701,5 +780,6 @@ export function actionLabel(action: AgentAction): string {
     case 'slack_send': return 'Enviando mensagem no Slack';
     case 'mcp_call': return 'Usando conexão MCP';
     case 'set_layout': return 'Ajustando a tela';
+    case 'figcraft': return 'Trabalhando no figCraft';
   }
 }

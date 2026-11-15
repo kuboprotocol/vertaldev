@@ -711,7 +711,7 @@ export function ArtifactViewer({ artifact, actions }: { artifact: Artifact; acti
                 .join(', ')}</p>
             )}
           </div>
-          <p className="mt-4 text-sm text-muted-foreground">Alarme agendado com sucesso. Você pode escolher entre 18 sons pré-definidos ou sons da sua galeria personalizada.</p>
+          <p className="mt-4 text-sm text-muted-foreground">Alarme salvo no Vertal Clock. Ele toca no horário marcado, com o som escolhido (ou o da sua galeria de sons).</p>
         </div>
       );
       break;

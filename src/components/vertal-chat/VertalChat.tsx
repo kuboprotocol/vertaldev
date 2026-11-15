@@ -5,7 +5,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle, ArrowLeft, ArrowUp, Check, ChevronDown, Coins, Columns2, ExternalLink, LayoutGrid, Loader2,
-  Maximize2, MessageSquare, MessageSquarePlus, Cable, MoreHorizontal, PanelLeft, Pencil, Pin, PinOff, Plus, ShieldCheck, Trash2, X,
+  Maximize2, MessageSquare, MessageSquarePlus, Cable, MoreHorizontal, PanelLeft, Pencil, Pin, PinOff, Plus, ShieldCheck, Trash2, X, Mic,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useVertalChat, type VertalMessage } from '@/hooks/useVertalChat';
@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { LOGO_SRC } from '@/components/branding/AnimatedLogo';
 import { PANELS, type PanelKey } from '@/lib/chatAgent/contract';
 import { KIND_LABEL, type Artifact } from '@/lib/chatAgent/artifacts';
+import { isDesignId } from '@/lib/figcraft/contract';
 import { ArtifactCard, ArtifactViewer, ChatMarkdown, type ViewerActions } from './ArtifactViews';
 import { PANEL_BY_KEY, PANEL_LIST, type PanelRequest } from './panelList';
 import { PanelHost } from './PanelHost';
@@ -54,7 +55,7 @@ const GROUPS: Array<{ id: 'criar' | 'midia' | 'conectar'; label: string }> = [
 ];
 
 /** Painéis que ocupam bem a tela inteira; o chat fica a um toque de distância. */
-const WIDE_PANELS: PanelKey[] = ['office', 'design', 'canvas', 'notebook'];
+const WIDE_PANELS: PanelKey[] = ['office', 'design', 'figcraft', 'canvas', 'notebook'];
 
 /** Artefatos que abrem sozinhos ao lado quando ficam prontos (em telas largas). */
 const AUTO_OPEN: Artifact['kind'][] = ['doc', 'sheet', 'slides', 'canvas', 'app', 'ebook', 'email'];
@@ -94,7 +95,7 @@ export function VertalChat() {
   const nonceRef = useRef(0);
 
   const openPanel = useCallback(
-    (key: PanelKey, extra: Partial<Pick<PanelRequest, 'office' | 'designOpen'>> = {}) => {
+    (key: PanelKey, extra: Partial<Pick<PanelRequest, 'office' | 'designOpen' | 'figcraft'>> = {}) => {
       const info = PANEL_BY_KEY[key];
       if (info.route) {
         navigate(info.route);
@@ -125,8 +126,9 @@ export function VertalChat() {
   const chat = useVertalChat({
     onChatOnly: setChatOnly,
     // Painéis com rota própria viram um botão na mensagem: o agente não tira o usuário do chat.
-    onOpenPanel: (key) => {
-      if (!PANEL_BY_KEY[key].route && !chatOnlyRef.current) openPanel(key);
+    onOpenPanel: (key, extra) => {
+      if (PANEL_BY_KEY[key].route || chatOnlyRef.current) return;
+      openPanel(key, key === 'figcraft' ? { figcraft: { designId: extra?.designId } } : {});
     },
     onArtifact: (artifact) => {
       if (!chatOnlyRef.current && AUTO_OPEN.includes(artifact.kind) && window.matchMedia('(min-width: 1024px)').matches) {
@@ -150,11 +152,15 @@ export function VertalChat() {
   }, [chat.livePreview]);
 
   // Link direto: /creative/chat?tool=office abre o painel já dentro do chat.
+  // /creative/chat?tool=figcraft&design=<id> abre aquele design do figCraft.
   useEffect(() => {
     const tool = searchParams.get('tool');
     if (!tool) return;
+    const design = searchParams.get('design');
     setSearchParams({}, { replace: true });
-    if ((PANELS as readonly string[]).includes(tool)) openPanel(tool as PanelKey);
+    if (!(PANELS as readonly string[]).includes(tool)) return;
+    if (tool === 'figcraft') openPanel('figcraft', { figcraft: { designId: isDesignId(design) ? design : undefined } });
+    else openPanel(tool as PanelKey);
   }, [openPanel, searchParams, setSearchParams]);
 
   useEffect(() => {
@@ -192,6 +198,10 @@ export function VertalChat() {
       el.focus();
       el.setSelectionRange(text.length, text.length);
     });
+  };
+
+  const voiceInput = () => {
+    void chat.execute({ tool: 'voice_input' });
   };
 
   const viewerActions: ViewerActions = useMemo(
@@ -246,6 +256,7 @@ export function VertalChat() {
       onFill={fill}
       busy={chat.busy}
       inputRef={inputRef}
+      onVoice={voiceInput}
     />
   );
 
@@ -732,7 +743,7 @@ function MessageRow({
 // ─── Compositor ──────────────────────────────────────────────────────────
 
 function Composer({
-  value, onChange, onSubmit, onFill, busy, inputRef,
+  value, onChange, onSubmit, onFill, busy, inputRef, onVoice,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -740,6 +751,7 @@ function Composer({
   onFill: (text: string) => void;
   busy: boolean;
   inputRef: React.RefObject<HTMLTextAreaElement>;
+  onVoice?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   return (
@@ -790,6 +802,15 @@ function Composer({
             </ul>
           </PopoverContent>
         </Popover>
+        <button
+          type="button"
+          onClick={() => onVoice?.()}
+          aria-label="Abrir gravador de voz"
+          title="Gravador de voz (🎤)"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition hover:border-primary/50 hover:text-foreground"
+        >
+          <Mic className="h-4 w-4" />
+        </button>
         <span className="flex-1" />
         <button
           type="button"
