@@ -39,6 +39,7 @@ import {
 } from "../_shared/chatAgent.ts";
 import { listVisibleSecrets, resolveEnvForRun } from "../_shared/kuboSecrets.ts";
 import { validatePublicUrl } from "../_shared/security.ts";
+import { cleanAssets, formatCrypto, formatSecurities, getCryptoQuotes, getSecurityQuotes } from "../_shared/marketData.ts";
 
 const InputSchema = z.object({
   messages: z.array(z.object({
@@ -46,7 +47,7 @@ const InputSchema = z.object({
     content: z.string().min(1),
   })).optional(),
   prompt: z.string().optional(),
-  tool: z.enum(["chat", "image", "video", "music", "pdf", "docs", "slide", "edit_image", "edit_video", "office_ai", "office_email", "chat_json", "notebook_ai", "agent_chat", "api_request"]),
+  tool: z.enum(["chat", "image", "video", "music", "pdf", "docs", "slide", "edit_image", "edit_video", "office_ai", "office_email", "chat_json", "notebook_ai", "agent_chat", "api_request", "market_quote"]),
   model: z.string().optional(),
   temperature: z.number().optional(),
   max_tokens: z.number().optional(),
@@ -59,6 +60,8 @@ const InputSchema = z.object({
   agent: z.record(z.any()).optional(),
   // Vertal Chat: chamada de API externa aprovada pelo usuário (validada em handleApiRequest).
   api: z.record(z.any()).optional(),
+  // Vertal Chat: cotações de mercado (CoinGecko / Mais Retorno), validadas em handleMarketQuote.
+  market: z.record(z.any()).optional(),
 });
 
 // Credit costs based on prompt instructions
@@ -79,6 +82,7 @@ const COSTS: Record<string, number> = {
   notebook_ai: 1,  // Vertal Notebook: custo real vem de notebookAiCost(pedido)
   agent_chat: 0,   // Vertal Chat: custo real vem de chatJsonCost (mesma cota do modo de conversa)
   api_request: 0,  // Vertal Chat: chamada de API externa não é cobrada (tem limite de requisições)
+  market_quote: 0, // Vertal Chat: cotações (CoinGecko / Mais Retorno) não são cobradas (tem limite de requisições)
 };
 
 Deno.serve(withRefundOnFailure(async (req) => {
@@ -102,7 +106,7 @@ Deno.serve(withRefundOnFailure(async (req) => {
       });
     }
 
-    const { tool, messages, prompt, model, temperature, max_tokens, metadata, office, notebook, agent, api } = parsed.data;
+    const { tool, messages, prompt, model, temperature, max_tokens, metadata, office, notebook, agent, api, market } = parsed.data;
     
     // Determine cost
     let cost = COSTS[tool] ?? 1;
@@ -147,6 +151,8 @@ Deno.serve(withRefundOnFailure(async (req) => {
       return await handleAgentChat(user, messages ?? [], agent ?? {}, cost);
     } else if (tool === "api_request") {
       return await handleApiRequest(user, api ?? {});
+    } else if (tool === "market_quote") {
+      return await handleMarketQuote(user, market ?? {});
     }
 
     return new Response(JSON.stringify({ error: "tool_not_implemented_in_router" }), {
@@ -641,6 +647,28 @@ function fillSecrets(text: string, env: Record<string, string>): string {
  * Proteções: só https, sem IPs/hosts internos, sem seguir redirecionamentos,
  * tempo e tamanho limitados, e os valores dos segredos nunca voltam na resposta.
  */
+// Cotações para o Vertal Chat. As chaves ficam nos secrets do projeto Supabase
+// (sincronizados do GitHub pelo workflow de deploy): COINGECKO_API_KEY e MAISRETORNO_API_KEY.
+async function handleMarketQuote(user: { id: string; email?: string | null }, raw: Record<string, unknown>): Promise<Response> {
+  const limit = await enforceRateLimit(user.id, "market_quote", { max: 30, windowSeconds: 60, userEmail: user.email ?? null });
+  if (!limit.ok) return jsonResponse(429, { error: limit.error });
+
+  const assets = cleanAssets(raw.assets);
+  if (assets.length === 0) return jsonResponse(400, { error: "invalid_input" });
+  const env = (k: string) => Deno.env.get(k) || undefined;
+
+  if (raw.market === "crypto") {
+    const currency = ["brl", "usd", "eur"].includes(String(raw.currency)) ? String(raw.currency) : "brl";
+    const r = await getCryptoQuotes(assets, currency, env("COINGECKO_API_KEY") ?? env("COINGENKO"));
+    return jsonResponse(200, { ok: r.quotes.length > 0, source: "coingecko", ...r, summary: formatCrypto(r) });
+  }
+  if (raw.market === "securities") {
+    const r = await getSecurityQuotes(assets, env("MAISRETORNO_API_KEY") ?? env("MAISRETORNO"));
+    return jsonResponse(200, { ok: r.quotes.length > 0, source: "maisretorno", ...r, summary: formatSecurities(r) });
+  }
+  return jsonResponse(400, { error: "invalid_input" });
+}
+
 async function handleApiRequest(user: { id: string; email?: string | null }, raw: unknown): Promise<Response> {
   const limit = await enforceRateLimit(user.id, "api_request", { max: 20, windowSeconds: 60, userEmail: user.email ?? null });
   if (!limit.ok) return jsonResponse(429, { error: limit.error });
