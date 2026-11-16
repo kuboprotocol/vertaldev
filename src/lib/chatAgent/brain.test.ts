@@ -310,3 +310,28 @@ describe('modo plano (motor do Vibe Code)', () => {
     expect(msgs[1].content).toContain('(nenhuma ferramenta usada)');
   });
 });
+
+describe('busca sem chave (DuckDuckGo + Jina)', () => {
+  it('lê os resultados do markdown e tira o redirecionamento', async () => {
+    const { parseDdgMarkdown, unwrapDdgUrl, ddgHtmlUrl, parseJinaReader } = await import('../../../supabase/functions/_shared/chatWeb.ts');
+    const md = [
+      '[](https://html.duckduckgo.com/html/?q=dolar+hoje)',
+      '',
+      '## [Dólar Hoje: Cotação **Comercial**](https://duckduckgo.com/l/?uddg=https%3A%2F%2Fdolarhoje.com%2F&rut=abc)',
+      '',
+      '[Veja o valor do **dólar** hoje em reais, com gráfico e histórico.](https://duckduckgo.com/l/?uddg=https%3A%2F%2Fdolarhoje.com%2F&rut=abc)',
+      '',
+      '## [Wise conversor](https://duckduckgo.com/l/?uddg=https%3A%2F%2Fwise.com%2Fbr%2F&rut=d)',
+      '',
+      '[Converta dólar para real em tempo real com a taxa comercial.](https://duckduckgo.com/l/?uddg=https%3A%2F%2Fwise.com%2Fbr%2F&rut=d)',
+    ].join('\n');
+    const r = parseDdgMarkdown(md, 5);
+    expect(r).toHaveLength(2);
+    expect(r[0]).toMatchObject({ title: 'Dólar Hoje: Cotação Comercial', url: 'https://dolarhoje.com/' });
+    expect(r[0].description).toContain('valor do dólar');
+    expect(unwrapDdgUrl('https://duckduckgo.com/settings')).toBeNull();
+    expect(ddgHtmlUrl('dólar hoje', 'dia')).toContain('df=d');
+    expect(parseJinaReader({ data: { title: 'T', url: 'https://a.com', content: 'Texto da página com conteúdo.' } }, 'https://a.com')?.title).toBe('T');
+    expect(parseJinaReader({ data: { content: '' } }, 'https://a.com')).toBeNull();
+  });
+});

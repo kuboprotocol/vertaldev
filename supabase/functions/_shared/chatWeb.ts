@@ -223,3 +223,79 @@ function clampInt(v: unknown, min: number, max: number, fallback: number): numbe
   const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
   return Number.isFinite(n) ? Math.min(Math.max(Math.round(n), min), max) : fallback;
 }
+
+// ─── Sem chave: DuckDuckGo HTML + Jina Reader ────────────────────────────
+//
+// Quando FIRECRAWL_API_KEY não está configurada, a busca usa a página HTML do
+// DuckDuckGo lida pelo Jina Reader (r.jina.ai, grátis, sem chave), e a leitura
+// de páginas também passa pelo Jina Reader. É o plano B: funciona já, com limite
+// de uso mais baixo. Com a chave do Firecrawl, ele volta a ser o principal.
+
+export const JINA_READER = "https://r.jina.ai/";
+
+/** URL do Jina Reader para uma página pública. */
+export function jinaReaderUrl(url: string): string {
+  return `${JINA_READER}${url}`;
+}
+
+/** Página de resultados do DuckDuckGo (HTML, região Brasil por padrão). */
+export function ddgHtmlUrl(query: string, recency?: WebRecency | null, region = "br-pt"): string {
+  const params = new URLSearchParams({ q: query.trim().slice(0, WEB_LIMITS.queryChars), kl: region });
+  const df = recency === "dia" ? "d" : recency === "semana" ? "w" : recency === "mes" ? "m" : recency === "ano" ? "y" : "";
+  if (df) params.set("df", df);
+  return `https://html.duckduckgo.com/html/?${params.toString()}`;
+}
+
+/** Tira o redirecionamento do DuckDuckGo (/l/?uddg=URL) e devolve o destino real. */
+export function unwrapDdgUrl(raw: string): string | null {
+  try {
+    const u = new URL(raw.replace(/&amp;/g, "&"), "https://duckduckgo.com");
+    if (/duckduckgo\.com$/i.test(u.hostname) && u.pathname.startsWith("/l/")) {
+      const target = u.searchParams.get("uddg");
+      return target && /^https?:\/\//i.test(target) ? target : null;
+    }
+    if (/duckduckgo\.com$/i.test(u.hostname)) return null;
+    return /^https?:$/.test(u.protocol) ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+const stripMd = (s: string) => oneLine(s.replace(/\*\*|__|`/g, "").replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1"));
+
+/** Lê o markdown que o Jina Reader devolve da página HTML do DuckDuckGo. */
+export function parseDdgMarkdown(md: string, max: number = WEB_LIMITS.defaultResults): WebResult[] {
+  const limit = clampInt(max, 1, WEB_LIMITS.maxResults, WEB_LIMITS.defaultResults);
+  const out: WebResult[] = [];
+  const seen = new Set<string>();
+  const blocks = md.split(/\n(?=##\s+\[)/);
+  for (const block of blocks) {
+    const head = block.match(/^##\s+\[([\s\S]*?)\]\((\S+?)\)/);
+    if (!head) continue;
+    const url = unwrapDdgUrl(head[2]);
+    if (!url || seen.has(url)) continue;
+    // Anúncios do DuckDuckGo passam por y.js / ad_domain.
+    if (/duckduckgo\.com\/y\.js|ad_domain=/i.test(head[2])) continue;
+    seen.add(url);
+    let description = "";
+    for (const m of block.slice(head[0].length).matchAll(/\[([^\]]{25,})\]\(/g)) {
+      const t = stripMd(m[1]);
+      if (t.length >= 25) { description = t.slice(0, 400); break; }
+    }
+    out.push({ title: stripMd(head[1]).slice(0, 200) || hostOf(url), url, description });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/** Lê a resposta JSON do Jina Reader ({ data: { title, url, content, publishedTime } }). */
+export function parseJinaReader(raw: unknown, fallbackUrl: string, maxChars: number = WEB_LIMITS.readChars): WebPage | null {
+  const data = raw && typeof raw === "object" ? (raw as Record<string, unknown>).data : null;
+  if (!data || typeof data !== "object") return null;
+  const d = data as Record<string, unknown>;
+  const markdown = typeof d.content === "string" ? cleanMarkdown(d.content, maxChars) : "";
+  if (!markdown) return null;
+  const url = text(d.url, WEB_LIMITS.urlChars) || fallbackUrl;
+  const published = text(d.publishedTime, 40);
+  return { url, title: oneLine(text(d.title, 200)) || hostOf(url), markdown, ...(published ? { published } : {}) };
+}
