@@ -120,6 +120,15 @@ export async function spotifyCall(
     await admin.from('spotify_accounts').update({ access_token_expires_at: null }).eq('user_id', account.user_id)
     return spotifyCall(admin, { ...account, access_token_expires_at: null }, op, method, path, opts, true)
   }
+  // 429: respeita Retry-After e tenta UMA vez (sem loop). Se passar do teto, devolve rate_limited.
+  if (res.status === 429 && !retried) {
+    const waitSec = Number(res.headers.get('Retry-After') ?? '1')
+    const capped = Math.min(Number.isFinite(waitSec) && waitSec > 0 ? waitSec : 1, 5)
+    if (waitSec <= 5) {
+      await new Promise((r) => setTimeout(r, capped * 1000))
+      return spotifyCall(admin, account, op, method, path, opts, true)
+    }
+  }
   if (res.status >= 400) throw new SpotifyApiError(spotifyErrorCode(res.status, op), res.status)
   if (res.status === 204 || !res.headers.get('content-type')?.includes('application/json')) {
     return { status: res.status, data: null }
