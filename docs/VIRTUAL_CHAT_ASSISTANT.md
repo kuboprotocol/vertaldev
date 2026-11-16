@@ -149,8 +149,10 @@ Enquanto as premissas não forem trocadas, os números acima são **estimativas*
 
 ## 7. Roadmap
 
-1. **Feito (esta base):** precificação, política de acesso, parse e envio de Telegram e WhatsApp, testes.
-2. Edge function `virtual-chat-webhook`: verificação de assinatura, download de mídia, debite de créditos, resposta.
+1. **Feito (esta base):** precificação, política de acesso, parse e envio de Telegram e WhatsApp, testes. O código puro do canal WhatsApp fica em `supabase/functions/_shared/virtualChat/` (fonte única; `src/lib/virtualChat/` re-exporta).
+2. **Parcial — WhatsApp:** edge function `supabase/functions/virtual-chat-webhook` faz o handshake GET, valida `X-Hub-Signature-256`, responde por texto com Kimi e só para números da lista `WHATSAPP_ALLOWED_WA_IDS`. Ainda falta: download de mídia, debite de créditos, vínculo número ↔ conta (tabela) e Telegram.
+
+   Segredos necessários (Supabase → Edge Functions → Secrets): `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ALLOWED_WA_IDS`. Sem a lista, o bot não responde ninguém (falha fechada).
 3. Tabelas: concessões de arquivo, log de acesso, canais conectados por usuário (com RLS).
 4. Agente local: rota de leitura com `realpath` e concessão por pasta; indexação com cache.
 5. Messenger e Instagram DM (após revisão de permissões da Meta).
