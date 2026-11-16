@@ -716,6 +716,9 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
       case 'plan':
         // O hook executa o plano tarefa por tarefa; aqui só confirma o recebimento.
         return { result: { tool: 'plan', ok: true, summary: `Plano com ${action.tasks.length} tarefas recebido.` } };
+      default:
+        // Ferramenta do contrato sem executor no navegador (ex.: alarm/timer): falha clara em vez de `undefined`.
+        return fail((action as AgentAction).tool, 'Esta ferramenta ainda não está disponível no chat.');
     }
   } catch (e) {
     return fail(action.tool, e instanceof Error && e.message ? 'Algo deu errado ao executar esta ferramenta.' : 'Algo deu errado.');

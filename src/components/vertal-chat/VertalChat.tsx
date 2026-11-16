@@ -5,7 +5,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle, ArrowLeft, ArrowUp, Check, ChevronDown, Coins, Columns2, ExternalLink, LayoutGrid, Loader2,
-  Maximize2, MessageSquare, MessageSquarePlus, Cable, MoreHorizontal, PanelLeft, Pencil, Pin, PinOff, Plus, ShieldCheck, Trash2, X, Mic, Brain,
+  Maximize2, MessageSquare, MessageSquarePlus, Cable, MoreHorizontal, PanelLeft, Pencil, Pin, PinOff, Plus, ShieldCheck, Square, Trash2, X, Mic, Brain,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useVertalChat, type VertalMessage } from '@/hooks/useVertalChat';
@@ -286,6 +286,7 @@ export function VertalChat() {
       onSubmit={submit}
       onFill={fill}
       busy={chat.busy}
+      onStop={chat.stop}
       inputRef={inputRef}
       onVoice={voiceInput}
       listening={dictation.listening}
@@ -802,13 +803,15 @@ function MessageRow({
 // ─── Compositor ──────────────────────────────────────────────────────────
 
 function Composer({
-  value, onChange, onSubmit, onFill, busy, inputRef, onVoice, listening = false,
+  value, onChange, onSubmit, onFill, busy, onStop, inputRef, onVoice, listening = false,
 }: {
   value: string;
   onChange: (v: string) => void;
   onSubmit: () => void;
   onFill: (text: string) => void;
   busy: boolean;
+  /** Com o chat trabalhando, o botão de enviar vira "Parar". */
+  onStop?: () => void;
   inputRef: React.RefObject<HTMLTextAreaElement>;
   onVoice?: () => void;
   listening?: boolean;
@@ -879,15 +882,28 @@ function Composer({
           <Mic className="relative h-4 w-4" />
         </button>
         <span className="flex-1" />
-        <button
-          type="button"
-          onClick={onSubmit}
-          disabled={busy || !value.trim()}
-          aria-label={busy ? 'O chat está trabalhando' : 'Enviar mensagem'}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground transition hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
-        >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
-        </button>
+        {busy && onStop ? (
+          <button
+            type="button"
+            onClick={onStop}
+            aria-label="Parar resposta"
+            title="Parar (o que já saiu fica na conversa)"
+            className="group relative inline-flex h-9 w-9 items-center justify-center rounded-full bg-foreground text-background transition hover:bg-foreground/85"
+          >
+            <Loader2 className="absolute h-9 w-9 animate-spin opacity-30" strokeWidth={1.5} aria-hidden />
+            <Square className="relative h-3.5 w-3.5 fill-current" aria-hidden />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={busy || !value.trim()}
+            aria-label={busy ? 'O chat está trabalhando' : 'Enviar mensagem'}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground transition hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
+          </button>
+        )}
       </div>
     </div>
   );

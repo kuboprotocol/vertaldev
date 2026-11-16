@@ -29,12 +29,14 @@ import {
 } from "../_shared/officeEmail.ts";
 import { getFreshAccessToken, loadAccount } from "../_shared/gmailToken.ts";
 import { handleChatBrainOp, loadChatBrain, saveChatBrain } from "../_shared/chatBrain.ts";
+import { chooseAgentTier, ORCHESTRATOR_LIMITS, otherTier, type AgentTier } from "../_shared/chatOrchestrator.ts";
 import {
   AGENT_LIMITS,
   API_METHODS,
   buildAgentSystemPrompt,
   formatToolResults,
-  parseAgentTurn,
+  agentOutputNeedsRetry,
+  parseAgentOutput,
   parseConnections,
   secretPlaceholders,
 } from "../_shared/chatAgent.ts";
@@ -527,7 +529,7 @@ const AgentInput = z.object({
     tool: z.string().max(40),
     ok: z.boolean(),
     summary: z.string().max(AGENT_LIMITS.maxToolResultChars * 2),
-  })).max(8).optional(),
+  })).max(ORCHESTRATOR_LIMITS.maxToolResults).optional(),
   // Fuso do aparelho e conexões que o cliente adicionou no chat (validadas em parseConnections).
   context: z.object({
     timezone: z.string().max(64).optional(),
@@ -623,18 +625,55 @@ async function handleAgentChat(
     ? [...brain.window, { role: "user" as const, content: formatToolResults(results, { final }) }]
     : brain.window;
 
+  // Orquestrador v2: flash por padrão; "pro" na síntese do plano e na 1ª rodada de pedido complexo.
+  const lastUserText = [...all].reverse().find((m) => m.role === "user")?.content ?? "";
+  const route = chooseAgentTier({
+    lastUserText,
+    firstRound: results.length === 0,
+    planPhase: brain.planPhase,
+    escalation: Deno.env.get("VERTAL_CHAT_ESCALATION") !== "off",
+  });
+  const callModel = (tier: AgentTier) => runGateway({
+    messages: [{ role: "system", content: system }, ...convo],
+    kind: "chat",
+    tier,
+    json: true,
+    temperature: 0.4,
+    maxTokens: ORCHESTRATOR_LIMITS.maxTokens[tier],
+    contextChars: 78_000,
+    noCache: true,
+  });
+
   try {
-    const gw = await runGateway({
-      messages: [{ role: "system", content: system }, ...convo],
-      kind: "chat",
-      tier: "flash",
-      json: true,
-      temperature: 0.4,
-      maxTokens: 3500,
-      contextChars: 78_000,
-      noCache: true,
-    });
-    const turn = parseAgentTurn(gw.content);
+    let gw: Awaited<ReturnType<typeof runGateway>>;
+    try {
+      gw = await callModel(route.tier);
+    } catch (err) {
+      // Escalar nunca pode piorar: se o "pro" falhar, volta para o flash de sempre.
+      if (!(err instanceof GatewayError) || route.tier === "flash") throw err;
+      console.warn("[creative-router] agent_chat pro falhou, voltando ao flash:", err.message);
+      gw = await callModel("flash");
+    }
+    let parsed = parseAgentOutput(gw.content);
+    let retried = false;
+    // JSON vazio, cortado ou quebrado: uma nova tentativa no outro tier antes do 502.
+    if (agentOutputNeedsRetry(parsed.status)) {
+      retried = true;
+      try {
+        const second = await callModel(otherTier(gw.tier));
+        const again = parseAgentOutput(second.content);
+        const better = !agentOutputNeedsRetry(again.status) ||
+          (parsed.status === "empty" && again.status !== "empty");
+        if (better) {
+          gw = second;
+          parsed = again;
+        }
+      } catch (err) {
+        if (!(err instanceof GatewayError)) throw err;
+      }
+      console.warn(`[creative-router] agent_chat saída ${parsed.status} após nova tentativa (${gw.provider}/${gw.model})`);
+    }
+    const turn = parsed.turn;
     if (!turn.reply && turn.actions.length === 0) return fail(502, "invalid_model_output");
     // Última rodada ou fase final do plano: sem novas ações. Durante um plano, sem plano dentro de plano.
     let actions = final ? [] : turn.actions;
@@ -644,10 +683,11 @@ async function handleAgentChat(
       userId: user.id,
       turn: { ...turn, actions },
       results,
-      lastUserText: [...all].reverse().find((m) => m.role === "user")?.content ?? "",
+      lastUserText,
     });
     return jsonResponse(200, {
       reply: after.reply, actions, provider: gw.provider, model: gw.model, creditsCharged: cost,
+      tier: gw.tier, ...(route.tier === "pro" ? { escalated: route.reason } : {}), ...(retried ? { retried: true } : {}),
       ...(after.memory ? { memory: after.memory } : {}),
       ...(after.reviewed ? { reviewed: true } : {}),
     });
