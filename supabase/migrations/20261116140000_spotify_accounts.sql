@@ -28,5 +28,11 @@ create table if not exists public.spotify_accounts (
 alter table public.spotify_oauth_states enable row level security;
 alter table public.spotify_accounts enable row level security;
 
+-- Grants explícitos: só o service role (edge functions) acessa estas tabelas.
+revoke all on public.spotify_oauth_states from anon, authenticated;
+revoke all on public.spotify_accounts from anon, authenticated;
+grant all on public.spotify_oauth_states to service_role;
+grant all on public.spotify_accounts to service_role;
+
 -- Limpeza de estados expirados (ficam só alguns minutos).
 create index if not exists spotify_oauth_states_expires_idx on public.spotify_oauth_states (expires_at);
