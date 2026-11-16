@@ -19,7 +19,11 @@ import type { AgentTurn, ToolResult } from "./chatAgent.ts";
 import {
   buildFirecrawlScrapeBody,
   buildFirecrawlSearchBody,
+  ddgHtmlUrl,
   formatReadResult,
+  jinaReaderUrl,
+  parseDdgMarkdown,
+  parseJinaReader,
   formatSearchResults,
   normalizeWebUrl,
   parseFirecrawlScrape,
@@ -280,6 +284,53 @@ export async function handleChatBrainOp(user: { id: string; email?: string | nul
   }
 }
 
+/** Jina Reader (sem chave): devolve o JSON da página lida, ou null. JINA_API_KEY é opcional (limite maior). */
+async function jina(url: string, timeoutMs: number): Promise<unknown | null> {
+  try {
+    const headers: Record<string, string> = { Accept: "application/json", "X-Return-Format": "markdown" };
+    const jinaKey = Deno.env.get("JINA_API_KEY");
+    if (jinaKey) headers.Authorization = `Bearer ${jinaKey}`;
+    const res = await fetch(jinaReaderUrl(url), { headers, signal: AbortSignal.timeout(timeoutMs) });
+    if (!res.ok) {
+      console.error(`[chatBrain] jina HTTP ${res.status}`);
+      return null;
+    }
+    return await res.json();
+  } catch (e) {
+    console.error("[chatBrain] jina falhou:", sanitizeError(e));
+    return null;
+  }
+}
+
+/** Busca sem chave: página HTML do DuckDuckGo lida pelo Jina Reader, e as primeiras páginas lidas também. */
+async function keylessSearch(query: string, max: number | undefined, recency: WebRecency | undefined, when: string): Promise<OpResult> {
+  const raw = await jina(ddgHtmlUrl(query, recency), 20_000);
+  const data = raw && typeof raw === "object" ? (raw as Record<string, unknown>).data : null;
+  const content = data && typeof data === "object" ? (data as Record<string, unknown>).content : null;
+  const md = typeof content === "string" ? content : "";
+  const results = md ? parseDdgMarkdown(md, max) : [];
+  if (!md) {
+    return [200, { ok: false, error: "web_search_failed", summary: `A busca por "${query}" falhou agora (serviço de busca indisponível). Diga isso ao usuário; não invente resultados.` }];
+  }
+  const top = Math.max(0, Math.min(3, Number(Deno.env.get("CHAT_WEB_SCRAPE_TOP") ?? 2) || 0));
+  await Promise.all(results.slice(0, top).map(async (r) => {
+    const target = safeTarget(r.url);
+    if (!target) return;
+    const page = parseJinaReader(await jina(target, 15_000), target, WEB_LIMITS.scrapeSnippetChars);
+    if (page) {
+      r.content = page.markdown;
+      if (!r.published && page.published) r.published = page.published;
+    }
+  }));
+  return [200, {
+    ok: true,
+    query,
+    provider: "duckduckgo+jina",
+    results: results.map((r) => ({ title: r.title, url: r.url, ...(r.published ? { published: r.published } : {}) })),
+    summary: formatSearchResults(query, results, when),
+  }];
+}
+
 async function firecrawl(path: "search" | "scrape", body: Record<string, unknown>, key: string, timeoutMs: number): Promise<unknown | null> {
   try {
     const res = await fetch(`${FIRECRAWL_URL}/${path}`, {
@@ -318,14 +369,11 @@ async function webSearch(input: Record<string, unknown>): Promise<OpResult> {
   if (query.length < 2) return [400, { error: "invalid_input" }];
   const when = whenText(input.timezone);
   const key = Deno.env.get("FIRECRAWL_API_KEY");
-  if (!key) {
-    return [200, { ok: false, error: "web_search_unavailable", summary: "A busca na web não está configurada agora. Diga ao usuário que não conseguiu pesquisar e responda só com o que sabe, avisando que pode estar desatualizado." }];
-  }
   const recency = WEB_RECENCY.includes(input.recency as WebRecency) ? input.recency as WebRecency : undefined;
+  if (!key) return await keylessSearch(query, Number(input.max) || undefined, recency, when);
   const data = await firecrawl("search", buildFirecrawlSearchBody({ query, max: Number(input.max) || undefined, recency }), key, 20_000);
-  if (!data) {
-    return [200, { ok: false, error: "web_search_failed", summary: `A busca por "${query}" falhou agora (serviço de busca indisponível). Diga isso ao usuário; não invente resultados.` }];
-  }
+  // Firecrawl fora do ar ou sem créditos: cai para a busca sem chave.
+  if (!data) return await keylessSearch(query, Number(input.max) || undefined, recency, when);
   const results = parseFirecrawlSearch(data);
   // Lê as primeiras páginas para o modelo ter conteúdo, não só o resumo do buscador.
   const top = Math.max(0, Math.min(3, Number(Deno.env.get("CHAT_WEB_SCRAPE_TOP") ?? 2) || 0));
@@ -350,10 +398,8 @@ async function webRead(input: Record<string, unknown>): Promise<OpResult> {
   const target = safeTarget(input.url);
   if (!target) return [400, { error: "url_not_allowed" }];
   const key = Deno.env.get("FIRECRAWL_API_KEY");
-  if (!key) {
-    return [200, { ok: false, error: "web_read_unavailable", summary: "A leitura de páginas não está configurada agora. Diga ao usuário que não conseguiu abrir o link." }];
-  }
-  const page = parseFirecrawlScrape(await firecrawl("scrape", buildFirecrawlScrapeBody(target), key, 25_000), target);
+  const page = (key ? parseFirecrawlScrape(await firecrawl("scrape", buildFirecrawlScrapeBody(target), key, 25_000), target) : null)
+    ?? parseJinaReader(await jina(target, 25_000), target);
   if (!page) {
     return [200, { ok: false, error: "web_read_failed", summary: `Não consegui ler ${target} (página fora do ar, bloqueada ou sem texto). Diga isso ao usuário; não invente o conteúdo.` }];
   }
