@@ -265,6 +265,7 @@ export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
     `"actions" tem no máximo ${AGENT_LIMITS.maxActions} itens; use [] quando for só conversa. Cada item é uma ferramenta:`,
     "",
     `- {"tool":"image","prompt":"descrição detalhada da imagem"} → gera uma imagem (${TOOL_COSTS.image}).`,
+    '  Regra para imagens: o "prompt" tem que manter o SUJEITO exato que o usuário pediu. Se ele pediu um sapo, descreva um sapo; nunca troque por uma pessoa, mulher ou outro personagem. Você pode acrescentar estilo, cenário, cor e luz, mas não mudar o que foi pedido.',
     `- {"tool":"design","prompt":"...","format":"post|story|banner|poster","tier":"simple|premium"} → arte pronta do Design Premium (${TOOL_COSTS.design}). Use para posts, stories, banners e cartazes.`,
     `- {"tool":"document","prompt":"o que escrever"} → documento do Vertal Office (${TOOL_COSTS.document}).`,
     `- {"tool":"spreadsheet","prompt":"que tabela montar"} → planilha do Vertal Office (${TOOL_COSTS.spreadsheet}).`,
