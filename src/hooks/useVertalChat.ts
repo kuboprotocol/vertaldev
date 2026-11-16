@@ -22,6 +22,13 @@ import {
 } from '@/lib/chatAgent/artifacts';
 import { actionLabel, runAction, type ApiApprovalRequest } from '@/lib/chatAgent/runAction';
 import { loadConnections } from '@/lib/chatAgent/connections';
+import {
+  PLAN_LIMITS,
+  completePlanTask,
+  initPlanState,
+  type ChatPlanAction,
+  type ChatPlanState,
+} from '@/lib/chatAgent/brain';
 
 export interface ChatStep {
   label: string;
@@ -36,13 +43,18 @@ export interface VertalMessage {
   /** Só na mensagem em andamento: o que o agente está fazendo agora. */
   steps?: ChatStep[];
   pending?: boolean;
+  /** O chat guardou ou esqueceu algo da memória neste turno (aviso discreto, não vai para o histórico). */
+  memory?: { saved: number; forgotten: number };
 }
 
 export interface PendingApproval extends ApiApprovalRequest {
   resolve: (approved: boolean) => void;
 }
 
-const MAX_ROUNDS = 4;
+/** Rodadas de ferramentas seguidas (ex.: buscar → ler → responder) antes de o agente ter de responder. */
+const MAX_TOOL_ROUNDS = PLAN_LIMITS.maxToolRounds;
+/** Teto de chamadas ao agente num turno (plano + ferramentas + síntese). */
+const MAX_AGENT_CALLS = PLAN_LIMITS.maxAgentCallsPerTurn;
 
 const AGENT_ERRORS: Record<string, string> = {
   deduction_failed: 'Seus créditos acabaram. Recarregue para continuar conversando.',
@@ -56,19 +68,35 @@ const AGENT_ERRORS: Record<string, string> = {
 interface AgentResponse {
   reply: string;
   actions: AgentAction[];
+  memory?: { saved: number; forgotten: number };
+}
+
+interface AgentCallOptions {
+  conversationId?: string | null;
+  /** Última rodada: o servidor manda responder sem novas ações. */
+  final?: boolean;
+  /** Plano em execução (tarefa atual ou fase final). */
+  plan?: ChatPlanState;
 }
 
 async function callAgent(
   history: Array<{ role: 'user' | 'assistant'; content: string }>,
   toolResults: ToolResult[],
+  options: AgentCallOptions = {},
 ): Promise<AgentResponse> {
   const { data, error } = await supabase.functions.invoke<AgentResponse>('creative-router', {
     body: {
       tool: 'agent_chat',
       messages: history,
       agent: {
-        ...(toolResults.length ? { tool_results: toolResults } : {}),
-        context: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, connections: loadConnections() },
+        ...(toolResults.length ? { tool_results: toolResults.slice(-8) } : {}),
+        ...(options.final ? { final: true } : {}),
+        ...(options.plan ? { plan: options.plan } : {}),
+        context: {
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          connections: loadConnections(),
+          ...(options.conversationId ? { conversation_id: options.conversationId } : {}),
+        },
       },
     },
   });
@@ -231,63 +259,122 @@ export function useVertalChat(options: {
       const made: Artifact[] = [];
       const panels: PanelKey[] = [];
       const errors: string[] = [];
-      const replies: string[] = [];
-      let toolResults: ToolResult[] = [];
+      const memory = { saved: 0, forgotten: 0 };
+      let calls = 0;
+      const conversationForAgent = convId;
 
-      for (let round = 0; round < MAX_ROUNDS; round++) {
-        const turn = await callAgent(
-          round === 0 ? history : [...history, { role: 'assistant' as const, content: replies.join('\n\n') || '(executando ferramentas)' }],
-          toolResults,
-        );
-        if (turn.reply) replies.push(turn.reply);
-        patchDraft((m) => ({ ...m, text: replies.join('\n\n') }));
-        if (turn.actions.length === 0) break;
+      const addStep = (label: string) => patchDraft((m) => ({ ...m, steps: [...(m.steps ?? []), { label, state: 'running' }] }));
+      const finishStep = (index: number, state: ChatStep['state']) =>
+        patchDraft((m) => ({ ...m, steps: (m.steps ?? []).map((s, i) => (i === index ? { ...s, state } : s)) }));
+      let stepCount = 0;
+      const pushStep = (label: string) => {
+        addStep(label);
+        return stepCount++;
+      };
 
-        toolResults = [];
-        let followUp = false;
-        for (const action of turn.actions) {
-          const label = actionLabel(action);
-          patchDraft((m) => ({ ...m, steps: [...(m.steps ?? []), { label, state: 'running' }] }));
-          const outcome = await runAction(action, {
-            userId: user.id,
-            artifacts: [...known, ...made],
-            newId: () => nextArtifactId([...known, ...made]),
-            approveApi,
-            onAppPreview: setLivePreview,
-            appBlockedReason: () => {
-              const plan = planRef.current;
-              if (!plan.subscription?.is_active && !plan.canEdit) return 'Construir aplicativos precisa de um plano ativo. Veja os planos em Preços.';
-              if (!plan.canEdit) return 'Suas edições do plano acabaram. Recarregue para continuar construindo.';
-              return null;
-            },
-            chargeAppEdit: () => planRef.current.incrementEdit(),
-            setChatOnly: (value) => optionsRef.current.onChatOnly(value),
-          });
-          if (action.tool === 'app') setLivePreview(null);
-          toolResults.push(outcome.result);
-          if (outcome.needsFollowUp) followUp = true;
-          if (outcome.error) errors.push(outcome.error);
-          if (outcome.panel && !panels.includes(outcome.panel)) panels.push(outcome.panel);
-          if (outcome.artifact) {
-            // Uma edição devolve o mesmo id: substitui a versão anterior desta mensagem.
-            const at = made.findIndex((a) => a.id === outcome.artifact!.id);
-            if (at >= 0) made[at] = outcome.artifact;
-            else made.push(outcome.artifact);
-            optionsRef.current.onArtifact(outcome.artifact);
+      /**
+       * Laço do agente: pergunta → ações → resultados → nova rodada, até o agente
+       * responder sem ações ou acabar o limite de rodadas (aí ele responde com o que tem).
+       */
+      const runLoop = async (opts: { plan?: ChatPlanState; show: boolean }) => {
+        const replies: string[] = [];
+        let toolResults: ToolResult[] = [];
+        let planAction: ChatPlanAction | undefined;
+        for (let round = 0; round <= MAX_TOOL_ROUNDS && calls < MAX_AGENT_CALLS; round++) {
+          const last = round === MAX_TOOL_ROUNDS || calls === MAX_AGENT_CALLS - 1;
+          calls++;
+          const turn = await callAgent(
+            round === 0 ? history : [...history, { role: 'assistant' as const, content: replies.join('\n\n') || '(executando ferramentas)' }],
+            round === 0 ? [] : toolResults,
+            { conversationId: conversationForAgent, final: round > 0 && last, plan: opts.plan },
+          );
+          if (turn.memory) {
+            memory.saved += turn.memory.saved;
+            memory.forgotten += turn.memory.forgotten;
           }
-          patchDraft((m) => ({
-            ...m,
-            steps: (m.steps ?? []).map((s, i, all) => (i === all.length - 1 ? { ...s, state: outcome.error ? 'error' : 'done' } : s)),
-            extras: { artifacts: [...made], panels: [...panels], errors: [...errors] },
-          }));
-          if (outcome.panel) optionsRef.current.onOpenPanel(outcome.panel, outcome.figcraft);
+          if (turn.reply) replies.push(turn.reply);
+          if (opts.show) patchDraft((m) => ({ ...m, text: replies.join('\n\n') }));
+          const plan = !opts.plan && round === 0 ? turn.actions.find((a): a is ChatPlanAction => a.tool === 'plan') : undefined;
+          if (plan) {
+            planAction = plan;
+            break;
+          }
+          const actions = turn.actions.filter((a) => a.tool !== 'plan');
+          if (actions.length === 0 || last) break;
+
+          let followUp = false;
+          for (const action of actions) {
+            const step = pushStep(actionLabel(action));
+            const outcome = await runAction(action, {
+              userId: user.id,
+              artifacts: [...known, ...made],
+              newId: () => nextArtifactId([...known, ...made]),
+              approveApi,
+              onAppPreview: setLivePreview,
+              appBlockedReason: () => {
+                const plan = planRef.current;
+                if (!plan.subscription?.is_active && !plan.canEdit) return 'Construir aplicativos precisa de um plano ativo. Veja os planos em Preços.';
+                if (!plan.canEdit) return 'Suas edições do plano acabaram. Recarregue para continuar construindo.';
+                return null;
+              },
+              chargeAppEdit: () => planRef.current.incrementEdit(),
+              setChatOnly: (value) => optionsRef.current.onChatOnly(value),
+            });
+            if (action.tool === 'app') setLivePreview(null);
+            // Resultados acumulam entre rodadas (ex.: a busca continua visível quando o agente lê uma página).
+            toolResults = [...toolResults, outcome.result].slice(-8);
+            if (outcome.needsFollowUp) followUp = true;
+            if (outcome.error) errors.push(outcome.error);
+            if (outcome.panel && !panels.includes(outcome.panel)) panels.push(outcome.panel);
+            if (outcome.artifact) {
+              // Uma edição devolve o mesmo id: substitui a versão anterior desta mensagem.
+              const at = made.findIndex((a) => a.id === outcome.artifact!.id);
+              if (at >= 0) made[at] = outcome.artifact;
+              else made.push(outcome.artifact);
+              optionsRef.current.onArtifact(outcome.artifact);
+            }
+            finishStep(step, outcome.error ? 'error' : 'done');
+            patchDraft((m) => ({ ...m, extras: { artifacts: [...made], panels: [...panels], errors: [...errors] } }));
+            if (outcome.panel) optionsRef.current.onOpenPanel(outcome.panel, outcome.figcraft);
+          }
+          if (!followUp) break;
         }
-        if (!followUp) break;
+        return { replies, planAction };
+      };
+
+      const first = await runLoop({ show: true });
+      let replies = first.replies;
+
+      // Modo plano (motor do Vibe Code): uma tarefa por vez, depois a síntese revisada.
+      if (first.planAction) {
+        let state = initPlanState(first.planAction);
+        const intro = first.replies.join('\n\n');
+        const total = state.tasks.length;
+        while (state.phase === 'execute' && state.current !== undefined && calls < MAX_AGENT_CALLS - 1) {
+          const task = state.tasks.find((t) => t.id === state.current)!;
+          const position = state.tasks.filter((t) => t.status !== 'pending').length + 1;
+          const step = pushStep(`Etapa ${position}/${total}: ${task.title}`);
+          const run = await runLoop({ plan: state, show: false });
+          const result = run.replies.join(' ').trim();
+          const ok = result.length > 0;
+          finishStep(step, ok ? 'done' : 'error');
+          state = completePlanTask(state, task.id, ok, result || 'Sem resultado.');
+        }
+        if (state.phase !== 'final') state = { ...state, current: undefined, phase: 'final' };
+        const finalStep = pushStep('Revisando e escrevendo a resposta final');
+        const synthesis = calls < MAX_AGENT_CALLS ? await runLoop({ plan: state, show: false }) : { replies: [] as string[] };
+        finishStep(finalStep, synthesis.replies.length ? 'done' : 'error');
+        const doneTitles = state.tasks.filter((t) => t.status === 'done').map((t) => t.title);
+        const trail = doneTitles.length ? `\n\n_Feito em ${doneTitles.length} etapa(s): ${doneTitles.join(' → ')}._` : '';
+        replies = synthesis.replies.length ? [`${synthesis.replies.join('\n\n')}${trail}`] : [intro, 'Não consegui concluir todas as etapas do plano.'].filter(Boolean);
       }
 
       const finalText = replies.join('\n\n') || (made.length ? 'Pronto.' : errors.length ? 'Não consegui concluir.' : '…');
       const extras: MessageExtras = { artifacts: made, panels, errors };
-      patchDraft((m) => ({ ...m, text: finalText, extras, steps: undefined, pending: false }));
+      patchDraft((m) => ({
+        ...m, text: finalText, extras, steps: undefined, pending: false,
+        ...(memory.saved || memory.forgotten ? { memory: { ...memory } } : {}),
+      }));
       await conversationService.addMessage(convId, 'assistant', encodeMessage(finalText, extras));
       void refreshConversations();
       void refetchCredits();

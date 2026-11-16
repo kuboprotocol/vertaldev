@@ -16,6 +16,12 @@ interface VoiceRecordingState {
   interimTranscript: string;
 }
 
+// Tipos mínimos da Web Speech API (o lib.dom do TypeScript não traz SpeechRecognition).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SpeechRecognition = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SpeechRecognitionEvent = any;
+
 // Web Speech API (nativa do navegador - sem dependências)
 export class WebSpeechVoiceService {
   private recognition: SpeechRecognition | null = null;

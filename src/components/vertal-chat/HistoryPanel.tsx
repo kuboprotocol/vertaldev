@@ -7,11 +7,11 @@ import { decodeMessage, KIND_LABEL, type Artifact, type ArtifactKind } from '@/l
 import { ArtifactCard } from './ArtifactViews';
 import { Loader2, Search, Filter } from 'lucide-react';
 
-interface ArtifactWithConversation extends Artifact {
+type ArtifactWithConversation = Artifact & {
   conversationId: string;
   conversationTitle: string;
   createdAt: string;
-}
+};
 
 export function HistoryPanel() {
   const { user } = useAuth();
