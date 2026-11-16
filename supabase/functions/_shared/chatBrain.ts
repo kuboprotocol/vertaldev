@@ -377,14 +377,25 @@ async function webSearch(input: Record<string, unknown>): Promise<OpResult> {
   const query = typeof input.query === "string" ? input.query.trim().slice(0, WEB_LIMITS.queryChars) : "";
   if (query.length < 2) return [400, { error: "invalid_input" }];
   const when = whenText(input.timezone);
-  const key = firecrawlKey();
   const recency = WEB_RECENCY.includes(input.recency as WebRecency) ? input.recency as WebRecency : undefined;
-  if (!key) return await keylessSearch(query, Number(input.max) || undefined, recency, when);
-  const data = await firecrawl("search", buildFirecrawlSearchBody({ query, max: Number(input.max) || undefined, recency }), key, 20_000);
-  // Firecrawl fora do ar ou sem créditos: cai para a busca sem chave.
-  if (!data) return await keylessSearch(query, Number(input.max) || undefined, recency, when);
+  const max = Number(input.max) || undefined;
+  // Principal: DuckDuckGo + Jina Reader (grátis). Firecrawl é o reserva: só entra
+  // quando a busca grátis falha ou volta vazia, para não gastar créditos à toa.
+  const primary = await keylessSearch(query, max, recency, when);
+  const body = primary[1] as { ok?: boolean; results?: unknown[] };
+  if (body.ok && Array.isArray(body.results) && body.results.length > 0) return primary;
+  const key = firecrawlKey();
+  if (!key) return primary;
+  return (await firecrawlSearch(query, max, recency, when, key)) ?? primary;
+}
+
+async function firecrawlSearch(
+  query: string, max: number | undefined, recency: WebRecency | undefined, when: string, key: string,
+): Promise<OpResult | null> {
+  const data = await firecrawl("search", buildFirecrawlSearchBody({ query, max, recency }), key, 20_000);
+  if (!data) return null;
   const results = parseFirecrawlSearch(data);
-  // Lê as primeiras páginas para o modelo ter conteúdo, não só o resumo do buscador.
+  if (results.length === 0) return null;
   const top = Math.max(0, Math.min(3, Number(Deno.env.get("CHAT_WEB_SCRAPE_TOP") ?? 2) || 0));
   await Promise.all(results.slice(0, top).map(async (r) => {
     const target = safeTarget(r.url);
@@ -398,6 +409,7 @@ async function webSearch(input: Record<string, unknown>): Promise<OpResult> {
   return [200, {
     ok: true,
     query,
+    provider: "firecrawl",
     results: results.map((r) => ({ title: r.title, url: r.url, ...(r.published ? { published: r.published } : {}) })),
     summary: formatSearchResults(query, results, when),
   }];
@@ -406,9 +418,10 @@ async function webSearch(input: Record<string, unknown>): Promise<OpResult> {
 async function webRead(input: Record<string, unknown>): Promise<OpResult> {
   const target = safeTarget(input.url);
   if (!target) return [400, { error: "url_not_allowed" }];
+  // Principal: Jina Reader (grátis). Reserva: Firecrawl, se houver chave.
   const key = firecrawlKey();
-  const page = (key ? parseFirecrawlScrape(await firecrawl("scrape", buildFirecrawlScrapeBody(target), key, 25_000), target) : null)
-    ?? parseJinaReader(await jina(target, 25_000), target);
+  const page = parseJinaReader(await jina(target, 25_000), target)
+    ?? (key ? parseFirecrawlScrape(await firecrawl("scrape", buildFirecrawlScrapeBody(target), key, 25_000), target) : null);
   if (!page) {
     return [200, { ok: false, error: "web_read_failed", summary: `Não consegui ler ${target} (página fora do ar, bloqueada ou sem texto). Diga isso ao usuário; não invente o conteúdo.` }];
   }

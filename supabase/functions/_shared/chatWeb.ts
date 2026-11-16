@@ -224,12 +224,12 @@ function clampInt(v: unknown, min: number, max: number, fallback: number): numbe
   return Number.isFinite(n) ? Math.min(Math.max(Math.round(n), min), max) : fallback;
 }
 
-// ─── Sem chave: DuckDuckGo HTML + Jina Reader ────────────────────────────
+// ─── Principal: DuckDuckGo HTML + Jina Reader (Firecrawl é reserva) ────────────────────────────
 //
-// Quando FIRECRAWL_API_KEY não está configurada, a busca usa a página HTML do
-// DuckDuckGo lida pelo Jina Reader (r.jina.ai, grátis, sem chave), e a leitura
-// de páginas também passa pelo Jina Reader. É o plano B: funciona já, com limite
-// de uso mais baixo. Com a chave do Firecrawl, ele volta a ser o principal.
+// Caminho principal (grátis): a busca usa a página HTML do DuckDuckGo lida pelo
+// Jina Reader (r.jina.ai, sem chave), e a leitura de páginas também passa pelo
+// Jina Reader. O Firecrawl fica de reserva: só entra quando este caminho falha
+// ou volta vazio, para economizar créditos.
 
 export const JINA_READER = "https://r.jina.ai/";
 
