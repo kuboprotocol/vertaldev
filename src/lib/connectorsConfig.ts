@@ -1,4 +1,4 @@
-import { Github, CreditCard, Globe, Figma, Server, Smartphone, Cloud, Database, Mail, MessageSquare, Shield, Container, Wallet, Zap, Leaf, Rocket, Terminal, TrendingUp } from 'lucide-react'
+import { Github, CreditCard, Globe, Figma, Server, Smartphone, Cloud, Database, Mail, MessageSquare, Shield, Container, Wallet, Zap, Leaf, Rocket, Terminal, TrendingUp, Instagram, MessageCircle } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 export interface ConnectorSetupStep {
@@ -263,6 +263,50 @@ export const connectors: ConnectorConfig[] = [
       { title: 'Conecte o workspace', description: 'Autorize o app Lovable Slack quando solicitado.' },
       { title: 'Ajuste escopos', description: 'Em Connectors → Slack adicione/remova scopes conforme necessário.' },
       { title: 'Pronto', description: 'O bot fica disponível em canais públicos automaticamente.' },
+    ],
+  },
+  {
+    name: 'Instagram',
+    slug: 'instagram',
+    icon: Instagram,
+    color: '#E4405F',
+    authType: 'webhook',
+    category: 'communication',
+    description: 'Leia e responda as DMs da sua conta profissional pelo Vertal Chat.',
+    longDescription: 'Conta profissional do Instagram pela API oficial da Meta. As mensagens diretas chegam por webhook assinado: a IA responde os contatos da lista permitida, e o Vertal Chat lê a caixa de entrada e envia respostas com a sua confirmação. A Meta só permite texto livre até 24 h depois da última mensagem do contato.',
+    features: ['DMs por webhook com assinatura HMAC', 'Respostas com IA para contatos autorizados', 'Caixa de entrada no Vertal Chat', 'Envio pelo chat, sempre com confirmação', 'Janela de 24 h da Meta respeitada'],
+    docsUrl: 'https://developers.facebook.com/docs/instagram-platform',
+    status: 'available',
+    internalRoute: '/connectors/instagram',
+    apiKeyLabel: '',
+    apiKeyPlaceholder: '',
+    apiKeyHelp: 'Os segredos ficam no servidor (Edge Functions → Secrets). Veja a página do conector para o passo a passo.',
+    setupSteps: [
+      { title: 'Conta profissional', description: 'Use uma conta profissional do Instagram vinculada a uma Página do Facebook.' },
+      { title: 'App na Meta', description: 'Crie o app, ative Instagram e aprove a permissão instagram_manage_messages.' },
+      { title: 'Webhook', description: 'Cole a URL de callback mostrada na página e assine o campo "messages".' },
+    ],
+  },
+  {
+    name: 'WhatsApp',
+    slug: 'whatsapp',
+    icon: MessageCircle,
+    color: '#25D366',
+    authType: 'webhook',
+    category: 'communication',
+    description: 'Atenda clientes no WhatsApp Business e converse com eles pelo Vertal Chat.',
+    longDescription: 'WhatsApp Business Cloud API da Meta, para conta de negócio. As mensagens chegam por webhook assinado: a IA responde os números da lista permitida, e o Vertal Chat lê a caixa de entrada e envia respostas com a sua confirmação. Texto livre só até 24 h depois da última mensagem do cliente; fora disso, é preciso um template aprovado.',
+    features: ['Webhook com assinatura HMAC', 'Respostas com IA para números autorizados', 'Caixa de entrada no Vertal Chat', 'Envio pelo chat, sempre com confirmação', 'Janela de 24 h da Meta respeitada'],
+    docsUrl: 'https://developers.facebook.com/docs/whatsapp/cloud-api',
+    status: 'available',
+    internalRoute: '/connectors/whatsapp',
+    apiKeyLabel: '',
+    apiKeyPlaceholder: '',
+    apiKeyHelp: 'Os segredos ficam no servidor (Edge Functions → Secrets). Veja a página do conector para o passo a passo.',
+    setupSteps: [
+      { title: 'Conta de negócio', description: 'Tenha um número no WhatsApp Business Cloud API.' },
+      { title: 'Webhook', description: 'Cole a URL de callback mostrada na página e assine o campo "messages".' },
+      { title: 'Números permitidos', description: 'Defina WHATSAPP_ALLOWED_WA_IDS para o bot responder esses números.' },
     ],
   },
   {

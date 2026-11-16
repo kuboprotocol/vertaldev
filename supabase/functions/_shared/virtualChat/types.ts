@@ -2,7 +2,7 @@
  * Virtual Chat — tipos compartilhados entre canais, política de acesso e cobrança.
  */
 
-export type ChannelId = "telegram" | "whatsapp" | "messenger";
+export type ChannelId = "telegram" | "whatsapp" | "messenger" | "instagram";
 
 /** Quem está pedindo algo: o dono da conta, ou um cliente dele falando por um canal. */
 export type Audience = "owner" | "external_contact";

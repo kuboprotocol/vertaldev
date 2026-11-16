@@ -201,6 +201,7 @@ export function isParallelSafe(action: AgentAction): boolean {
     case "news_weather":
     case "world_time":
     case "gmail_search":
+    case "channel_inbox":
       return true;
     case "memory":
       return action.op === "list";
