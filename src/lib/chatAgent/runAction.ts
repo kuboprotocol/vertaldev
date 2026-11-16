@@ -353,30 +353,77 @@ async function runWeather(action: Extract<AgentAction, { tool: 'weather' }>): Pr
   ].join('\n'));
 }
 
-async function runWebSearch(action: Extract<AgentAction, { tool: 'web_search' }>): Promise<ActionOutcome> {
+/**
+ * Busca na web de verdade, pelo servidor (Firecrawl em creative-router, com limite por
+ * usuário). O resultado volta ao agente com títulos, URLs, datas e trechos das páginas.
+ */
+async function runWebSearch(action: Extract<AgentAction, { tool: 'web_search' }>, recency?: 'dia' | 'semana' | 'mes' | 'ano'): Promise<ActionOutcome> {
   if (!action.query || action.query.trim().length === 0) {
     return followUp('web_search', false, 'Consulta vazia. Digite o que procurar.');
   }
   try {
-    const max = Math.min(action.max ?? 5, 10);
-    const encoded = encodeURIComponent(action.query.trim());
-    const r = await fetch(`https://api.duckduckgo.com/?q=${encoded}&format=json&no_html=1&max_results=${max}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; VertChat/1.0)' },
+    const { data, error } = await supabase.functions.invoke('creative-router', {
+      body: { tool: 'agent_op', op_input: { op: 'web_search', query: action.query.trim(), max: action.max, recency, timezone: deviceTimeZone() } },
     });
-    if (!r.ok) return followUp('web_search', false, 'Serviço de busca indisponível no momento.');
-    const data = (await r.json()) as Record<string, unknown>;
-    const results = (data.Results as Array<{ Title?: string; Url?: string; Abstract?: string }> | undefined) ?? [];
-    if (results.length === 0) {
-      return followUp('web_search', true, `Nenhum resultado encontrado para: "${action.query}"`);
-    }
-    const summary = results
-      .map((r, i) => `${i + 1}. **${r.Title ?? 'Sem título'}**\n   ${r.Abstract ?? 'Sem resumo'}\n   🔗 ${r.Url}`)
-      .join('\n\n');
-    return followUp('web_search', true, `**Resultados para: "${action.query}"** (${results.length} encontrados)\n\n${summary}`);
+    if (error) return followUp('web_search', false, await errorText(error, 'A busca na web falhou agora. Diga isso ao usuário; não invente resultados.'));
+    const d = (data ?? {}) as { ok?: boolean; summary?: string };
+    return followUp('web_search', Boolean(d.ok), d.summary || `Nenhum resultado para "${action.query}".`);
   } catch (err) {
     return followUp('web_search', false, `Erro ao buscar: ${err instanceof Error ? err.message : 'desconhecido'}`);
   }
 }
+
+/** Lê o conteúdo principal de uma página pelo servidor (Firecrawl, URL validada contra SSRF). */
+async function runWebRead(action: Extract<AgentAction, { tool: 'web_read' }>): Promise<ActionOutcome> {
+  const { data, error } = await supabase.functions.invoke('creative-router', {
+    body: { tool: 'agent_op', op_input: { op: 'web_read', url: action.url, timezone: deviceTimeZone() } },
+  });
+  if (error) return followUp('web_read', false, await errorText(error, `Não consegui abrir ${action.url}.`));
+  const d = (data ?? {}) as { ok?: boolean; summary?: string };
+  return followUp('web_read', Boolean(d.ok), d.summary || `Não consegui ler ${action.url}.`);
+}
+
+/** O que o chat lembra do usuário (listar ou esquecer). */
+async function runMemory(action: Extract<AgentAction, { tool: 'memory' }>): Promise<ActionOutcome> {
+  const op_input = action.op === 'forget' ? { op: 'memory_forget', query: action.query } : { op: 'memory_list' };
+  const { data, error } = await supabase.functions.invoke('creative-router', { body: { tool: 'agent_op', op_input } });
+  if (error) return followUp('memory', false, 'A memória está indisponível agora.');
+  if (action.op === 'forget') {
+    const d = (data ?? {}) as { forgotten?: number; items?: string[] };
+    return followUp('memory', true, d.forgotten
+      ? `Apaguei ${d.forgotten} memória(s): ${(d.items ?? []).join(' | ')}`
+      : `Nenhuma memória batia com "${action.query}".`);
+  }
+  const d = (data ?? {}) as { enabled?: boolean; items?: Array<{ kind: string; content: string }> };
+  if (d.enabled === false) return followUp('memory', true, 'A memória está desligada pelo usuário (ele religa no painel Memória).');
+  const items = d.items ?? [];
+  return followUp('memory', true, items.length
+    ? `Memórias do usuário (${items.length}):\n${items.slice(0, 60).map((m) => `- [${m.kind}] ${m.content}`).join('\n')}\nEle vê e apaga tudo no painel Memória da barra lateral.`
+    : 'Ainda não há memórias salvas deste usuário.');
+}
+
+/** Hora local agora em outras cidades (catálogo do Vertal Clock, sem rede). */
+async function runWorldTime(action: Extract<AgentAction, { tool: 'world_time' }>): Promise<ActionOutcome> {
+  const { resolvePlace, isValidTimeZone, formatZoneDate, formatZoneTime, offsetLabel } = await import('@/lib/clock/zones');
+  const now = Date.now();
+  const lines = action.places.map((place) => {
+    const city = resolvePlace(place);
+    const tz = city?.tz ?? (isValidTimeZone(place) ? place : null);
+    if (!tz) return `${place}: não encontrei esse lugar no catálogo de fusos.`;
+    return `${city ? `${city.city}, ${city.country}` : tz}: ${formatZoneTime(tz, now)} de ${formatZoneDate(tz, now)} (${offsetLabel(tz, now)}, fuso ${tz})`;
+  });
+  return followUp('world_time', true, lines.join('\n'));
+}
+
+const deviceTimeZone = (): string => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return 'America/Sao_Paulo';
+  }
+};
+
+const NEWS_RECENCY = { ultima_hora: 'dia', hoje: 'dia', ultima_semana: 'semana' } as const;
 
 const NOT_CONNECTED = (name: string) => `${name} não está conectado. O usuário conecta em Conectores.`;
 
@@ -587,24 +634,15 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
         };
       }
       case 'news_feed': {
-        const category = action.category ?? 'geral';
-        const timeRange = action.timeRange ?? 'hoje';
-        const location = action.location ?? 'local';
-        const title = `Notícias ${location === 'local' ? 'do seu bairro' : location === 'regional' ? 'da sua região' : location === 'nacional' ? 'do Brasil' : 'internacionais'} - ${timeRange}`;
-        return {
-          artifact: { id: ctx.newId(), kind: 'news_feed', title, category, timeRange, location, articleCount: 0 },
-          panel: 'history',
-          result: { tool: 'news_feed', ok: true, summary: `📰 Notícias ${category} (${location}) buscadas. Mostrando artigos de ${timeRange}.` },
-        };
+        // Notícias de verdade: busca na web recente (antes só abria um painel e dizia que tinha buscado).
+        const where = action.location === 'internacional' ? 'mundo' : action.location === 'nacional' || !action.location ? 'Brasil' : 'região do usuário';
+        const query = `notícias ${action.category ?? ''} ${where}`.replace(/\s+/g, ' ').trim();
+        const out = await runWebSearch({ tool: 'web_search', query, max: 6 }, NEWS_RECENCY[action.timeRange ?? 'hoje']);
+        return { ...out, result: { ...out.result, tool: 'news_feed' } };
       }
       case 'news_weather': {
-        const location = action.location ?? 'sua localização';
-        const title = `Previsão do Tempo - ${location}`;
-        return {
-          artifact: { id: ctx.newId(), kind: 'news_weather', title, location },
-          panel: 'history',
-          result: { tool: 'news_weather', ok: true, summary: `🌤️ Clima de ${location} carregado com previsão detalhada e alertas.` },
-        };
+        const out = await runWeather({ tool: 'weather', ...(action.location ? { place: action.location } : {}) });
+        return { ...out, result: { ...out.result, tool: 'news_weather' } };
       }
       case 'podcast_studio': {
         const title = titleFrom(action.topic, 50);
@@ -669,6 +707,15 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
         return { panel: action.panel, result: { tool: 'open_panel', ok: true, summary: `Painel ${action.panel} aberto para o usuário.` } };
       case 'figcraft':
         return await runFigcraft(action, ctx);
+      case 'web_read':
+        return await runWebRead(action);
+      case 'memory':
+        return await runMemory(action);
+      case 'world_time':
+        return await runWorldTime(action);
+      case 'plan':
+        // O hook executa o plano tarefa por tarefa; aqui só confirma o recebimento.
+        return { result: { tool: 'plan', ok: true, summary: `Plano com ${action.tasks.length} tarefas recebido.` } };
     }
   } catch (e) {
     return fail(action.tool, e instanceof Error && e.message ? 'Algo deu errado ao executar esta ferramenta.' : 'Algo deu errado.');
@@ -781,5 +828,17 @@ export function actionLabel(action: AgentAction): string {
     case 'mcp_call': return 'Usando conexão MCP';
     case 'set_layout': return 'Ajustando a tela';
     case 'figcraft': return 'Trabalhando no figCraft';
+    case 'web_read': {
+      try {
+        return `Lendo ${new URL(action.url).host}`;
+      } catch {
+        return 'Lendo a página';
+      }
+    }
+    case 'memory': return action.op === 'forget' ? 'Esquecendo da memória' : 'Consultando a memória';
+    case 'plan': return 'Montando o plano';
+    case 'world_time': return 'Consultando o horário no mundo';
+    case 'alarm': return 'Ajustando alarmes';
+    case 'timer': return 'Ajustando timer';
   }
 }

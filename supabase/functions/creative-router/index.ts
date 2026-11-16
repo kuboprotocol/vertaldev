@@ -28,6 +28,7 @@ import {
   toGmailRaw,
 } from "../_shared/officeEmail.ts";
 import { getFreshAccessToken, loadAccount } from "../_shared/gmailToken.ts";
+import { handleChatBrainOp, loadChatBrain, saveChatBrain } from "../_shared/chatBrain.ts";
 import {
   AGENT_LIMITS,
   API_METHODS,
@@ -95,6 +96,9 @@ Deno.serve(withRefundOnFailure(async (req) => {
   
   try {
     const body = await req.json();
+    // Vertal Chat: busca/leitura na web e memória. Grátis (sem créditos), com
+    // limite próprio por usuário; fica aqui porque o projeto está no teto de edge functions.
+    if (body?.tool === "agent_op") return jsonResponse(...(await handleChatBrainOp(user, body?.op_input ?? {})));
     const parsed = InputSchema.safeParse(body);
     if (!parsed.success) {
       return new Response(JSON.stringify({ error: "invalid_input", details: parsed.error.flatten() }), {
@@ -446,6 +450,8 @@ const CHAT_JSON_MODEL = "openai/gpt-3.5-turbo";
 const CHAT_FREE_PER_DAY = 5;
 const CHAT_JSON_MAX_MESSAGES = 40;
 const CHAT_JSON_MAX_CHARS = 8_000;
+// Vertal Chat: o navegador manda a conversa inteira; acima disto o resumo rolante cobre o começo.
+const CHAT_BRAIN_MAX_MESSAGES = 400;
 
 /** Conversa com a OpenRouter a partir do servidor: a chave fica no segredo do Supabase, nunca no navegador. */
 /** Conta a conversa no dia e devolve o custo: 0 (grátis) até o limite diário, depois 1 crédito. */
@@ -526,7 +532,13 @@ const AgentInput = z.object({
   context: z.object({
     timezone: z.string().max(64).optional(),
     connections: z.array(z.record(z.any())).max(20).optional(),
+    // Conversa atual (resumo rolante e memória); a posse é conferida no servidor.
+    conversation_id: z.string().uuid().optional(),
   }).optional(),
+  // Última rodada de ferramentas do turno: o modelo tem de responder, sem novas ações.
+  final: z.boolean().optional(),
+  // Modo plano em execução (validado em parsePlanState).
+  plan: z.record(z.any()).optional(),
 });
 
 /** Data e hora no fuso do usuário, por extenso. Fuso inválido cai para UTC. */
@@ -544,6 +556,7 @@ function localNow(timezone?: string): { text: string; timezone: string } {
 /**
  * Uma rodada do agente: devolve a resposta e as ações que o navegador vai executar.
  * As ações rodam pelas funções de cada ferramenta, com a cobrança e os limites delas.
+ * O "cérebro" (memória, resumo rolante, plano e revisão) fica em _shared/chatBrain.ts.
  */
 async function handleAgentChat(
   user: { id: string; email?: string | null },
@@ -563,12 +576,13 @@ async function handleAgentChat(
   const agent = AgentInput.safeParse(rawAgent);
   if (!agent.success) return fail(400, "invalid_input");
 
-  const trimmed = messages
-    .filter((m) => m.role === "user" || m.role === "assistant")
-    .slice(-CHAT_JSON_MAX_MESSAGES)
+  // Conversa inteira (até CHAT_BRAIN_MAX_MESSAGES); a janela enviada ao modelo sai do resumo rolante.
+  const filtered = messages.filter((m) => m.role === "user" || m.role === "assistant");
+  const all = filtered
+    .slice(-CHAT_BRAIN_MAX_MESSAGES)
     .map((m) => ({ role: m.role as "user" | "assistant", content: String(m.content).slice(0, CHAT_JSON_MAX_CHARS) }));
   const results = agent.data.tool_results ?? [];
-  if (trimmed.length === 0 || (results.length === 0 && trimmed[trimmed.length - 1].role !== "user")) {
+  if (all.length === 0 || (results.length === 0 && all[all.length - 1].role !== "user")) {
     return fail(400, "invalid_messages");
   }
 
@@ -580,6 +594,17 @@ async function handleAgentChat(
     console.error("[creative-router] agent_chat secrets list failed:", sanitizeError(e));
   }
 
+  // Memória, recordação entre conversas, resumo rolante e plano. Falhas aqui não derrubam a conversa.
+  const brain = await loadChatBrain({
+    userId: user.id,
+    conversationId: agent.data.context?.conversation_id,
+    messages: all,
+    offset: filtered.length - all.length,
+    maxMessages: CHAT_JSON_MAX_MESSAGES,
+    firstRound: results.length === 0,
+    plan: agent.data.plan,
+  });
+
   const now = localNow(agent.data.context?.timezone);
   const system = buildAgentSystemPrompt({
     secretNames,
@@ -587,10 +612,16 @@ async function handleAgentChat(
     localNow: now.text,
     timezone: now.timezone,
     connections: parseConnections(agent.data.context?.connections),
+    memoryEnabled: brain.memoryEnabled,
+    memories: brain.memories,
+    recall: brain.recall,
+    summary: brain.summary,
+    plan: brain.planBlock,
   });
+  const final = agent.data.final === true || brain.planPhase === "final";
   const convo = results.length
-    ? [...trimmed, { role: "user" as const, content: formatToolResults(results) }]
-    : trimmed;
+    ? [...brain.window, { role: "user" as const, content: formatToolResults(results, { final }) }]
+    : brain.window;
 
   try {
     const gw = await runGateway({
@@ -600,13 +631,25 @@ async function handleAgentChat(
       json: true,
       temperature: 0.4,
       maxTokens: 3500,
-      contextChars: 48_000,
+      contextChars: 78_000,
       noCache: true,
     });
     const turn = parseAgentTurn(gw.content);
     if (!turn.reply && turn.actions.length === 0) return fail(502, "invalid_model_output");
+    // Última rodada ou fase final do plano: sem novas ações. Durante um plano, sem plano dentro de plano.
+    let actions = final ? [] : turn.actions;
+    if (brain.planPhase) actions = actions.filter((a) => a.tool !== "plan");
+    // Memória (no mesmo JSON, sem chamada extra), revisão crítica da resposta final e resumo em segundo plano.
+    const after = await saveChatBrain(brain, {
+      userId: user.id,
+      turn: { ...turn, actions },
+      results,
+      lastUserText: [...all].reverse().find((m) => m.role === "user")?.content ?? "",
+    });
     return jsonResponse(200, {
-      reply: turn.reply, actions: turn.actions, provider: gw.provider, model: gw.model, creditsCharged: cost,
+      reply: after.reply, actions, provider: gw.provider, model: gw.model, creditsCharged: cost,
+      ...(after.memory ? { memory: after.memory } : {}),
+      ...(after.reviewed ? { reviewed: true } : {}),
     });
   } catch (err) {
     if (err instanceof GatewayError) return fail(503, "ai_unavailable");

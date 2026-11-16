@@ -5,7 +5,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle, ArrowLeft, ArrowUp, Check, ChevronDown, Coins, Columns2, ExternalLink, LayoutGrid, Loader2,
-  Maximize2, MessageSquare, MessageSquarePlus, Cable, MoreHorizontal, PanelLeft, Pencil, Pin, PinOff, Plus, ShieldCheck, Trash2, X, Mic,
+  Maximize2, MessageSquare, MessageSquarePlus, Cable, MoreHorizontal, PanelLeft, Pencil, Pin, PinOff, Plus, ShieldCheck, Trash2, X, Mic, Brain,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useVertalChat, type VertalMessage } from '@/hooks/useVertalChat';
@@ -21,6 +21,7 @@ import { ArtifactCard, ArtifactViewer, ChatMarkdown, type ViewerActions } from '
 import { PANEL_BY_KEY, PANEL_LIST, type PanelRequest } from './panelList';
 import { PanelHost } from './PanelHost';
 import { ConnectionsDialog } from './ConnectionsDialog';
+import { MemoryDialog } from './MemoryDialog';
 import { previewHtml } from '@/lib/chatAgent/previewHtml';
 
 const SIDEBAR_KEY = 'vertal-chat-sidebar';
@@ -86,6 +87,7 @@ export function VertalChat() {
   const chatOnlyRef = useRef(chatOnly);
   chatOnlyRef.current = chatOnly;
   const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
   const [side, setSide] = useState<Side>(null);
   const [panel, setPanel] = useState<PanelRequest | null>(null);
   const [focus, setFocus] = useState(false);
@@ -245,6 +247,10 @@ export function VertalChat() {
         setDrawerOpen(false);
         setConnectionsOpen(true);
       }}
+      onMemory={() => {
+        setDrawerOpen(false);
+        setMemoryOpen(true);
+      }}
     />
   );
 
@@ -385,6 +391,7 @@ export function VertalChat() {
                       setFocus(false);
                     }}
                     onOpenPanel={(key) => openPanel(key)}
+                    onOpenMemory={() => setMemoryOpen(true)}
                   />
                 ))}
                 <div ref={endRef} />
@@ -488,6 +495,7 @@ export function VertalChat() {
 
       <ApiApprovalDialog approval={chat.approval} />
       <ConnectionsDialog open={connectionsOpen} onOpenChange={setConnectionsOpen} onOpenVault={() => navigate('/secrets')} />
+      <MemoryDialog open={memoryOpen} onOpenChange={setMemoryOpen} />
     </div>
   );
 }
@@ -495,9 +503,10 @@ export function VertalChat() {
 // ─── Barra lateral ───────────────────────────────────────────────────────
 
 function SidebarContent({
-  chat, activePanel, onNew, onOpenConversation, onOpenPanel, onCollapse, onBackToPanel, onConnections,
+  chat, activePanel, onNew, onOpenConversation, onOpenPanel, onCollapse, onBackToPanel, onConnections, onMemory,
 }: {
   onConnections: () => void;
+  onMemory: () => void;
   chat: ReturnType<typeof useVertalChat>;
   activePanel?: PanelKey;
   onNew: () => void;
@@ -553,6 +562,19 @@ function SidebarContent({
                     >
                       <Cable className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <span className="flex-1 truncate">Minhas conexões</span>
+                    </button>
+                  </li>
+                )}
+                {group.id === 'conectar' && (
+                  <li>
+                    <button
+                      type="button"
+                      onClick={onMemory}
+                      title="O que o chat lembra de você entre conversas"
+                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-left text-foreground/85 transition hover:bg-secondary"
+                    >
+                      <Brain className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="flex-1 truncate">Memória</span>
                     </button>
                   </li>
                 )}
@@ -671,12 +693,13 @@ function SidebarContent({
 // ─── Mensagens ───────────────────────────────────────────────────────────
 
 function MessageRow({
-  message, activeArtifactId, onOpenArtifact, onOpenPanel,
+  message, activeArtifactId, onOpenArtifact, onOpenPanel, onOpenMemory,
 }: {
   message: VertalMessage;
   activeArtifactId?: string;
   onOpenArtifact: (id: string) => void;
   onOpenPanel: (key: PanelKey) => void;
+  onOpenMemory?: () => void;
 }) {
   if (message.role === 'user') {
     return (
@@ -736,6 +759,16 @@ function MessageRow({
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden /> {e}
         </p>
       ))}
+      {message.memory && (
+        <button
+          type="button"
+          onClick={onOpenMemory}
+          className="inline-flex items-center gap-1.5 rounded-full border border-border/60 px-2.5 py-1 text-xs text-muted-foreground hover:border-primary/50 hover:text-foreground"
+        >
+          <Brain className="h-3.5 w-3.5" aria-hidden />
+          {message.memory.forgotten ? 'Memória atualizada (esqueci o que você pediu)' : 'Memória atualizada'}
+        </button>
+      )}
     </div>
   );
 }
