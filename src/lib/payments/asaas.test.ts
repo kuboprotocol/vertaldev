@@ -73,3 +73,50 @@ describe("cobrança", () => {
     expect(buildCreatePaymentBody({ ...base, dueDate: "20/11/2026" }, today)).toEqual({ ok: false, error: "invalid_due_date" });
   });
 });
+
+import { decideCharge, type ChargeDecisionInput } from "./asaas";
+import { evaluatePaymentRequest } from "./policy";
+
+const decisionBase: ChargeDecisionInput = {
+  actor: "owner",
+  customerId: "cus_1",
+  billingType: "PIX",
+  valueBrl: 49.9,
+  dueDate: "2026-11-20",
+  confirmed: true,
+  extraConfirmed: false,
+  spentTodayBrl: 0,
+  dailyLimitBrl: 500,
+  today: "2026-11-16",
+  authHeader: "CONFIRMAR",
+};
+const decide = (over: Partial<ChargeDecisionInput> = {}) => decideCharge({ ...decisionBase, ...over }, evaluatePaymentRequest);
+
+describe("decisão de cobrança", () => {
+  it("cliente de canal nunca cobra", () => {
+    expect(decide({ actor: "customer" })).toEqual({ status: "deny", reason: "customer_cannot_pay" });
+  });
+
+  it("sem confirmação do dono, pede confirmação", () => {
+    expect(decide({ confirmed: false })).toEqual({ status: "needs_confirmation" });
+  });
+
+  it("passou do limite diário, pede confirmação extra", () => {
+    expect(decide({ spentTodayBrl: 480, valueBrl: 49.9 })).toEqual({ status: "needs_extra_confirmation" });
+  });
+
+  it("cabeçalho de autenticação não confirmado bloqueia a chamada mesmo com tudo aprovado", () => {
+    expect(decide({ authHeader: null })).toEqual({ status: "blocked_auth_unconfirmed" });
+  });
+
+  it("tudo certo: sai com body pronto", () => {
+    expect(decide()).toEqual({
+      status: "ready",
+      body: { customer: "cus_1", billingType: "PIX", value: 49.9, dueDate: "2026-11-20" },
+    });
+  });
+
+  it("body inválido é recusado antes da regra de pagamento", () => {
+    expect(decide({ valueBrl: 0 })).toEqual({ status: "deny", reason: "invalid_value" });
+  });
+});

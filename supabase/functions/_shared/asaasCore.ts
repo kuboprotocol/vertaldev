@@ -137,3 +137,69 @@ export function buildCreatePaymentBody(input: CreatePaymentInput, today: string)
   if (input.description) body.description = input.description;
   return { ok: true, body };
 }
+
+export interface ChargeDecisionInput {
+  actor: "owner" | "customer" | "agent";
+  customerId: string;
+  billingType: AsaasBillingType;
+  valueBrl: number;
+  dueDate: string;
+  description?: string;
+  /** Confirmação do dono para este valor e destinatário (mostrada na tela antes). */
+  confirmed: boolean;
+  /** Confirmação extra, quando passa do limite diário. */
+  extraConfirmed: boolean;
+  spentTodayBrl: number;
+  dailyLimitBrl: number;
+  /** Data de hoje em YYYY-MM-DD, para validar vencimento. */
+  today: string;
+  /** Cabeçalho confirmado pela doc. null = ainda não confirmado: a chamada fica bloqueada. */
+  authHeader: string | null;
+}
+
+export type ChargeDecision =
+  | { status: "needs_confirmation" }
+  | { status: "needs_extra_confirmation" }
+  | { status: "deny"; reason: string }
+  | { status: "blocked_auth_unconfirmed" }
+  | { status: "ready"; body: Record<string, unknown> };
+
+/**
+ * Decide se a cobrança pode sair. Ordem: regra de quem paga e limite (paymentPolicy),
+ * depois validação do body, depois cabeçalho de autenticação confirmado.
+ * Valores em reais; a regra de centavos fica em paymentPolicy (convertido aqui).
+ */
+export function decideCharge(
+  input: ChargeDecisionInput,
+  policy: (req: {
+    actor: "owner" | "customer" | "agent";
+    amountMinor: number;
+    currency: string;
+    spentTodayMinor: number;
+    dailyLimitMinor: number;
+    confirmed: boolean;
+    extraConfirmed: boolean;
+  }) => { status: string; reason?: string },
+): ChargeDecision {
+  const built = buildCreatePaymentBody(
+    { customerId: input.customerId, billingType: input.billingType, valueBrl: input.valueBrl, dueDate: input.dueDate, description: input.description },
+    input.today,
+  );
+  if (!built.ok) return { status: "deny", reason: built.error };
+
+  const verdict = policy({
+    actor: input.actor,
+    amountMinor: Math.round(input.valueBrl * 100),
+    currency: "BRL",
+    spentTodayMinor: Math.round(input.spentTodayBrl * 100),
+    dailyLimitMinor: Math.round(input.dailyLimitBrl * 100),
+    confirmed: input.confirmed,
+    extraConfirmed: input.extraConfirmed,
+  });
+  if (verdict.status === "needs_confirmation") return { status: "needs_confirmation" };
+  if (verdict.status === "needs_extra_confirmation") return { status: "needs_extra_confirmation" };
+  if (verdict.status === "deny") return { status: "deny", reason: verdict.reason ?? "denied" };
+
+  if (input.authHeader === null) return { status: "blocked_auth_unconfirmed" };
+  return { status: "ready", body: built.body };
+}
