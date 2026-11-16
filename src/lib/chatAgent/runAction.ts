@@ -14,6 +14,9 @@ import { scheduleChatAlarm } from '@/lib/clock/chatAlarm';
 import { FIGCRAFT_BASE } from '@/lib/figcraft/bridge';
 import { createDesign, getDesign, listDesigns } from '@/lib/figcraft/designStore';
 import { activeFigcraftDesignId, sendFigcraftCommands } from '@/lib/figcraft/activeEditor';
+import { generateCad } from '@/lib/cad/cadService';
+import { getCadDraft, sendCadToStudio } from '@/lib/cad/cadBridge';
+import { cadElementCount } from '@/lib/cad/model';
 
 export interface ApiApprovalRequest {
   method: string;
@@ -707,6 +710,8 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
         return { panel: action.panel, result: { tool: 'open_panel', ok: true, summary: `Painel ${action.panel} aberto para o usuário.` } };
       case 'figcraft':
         return await runFigcraft(action, ctx);
+      case 'cad':
+        return await runCad(action);
       case 'web_read':
         return await runWebRead(action);
       case 'memory':
@@ -722,6 +727,33 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
     }
   } catch (e) {
     return fail(action.tool, e instanceof Error && e.message ? 'Algo deu errado ao executar esta ferramenta.' : 'Algo deu errado.');
+  }
+}
+
+/** Auto Cadê: desenha ou ajusta uma planta com a mesma IA e a mesma cobrança do painel. */
+async function runCad(action: Extract<AgentAction, { tool: 'cad' }>): Promise<ActionOutcome> {
+  const tool = 'cad' as const;
+  if (action.op === 'open') {
+    return { panel: 'cad', result: { tool, ok: true, summary: 'Auto Cadê aberto ao lado, vazio, para desenhar à mão.' } };
+  }
+  try {
+    const current = action.op === 'edit' ? getCadDraft() : null;
+    if (action.op === 'edit' && (!current || cadElementCount(current) === 0)) {
+      return fail(tool, 'Não há desenho aberto no Auto Cadê para ajustar. Peça uma planta nova.');
+    }
+    const generated = await generateCad({ prompt: action.prompt, mode: action.op, current: current ?? undefined });
+    const doc = generated.document;
+    sendCadToStudio(doc);
+    return {
+      panel: 'cad',
+      result: {
+        tool,
+        ok: true,
+        summary: `Planta ${action.op === 'edit' ? 'ajustada' : 'criada'} no Auto Cadê: ${doc.walls.length} paredes, ${doc.rooms.length} ambientes, escala ${doc.scale}. Gastou ${generated.creditsSpent} crédito(s). O usuário pode editar tudo à mão.`,
+      },
+    };
+  } catch (e) {
+    return fail(tool, e instanceof Error && e.message ? e.message : 'Não foi possível gerar a planta agora.');
   }
 }
 
@@ -831,6 +863,7 @@ export function actionLabel(action: AgentAction): string {
     case 'mcp_call': return 'Usando conexão MCP';
     case 'set_layout': return 'Ajustando a tela';
     case 'figcraft': return 'Trabalhando no figCraft';
+    case 'cad': return action.op === 'open' ? 'Abrindo o Auto Cadê' : 'Desenhando a planta no Auto Cadê (IA)';
     case 'web_read': {
       try {
         return `Lendo ${new URL(action.url).host}`;

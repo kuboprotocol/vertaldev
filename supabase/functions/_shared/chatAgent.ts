@@ -15,6 +15,7 @@ import {
   parseFigcraftCommands, type FigcraftCommandInput,
 } from "./figcraft.ts";
 import { parseMemoryOps, type MemoryOps } from "./chatMemory.ts";
+import { CAD_LIMITS } from "./cad.ts";
 import { PLAN_LIMITS, parsePlanAction, type ChatPlanTask } from "./chatPlan.ts";
 import { normalizeWebUrl } from "./chatWeb.ts";
 import { budgetToolResults, looksLikeJson, repairAgentJson, salvageReply, type JsonRepair } from "./chatOrchestrator.ts";
@@ -45,7 +46,7 @@ export interface CanvasSpec {
 
 /** Painéis que o chat abre dentro do próprio layout. */
 export const PANELS = [
-  "history", "office", "design", "figcraft", "canvas", "notebook", "video_studio", "clips", "avatar",
+  "history", "office", "design", "figcraft", "cad", "canvas", "notebook", "video_studio", "clips", "avatar",
   "shorts", "emo", "sheet", "ebook", "music", "downloader", "builder", "clock", "voice",
   "connectors", "secrets", "agents",
 ] as const;
@@ -90,6 +91,8 @@ export type AgentAction =
   | { tool: "figcraft"; op: "open"; design_id: string }
   | { tool: "figcraft"; op: "list" }
   | { tool: "figcraft"; op: "run"; design_id?: string; commands: FigcraftCommandInput[] }
+  | { tool: "cad"; op: "new" | "edit"; prompt: string }
+  | { tool: "cad"; op: "open" }
   | { tool: "open_panel"; panel: PanelKey }
   | { tool: "world_time"; places: string[] }
   | { tool: "alarm"; op: "set" | "list" | "remove"; time?: string; label?: string; days?: number[]; place?: string; id?: string }
@@ -166,6 +169,7 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   api_request: "grátis",
   open_panel: "grátis",
   figcraft: "grátis (o design fica salvo na sua conta)",
+  cad: "1 crédito por planta com IA (custo do uso + 75%); desenhar à mão é grátis",
   weather: "grátis",
   web_search: "grátis",
   podcast_studio: "2-4 créditos por episódio (varia com duração e qualidade)",
@@ -298,6 +302,7 @@ export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
     `- {"tool":"figcraft","op":"open","design_id":"uuid"} → abre um design salvo no figCraft.`,
     `- {"tool":"figcraft","op":"list"} → lista os designs do usuário. Você recebe a lista na rodada seguinte e responde com ela.`,
     `- {"tool":"figcraft","op":"run","design_id":"uuid (opcional: o design aberto)","commands":[{"command":"nome.do.comando","params":{}}]} → executa comandos do engine do figCraft no design, em ordem, até ${FIGCRAFT_MAX_COMMANDS} por pedido. Comandos: ${FIGCRAFT_COMMAND_HINT}. Se o design não estiver aberto, o figCraft abre ao lado e aplica os comandos.`,
+    `- {"tool":"cad","op":"new","prompt":"o que o arquiteto quer: cômodos, medidas, área, orientação"} → desenha uma planta baixa profissional no Auto Cadê (CAD, com carimbo e escala) e abre ao lado. Use quando pedirem planta, desenho técnico, layout de casa/apartamento/escritório (${TOOL_COSTS.cad}). Com "op":"edit", ajusta o desenho que está aberto no Auto Cadê. {"tool":"cad","op":"open"} abre o editor vazio para desenhar à mão.`,
     `- {"tool":"world_time","places":["Tóquio","Lisboa"]} → hora local agora em outras cidades (${TOOL_COSTS.world_time}).`,
     `- {"tool":"schedule_alarm","time":"07:30","label":"...","repeatDays":[1,2,3,4,5],"soundId":"nome do som (opcional)","ringTimes":1} → agenda um alarme no Vertal Clock; "repeatDays" 0=domingo…6=sábado, vazio = uma vez (${TOOL_COSTS.schedule_alarm}).`,
     `- {"tool":"web_read","url":"https://..."} → lê o conteúdo principal de uma página (link do usuário ou resultado promissor da busca) (${TOOL_COSTS.web_read}).`,
@@ -520,6 +525,12 @@ export function parseAgentAction(raw: unknown): AgentAction | null {
     }
     case "set_layout":
       return { tool: "set_layout", mode: a.mode === "chat_only" ? "chat_only" : "split" };
+    case "cad": {
+      if (a.op === "open") return { tool: "cad", op: "open" };
+      if (a.op !== "new" && a.op !== "edit") return null;
+      const cadPrompt = str(a.prompt, CAD_LIMITS.maxPromptChars);
+      return cadPrompt.length >= 3 ? { tool: "cad", op: a.op, prompt: cadPrompt } : null;
+    }
     case "figcraft": {
       if (a.op === "list") return { tool: "figcraft", op: "list" };
       if (a.op === "open") {
