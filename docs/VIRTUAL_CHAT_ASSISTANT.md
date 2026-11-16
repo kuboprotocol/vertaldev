@@ -1,7 +1,7 @@
 # Virtual Chat — assistente de tarefas multicanal
 
-Status: **base implementada** (precificação, política de acesso, conectores Telegram e WhatsApp, testes).
-Pendente: edge functions de webhook, agente de dispositivo, canal Messenger, interface.
+Status: **base implementada** (precificação, política de acesso, conectores Telegram, WhatsApp e Instagram, webhooks, caixa de entrada, envio pelo chat, testes).
+Pendente: download de mídia, débito de créditos nos canais, tokens por usuário, agente de dispositivo, Messenger.
 
 Código: `src/lib/virtualChat/`. Testes: `npx vitest run src/lib/virtualChat`.
 
@@ -150,9 +150,20 @@ Enquanto as premissas não forem trocadas, os números acima são **estimativas*
 ## 7. Roadmap
 
 1. **Feito (esta base):** precificação, política de acesso, parse e envio de Telegram e WhatsApp, testes. O código puro do canal WhatsApp fica em `supabase/functions/_shared/virtualChat/` (fonte única; `src/lib/virtualChat/` re-exporta).
-2. **Parcial — WhatsApp:** edge function `supabase/functions/virtual-chat-webhook` faz o handshake GET, valida `X-Hub-Signature-256`, responde por texto com Kimi e só para números da lista `WHATSAPP_ALLOWED_WA_IDS`. Ainda falta: download de mídia, debite de créditos, vínculo número ↔ conta (tabela) e Telegram.
+2. **Feito — WhatsApp e Instagram (DM):**
+   - Webhooks: `supabase/functions/virtual-chat-webhook` (WhatsApp) e `supabase/functions/virtual-chat-instagram-webhook` (Instagram). Os dois fazem o handshake GET, validam `X-Hub-Signature-256`, **gravam toda mensagem** na caixa de entrada e respondem com IA só para os IDs da lista permitida (falha fechada).
+   - Caixa de entrada: tabela `virtual_chat_channel_messages` (migration `20261116120000`), RLS ligado sem políticas. Duplicatas da Meta são barradas pelo banco (`channel + message_id`).
+   - `channel-send` (envio) e `channel-inbox` (leitura): só o dono listado em `CHANNEL_OWNER_USER_IDS` usa. Envio fora da janela de 24 h responde `409 outside_window`.
+   - Vertal Chat: ferramentas `channel_inbox` (lê) e `channel_send` (envia, sempre com confirmação do usuário).
+   - Interface: hub de conectores (`/connectors/instagram`, `/connectors/whatsapp`) com URL de callback, segredos necessários, caixa e envio.
 
-   Segredos necessários (Supabase → Edge Functions → Secrets): `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ALLOWED_WA_IDS`. Sem a lista, o bot não responde ninguém (falha fechada).
+   Segredos do WhatsApp: `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ALLOWED_WA_IDS`.
+   Segredos do Instagram: `INSTAGRAM_VERIFY_TOKEN`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_ACCOUNT_ID`, `INSTAGRAM_ALLOWED_IG_IDS`.
+   Comum a todos: `CHANNEL_OWNER_USER_IDS` (UUIDs do dono, separados por vírgula). Sem a lista, ninguém lê nem envia pelo chat (falha fechada).
+
+   Instagram exige conta profissional vinculada a uma Página do Facebook e a permissão `instagram_manage_messages` aprovada pela Meta. Assine o campo `messages` no webhook.
+
+   Ainda falta: download de mídia, débito de créditos nos canais, vínculo número ↔ conta (tabela), tokens por usuário (hoje os tokens são do operador) e Telegram. Retenção: as mensagens ficam guardadas até alguém apagar; definir prazo de retenção (LGPD) antes de abrir para clientes.
 3. Tabelas: concessões de arquivo, log de acesso, canais conectados por usuário (com RLS).
 4. Agente local: rota de leitura com `realpath` e concessão por pasta; indexação com cache.
 5. Messenger e Instagram DM (após revisão de permissões da Meta).

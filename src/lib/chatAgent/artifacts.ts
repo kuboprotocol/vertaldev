@@ -31,6 +31,7 @@ export type Artifact =
   | (Base & { kind: 'canvas'; spec: CanvasSpec })
   | (Base & { kind: 'app'; html: string; prompt: string; projectId?: string })
   | (Base & { kind: 'music'; tracks: Array<{ title: string; audioUrl: string; imageUrl?: string }>; prompt: string })
+  | (Base & { kind: 'spotify'; query: string; tracks: Array<{ id: string; title: string; artist: string; imageUrl?: string }> })
   | (Base & { kind: 'ebook'; content: string; cover?: string })
   | (Base & { kind: 'notebook'; description: string; emoji?: string; notebookId?: string })
   | (Base & { kind: 'notebook_feed'; documentCount?: number; instructions?: string; notebookId?: string })
@@ -125,6 +126,7 @@ export const KIND_LABEL: Record<ArtifactKind, string> = {
   canvas: 'Canvas',
   app: 'Aplicativo',
   music: 'Música',
+  spotify: 'Spotify',
   ebook: 'Ebook',
   notebook: 'Notebook',
   notebook_feed: 'Notebook Alimentado',

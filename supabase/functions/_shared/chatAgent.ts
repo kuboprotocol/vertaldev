@@ -68,6 +68,9 @@ export const FIGCRAFT_COMMAND_HINT = [
 export const DESIGN_FORMATS = ["post", "story", "banner", "poster"] as const;
 export const API_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 
+export const SPOTIFY_CHAT_OPS = ["search", "play", "queue", "pause", "next", "previous", "now_playing", "devices"] as const;
+export type SpotifyChatOp = (typeof SPOTIFY_CHAT_OPS)[number];
+
 export type AgentAction =
   | { tool: "image"; prompt: string }
   | { tool: "design"; prompt: string; format: (typeof DESIGN_FORMATS)[number]; tier: "simple" | "premium" }
@@ -104,7 +107,10 @@ export type AgentAction =
   | { tool: "news_weather"; location?: string }
   | { tool: "gmail_search"; query: string; max: number }
   | { tool: "gmail_send"; to: string; subject: string; body: string }
+  | { tool: "spotify"; op: SpotifyChatOp; query?: string; max?: number }
   | { tool: "slack_send"; channel: string; text: string }
+  | { tool: "channel_send"; channel: "instagram" | "whatsapp"; to: string; text: string }
+  | { tool: "channel_inbox"; channel?: "instagram" | "whatsapp"; contact?: string; limit?: number }
   | { tool: "mcp_call"; server: string; method: "list_tools" | "call_tool"; name?: string; arguments?: Record<string, unknown> }
   | { tool: "set_layout"; mode: "chat_only" | "split" }
   | { tool: "voice_input"; language?: "pt-BR" | "en-US" | "es-ES" | "fr-FR"; provider?: "web_speech" | "whisper" }
@@ -177,7 +183,10 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   news_weather: "grátis (previsão do tempo localizada)",
   gmail_search: "grátis",
   gmail_send: "grátis",
+  spotify: "grátis",
   slack_send: "grátis",
+  channel_send: "grátis (você confirma cada envio)",
+  channel_inbox: "grátis",
   mcp_call: "grátis",
   set_layout: "grátis",
   voice_input: "grátis (captura de voz com transcrição em tempo real)",
@@ -294,8 +303,11 @@ export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
     `- {"tool":"weather","place":"bairro ou cidade"} → clima atual e previsão de 3 dias. Sem "place", usa a localização do aparelho do usuário (ele autoriza). Nunca invente o clima: use sempre esta ferramenta.`,
     `- {"tool":"web_search","query":"o que procurar","max":5} → busca na web por informações atuais. Retorna URLs com títulos e resumos. Use para responder sobre eventos recentes, notícias, preços, horários, ou qualquer coisa que mude frequentemente. "max" é opcional (padrão 5 resultados).`,
     `- {"tool":"gmail_search","query":"busca no formato do Gmail","max":10} → lê os e-mails da conta Gmail conectada.`,
+    `- {"tool":"spotify","op":"search|play|queue|pause|next|previous|now_playing|devices","query":"música, artista ou álbum","max":5} → Spotify do usuário. "search" lista faixas com player embutido: o usuário ouve dentro do chat, sem Premium. "play" toca a melhor faixa da busca no aparelho Spotify ativo (exige Premium e o Spotify aberto em algum aparelho). "queue" põe na fila. "pause", "next", "previous", "now_playing" e "devices" controlam a reprodução. Use quando pedirem uma música ou controle do Spotify; nunca invente faixas: use o resultado da ferramenta.`,
     `- {"tool":"gmail_send","to":"email","subject":"...","body":"..."} → envia e-mail pelo Gmail conectado (o usuário confirma antes).`,
     `- {"tool":"slack_send","channel":"#canal ou id","text":"..."} → envia mensagem no Slack conectado (o usuário confirma antes).`,
+    `- {"tool":"channel_inbox","channel":"instagram|whatsapp","contact":"id do contato (opcional)","limit":20} → lê as últimas mensagens recebidas no Instagram (DM) e no WhatsApp. Use para "o que chegou?", "tem mensagem nova?", "o que o cliente perguntou?". "channel", "contact" e "limit" são opcionais.`,
+    `- {"tool":"channel_send","channel":"instagram|whatsapp","to":"id do contato","text":"..."} → responde no Instagram ou no WhatsApp (o usuário confirma antes). Só funciona para quem escreveu nas últimas 24 h; "to" é o id que aparece em channel_inbox. Nunca invente o id.`,
     `- {"tool":"mcp_call","server":"nome da conexão","method":"list_tools|call_tool","name":"ferramenta","arguments":{}} → usa um servidor MCP que o cliente conectou. Primeiro "list_tools" para ver o que existe, depois "call_tool".`,
     `- {"tool":"set_layout","mode":"chat_only|split"} → "chat_only" quando o usuário pedir para ficar só na tela do chat (nada abre ao lado); "split" para voltar a abrir ao lado.`,
     `- {"tool":"figcraft","op":"new","title":"nome do design","template":"${FIGCRAFT_TEMPLATE_IDS.join("|")}"} → cria um design no figCraft (editor de telas, componentes, auto layout e protótipos), salvo na conta do usuário, e abre ao lado. "template" é opcional: sem ele, o editor abre na tela inicial (${TOOL_COSTS.figcraft}).`,
@@ -497,6 +509,13 @@ export function parseAgentAction(raw: unknown): AgentAction | null {
     }
     case "gmail_search":
       return { tool: "gmail_search", query: str(a.query, 400), max: num(a.max, 1, 20, 10) };
+    case "spotify": {
+      const op = str(a.op, 20) as SpotifyChatOp;
+      if (!SPOTIFY_CHAT_OPS.includes(op)) return null;
+      const query = str(a.query, 200);
+      const max = num(a.max, 1, 10, 5);
+      return query ? { tool: "spotify", op, query, max } : { tool: "spotify", op, max };
+    }
     case "gmail_send": {
       const to = str(a.to, 254);
       const subject = str(a.subject, 200).replace(/[\r\n]+/g, " ");
@@ -507,6 +526,23 @@ export function parseAgentAction(raw: unknown): AgentAction | null {
       const channel = str(a.channel, 64);
       const text = str(a.text, 8_000);
       return channel && text ? { tool: "slack_send", channel, text } : null;
+    }
+    case "channel_send": {
+      const channel = a.channel === "instagram" || a.channel === "whatsapp" ? a.channel : null;
+      const to = str(a.to, 32);
+      const text = str(a.text, 4_000);
+      return channel && /^\d{4,32}$/.test(to) && text ? { tool: "channel_send", channel, to, text } : null;
+    }
+    case "channel_inbox": {
+      const channel = a.channel === "instagram" || a.channel === "whatsapp" ? a.channel : undefined;
+      const contact = str(a.contact, 32);
+      const limit = num(a.limit, 1, 50, 20);
+      return {
+        tool: "channel_inbox",
+        ...(channel ? { channel } : {}),
+        ...(/^\d{4,32}$/.test(contact) ? { contact } : {}),
+        limit,
+      };
     }
     case "mcp_call": {
       const server = str(a.server, 40);

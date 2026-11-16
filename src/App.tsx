@@ -37,7 +37,9 @@ const ConnectorSetupPage = lazy(() => import("./pages/ConnectorSetupPage"));
 const ConnectorWeb3Page = lazy(() => import("./pages/ConnectorWeb3Page"));
 const ConnectorWeb3HubPage = lazy(() => import("./pages/ConnectorWeb3HubPage"));
 const ConnectorGmailPage = lazy(() => import("./pages/ConnectorGmailPage"));
+const ConnectorSpotifyPage = lazy(() => import("./pages/ConnectorSpotifyPage"));
 const ConnectorSlackPage = lazy(() => import("./pages/ConnectorSlackPage"));
+const ConnectorChannelPage = lazy(() => import("./pages/ConnectorChannelPage"));
 const ConnectorRenderPage = lazy(() => import("./pages/ConnectorRenderPage"));
 const ConnectorEcosystemPage = lazy(() => import("./pages/ConnectorEcosystemPage"));
 const EcosystemPage = lazy(() => import("./pages/EcosystemPage"));
@@ -233,7 +235,10 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/connectors/web3" element={<ProtectedRoute><ConnectorWeb3HubPage /></ProtectedRoute>} />
                 <Route path="/connectors/web3/:provider" element={<ProtectedRoute><ConnectorWeb3Page /></ProtectedRoute>} />
                 <Route path="/connectors/gmail" element={<ProtectedRoute><ConnectorGmailPage /></ProtectedRoute>} />
+                <Route path="/connectors/spotify" element={<ProtectedRoute><ConnectorSpotifyPage /></ProtectedRoute>} />
                 <Route path="/connectors/slack" element={<ProtectedRoute><ConnectorSlackPage /></ProtectedRoute>} />
+                <Route path="/connectors/instagram" element={<ProtectedRoute><ConnectorChannelPage channel="instagram" /></ProtectedRoute>} />
+                <Route path="/connectors/whatsapp" element={<ProtectedRoute><ConnectorChannelPage channel="whatsapp" /></ProtectedRoute>} />
                 <Route path="/connectors/render" element={<ProtectedRoute><ConnectorRenderPage /></ProtectedRoute>} />
                 <Route path="/connectors/ecosystem/:product" element={<ProtectedRoute><ConnectorEcosystemPage /></ProtectedRoute>} />
                 <Route path="/connectors/:slug/setup" element={<ProtectedRoute><ConnectorSetupPage /></ProtectedRoute>} />

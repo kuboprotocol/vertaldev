@@ -13,11 +13,15 @@ project_id = "sccizjlpwezsgaxkclot"
     verify_jwt = false
   [functions.virtual-chat-webhook]
     verify_jwt = false
+  [functions.virtual-chat-instagram-webhook]
+    verify_jwt = false
   [functions.github-signin-callback]
     verify_jwt = false
   [functions.github-signin-initiate]
     verify_jwt = false
   [functions.gmail-oauth-callback]
+    verify_jwt = false
+  [functions.spotify-oauth-callback]
     verify_jwt = false
   [functions.gmail-sync-accounts]
     verify_jwt = false

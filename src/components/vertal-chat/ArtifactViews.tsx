@@ -12,6 +12,22 @@ import type { CanvasSpec } from '@/lib/chatAgent/contract';
 import { CANVAS_HEX, CANVAS_LINE_HEIGHT, describeCanvas, wrapCanvasText } from '@/lib/chatAgent/canvasSpec';
 import { resolveStoredImage } from '@/lib/chatAgent/runAction';
 import { previewHtml } from '@/lib/chatAgent/previewHtml';
+import { spotifyEmbedUrl } from '@/lib/spotify/spotifyCore';
+
+/** Player oficial do Spotify embutido (toca sem Premium). O id já vem validado pelo servidor. */
+function SpotifyEmbed({ trackId, title, compact = false }: { trackId: string; title: string; compact?: boolean }) {
+  return (
+    <iframe
+      title={`Spotify: ${title}`}
+      src={spotifyEmbedUrl(trackId)}
+      width="100%"
+      height={compact ? 152 : 232}
+      loading="lazy"
+      allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+      className="rounded-xl border-0"
+    />
+  );
+}
 
 const KIND_ICON: Record<ArtifactKind, typeof FileText> = {
   image: ImageIcon,
@@ -23,6 +39,7 @@ const KIND_ICON: Record<ArtifactKind, typeof FileText> = {
   canvas: LayoutTemplate,
   app: AppWindow,
   music: Music,
+  spotify: Radio,
   ebook: BookOpen,
   notebook: BookMarked,
   notebook_feed: FileText,
@@ -122,6 +139,7 @@ function summary(a: Artifact): string {
     case 'canvas': return `${a.spec.width}×${a.spec.height} · ${a.spec.elements.length} elementos`;
     case 'app': return 'Prévia interativa';
     case 'music': return `${a.tracks.length} faixa${a.tracks.length === 1 ? '' : 's'}`;
+    case 'spotify': return `${a.tracks.length} faixa${a.tracks.length === 1 ? '' : 's'} · ouça aqui`;
     case 'ebook': return `${Math.max(1, Math.round(a.content.split(/\s+/).length / 250))} páginas aprox.`;
     case 'notebook': return 'Notas, PDFs e links';
     case 'notebook_feed': return `${a.documentCount || 0} documentos carregados`;
@@ -194,6 +212,11 @@ export function ArtifactCard({ artifact, onOpen, active }: { artifact: Artifact;
         <button type="button" onClick={onOpen} tabIndex={-1} aria-hidden className="block w-full border-t border-border/50 bg-muted/30 p-3">
           <CanvasPreview spec={artifact.spec} className="mx-auto max-h-64 w-auto max-w-full rounded-lg shadow-lg" />
         </button>
+      )}
+      {artifact.kind === 'spotify' && (
+        <div className="border-t border-border/50 px-4 py-3">
+          <SpotifyEmbed trackId={artifact.tracks[0].id} title={artifact.tracks[0].title} compact />
+        </div>
       )}
       {artifact.kind === 'music' && (
         <div className="space-y-2 border-t border-border/50 px-4 py-3">
@@ -552,6 +575,18 @@ export function ArtifactViewer({ artifact, actions }: { artifact: Artifact; acti
         </>
       );
       body = a.html ? <AppView html={a.html} /> : <p className="text-sm text-muted-foreground">Este app está salvo no Dev Code. Abra por lá para ver a prévia.</p>;
+      break;
+    case 'spotify':
+      body = (
+        <ul className="mx-auto max-w-2xl space-y-4">
+          {a.tracks.map((t) => (
+            <li key={t.id} className="space-y-2 rounded-xl border border-border/60 bg-card p-4">
+              <p className="truncate text-sm font-semibold">{t.title} <span className="font-normal text-muted-foreground">— {t.artist}</span></p>
+              <SpotifyEmbed trackId={t.id} title={t.title} />
+            </li>
+          ))}
+        </ul>
+      );
       break;
     case 'music':
       body = (
