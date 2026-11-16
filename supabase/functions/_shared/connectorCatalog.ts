@@ -109,6 +109,17 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
     signals: [/\bgmail\b/i, /googleapis\.com\/gmail/i],
   },
   {
+    slug: "spotify",
+    keyUrl: "https://developer.spotify.com/dashboard",
+    siteUrl: "https://developer.spotify.com/dashboard",
+    label: "Spotify",
+    kind: "connector",
+    description: "Buscar músicas, tocar e controlar a reprodução na conta Spotify do usuário.",
+    secrets: ["SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET"],
+    connectPath: "/connectors/spotify",
+    signals: [/\bspotify\b/i, /api\.spotify\.com/i, /open\.spotify\.com/i],
+  },
+  {
     slug: "slack",
     keyUrl: "https://api.slack.com/apps",
     siteUrl: "https://slack.com/get-started",
