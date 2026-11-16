@@ -4,6 +4,7 @@ import type { PanelKey } from '@/lib/chatAgent/contract';
 import type { PanelRequest } from './panelList';
 import { HistoryPanel } from './HistoryPanel';
 import { VoicePanel } from './VoicePanel';
+import { KnowledgePanel } from '@/components/knowledge/KnowledgePanel';
 
 const OfficeSuite = lazy(() => import('@/components/office/OfficeSuite').then((m) => ({ default: m.OfficeSuite })));
 const CreativeDesign = lazy(() => import('@/components/CreativeDesign').then((m) => ({ default: m.CreativeDesign })));
@@ -26,6 +27,7 @@ const isToolPanel = (key: PanelKey): key is ToolPanelKey => (TOOL_KEYS as readon
 export function PanelHost({ request, credits, userId }: { request: PanelRequest; credits: number; userId?: string }) {
   const { key } = request;
   if (key === 'history') return <HistoryPanel />;
+  if (key === 'knowledge') return <KnowledgePanel userId={userId} />;
   if (key === 'office') {
     return (
       <OfficeSuite

@@ -1,5 +1,5 @@
 /**
- * Virtual Chat — precificação em créditos.
+ * Vertal Chat — precificação em créditos.
  *
  * Regra: preço = custo / (1 - margemAlvo). O crédito é arredondado PARA CIMA,
  * então a margem real nunca fica abaixo da alvo. Se o custo for menor que o mínimo

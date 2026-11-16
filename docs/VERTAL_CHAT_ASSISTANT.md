@@ -1,15 +1,15 @@
-# Virtual Chat — assistente de tarefas multicanal
+# Vertal Chat — assistente de tarefas multicanal
 
 Status: **base implementada** (precificação, política de acesso, conectores Telegram e WhatsApp, testes).
 Pendente: edge functions de webhook, agente de dispositivo, canal Messenger, interface.
 
-Código: `src/lib/virtualChat/`. Testes: `npx vitest run src/lib/virtualChat`.
+Código: `src/lib/vertalChat/`. Testes: `npx vitest run src/lib/vertalChat`.
 
 ---
 
 ## 1. O que o produto faz
 
-O Virtual Chat é um assistente que trabalha com os arquivos e as conversas do usuário:
+O Vertal Chat é um assistente que trabalha com os arquivos e as conversas do usuário:
 
 1. **Responde no próprio chat** do KUBO Vibe, com acesso às pastas que o dono liberou no PC ou no celular.
 2. **Responde por canais de mensagem** (Telegram, WhatsApp Business, Messenger). Um cliente pergunta
@@ -33,7 +33,7 @@ Regra de ouro: **o assistente só enxerga o que foi concedido, para quem foi con
    Canais ──► Conectores (telegram.ts, whatsapp.ts) ──► normalizam mensagens
                    │
                    ▼
-        Orquestrador do Virtual Chat (edge function, service role)
+        Orquestrador do Vertal Chat (edge function, service role)
           · valida assinatura do webhook
           · consulta a política de acesso
           · lê/indexa arquivo, chama o modelo
@@ -150,7 +150,7 @@ Enquanto as premissas não forem trocadas, os números acima são **estimativas*
 ## 7. Roadmap
 
 1. **Feito (esta base):** precificação, política de acesso, parse e envio de Telegram e WhatsApp, testes.
-2. Edge function `virtual-chat-webhook`: verificação de assinatura, download de mídia, debite de créditos, resposta.
+2. Edge function `vertal-chat-webhook`: verificação de assinatura, download de mídia, debite de créditos, resposta.
 3. Tabelas: concessões de arquivo, log de acesso, canais conectados por usuário (com RLS).
 4. Agente local: rota de leitura com `realpath` e concessão por pasta; indexação com cache.
 5. Messenger e Instagram DM (após revisão de permissões da Meta).
@@ -162,3 +162,24 @@ Enquanto as premissas não forem trocadas, os números acima são **estimativas*
 - Valor real do crédito em dólar e margem alvo (hoje 50%, piso 40%).
 - Provedor de LLM e de OCR, para trocar as taxas premissa pelas reais.
 - Confirmar que o canal de WhatsApp será conta **de negócio**, não pessoal.
+
+---
+
+## 9. Carteira de pagamentos (decisão de arquitetura, ainda não implementada)
+
+Visão do dono: uma carteira centralizada no estilo banco. Stripe cobre o lado global (contas em moeda estrangeira e cripto onde o Stripe permitir). Asaas cobre o Brasil, em real: Pix, boleto, cartão, envio e recebimento.
+
+**Ponto que decide a arquitetura: quem fica com o dinheiro.**
+
+| Opção | O que é | Consequência |
+|---|---|---|
+| A. Vertal recebe e guarda o dinheiro numa conta própria, e repassa | A Vertal vira custodiante | Exige autorização do Banco Central como instituição de pagamento. Não é só código. |
+| B. Cada usuário tem conta própria no Asaas (ou no Stripe), e a Vertal só orquestra | A Vertal não custodia o dinheiro | Mais simples e mais seguro. Depende de o Asaas oferecer subcontas via API para marketplace. Confirmar na documentação do Asaas. |
+
+**Recomendação:** começar pela opção B. Antes de escolher A, consultar advogado de pagamentos.
+
+**Regras que valem nas duas opções:**
+1. Enviar ou pagar só por pedido do dono, com confirmação mostrando valor e destinatário (ver `paymentPolicy.ts`).
+2. Chave de API nunca em texto de pasta; fica em Conexões (conta do usuário) ou em variável de ambiente da edge function (conta da plataforma).
+3. Cliente de canal nunca dispara pagamento.
+4. Cripto: depende do que o Stripe libera por país. Fora de escopo até validar.

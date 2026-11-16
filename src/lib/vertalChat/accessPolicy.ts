@@ -1,7 +1,7 @@
 /**
- * Virtual Chat — política de acesso a arquivos do dispositivo.
+ * Vertal Chat — política de acesso a arquivos do dispositivo.
  *
- * Regras (ver docs/VIRTUAL_CHAT_ASSISTANT.md):
+ * Regras (ver docs/VERTAL_CHAT_ASSISTANT.md):
  *  - Nada é lido sem uma concessão (grant) explícita de uma pasta específica.
  *    Nunca há acesso ao disco inteiro.
  *  - Caminhos com `..` ou fora da raiz concedida são recusados.
