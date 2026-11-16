@@ -55,7 +55,7 @@ export function PanelHost({ request, credits, userId }: { request: PanelRequest;
   }
   if (key === 'notebook') return <VertalNotebook />;
   if (key === 'clock') return <div className="mx-auto max-w-3xl p-3 sm:p-4"><VertalClock /></div>;
-  if (key === 'voice') return <div className="mx-auto max-w-2xl p-3 sm:p-4"><VoicePanel onSend={(text) => console.log('Voice:', text)} onClose={() => {}} /></div>;
+  if (key === 'voice') return <div className="mx-auto max-w-2xl p-3 sm:p-4"><VoicePanel onSend={(text) => window.dispatchEvent(new CustomEvent('vertal-chat:voice-text', { detail: text }))} onClose={() => {}} /></div>;
   if (key === 'sheet') return <div className="mx-auto max-w-6xl p-4"><CreativeSheets creditsAvailable={credits} /></div>;
   if (isToolPanel(key)) return <div className="mx-auto max-w-5xl p-4 sm:p-6"><CreativeToolInterface toolKey={key} /></div>;
   return null;

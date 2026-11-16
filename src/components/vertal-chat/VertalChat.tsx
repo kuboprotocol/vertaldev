@@ -23,6 +23,8 @@ import { PanelHost } from './PanelHost';
 import { ConnectionsDialog } from './ConnectionsDialog';
 import { MemoryDialog } from './MemoryDialog';
 import { previewHtml } from '@/lib/chatAgent/previewHtml';
+import { toast } from 'sonner';
+import { DICTATION_ERROR_TEXT, useDictation } from '@/lib/voice/useDictation';
 
 const SIDEBAR_KEY = 'vertal-chat-sidebar';
 const CHAT_ONLY_KEY = 'vertal-chat-only';
@@ -187,6 +189,7 @@ export function VertalChat() {
 
   const submit = () => {
     if (!input.trim() || chat.busy) return;
+    if (dictation.listening) dictation.stop();
     const text = input;
     setInput('');
     void chat.send(text);
@@ -202,9 +205,31 @@ export function VertalChat() {
     });
   };
 
+  // Microfone: ditado direto na caixa de mensagem. O texto falado entra depois do que já estava escrito.
+  const dictationBaseRef = useRef('');
+  const dictation = useDictation({
+    lang: 'pt-BR',
+    onText: (spoken) => {
+      const base = dictationBaseRef.current;
+      setInput(base ? `${base}${/\s$/.test(base) ? '' : ' '}${spoken}` : spoken);
+    },
+    onError: (err) => toast.error(DICTATION_ERROR_TEXT[err]),
+  });
   const voiceInput = () => {
-    void chat.execute({ tool: 'voice_input' });
+    if (!dictation.listening) dictationBaseRef.current = input;
+    dictation.toggle();
+    inputRef.current?.focus();
   };
+
+  // O painel de gravação (aberto pelo agente) manda o texto para a caixa de mensagem.
+  useEffect(() => {
+    const onVoiceText = (e: Event) => {
+      const text = (e as CustomEvent<string>).detail;
+      if (typeof text === 'string' && text.trim()) fill(text.trim());
+    };
+    window.addEventListener('vertal-chat:voice-text', onVoiceText);
+    return () => window.removeEventListener('vertal-chat:voice-text', onVoiceText);
+  });
 
   const viewerActions: ViewerActions = useMemo(
     () => ({
@@ -263,6 +288,7 @@ export function VertalChat() {
       busy={chat.busy}
       inputRef={inputRef}
       onVoice={voiceInput}
+      listening={dictation.listening}
     />
   );
 
@@ -776,7 +802,7 @@ function MessageRow({
 // ─── Compositor ──────────────────────────────────────────────────────────
 
 function Composer({
-  value, onChange, onSubmit, onFill, busy, inputRef, onVoice,
+  value, onChange, onSubmit, onFill, busy, inputRef, onVoice, listening = false,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -785,6 +811,7 @@ function Composer({
   busy: boolean;
   inputRef: React.RefObject<HTMLTextAreaElement>;
   onVoice?: () => void;
+  listening?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   return (
@@ -838,11 +865,18 @@ function Composer({
         <button
           type="button"
           onClick={() => onVoice?.()}
-          aria-label="Abrir gravador de voz"
-          title="Gravador de voz (🎤)"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition hover:border-primary/50 hover:text-foreground"
+          aria-label={listening ? 'Parar ditado' : 'Falar mensagem'}
+          aria-pressed={listening}
+          title={listening ? 'Ouvindo… toque para parar' : 'Falar mensagem (🎤)'}
+          className={cn(
+            'relative inline-flex h-9 w-9 items-center justify-center rounded-full border transition',
+            listening
+              ? 'border-red-500/70 bg-red-500/15 text-red-500'
+              : 'border-border/60 text-muted-foreground hover:border-primary/50 hover:text-foreground',
+          )}
         >
-          <Mic className="h-4 w-4" />
+          {listening && <span className="absolute inset-0 animate-ping rounded-full bg-red-500/25" aria-hidden />}
+          <Mic className="relative h-4 w-4" />
         </button>
         <span className="flex-1" />
         <button
