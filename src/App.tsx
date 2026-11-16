@@ -76,6 +76,7 @@ const NotificationPreferencesPage = lazy(() => import("./pages/creative/Notifica
 const ExportDetailsPage = lazy(() => import("./pages/creative/ExportDetailsPage"));
 const AgentsHubPage = lazy(() => import("./pages/AgentsHubPage"));
 const VibeAgentsPage = lazy(() => import("./pages/VibeAgentsPage"));
+const AgencyAgentsPage = lazy(() => import("./pages/AgencyAgentsPage"));
 const AgentDetailPage = lazy(() => import("./pages/AgentDetailPage"));
 const AdminPage = lazy(() => import("./pages/AdminPage"));
 const AdminDeployPage = lazy(() => import("./pages/AdminDeployPage"));
@@ -286,6 +287,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 
                 <Route path="/agents" element={<ProtectedRoute><AgentsHubPage /></ProtectedRoute>} />
                 <Route path="/vibe-agents" element={<ProtectedRoute><VibeAgentsPage /></ProtectedRoute>} />
+                <Route path="/agency-agents" element={<ProtectedRoute><AgencyAgentsPage /></ProtectedRoute>} />
                 <Route path="/agents/:slug" element={<ProtectedRoute><AgentDetailPage /></ProtectedRoute>} />
                 <Route path="/admin" element={<ProtectedRoute requireRoles={["admin"]}><AdminPage /></ProtectedRoute>} />
                 <Route path="/admin/deploy" element={<ProtectedRoute requireRoles={["admin"]}><AdminDeployPage /></ProtectedRoute>} />

@@ -84,3 +84,12 @@ O grafo de tarefas (`supabase/functions/_shared/vibeTaskGraph.ts`, prompts do pl
 dependências, subtarefas e "próxima tarefa". Não contém código, prompts nem texto do Task Master. Nada
 dele foi copiado porque a licença do Task Master é MIT acrescida da Commons Clause, que proíbe vender o
 software ou um serviço cujo valor venha substancialmente dele.
+
+---
+
+## The Agency (agency-agents)
+
+O catálogo de especialistas em `src/data/agency-agents/` (283 agentes em 18 divisões, mais `LICENSE` e
+`divisions.json`) é copiado sem alterações de conteúdo de https://github.com/msitarzewski/agency-agents,
+sob licença MIT (cópia completa em `src/data/agency-agents/LICENSE`). O commit de origem está em
+`src/data/agency-agents/catalog.json`. Para atualizar, rode `node scripts/sync-agency-agents.mjs <clone>`.

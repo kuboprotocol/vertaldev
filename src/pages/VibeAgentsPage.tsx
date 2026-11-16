@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowLeft, Bot, CheckCircle2, Loader2, Play, Plug, Sparkles, Trash2, XCircle } from 'lucide-react'
-import { supabase } from '@/integrations/supabase/client'
+import { ArrowLeft, Bot, CheckCircle2, Loader2, Play, Plug, Sparkles, Trash2, Library } from 'lucide-react'
 import { useSubscription } from '@/hooks/useSubscription'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,52 +9,15 @@ import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import {
+  VIBE_AGENT_LIMITS,
   VIBE_AGENT_MIN_RUN_CREDITS,
   VIBE_AGENT_PRICING,
   VIBE_TOOLS,
   VIBE_TOOL_IDS,
   type VibeToolId,
 } from '@/config/vibeAgents'
-
-interface AgentDraft { name: string; instructions: string; tools: VibeToolId[] }
-interface SavedAgent extends AgentDraft { id: string; created_at: string }
-/** setup_route is null for platform capabilities (e.g. the Python sandbox) that the user cannot connect. */
-interface Readiness { connector: string; label: string; setup_route: string | null; connected: boolean }
-type Step =
-  | { type: 'thought' | 'final'; agent: string; text: string }
-  | { type: 'tool'; agent: string; tool: VibeToolId; args: Record<string, unknown>; ok: boolean; result: string }
-interface RunResult { status: 'completed' | 'failed'; output: string; steps: Step[]; credits_charged?: number }
-
-const ERRORS: Record<string, string> = {
-  agent_model_not_configured: 'O modelo dos agentes ainda não está ativo (falta a chave do OpenRouter).',
-  deduction_failed: 'Créditos insuficientes para executar o agente.',
-  sandbox_not_configured: 'A sandbox Python ainda não foi ativada na plataforma.',
-  agent_limit_reached: 'Você chegou ao limite de agentes. Apague algum para criar outro.',
-  description_required: 'Descreva o que o agente deve fazer.',
-  duplicate_request: 'Essa execução já foi enviada.',
-}
-const friendly = (code: string) => ERRORS[code] ?? (code.startsWith('rate_limit') ? 'Muitas solicitações. Aguarde um minuto.' : code)
-
-async function invokeAgents<T>(body: Record<string, unknown>, idempotencyKey?: string): Promise<T> {
-  const { data, error } = await supabase.functions.invoke('vibe-agents', {
-    body,
-    headers: idempotencyKey ? { 'X-Idempotency-Key': idempotencyKey } : undefined,
-  })
-  if (error) {
-    const detail = await (error as { context?: Response }).context?.json?.().catch(() => null)
-    // A failed run still carries its steps, so the timeline can show what happened.
-    if (detail?.steps) return detail as T
-    throw new Error(friendly(detail?.error ?? error.message))
-  }
-  return data as T
-}
-
-// vibe_agents is newer than the generated Supabase types; type just the two queries used here.
-interface AgentsTable {
-  select: (cols: string) => { order: (col: string, o: { ascending: boolean }) => PromiseLike<{ data: SavedAgent[] | null }> }
-  delete: () => { eq: (col: string, v: string) => PromiseLike<{ error: unknown }> }
-}
-const agentsTable = () => (supabase as unknown as { from: (t: string) => AgentsTable }).from('vibe_agents')
+import { RunTimeline } from '@/components/vibe-agents/RunTimeline'
+import { agentsTable, invokeAgents, type AgentDraft, type Readiness, type RunResult, type SavedAgent } from '@/lib/vibeAgentsApi'
 
 export default function VibeAgentsPage() {
   const navigate = useNavigate()
@@ -137,6 +99,9 @@ export default function VibeAgentsPage() {
             </h1>
             <p className="text-sm text-muted-foreground">Descreva o agente. A IA escolhe as ferramentas, você aprova e executa.</p>
           </div>
+          <Button variant="outline" size="sm" onClick={() => navigate('/agency-agents')} className="hidden md:inline-flex gap-2 rounded-xl border-primary/30 text-primary hover:bg-primary/10">
+            <Library className="h-4 w-4" /> Agency Agents
+          </Button>
           <label className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
             Modo avançado <Switch checked={advanced} onCheckedChange={setAdvanced} />
           </label>
@@ -160,8 +125,14 @@ export default function VibeAgentsPage() {
 
           {draft && (
             <div className="space-y-4 border-t border-border pt-4" data-testid="agent-draft">
-              <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} maxLength={80} aria-label="Nome do agente" />
-              <Textarea value={draft.instructions} onChange={(e) => setDraft({ ...draft, instructions: e.target.value })} className="min-h-[120px]" maxLength={4000} aria-label="Instruções" />
+              <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} maxLength={VIBE_AGENT_LIMITS.maxNameChars} aria-label="Nome do agente" />
+              <Textarea
+                value={draft.instructions}
+                onChange={(e) => setDraft({ ...draft, instructions: e.target.value })}
+                className="min-h-[120px]"
+                maxLength={VIBE_AGENT_LIMITS.maxInstructionsChars}
+                aria-label="Instruções"
+              />
 
               <div>
                 <p className="text-sm font-medium mb-2">Ferramentas que o agente vai usar</p>
@@ -218,7 +189,12 @@ export default function VibeAgentsPage() {
           {loadingAgents ? (
             <p className="text-sm text-muted-foreground">Carregando…</p>
           ) : agents.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhum agente ainda. Descreva um acima para começar.</p>
+            <div className="glass glass-border rounded-2xl p-6 text-center space-y-3">
+              <p className="text-sm text-muted-foreground">Nenhum agente ainda. Descreva um acima ou contrate um especialista pronto.</p>
+              <Button variant="outline" onClick={() => navigate('/agency-agents')} className="gap-2 rounded-xl">
+                <Library className="h-4 w-4" /> Explorar Agency Agents
+              </Button>
+            </div>
           ) : (
             agents.map((a) => (
               <AgentCard key={a.id} agent={a} advanced={advanced} onDelete={() => deleteAgent(a.id)} onRan={() => { refetch(); loadAgents() }} />
@@ -279,39 +255,5 @@ function AgentCard({ agent, advanced, onDelete, onRan }: { agent: SavedAgent; ad
         </div>
       )}
     </div>
-  )
-}
-
-function RunTimeline({ result, advanced }: { result: RunResult; advanced: boolean }) {
-  return (
-    <ol className="space-y-2 text-sm" data-testid="run-timeline">
-      {result.steps.map((s, i) => (
-        <li key={i} className="rounded-xl bg-secondary/50 px-3 py-2">
-          {s.type === 'tool' ? (
-            <div>
-              <span className="flex items-center gap-2">
-                {s.ok ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <XCircle className="h-4 w-4 text-destructive" />}
-                <span>{VIBE_TOOLS[s.tool]?.emoji} {VIBE_TOOLS[s.tool]?.label ?? s.tool}</span>
-                <span className="text-xs text-muted-foreground">· {s.agent}</span>
-              </span>
-              {(advanced || !s.ok) && (
-                <pre className="mt-1 text-xs whitespace-pre-wrap break-words text-muted-foreground">
-                  {advanced ? `${JSON.stringify(s.args)}\n→ ${s.result}` : s.result}
-                </pre>
-              )}
-            </div>
-          ) : (
-            <p className={cn(s.type === 'final' && 'font-medium')}>
-              {s.type === 'final' ? '✅ ' : '💭 '}{s.text}
-              <span className="text-xs text-muted-foreground"> · {s.agent}</span>
-            </p>
-          )}
-        </li>
-      ))}
-      {result.status === 'failed' && <li className="text-destructive text-sm">Falhou: {result.output} (créditos devolvidos)</li>}
-      {result.status === 'completed' && result.credits_charged != null && (
-        <li className="text-xs text-muted-foreground">Custo desta execução: {result.credits_charged} créditos</li>
-      )}
-    </ol>
   )
 }
