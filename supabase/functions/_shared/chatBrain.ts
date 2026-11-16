@@ -331,6 +331,15 @@ async function keylessSearch(query: string, max: number | undefined, recency: We
   }];
 }
 
+/** Chave do Firecrawl: o nome canônico ou os nomes já cadastrados no Supabase. */
+function firecrawlKey(): string | undefined {
+  for (const name of ["FIRECRAWL_API_KEY", "API_key_Fireclawl", "API_KEY_FIRECRAWL", "FIRECRAWL_KEY"]) {
+    const v = Deno.env.get(name)?.trim();
+    if (v) return v;
+  }
+  return undefined;
+}
+
 async function firecrawl(path: "search" | "scrape", body: Record<string, unknown>, key: string, timeoutMs: number): Promise<unknown | null> {
   try {
     const res = await fetch(`${FIRECRAWL_URL}/${path}`, {
@@ -368,7 +377,7 @@ async function webSearch(input: Record<string, unknown>): Promise<OpResult> {
   const query = typeof input.query === "string" ? input.query.trim().slice(0, WEB_LIMITS.queryChars) : "";
   if (query.length < 2) return [400, { error: "invalid_input" }];
   const when = whenText(input.timezone);
-  const key = Deno.env.get("FIRECRAWL_API_KEY");
+  const key = firecrawlKey();
   const recency = WEB_RECENCY.includes(input.recency as WebRecency) ? input.recency as WebRecency : undefined;
   if (!key) return await keylessSearch(query, Number(input.max) || undefined, recency, when);
   const data = await firecrawl("search", buildFirecrawlSearchBody({ query, max: Number(input.max) || undefined, recency }), key, 20_000);
@@ -397,7 +406,7 @@ async function webSearch(input: Record<string, unknown>): Promise<OpResult> {
 async function webRead(input: Record<string, unknown>): Promise<OpResult> {
   const target = safeTarget(input.url);
   if (!target) return [400, { error: "url_not_allowed" }];
-  const key = Deno.env.get("FIRECRAWL_API_KEY");
+  const key = firecrawlKey();
   const page = (key ? parseFirecrawlScrape(await firecrawl("scrape", buildFirecrawlScrapeBody(target), key, 25_000), target) : null)
     ?? parseJinaReader(await jina(target, 25_000), target);
   if (!page) {
