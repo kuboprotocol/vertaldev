@@ -26,8 +26,10 @@ export const PLAN_LIMITS = {
   maxGoalChars: 300,
   /** Teto de chamadas ao modelo num turno do chat (plano + ferramentas + síntese). */
   maxAgentCallsPerTurn: 14,
-  /** Rodadas de ferramentas seguidas antes de o modelo ter de responder. */
-  maxToolRounds: 3,
+  /** Rodadas de ferramentas seguidas antes de o modelo ter de responder (antes 3). */
+  maxToolRounds: 6,
+  /** Tarefas sem dependência entre si que rodam ao mesmo tempo. */
+  maxParallelTasks: 3,
 } as const;
 
 export interface ChatPlanTask {
@@ -119,6 +121,27 @@ export function nextPlanTask(state: ChatPlanState): ChatPlanStateTask | null {
   if (next) return state.tasks.find((t) => t.id === next.id) ?? null;
   // Dependência bloqueada: segue com o que der, sem travar o turno.
   return state.tasks.find((t) => t.status === "pending") ?? null;
+}
+
+/**
+ * Tarefas pendentes que já podem rodar (todas as dependências concluídas ou
+ * bloqueadas), na ordem do plano. Elas não dependem umas das outras, então o
+ * chat as executa juntas. Sem nenhuma pronta, cai na regra de `nextPlanTask`.
+ */
+export function readyPlanTasks(state: ChatPlanState, limit: number = PLAN_LIMITS.maxParallelTasks): ChatPlanStateTask[] {
+  if (limit <= 0) return [];
+  const status = new Map(state.tasks.map((t) => [t.id, t.status]));
+  const ready = state.tasks.filter((t) =>
+    t.status === "pending" && t.dependencies.every((d) => status.get(d) !== "pending")
+  );
+  if (ready.length > 0) return ready.slice(0, limit);
+  const next = nextPlanTask(state);
+  return next ? [next] : [];
+}
+
+/** Estado para executar uma tarefa específica (cada tarefa paralela leva o seu). */
+export function startPlanTask(state: ChatPlanState, id: number): ChatPlanState {
+  return { ...state, current: id, phase: "execute" };
 }
 
 /** Marca a tarefa atual e avança para a próxima (ou para a fase final). */

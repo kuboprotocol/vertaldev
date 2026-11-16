@@ -181,7 +181,7 @@ export function artifactSourceText(a: Artifact): string {
 }
 
 /** Próximo id livre (a1, a2…) dado o que já existe na conversa. */
-export function nextArtifactId(existing: Artifact[]): string {
+export function nextArtifactId(existing: ReadonlyArray<Pick<Artifact, 'id'>>): string {
   let max = 0;
   for (const a of existing) {
     const n = /^a(\d+)$/.exec(a.id);

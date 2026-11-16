@@ -130,10 +130,23 @@ describe('formatToolResults', () => {
     expect(formatToolResults(r)).toContain('ler uma página encontrada na busca');
   });
 
-  it('mantém os 8 resultados mais recentes', () => {
-    const many = Array.from({ length: 10 }, (_, i) => ({ tool: `t${i}`, ok: true, summary: `r${i}` }));
+  it('mantém os 12 resultados mais recentes', () => {
+    const many = Array.from({ length: 14 }, (_, i) => ({ tool: `t${i}`, ok: true, summary: `r${i}` }));
     const text = formatToolResults(many);
-    expect(text).toContain('t9');
-    expect(text).not.toContain('t0 —');
+    expect(text).toContain('t13');
+    expect(text).toContain('t2 —');
+    expect(text).not.toContain('t1 —');
+  });
+
+  it('mantém o contexto limitado mesmo com 12 resultados grandes', () => {
+    const many = Array.from({ length: 12 }, (_, i) => ({ tool: `t${i}`, ok: true, summary: 'x'.repeat(6_000) }));
+    expect(formatToolResults(many).length).toBeLessThan(40_000);
+  });
+
+  it('com falha, convida o agente a corrigir uma vez (fora da última rodada)', () => {
+    const r = [{ tool: 'web_read', ok: false, summary: 'Não consegui abrir https://x.com.' }];
+    expect(formatToolResults(r)).toContain('Alguma ferramenta falhou');
+    expect(formatToolResults(r, { final: true })).not.toContain('Alguma ferramenta falhou');
+    expect(formatToolResults([{ tool: 'web_search', ok: true, summary: 'ok' }])).not.toContain('Alguma ferramenta falhou');
   });
 });

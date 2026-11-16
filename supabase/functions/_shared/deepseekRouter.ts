@@ -13,6 +13,10 @@
 // env porque a DeepSeek já renomeou os IDs de modelo mais de uma vez em 2026
 // — não travar isso no código.
 
+// A heurística de complexidade é pura e mora em complexity.ts (também roda no navegador e no Vitest).
+import { classifyComplexity } from "./complexity.ts";
+export { classifyComplexity };
+
 type Msg = { role: "system" | "user" | "assistant"; content: string };
 
 export interface DeepSeekCallOptions {
@@ -32,21 +36,6 @@ export interface DeepSeekResult {
   model: string;
   tier: "flash" | "pro";
   usage: unknown;
-}
-
-const COMPLEX_KEYWORDS = [
-  "refator", "refactor", "arquitetur", "architecture", "migrar", "migration",
-  "redesenh", "redesign", "multi-arquivo", "multi-file", "debug profundo",
-  "deep debug", "performance crítica", "security audit", "auditoria de segurança",
-  "reescrever", "rewrite", "estrutura de dados", "database schema",
-];
-
-/** Heurística simples de classificação — MVP; refinar com telemetria de uso real depois. */
-export function classifyComplexity(text: string): "flash" | "pro" {
-  const normalized = text.toLowerCase();
-  const hasComplexKeyword = COMPLEX_KEYWORDS.some((k) => normalized.includes(k));
-  const isLong = text.length > 1200;
-  return hasComplexKeyword || isLong ? "pro" : "flash";
 }
 
 function modelIdFor(tier: "flash" | "pro"): string {
