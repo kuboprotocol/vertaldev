@@ -41,7 +41,7 @@ export class WebSpeechVoiceService {
     if (!this.recognition) return;
 
     // Configurações do reconhecimento
-    this.recognition.continuous = false;
+    this.recognition.continuous = true;
     this.recognition.interimResults = true;
     this.recognition.lang = 'pt-BR'; // Português do Brasil por padrão
 
