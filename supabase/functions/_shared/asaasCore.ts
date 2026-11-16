@@ -7,17 +7,21 @@
  *  - Cobrança: billingType ∈ {UNDEFINED, BOLETO, CREDIT_CARD, PIX}; value e dueDate obrigatórios;
  *    description até 500 caracteres.
  *
- * NÃO confirmado ainda (marcado TODO): URL base de sandbox e produção, e nome do cabeçalho de
- * autenticação. Não usar em produção até confirmar na página de autenticação.
+ * URLs base CONFIRMADAS em docs.asaas.com/docs/sandbox (sandbox e produção).
+ * NÃO confirmado ainda: nome do cabeçalho de autenticação (a página carrega por JavaScript; ver TODO
+ * em ASAAS_AUTH_HEADER). Não chamar a API real até confirmar.
  */
 
 export type AsaasEnv = "sandbox" | "production";
 
-/** TODO(confirmar na doc de autenticação): URLs base. Valores provisórios. */
+/** URLs base confirmadas na documentação de sandbox. Chave de sandbox só funciona na URL de sandbox. */
 export const ASAAS_BASE_URL: Record<AsaasEnv, string> = {
   sandbox: "https://api-sandbox.asaas.com/v3",
   production: "https://api.asaas.com/v3",
 };
+
+/** TODO(confirmar): nome do cabeçalho com a chave. Não inventar: ler a doc de autenticação ou testar na sandbox. */
+export const ASAAS_AUTH_HEADER: string | null = null;
 
 export const ASAAS_BILLING_TYPES = ["UNDEFINED", "BOLETO", "CREDIT_CARD", "PIX"] as const;
 export type AsaasBillingType = (typeof ASAAS_BILLING_TYPES)[number];
