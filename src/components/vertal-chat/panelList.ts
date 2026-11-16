@@ -2,7 +2,7 @@
 import type { ComponentType } from 'react';
 import {
   BookOpen, Clapperboard, Clock, Code2, Download, FileText, History, KeyRound, Layout, LayoutTemplate, Music, NotebookPen,
-  Palette, Plug, Puzzle, Scissors, Sparkles, Table2, User2, Video,
+  Palette, Plug, Puzzle, Ruler, Scissors, Sparkles, Table2, User2, Video,
 } from 'lucide-react';
 import type { PanelKey } from '@/lib/chatAgent/contract';
 import type { DesignCopy } from '@/components/creative/DesignGallery';
@@ -39,6 +39,7 @@ export const PANEL_LIST: PanelInfo[] = [
   { key: 'office', label: 'Vertal Office', hint: 'Documentos, planilhas, slides e PDF', icon: FileText, group: 'criar' },
   { key: 'design', label: 'Design Premium', hint: 'Artes com IA, slides, estúdio e avatares', icon: Palette, group: 'criar' },
   { key: 'figcraft', label: 'figCraft', hint: 'Telas, componentes e protótipos salvos na sua conta', icon: Layout, group: 'criar' },
+  { key: 'cad', label: 'Auto Cadê', hint: 'Plantas e desenhos técnicos, à mão ou com IA; exporta DXF para AutoCAD', icon: Ruler, group: 'criar' },
   { key: 'canvas', label: 'Canvas', hint: 'Canvas infinito para montar artes', icon: LayoutTemplate, group: 'criar' },
   { key: 'notebook', label: 'Vertal Notebook', hint: 'Converse com PDFs, links e vídeos', icon: NotebookPen, group: 'criar' },
   { key: 'sheet', label: 'Planilha IA', hint: 'Planilhas geradas por IA', icon: Table2, group: 'criar' },

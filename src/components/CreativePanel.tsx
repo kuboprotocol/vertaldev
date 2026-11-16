@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, Zap, Image, Music, Code, Video, Pen, Layout, BarChart3, Palette, ArrowLeft, ChevronRight, FileText } from 'lucide-react';
+import { Sparkles, Zap, Image, Music, Code, Video, Pen, Layout, BarChart3, Palette, ArrowLeft, ChevronRight, FileText, Ruler } from 'lucide-react';
 import { OfficeSuite } from './office/OfficeSuite';
 import ChatWidget from './ChatWidget';
 import { CreativeChat } from './CreativeChat';
@@ -9,6 +9,7 @@ import { CreativeSheets } from './CreativeSheets';
 import { CreativeMusic } from './CreativeMusic';
 import { CreativeDesign } from './CreativeDesign';
 import { FigcraftEditor } from './creative/FigcraftEditor';
+import { CadStudio } from './creative/CadStudio';
 import { DesignWorld, PREMIUM_BACKGROUND, PendingPage } from './creative/DesignWorld';
 import { useAuth } from '@/hooks/useAuth';
 import { SponsoredSlot } from './creative/SponsoredSlot';
@@ -17,7 +18,7 @@ type CategoryId = 'design' | 'content' | 'media' | 'digital';
 
 interface CreativeItem {
   id: string;
-  type: 'text' | 'image' | 'audio' | 'code' | 'video' | 'slides' | 'spreadsheet' | 'music' | 'design' | 'office' | 'figcraft';
+  type: 'text' | 'image' | 'audio' | 'code' | 'video' | 'slides' | 'spreadsheet' | 'music' | 'design' | 'office' | 'figcraft' | 'cad';
   title: string;
   description: string;
   icon: React.ReactNode;
@@ -109,6 +110,16 @@ const CREATIVE_ITEMS: CreativeItem[] = [
     status: 'available',
   },
   {
+    id: 'cad',
+    type: 'cad',
+    title: 'Auto Cadê',
+    description: 'Plantas e desenhos técnicos, à mão ou com IA. Exporta DXF para AutoCAD',
+    icon: <Ruler className="h-5 w-5" />,
+    color: 'from-cyan-500 to-blue-600',
+    category: 'design',
+    status: 'available',
+  },
+  {
     id: 'spreadsheet',
     type: 'spreadsheet',
     title: 'Gerador de Planilhas',
@@ -180,6 +191,8 @@ function renderTool(type: CreativeItem['type'], creditsAvailable: number) {
       return <CreativeMusic creditsAvailable={creditsAvailable} />;
     case 'figcraft':
       return <FigcraftEditor />;
+    case 'cad':
+      return <CadStudio creditsAvailable={creditsAvailable} />;
     default:
       return null;
   }
