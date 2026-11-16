@@ -79,6 +79,10 @@ Valores em `VIBE_AGENT_PRICING`.
 
 Migration: `supabase/migrations/20261011150000_vibe_agents.sql`.
 
+## Catálogo de especialistas
+
+Os 283 especialistas do projeto The Agency podem ser contratados para a equipe do Vibe Agents. Veja [AGENCY_AGENTS.md](./AGENCY_AGENTS.md).
+
 ## API (`vibe-agents`)
 
 Todas as chamadas são `POST` com login.

@@ -171,7 +171,8 @@ export const VIBE_PLATFORM_REQUIREMENTS: Record<VibePlatformRequirement, { label
 export const VIBE_AGENT_LIMITS = {
   maxAgentsPerUser: 50,
   maxNameChars: 80,
-  maxInstructionsChars: 4000,
+  /** Enough for the full persona of every Agency agent (the largest is ~35k chars). */
+  maxInstructionsChars: 40000,
   maxTaskChars: 4000,
   /** Model turns per run, shared with sub-agents. */
   maxSteps: 12,
