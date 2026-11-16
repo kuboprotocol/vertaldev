@@ -15,6 +15,8 @@ export interface SpotifyAccountRow {
   refresh_token_iv: string
   refresh_token_tag: string
   access_token_cache: string | null
+  access_token_iv: string | null
+  access_token_tag: string | null
   access_token_expires_at: string | null
 }
 
@@ -55,7 +57,11 @@ export async function exchangeAuthCode(code: string, redirectUri: string) {
 /** Garante um access token válido; renova com o refresh token quando faltar pouco para expirar. */
 export async function getFreshAccessToken(admin: AdminClient, account: SpotifyAccountRow): Promise<string> {
   const exp = account.access_token_expires_at ? new Date(account.access_token_expires_at).getTime() : 0
-  if (account.access_token_cache && exp > Date.now() + 60_000) return account.access_token_cache
+  // O access token fica criptografado no banco (RFC 6749 §10.3). Linhas antigas, em texto puro,
+  // não têm iv/tag: são ignoradas e o token é renovado.
+  if (account.access_token_cache && account.access_token_iv && account.access_token_tag && exp > Date.now() + 60_000) {
+    return decryptSecret({ ciphertext: account.access_token_cache, iv: account.access_token_iv, tag: account.access_token_tag })
+  }
 
   const refresh = await decryptSecret({
     ciphertext: account.refresh_token_ciphertext,
@@ -76,8 +82,11 @@ export async function getFreshAccessToken(admin: AdminClient, account: SpotifyAc
     throw new SpotifyApiError('reauth_required', res.status || 401)
   }
 
+  const encAccess = await encryptSecret(json.access_token)
   const update: Record<string, unknown> = {
-    access_token_cache: json.access_token,
+    access_token_cache: encAccess.ciphertext,
+    access_token_iv: encAccess.iv,
+    access_token_tag: encAccess.tag,
     access_token_expires_at: new Date(Date.now() + (json.expires_in ?? 3600) * 1000).toISOString(),
     updated_at: new Date().toISOString(),
   }
