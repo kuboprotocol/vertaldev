@@ -1,4 +1,4 @@
-import { Github, CreditCard, Globe, Figma, Server, Smartphone, Cloud, Database, Mail, MessageSquare, Shield, Container, Wallet, Zap, Leaf, Rocket, Terminal, TrendingUp, Instagram, MessageCircle } from 'lucide-react'
+import { Github, CreditCard, Globe, Figma, Server, Smartphone, Cloud, Database, Mail, MessageSquare, Shield, Container, Wallet, Zap, Leaf, Rocket, Terminal, TrendingUp, Instagram, MessageCircle, Music } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 export interface ConnectorSetupStep {
@@ -240,6 +240,28 @@ export const connectors: ConnectorConfig[] = [
       { title: 'Clique em Conectar conta', description: 'Você será redirecionado ao login do Google.' },
       { title: 'Autorize os escopos', description: 'Leitura (gmail.readonly) e envio (gmail.send).' },
       { title: 'Pronto', description: 'A conta aparece no painel e pode ser usada por agentes IA.' },
+    ],
+  },
+  {
+    name: 'Spotify',
+    slug: 'spotify',
+    icon: Music,
+    color: '#1DB954',
+    authType: 'oauth',
+    category: 'communication',
+    description: 'Peça músicas no chat e ouça aqui mesmo, com a sua conta Spotify.',
+    longDescription: 'OAuth oficial do Spotify com escopos de reprodução. Busca e player embutido funcionam sem Premium; controlar o seu aparelho exige Premium. Refresh token criptografado no servidor.',
+    features: ['OAuth Spotify', 'Busca de músicas', 'Player no chat', 'Controle do aparelho (Premium)', 'Tokens criptografados'],
+    docsUrl: 'https://developer.spotify.com/documentation/web-api',
+    status: 'available',
+    internalRoute: '/connectors/spotify',
+    apiKeyLabel: '',
+    apiKeyPlaceholder: '',
+    apiKeyHelp: 'Conexão via OAuth — não requer chave manual.',
+    setupSteps: [
+      { title: 'Clique em Conectar Spotify', description: 'Você será levado ao login do Spotify.' },
+      { title: 'Autorize o acesso', description: 'Apenas leitura e controle da reprodução.' },
+      { title: 'Pronto', description: 'Peça uma música no chat e ela toca no player.' },
     ],
   },
   {

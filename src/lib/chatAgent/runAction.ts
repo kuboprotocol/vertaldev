@@ -10,6 +10,7 @@ import { secretPlaceholders } from './contract';
 import { artifactSourceText, type Artifact, type StoredImage } from './artifacts';
 import { loadConnections, parseMcpBody, weatherText } from './connections';
 import { describeDays } from '@/lib/clock/alarms';
+import { SPOTIFY_ERROR_MESSAGES, type SpotifyErrorCode, type SpotifyTrack } from '@/lib/spotify/spotifyCore';
 import { scheduleChatAlarm } from '@/lib/clock/chatAlarm';
 import { FIGCRAFT_BASE } from '@/lib/figcraft/bridge';
 import { createDesign, getDesign, listDesigns } from '@/lib/figcraft/designStore';
@@ -435,6 +436,35 @@ async function gmailAccount(): Promise<{ id: string; email: string } | null> {
   return (data?.[0] as { id: string; email: string } | undefined) ?? null;
 }
 
+// ─── Spotify ──────────────────────────────────────────────────────────────
+// Busca e controle passam pela edge function spotify-action (tokens ficam no servidor).
+// Busca e "tocar" mostram um player embutido do Spotify, que toca dentro do chat.
+
+async function runSpotify(action: Extract<AgentAction, { tool: 'spotify' }>, ctx: ActionContext): Promise<ActionOutcome> {
+  const { data, error } = await supabase.functions.invoke('spotify-action', {
+    body: { op: action.op, query: action.query, max: action.max },
+  });
+  const d = (data ?? {}) as { ok?: boolean; code?: SpotifyErrorCode; message?: string; summary?: string; tracks?: SpotifyTrack[] };
+  if (!data && error) return followUp('spotify', false, 'Não foi possível falar com o Spotify agora.');
+  if (d.code === 'not_connected') return { ...followUp('spotify', false, SPOTIFY_ERROR_MESSAGES.not_connected), panel: 'connectors' };
+  if (!d.ok) return followUp('spotify', false, d.message ?? 'Falha no Spotify.', d.code);
+
+  const tracks = d.tracks ?? [];
+  const summary = d.summary ?? 'Pronto.';
+  const withPlayer = (action.op === 'search' || action.op === 'play') && tracks.length > 0;
+  if (!withPlayer) return followUp('spotify', true, summary);
+  return {
+    ...followUp('spotify', true, summary),
+    artifact: {
+      id: ctx.newId(),
+      kind: 'spotify',
+      title: action.op === 'play' ? tracks[0].title : `Spotify: ${action.query ?? 'busca'}`,
+      query: action.query ?? '',
+      tracks: tracks.map((t) => ({ id: t.id, title: t.title, artist: t.artist, imageUrl: t.imageUrl })),
+    },
+  };
+}
+
 async function runGmailSearch(action: Extract<AgentAction, { tool: 'gmail_search' }>): Promise<ActionOutcome> {
   const account = await gmailAccount();
   if (!account) return { ...followUp('gmail_search', false, NOT_CONNECTED('O Gmail')), panel: 'connectors' };
@@ -751,6 +781,8 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
         return await runWeather(action);
       case 'web_search':
         return await runWebSearch(action);
+      case 'spotify':
+        return await runSpotify(action, ctx);
       case 'gmail_search':
         return await runGmailSearch(action);
       case 'gmail_send':
@@ -900,6 +932,7 @@ export function actionLabel(action: AgentAction): string {
     case 'canvas': return 'Desenhando no Canvas';
     case 'app': return 'Construindo aplicativo no Dev Code';
     case 'music': return 'Compondo música (1 a 3 min)';
+    case 'spotify': return 'Falando com o Spotify';
     case 'ebook': return 'Escrevendo ebook (pode levar alguns minutos)';
     case 'notebook': return 'Criando notebook';
     case 'notebook_feed': return 'Abrindo Notebook para alimentar com documentos';
