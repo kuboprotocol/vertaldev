@@ -251,3 +251,77 @@ export function budgetToolResults(
   const cap = Math.min(per, opts.perResultMax ?? Number.POSITIVE_INFINITY);
   return kept.map((r) => (r.summary.length > cap ? { ...r, summary: `${r.summary.slice(0, cap - 1)}…` } : r));
 }
+
+// ─── Peças reaproveitadas pelo Vibe Code (mesmo orquestrador, outro laço) ──
+
+/**
+ * Chama o modelo no tier escolhido com as duas redes de segurança do
+ * orquestrador v2, sem saber de que agente se trata:
+ *  1. escalar nunca piora: se o "pro" falhar (erro do gateway), volta ao flash;
+ *  2. saída inútil (JSON vazio, cortado ou quebrado): UMA nova tentativa no
+ *     outro tier, e fica a melhor das duas.
+ * Usado pelo Vertal Chat (creative-router) e pelo Vibe Code (vibe-code-agent).
+ */
+export async function callWithTierFallback<R extends { tier?: AgentTier }, P>(opts: {
+  tier: AgentTier;
+  call: (tier: AgentTier) => Promise<R>;
+  parse: (result: R) => P;
+  /** A leitura pede nova tentativa no outro tier? */
+  needsRetry: (parsed: P) => boolean;
+  /** A segunda leitura é melhor que a primeira? (padrão: não precisa de nova tentativa) */
+  better?: (second: P, first: P) => boolean;
+  /** Só esses erros acionam a volta ao flash / são engolidos na nova tentativa. */
+  isRecoverable: (err: unknown) => boolean;
+  /** false = sem nova tentativa no outro tier (só a volta ao flash). */
+  retryOtherTier?: boolean;
+}): Promise<{ result: R; parsed: P; usedTier: AgentTier; fellBack: boolean; retried: boolean }> {
+  let usedTier = opts.tier;
+  let fellBack = false;
+  let result: R;
+  try {
+    result = await opts.call(opts.tier);
+  } catch (err) {
+    if (opts.tier === "flash" || !opts.isRecoverable(err)) throw err;
+    fellBack = true;
+    usedTier = "flash";
+    result = await opts.call("flash");
+  }
+  if (result.tier) usedTier = result.tier;
+  let parsed = opts.parse(result);
+  let retried = false;
+  if (opts.retryOtherTier !== false && opts.needsRetry(parsed)) {
+    retried = true;
+    try {
+      const secondTier = otherTier(usedTier);
+      const second = await opts.call(secondTier);
+      const again = opts.parse(second);
+      const isBetter = opts.better ? opts.better(again, parsed) : !opts.needsRetry(again);
+      if (isBetter) {
+        result = second;
+        parsed = again;
+        usedTier = second.tier ?? secondTier;
+      }
+    } catch (err) {
+      if (!opts.isRecoverable(err)) throw err;
+    }
+  }
+  return { result, parsed, usedTier, fellBack, retried };
+}
+
+/**
+ * Roda `fn` sobre os itens com no máximo `limit` ao mesmo tempo, devolvendo
+ * os resultados na ordem original (paralelo limitado, sem dependência externa).
+ */
+export async function mapWithConcurrency<T, R>(items: readonly T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  const width = Math.max(1, Math.min(Math.floor(limit) || 1, items.length));
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i], i);
+    }
+  };
+  await Promise.all(Array.from({ length: width }, worker));
+  return out;
+}

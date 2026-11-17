@@ -29,7 +29,7 @@ import {
 } from "../_shared/officeEmail.ts";
 import { getFreshAccessToken, loadAccount } from "../_shared/gmailToken.ts";
 import { handleChatBrainOp, loadChatBrain, saveChatBrain } from "../_shared/chatBrain.ts";
-import { chooseAgentTier, ORCHESTRATOR_LIMITS, otherTier, type AgentTier } from "../_shared/chatOrchestrator.ts";
+import { callWithTierFallback, chooseAgentTier, ORCHESTRATOR_LIMITS, type AgentTier } from "../_shared/chatOrchestrator.ts";
 import {
   AGENT_LIMITS,
   API_METHODS,
@@ -645,32 +645,21 @@ async function handleAgentChat(
   });
 
   try {
-    let gw: Awaited<ReturnType<typeof runGateway>>;
-    try {
-      gw = await callModel(route.tier);
-    } catch (err) {
-      // Escalar nunca pode piorar: se o "pro" falhar, volta para o flash de sempre.
-      if (!(err instanceof GatewayError) || route.tier === "flash") throw err;
-      console.warn("[creative-router] agent_chat pro falhou, voltando ao flash:", err.message);
-      gw = await callModel("flash");
-    }
-    let parsed = parseAgentOutput(gw.content);
-    let retried = false;
-    // JSON vazio, cortado ou quebrado: uma nova tentativa no outro tier antes do 502.
-    if (agentOutputNeedsRetry(parsed.status)) {
-      retried = true;
-      try {
-        const second = await callModel(otherTier(gw.tier));
-        const again = parseAgentOutput(second.content);
-        const better = !agentOutputNeedsRetry(again.status) ||
-          (parsed.status === "empty" && again.status !== "empty");
-        if (better) {
-          gw = second;
-          parsed = again;
-        }
-      } catch (err) {
-        if (!(err instanceof GatewayError)) throw err;
-      }
+    // Escalar nunca piora (pro que falha volta ao flash) e saída quebrada ganha
+    // uma nova tentativa no outro tier: mesmo helper usado pelo Vibe Code.
+    const attempt = await callWithTierFallback({
+      tier: route.tier,
+      call: callModel,
+      parse: (r) => parseAgentOutput(r.content),
+      needsRetry: (p) => agentOutputNeedsRetry(p.status),
+      better: (again, first) => !agentOutputNeedsRetry(again.status) || (first.status === "empty" && again.status !== "empty"),
+      isRecoverable: (err) => err instanceof GatewayError,
+    });
+    if (attempt.fellBack) console.warn("[creative-router] agent_chat pro falhou, voltando ao flash");
+    const gw = attempt.result;
+    const parsed = attempt.parsed;
+    const retried = attempt.retried;
+    if (retried) {
       console.warn(`[creative-router] agent_chat saída ${parsed.status} após nova tentativa (${gw.provider}/${gw.model})`);
     }
     const turn = parsed.turn;
