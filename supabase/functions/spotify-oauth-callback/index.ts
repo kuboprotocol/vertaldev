@@ -42,6 +42,7 @@ Deno.serve(async (req) => {
     const profile = me.ok ? await me.json() as { id?: string; display_name?: string } : {}
 
     const enc = await encryptSecret(tokens.refreshToken)
+    const encAccess = await encryptSecret(tokens.accessToken)
     const { error: upErr } = await admin.from('spotify_accounts').upsert({
       user_id: s.user_id,
       display_name: profile.display_name ?? null,
@@ -49,7 +50,9 @@ Deno.serve(async (req) => {
       refresh_token_ciphertext: enc.ciphertext,
       refresh_token_iv: enc.iv,
       refresh_token_tag: enc.tag,
-      access_token_cache: tokens.accessToken,
+      access_token_cache: encAccess.ciphertext,
+      access_token_iv: encAccess.iv,
+      access_token_tag: encAccess.tag,
       access_token_expires_at: new Date(Date.now() + tokens.expiresIn * 1000).toISOString(),
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' })
