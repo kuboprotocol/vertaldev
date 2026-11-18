@@ -9,7 +9,8 @@
 import type { ExtractedMemory, MemoryKind, MemoryScope } from "./primeMemory.ts";
 import { type JsonRepair, repairAgentJson } from "./chatOrchestrator.ts";
 
-export type AgentActionType = "read_file" | "edit_file" | "message" | "ask_user";
+/** ask_chat: pergunta de pesquisa/imagem ao Vertal Chat (ponte Vibe → Chat, profundidade 1). */
+export type AgentActionType = "read_file" | "edit_file" | "message" | "ask_user" | "ask_chat";
 
 export interface AgentAction {
   type: AgentActionType;
@@ -36,7 +37,7 @@ export interface AgentTurn {
 
 export type ChatMsg = { role: "system" | "user" | "assistant"; content: string };
 
-const ACTION_TYPES: AgentActionType[] = ["read_file", "edit_file", "message", "ask_user"];
+const ACTION_TYPES: AgentActionType[] = ["read_file", "edit_file", "message", "ask_user", "ask_chat"];
 
 const asString = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : undefined);
 
@@ -119,7 +120,8 @@ export function parseAgentTurn(raw: string): AgentTurn {
     .filter((a): a is AgentAction => a !== null)
     .slice(0, 30);
 
-  const needsMoreReading = actions.some((a) => a.type === "read_file");
+  // ask_chat também espera resposta (do Vertal Chat) antes de entregar.
+  const needsMoreReading = actions.some((a) => a.type === "read_file" || a.type === "ask_chat");
   return {
     thought: asString(data.thought, 400),
     summary: asString(data.summary, 300) ?? "",
@@ -463,4 +465,29 @@ export function checkVibeOrigin(body: Record<string, unknown>): { ok: true; orig
     return { ok: false, error: "delegation_preview_only" };
   }
   return { ok: true, origin };
+}
+
+// ---------------------------------------------------------------------------
+// Ponte Vibe Code → Vertal Chat (ação ask_chat)
+// ---------------------------------------------------------------------------
+
+/** Perguntas ao Vertal Chat por pedido (cada uma custa rodadas do chat). */
+export const MAX_CHAT_DELEGATIONS = 1;
+
+/** Linha da ação no protocolo do agente (vai dentro do array "actions" do SYSTEM). */
+export const ASK_CHAT_ACTION_LINE =
+  '{"type":"ask_chat","reason":"pergunta objetiva de pesquisa (documentação, versão de lib, API, preço) ou pedido de imagem ao Vertal Chat"}';
+
+/** Regra do prompt: quando e como usar ask_chat. */
+export const ASK_CHAT_RULE =
+  `Você não acessa a internet diretamente. Para pesquisar (documentação, versões, endpoints de API) ou gerar uma imagem, use UMA ação ask_chat (no máximo ${MAX_CHAT_DELEGATIONS} por pedido) com "final": false; o Vertal Chat responde e você continua na volta seguinte. Não use ask_chat para o que está no código (use read_file).`;
+
+/**
+ * Pedido vindo do Vertal Chat (origin "vertal_chat") não pode perguntar ao chat
+ * de volta (profundidade 1). Também respeita o limite por pedido.
+ */
+export function canAskChat(origin: VibeOrigin, used: number): { ok: true } | { ok: false; reason: string } {
+  if (origin === "vertal_chat") return { ok: false, reason: "delegation_depth_exceeded" };
+  if (used >= MAX_CHAT_DELEGATIONS) return { ok: false, reason: "chat_delegation_limit" };
+  return { ok: true };
 }

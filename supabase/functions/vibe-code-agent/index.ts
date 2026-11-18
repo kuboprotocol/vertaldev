@@ -46,6 +46,9 @@ import {
   isSafePath,
   lintGeneratedFile,
   type Observation,
+  ASK_CHAT_ACTION_LINE,
+  ASK_CHAT_RULE,
+  canAskChat,
   checkVibeOrigin,
   parseAgentTurn,
   sanitizeMemories,
@@ -69,14 +72,48 @@ import { parseReviewRequest, runReviewCommand } from "./review.ts";
 import { formatTaskGraphForPrompt, TaskGraphError } from "../_shared/vibeTaskGraph.ts";
 import {
   compactAgentState,
+  type HandoffStatus,
   lockBusyMessage,
+  mergeHandoff,
   type ModelTier,
   normalizeAgentState,
+  parseHandoffNote,
   parseLockOwner,
   readKnobs,
   type WriterKind,
 } from "../_shared/vibePlandexEngine.ts";
 import { type PlanActionName, PlanError, parsePlanRequest, READ_ONLY_PLAN_ACTIONS, runPlanAction } from "./plan.ts";
+import { type ChatDelegateResult, formatChatAnswerForAgent, type RouterCall, runChatDelegation } from "../_shared/chatDelegate.ts";
+
+/**
+ * Ponte Vibe Code → Vertal Chat: pergunta ao creative-router (tool agent_chat,
+ * origin 'vibe_code') com o token do próprio usuário. O creative-router filtra as
+ * ferramentas (só leitura/pesquisa/imagem) e cobra pelos caminhos de sempre.
+ */
+async function runDelegatedChat(token: string, question: string, context?: string, signal?: AbortSignal): Promise<ChatDelegateResult> {
+  const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/creative-router`;
+  const router: RouterCall = async (payload) => {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        apikey: Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      },
+      body: JSON.stringify(payload),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(90_000)]) : AbortSignal.timeout(90_000),
+    });
+    const text = await res.text();
+    let data: unknown = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = { error: "invalid_json" };
+    }
+    return { status: res.status, data };
+  };
+  return await runChatDelegation(question, router, { context });
+}
 
 /** Erro com mensagem já pronta para o Dev (pt-BR). */
 class UserFacingError extends Error {}
@@ -349,7 +386,8 @@ Você trabalha em voltas. A cada volta responda com UM objeto JSON ESTRITO (sem 
     {"type":"read_file","path":"src/..","reason":"por que preciso ler"},
     {"type":"edit_file","path":"src/..","reason":"o que muda","content":"CONTEÚDO FINAL COMPLETO do arquivo"},
     {"type":"message","reason":"nota ao usuário"},
-    {"type":"ask_user","reason":"pergunta objetiva, só se for impossível decidir sozinho"}
+    {"type":"ask_user","reason":"pergunta objetiva, só se for impossível decidir sozinho"},
+    ${ASK_CHAT_ACTION_LINE}
   ],
   "requirements": [{"slug":"stripe","reason":"cobrança mensal"},{"name":"API de Frete","secrets":["FRETE_API_KEY"],"reason":"calcular frete"}],
   "memories": [{"scope":"user|project","kind":"preference|constraint|architecture|design|integration|decision|note","content":"fato durável"}],
@@ -364,7 +402,7 @@ Como trabalhar:
 4. "memories": só fatos duráveis e úteis em conversas futuras (preferências, restrições, decisões de arquitetura). Nada de segredos, nada efêmero.
 5. Respeite a memória do Prime e o histórico: não refaça o que já foi feito, não contradiga decisões anteriores sem avisar.
 6. Pedido ambíguo e caro de errar: use ask_user (uma pergunta) em vez de chutar. Pedido claro: execute.
-7. Você não executa comandos nem acessa a internet; diga em "message" o que depender do usuário (credencial, decisão, deploy).
+7. Você não executa comandos; diga em "message" o que depender do usuário (credencial, decisão, deploy). ${ASK_CHAT_RULE}
 8. Você conversa com o usuário: "summary" é a sua resposta direta a ele, em português, em 1 a 3 frases. Se o pedido for só uma pergunta ou conversa, responda em "summary" (e em "message" se precisar de mais) sem editar arquivos.
 9. Para APIs fora do catálogo, inclua em "requirements" "key_url" (página oficial onde se gera a chave) e "site_url" (página oficial de cadastro), só https e só sites oficiais. Nunca invente um link que você não tem certeza que é oficial: deixe sem.
 10. Seja educado, claro e direto, como um engenheiro sênior gentil: diga o que fez, o que falta e o próximo passo.`;
@@ -477,6 +515,10 @@ Deno.serve(async (req) => {
     origin?: string;
     delegationDepth?: number;
     delegate?: unknown;
+    /** Conversa do Vertal Chat que delegou (vai para agent_state.handoff). */
+    chatConversationId?: string;
+    /** Atualiza agent_state.handoff sem rodar o agente: {action:"note", goal?, status?, lastSummary?, ...}. */
+    handoff?: unknown;
   };
   try {
     body = await req.json();
@@ -630,6 +672,32 @@ Deno.serve(async (req) => {
       };
 
       /**
+       * Passagem de bastão Chat ↔ Vibe Code: grava agent_state.handoff (sem migração;
+       * a coluna agent_state já existe). Lê, normaliza (preserva o resto do estado) e mescla.
+       * Sem a coluna/conversa, só avisa no log: nunca derruba o pedido.
+       */
+      const saveHandoff = async (convId: string | null, patch: Parameters<typeof mergeHandoff>[1]) => {
+        if (!convId) return null;
+        const { data, error } = await admin.from("vibe_conversations").select("agent_state").eq("id", convId).eq("user_id", userId).maybeSingle();
+        if (error || !data) {
+          if (error) console.warn("[vibe-code-agent] handoff unavailable:", error.message);
+          return null;
+        }
+        const state = normalizeAgentState(data.agent_state, knobs);
+        const next = { ...state, handoff: mergeHandoff(state.handoff, patch) };
+        const { error: upErr } = await admin
+          .from("vibe_conversations")
+          .update({ agent_state: compactAgentState(next) })
+          .eq("id", convId)
+          .eq("user_id", userId);
+        if (upErr) {
+          console.warn("[vibe-code-agent] handoff save failed:", upErr.message);
+          return null;
+        }
+        return next.handoff;
+      };
+
+      /**
        * O caminho de "apply": checagem estática, conferência de hash (o arquivo
        * não pode ter mudado desde que a correção foi calculada), créditos,
        * commit e checkpoint. Usado pelo "Aplicar" do chat, pela fila de
@@ -706,6 +774,23 @@ Deno.serve(async (req) => {
         if (typeof body.projectId === "string" && UUID_RE.test(body.projectId)) {
           const { data: proj } = await userClient.from("projects").select("id").eq("id", body.projectId).maybeSingle();
           projectId = proj?.id ?? null;
+        }
+
+        // ------------------------------------------------------------------
+        // Handoff: só anota agent_state.handoff (não roda o agente, não cobra)
+        // ------------------------------------------------------------------
+        if (body.handoff !== undefined) {
+          const patch = parseHandoffNote(body.handoff);
+          if (!patch) throw new UserFacingError("Handoff inválido: use {action:\"note\"} com goal, status, lastSummary, chatConversationId ou origin.");
+          persist = false;
+          const conv = await resolveConversation(false);
+          conversationId = conv?.id ?? null;
+          if (!conversationId) throw new UserFacingError("Não encontrei a conversa do Vibe Code para anotar o handoff.");
+          const saved = await saveHandoff(conversationId, patch);
+          if (!saved) throw new UserFacingError("Não consegui gravar o handoff desta conversa.");
+          send({ kind: "handoff", status: "success", title: "Handoff atualizado", handoff: saved, conversationId });
+          send({ kind: "done", status: "success", title: "Handoff anotado" });
+          return;
         }
 
         // ------------------------------------------------------------------
@@ -999,6 +1084,16 @@ Deno.serve(async (req) => {
         const conv = await resolveConversation(true, prompt);
         conversationId = conv?.id ?? null;
         if (mode === "apply") await acquireWriterLock(conversationId, "manual");
+        // Pedido delegado pelo Vertal Chat: abre/atualiza o handoff da conversa.
+        const chatConversationId = typeof body.chatConversationId === "string" && UUID_RE.test(body.chatConversationId)
+          ? body.chatConversationId
+          : undefined;
+        if (origin === "vertal_chat") {
+          await saveHandoff(conversationId, { origin, goal: prompt, status: "running", ...(chatConversationId ? { chatConversationId } : {}) })
+            .catch((e) => console.warn("[vibe-code-agent] handoff:", e instanceof Error ? e.message : e));
+        }
+        // Ponte Vibe → Chat: perguntas ao Vertal Chat feitas neste pedido.
+        let chatDelegations = 0;
         const store = makeStore(admin, userId, projectId, conversationId);
         const planSummary = await loadPlanSummary(conversationId).catch(() => "");
 
@@ -1192,6 +1287,7 @@ Deno.serve(async (req) => {
           // read_file é só leitura: as da volta rodam em paralelo (até READ_CONCURRENCY),
           // e as observações saem na ordem em que o modelo pediu.
           const observations: Observation[] = [];
+          const chatAnswers: string[] = [];
           const readFile = async (path: string): Promise<Observation> => {
             const cached = readCache.get(path);
             if (cached) return cached;
@@ -1236,6 +1332,33 @@ Deno.serve(async (req) => {
               }
               continue;
             }
+            if (action.type === "ask_chat") {
+              const question = (action.reason ?? action.content ?? "").trim();
+              if (!question) continue;
+              const allowed = canAskChat(origin, chatDelegations);
+              if (!allowed.ok) {
+                send({
+                  kind: "delegate",
+                  status: "skipped",
+                  title: allowed.reason === "delegation_depth_exceeded" ? "Pedido veio do Vertal Chat: não pergunto de volta" : "Limite de perguntas ao Vertal Chat neste pedido",
+                  detail: question,
+                });
+                continue;
+              }
+              chatDelegations++;
+              abortIfRequested();
+              send({ kind: "delegate", status: "running", title: "Perguntando ao Vertal Chat", detail: question });
+              const answer = await runDelegatedChat(token, question, prompt.slice(0, 800), req.signal);
+              send({
+                kind: "delegate",
+                status: answer.ok ? "success" : "failed",
+                title: answer.ok ? "Vertal Chat respondeu" : answer.error ?? "O Vertal Chat não respondeu",
+                detail: answer.ok ? answer.answer : question,
+                delegate: { target: "vertal_chat", origin: "vibe_code", ...answer },
+              });
+              chatAnswers.push(formatChatAnswerForAgent(answer));
+              continue;
+            }
             if (!action.path) continue;
 
             if (!isSafePath(action.path)) {
@@ -1255,10 +1378,11 @@ Deno.serve(async (req) => {
           }
           await flushReads();
 
-          // Precisa ler mais? Devolve as observações ao modelo.
-          if (!parsed.final && observations.length) {
+          // Precisa ler mais (ou o Vertal Chat respondeu)? Devolve as observações ao modelo.
+          if ((!parsed.final && observations.length) || (chatAnswers.length && turn < MAX_TURNS)) {
             messages.push({ role: "assistant", content: llm.content });
-            messages.push({ role: "user", content: formatObservations(observations) });
+            const parts = [observations.length ? formatObservations(observations) : "", ...chatAnswers].filter(Boolean);
+            messages.push({ role: "user", content: parts.join("\n\n") });
             continue;
           }
 
@@ -1481,6 +1605,12 @@ Deno.serve(async (req) => {
         });
         send({ kind: "reply", status: "success", title: "Resposta do agente", detail: replyText });
 
+        if (origin === "vertal_chat") {
+          const status: HandoffStatus = questions.length ? "waiting_user" : "done";
+          await saveHandoff(conversationId, { origin, status, lastSummary: finalTurn?.summary || replyText })
+            .catch((e) => console.warn("[vibe-code-agent] handoff:", e instanceof Error ? e.message : e));
+        }
+
         send({
           kind: "done",
           status: "success",
@@ -1504,6 +1634,9 @@ Deno.serve(async (req) => {
         const friendly = err instanceof UserFacingError || err instanceof PlanError || err instanceof TaskGraphError;
         console.error("[vibe-code-agent]", message);
         send({ kind: "error", status: "failed", title: friendly ? message : "Agente parou", detail: message });
+        if (origin === "vertal_chat" && body.handoff === undefined) {
+          await saveHandoff(conversationId, { origin, status: "failed", lastSummary: friendly ? message : "O agente parou." }).catch(() => null);
+        }
         if (!replyText) {
           replyText = friendly
             ? message

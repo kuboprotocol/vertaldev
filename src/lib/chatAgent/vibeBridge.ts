@@ -2,6 +2,12 @@
 // separada de runAction.ts para ser testável sem rede.
 import type { AgentAction } from './contract';
 import { isVibeConversationId, VIBE_CODE_CHAT_ORIGIN } from './contract';
+import {
+  type ChatDelegateResult,
+  insertDelegateAnswer,
+  type RouterCall,
+  runChatDelegation,
+} from '../../../supabase/functions/_shared/chatDelegate';
 
 export type VibeCodeAction = Extract<AgentAction, { tool: 'vibe_code' }>;
 
@@ -95,4 +101,67 @@ export function vibeHttpError(status: number, text: string): string {
     /* corpo não é JSON */
   }
   return `O Vibe Code não respondeu (HTTP ${status}).`;
+}
+
+// ---------------------------------------------------------------------------
+// Ponte Vibe Code → Vertal Chat (botão "Perguntar ao Vertal Chat")
+// ---------------------------------------------------------------------------
+
+export { CHAT_DELEGATE_ORIGIN, DELEGATED_CHAT_TOOLS, filterActionsForOrigin } from '../../../supabase/functions/_shared/chatDelegate';
+export type { ChatDelegateResult } from '../../../supabase/functions/_shared/chatDelegate';
+export { insertDelegateAnswer };
+
+/** Transporte do navegador até o creative-router (mesmo endpoint que o Vertal Chat usa). */
+export function creativeRouterCall(opts: { url: string; token: string; apikey?: string; fetchImpl?: typeof fetch; signal?: AbortSignal }): RouterCall {
+  const doFetch = opts.fetchImpl ?? fetch;
+  return async (body) => {
+    const resp = await doFetch(opts.url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${opts.token}`,
+        ...(opts.apikey ? { apikey: opts.apikey } : {}),
+      },
+      body: JSON.stringify(body),
+      ...(opts.signal ? { signal: opts.signal } : {}),
+    });
+    const text = await resp.text();
+    let data: unknown = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = { error: 'invalid_json' };
+    }
+    return { status: resp.status, data };
+  };
+}
+
+/**
+ * Pergunta ao Vertal Chat a partir do Vibe Code: agent_chat com origin 'vibe_code'
+ * (o servidor só libera leitura/pesquisa/imagem e nunca vibe_code).
+ */
+export async function askVertalChatFromVibe(
+  question: string,
+  opts: { url: string; token: string; apikey?: string; context?: string; fetchImpl?: typeof fetch; signal?: AbortSignal },
+): Promise<ChatDelegateResult> {
+  const router = creativeRouterCall(opts);
+  return runChatDelegation(question, router, {
+    context: opts.context,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  });
+}
+
+/** Cartão "delegate" vindo do stream do vibe-code-agent (ação ask_chat), ou null. */
+export function delegateCardFromStep(step: { kind?: string; status?: string; delegate?: unknown }): ChatDelegateResult | null {
+  if (step.kind !== 'delegate' || step.status !== 'success' || !step.delegate || typeof step.delegate !== 'object') return null;
+  const d = step.delegate as Partial<ChatDelegateResult>;
+  if (typeof d.answer !== 'string' || !d.answer.trim()) return null;
+  return {
+    ok: true,
+    question: typeof d.question === 'string' ? d.question : '',
+    answer: d.answer,
+    tools: Array.isArray(d.tools) ? d.tools : [],
+    images: Array.isArray(d.images) ? d.images.filter((u): u is string => typeof u === 'string') : [],
+    refused: Array.isArray(d.refused) ? d.refused : [],
+  };
 }

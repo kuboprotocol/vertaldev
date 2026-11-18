@@ -41,6 +41,12 @@ import {
   secretPlaceholders,
 } from "../_shared/chatAgent.ts";
 import { listVisibleSecrets, resolveEnvForRun } from "../_shared/kuboSecrets.ts";
+import {
+  DELEGATED_CHAT_PROMPT,
+  delegatedResultsViolateDepth,
+  filterActionsForOrigin,
+  parseChatOrigin,
+} from "../_shared/chatDelegate.ts";
 import { validatePublicUrl } from "../_shared/security.ts";
 
 const InputSchema = z.object({
@@ -541,6 +547,9 @@ const AgentInput = z.object({
   final: z.boolean().optional(),
   // Modo plano em execução (validado em parsePlanState).
   plan: z.record(z.any()).optional(),
+  // Quem chamou: ausente/"vertal_chat" = o próprio chat; "vibe_code" = pergunta delegada
+  // pelo Vibe Code (só leitura/pesquisa/imagem, sem vibe_code: profundidade 1).
+  origin: z.string().max(20).optional(),
 });
 
 /** Data e hora no fuso do usuário, por extenso. Fuso inválido cai para UTC. */
@@ -577,6 +586,12 @@ async function handleAgentChat(
 
   const agent = AgentInput.safeParse(rawAgent);
   if (!agent.success) return fail(400, "invalid_input");
+  const origin = parseChatOrigin(agent.data.origin);
+  if (!origin) return fail(400, "invalid_origin");
+  const delegated = origin === "vibe_code";
+  if (delegatedResultsViolateDepth(agent.data.tool_results ?? [], origin) || (delegated && agent.data.plan)) {
+    return fail(400, "delegation_depth_exceeded");
+  }
 
   // Conversa inteira (até CHAT_BRAIN_MAX_MESSAGES); a janela enviada ao modelo sai do resumo rolante.
   const filtered = messages.filter((m) => m.role === "user" || m.role === "assistant");
@@ -619,7 +634,7 @@ async function handleAgentChat(
     recall: brain.recall,
     summary: brain.summary,
     plan: brain.planBlock,
-  });
+  }) + (delegated ? DELEGATED_CHAT_PROMPT : "");
   const final = agent.data.final === true || brain.planPhase === "final";
   const convo = results.length
     ? [...brain.window, { role: "user" as const, content: formatToolResults(results, { final }) }]
@@ -667,6 +682,10 @@ async function handleAgentChat(
     // Última rodada ou fase final do plano: sem novas ações. Durante um plano, sem plano dentro de plano.
     let actions = final ? [] : turn.actions;
     if (brain.planPhase) actions = actions.filter((a) => a.tool !== "plan");
+    // Pedido do Vibe Code: só leitura/pesquisa/imagem, filtrado AQUI no servidor (nunca vibe_code).
+    const originFilter = filterActionsForOrigin(actions, origin);
+    actions = originFilter.actions;
+    if (originFilter.refused.length) console.warn(`[creative-router] agent_chat origin=${origin} recusou: ${originFilter.refused.join(", ")}`);
     // Memória (no mesmo JSON, sem chamada extra), revisão crítica da resposta final e resumo em segundo plano.
     const after = await saveChatBrain(brain, {
       userId: user.id,
@@ -679,6 +698,7 @@ async function handleAgentChat(
       tier: gw.tier, ...(route.tier === "pro" ? { escalated: route.reason } : {}), ...(retried ? { retried: true } : {}),
       ...(after.memory ? { memory: after.memory } : {}),
       ...(after.reviewed ? { reviewed: true } : {}),
+      ...(delegated ? { origin, refused: originFilter.refused } : {}),
     });
   } catch (err) {
     if (err instanceof GatewayError) return fail(503, "ai_unavailable");

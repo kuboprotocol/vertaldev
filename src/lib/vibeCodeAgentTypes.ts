@@ -32,6 +32,10 @@ export type VibeStepKind =
   | "plan_state"
   /** Mudanças staged atualizadas (sem gravar no projeto). */
   | "staged"
+  /** Pergunta do Vibe Code ao Vertal Chat (ação ask_chat) e a resposta. */
+  | "delegate"
+  /** agent_state.handoff atualizado (passagem de bastão Chat ↔ Vibe Code). */
+  | "handoff"
   /** Resposta em texto do agente ao usuário (o balão do chat). */
   | "reply"
   | "error"
@@ -68,6 +72,8 @@ export interface VibeStep {
   review?: ReviewPayload;
   /** Estado do plano (kind "plan_state" / "staged"). */
   planState?: VibePlanState;
+  /** Pergunta/resposta do Vertal Chat (kind "delegate"). */
+  delegate?: unknown;
   /** O cliente deve seguir sozinho para a próxima tarefa (autonomia semi/full). */
   continueNext?: boolean;
   /** Model tier chosen by the DeepSeek router for this cycle. */
