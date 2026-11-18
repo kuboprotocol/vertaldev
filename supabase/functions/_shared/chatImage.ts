@@ -61,6 +61,20 @@ export interface GenerateImageOptions {
 }
 
 /**
+ * Sinal de timeout. `AbortSignal.timeout` existe no Deno e no Node 18+, mas não no
+ * jsdom 20 (ambiente do Vitest), onde a chamada lançaria TypeError. Sem ele, segue
+ * sem timeout em vez de falhar.
+ */
+function timeoutSignal(ms: number): AbortSignal | undefined {
+  const AS = (globalThis as { AbortSignal?: { timeout?: (ms: number) => AbortSignal } }).AbortSignal;
+  try {
+    return typeof AS?.timeout === "function" ? AS.timeout(ms) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Gera a imagem. Nunca lança. Repete quando o modelo responde só texto, 429 ou 5xx;
  * erro 4xx de pedido (ex.: chave inválida) encerra na hora. Sem chave: provider indisponível.
  */
@@ -87,7 +101,7 @@ export async function generateChatImage(opts: GenerateImageOptions): Promise<Ima
           messages: [{ role: "user", content: buildImageInstruction(prompt, attempt) }],
           modalities: ["image", "text"],
         }),
-        signal: AbortSignal.timeout(CHAT_IMAGE_LIMITS.timeoutMs),
+        signal: timeoutSignal(CHAT_IMAGE_LIMITS.timeoutMs),
       });
       status = r.status;
       const data = await r.json().catch(() => null);
