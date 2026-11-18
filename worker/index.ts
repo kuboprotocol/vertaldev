@@ -2,11 +2,13 @@
 // monetização da Cloudflare — Pay Per Crawl (crawlers de IA pagam por
 // página) e Monetization Gateway (agentes pagam via x402 nas rotas pagas).
 // Configuração no painel: docs/CLOUDFLARE_MONETIZATION.md.
+// Também atende a API do conector Spotify em /api/spotify/* (docs/SPOTIFY_CONNECTOR.md).
 import { crawlPriceFor, formatCrawlerPrice, isInBandPricing } from './payPerCrawl';
 import { isPaidPath, parsePaidPrefixes, verifyPaymentContext } from './monetizationGateway';
 import { siteVerificationResponse } from './siteVerification';
+import { handleSpotify, SPOTIFY_API_PREFIX, type SpotifyRoutesEnv } from './spotifyRoutes';
 
-export interface Env {
+export interface Env extends SpotifyRoutesEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
   /** Prefixos protegidos pelo Monetization Gateway, separados por vírgula. */
   MONETIZATION_GATEWAY_PATHS?: string;
@@ -41,6 +43,12 @@ export default {
 
     const verification = siteVerificationResponse(url.pathname);
     if (verification) return verification;
+
+    if (url.pathname === SPOTIFY_API_PREFIX || url.pathname.startsWith(`${SPOTIFY_API_PREFIX}/`)) {
+      const res = await handleSpotify(request, env, url);
+      res.headers.set('X-Robots-Tag', 'noindex');
+      return res;
+    }
 
     const paid = isPaidPath(url.pathname, parsePaidPrefixes(env.MONETIZATION_GATEWAY_PATHS));
     if (paid) {

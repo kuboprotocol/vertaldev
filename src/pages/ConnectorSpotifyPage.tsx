@@ -2,23 +2,13 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ArrowLeft, Music, Search, Unplug } from 'lucide-react'
-import { supabase } from '@/integrations/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import {
-  SPOTIFY_ERROR_MESSAGES, spotifyEmbedUrl, type SpotifyErrorCode, type SpotifyTrack,
-} from '@/lib/spotify/spotifyCore'
+import { SPOTIFY_ERROR_MESSAGES, spotifyEmbedUrl, type SpotifyTrack } from '@/lib/spotify/spotifyCore'
+import { callSpotify, startSpotifyConnect } from '@/lib/spotify/client'
 
 type Status = { connected: boolean; display_name?: string | null }
-type ActionResponse = { ok?: boolean; code?: SpotifyErrorCode; message?: string; tracks?: SpotifyTrack[]; summary?: string; connected?: boolean; display_name?: string | null }
-
-/** Chama a edge function e devolve a resposta no mesmo formato, mesmo quando o HTTP falha. */
-async function callSpotify(body: Record<string, unknown>): Promise<ActionResponse> {
-  const { data, error } = await supabase.functions.invoke('spotify-action', { body })
-  if (data) return data as ActionResponse
-  return { ok: false, message: error?.message ?? SPOTIFY_ERROR_MESSAGES.spotify_unavailable }
-}
 
 export default function ConnectorSpotifyPage() {
   const navigate = useNavigate()
@@ -49,15 +39,13 @@ export default function ConnectorSpotifyPage() {
 
   const connect = async () => {
     setBusy(true)
-    const { data, error } = await supabase.functions.invoke('spotify-oauth-start', {
-      body: { returnUrl: '/connectors/spotify', origin: window.location.origin },
-    })
+    const url = await startSpotifyConnect('/connectors/spotify', window.location.origin)
     setBusy(false)
-    if (error || !data?.url) {
+    if (!url) {
       toast.error('Não foi possível iniciar a conexão com o Spotify. Tente de novo em instantes.')
       return
     }
-    window.location.href = data.url as string
+    window.location.href = url
   }
 
   const disconnect = async () => {

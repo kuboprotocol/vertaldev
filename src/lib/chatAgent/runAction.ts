@@ -10,7 +10,8 @@ import { secretPlaceholders } from './contract';
 import { artifactSourceText, type Artifact, type StoredImage } from './artifacts';
 import { loadConnections, parseMcpBody, weatherText } from './connections';
 import { describeDays } from '@/lib/clock/alarms';
-import { SPOTIFY_ERROR_MESSAGES, type SpotifyErrorCode, type SpotifyTrack } from '@/lib/spotify/spotifyCore';
+import { SPOTIFY_ERROR_MESSAGES } from '@/lib/spotify/spotifyCore';
+import { callSpotify } from '@/lib/spotify/client';
 import { scheduleChatAlarm } from '@/lib/clock/chatAlarm';
 import { FIGCRAFT_BASE } from '@/lib/figcraft/bridge';
 import { createDesign, getDesign, listDesigns } from '@/lib/figcraft/designStore';
@@ -524,15 +525,11 @@ async function gmailAccount(): Promise<{ id: string; email: string } | null> {
 }
 
 // ─── Spotify ──────────────────────────────────────────────────────────────
-// Busca e controle passam pela edge function spotify-action (tokens ficam no servidor).
+// Busca e controle passam pela API /api/spotify do Worker do vertal.dev (tokens ficam no servidor).
 // Busca e "tocar" mostram um player embutido do Spotify, que toca dentro do chat.
 
 async function runSpotify(action: Extract<AgentAction, { tool: 'spotify' }>, ctx: ActionContext): Promise<ActionOutcome> {
-  const { data, error } = await supabase.functions.invoke('spotify-action', {
-    body: { op: action.op, query: action.query, max: action.max },
-  });
-  const d = (data ?? {}) as { ok?: boolean; code?: SpotifyErrorCode; message?: string; summary?: string; tracks?: SpotifyTrack[] };
-  if (!data && error) return followUp('spotify', false, 'Não foi possível falar com o Spotify agora.');
+  const d = await callSpotify({ op: action.op, query: action.query, max: action.max });
   if (d.code === 'not_connected') return { ...followUp('spotify', false, SPOTIFY_ERROR_MESSAGES.not_connected), panel: 'connectors' };
   if (!d.ok) return followUp('spotify', false, d.message ?? 'Falha no Spotify.', d.code);
 
