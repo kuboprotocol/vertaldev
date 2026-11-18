@@ -437,3 +437,30 @@ export function composeAgentReply(input: ReplyInput): string {
   const text = parts.length ? parts.join("\n\n") : "Pronto. Me diga o próximo passo.";
   return text.length > MAX_REPLY ? `${text.slice(0, MAX_REPLY - 1).trimEnd()}…` : text;
 }
+
+// ---------------------------------------------------------------------------
+// Origem do pedido (ponte Chat → Vibe Code)
+// ---------------------------------------------------------------------------
+
+/** Quem chamou o agente. "vertal_chat" = delegado pelo Vertal Chat (profundidade 1). */
+export const VIBE_ORIGINS = ["vibe_code", "vertal_chat"] as const;
+export type VibeOrigin = (typeof VIBE_ORIGINS)[number];
+
+/**
+ * Lê `origin` do corpo e aplica o limite de delegação: um pedido que já veio
+ * do Vertal Chat não pode delegar de novo (nem pedir outra delegação, nem
+ * gravar/reverter direto — o chat só usa preview e perguntas).
+ */
+export function checkVibeOrigin(body: Record<string, unknown>): { ok: true; origin: VibeOrigin } | { ok: false; error: string } {
+  const raw = body.origin;
+  if (raw === undefined || raw === null || raw === "") return { ok: true, origin: "vibe_code" };
+  if (typeof raw !== "string" || !(VIBE_ORIGINS as readonly string[]).includes(raw)) return { ok: false, error: "invalid_origin" };
+  const origin = raw as VibeOrigin;
+  if (origin !== "vertal_chat") return { ok: true, origin };
+  const depth = body.delegationDepth;
+  if (body.delegate !== undefined || (depth !== undefined && depth !== 1)) return { ok: false, error: "delegation_depth_exceeded" };
+  if (body.mode === "apply" || body.apply !== undefined || body.revertSha !== undefined || body.revertCheckpointId !== undefined || body.plan !== undefined) {
+    return { ok: false, error: "delegation_preview_only" };
+  }
+  return { ok: true, origin };
+}

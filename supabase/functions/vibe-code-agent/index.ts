@@ -46,6 +46,7 @@ import {
   isSafePath,
   lintGeneratedFile,
   type Observation,
+  checkVibeOrigin,
   parseAgentTurn,
   sanitizeMemories,
   titleFromPrompt,
@@ -472,12 +473,19 @@ Deno.serve(async (req) => {
     review?: unknown;
     /** Contexto do Dev: erros recentes, arquivo aberto, decisões da fila de correções. */
     devContext?: DevContext;
+    /** Quem chamou: "vertal_chat" quando o Vertal Chat delega (profundidade 1, só preview/perguntas). */
+    origin?: string;
+    delegationDepth?: number;
+    delegate?: unknown;
   };
   try {
     body = await req.json();
   } catch {
     return json(400, { error: "invalid_json_body" });
   }
+  const originCheck = checkVibeOrigin(body as Record<string, unknown>);
+  if (!originCheck.ok) return json(400, { error: originCheck.error });
+  const origin = originCheck.origin;
 
   // Limite por usuário: o loop faz várias chamadas ao modelo por pedido.
   try {
@@ -524,6 +532,8 @@ Deno.serve(async (req) => {
       let replyText = "";
       let conversationPatch: Record<string, unknown> = {};
       let projectId: string | null = null;
+      // A origem fica gravada nos passos da mensagem (sem migração).
+      if (origin === "vertal_chat") send({ kind: "message", status: "success", title: "Pedido vindo do Vertal Chat", origin });
 
       const chargeCredits = async (amount: number, reason: string, metadata: Record<string, unknown>) => {
         const { data, error } = await admin.rpc("execute_atomic_credit_deduction", {

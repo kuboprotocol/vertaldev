@@ -6,6 +6,7 @@ import {
   LayoutTemplate, Loader2, Mail, Mic, Music, Newspaper, Palette, Presentation, Radio, Scissors, Table2, Thermometer, Clock,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { KIND_LABEL, type Artifact, type ArtifactKind, type StoredImage } from '@/lib/chatAgent/artifacts';
 import type { CanvasSpec } from '@/lib/chatAgent/contract';
@@ -13,6 +14,7 @@ import { CANVAS_HEX, CANVAS_LINE_HEIGHT, describeCanvas, wrapCanvasText } from '
 import { resolveStoredImage } from '@/lib/chatAgent/runAction';
 import { previewHtml } from '@/lib/chatAgent/previewHtml';
 import { spotifyEmbedUrl } from '@/lib/spotify/spotifyCore';
+import { vibeCodeHref } from '@/lib/chatAgent/vibeBridge';
 
 /** Player oficial do Spotify embutido (toca sem Premium). O id já vem validado pelo servidor. */
 function SpotifyEmbed({ trackId, title, compact = false }: { trackId: string; title: string; compact?: boolean }) {
@@ -38,6 +40,7 @@ const KIND_ICON: Record<ArtifactKind, typeof FileText> = {
   email: Mail,
   canvas: LayoutTemplate,
   app: AppWindow,
+  vibe: Code2,
   music: Music,
   spotify: Radio,
   ebook: BookOpen,
@@ -138,6 +141,7 @@ function summary(a: Artifact): string {
     case 'slides': return `${a.deck.slides.length} slides`;
     case 'canvas': return `${a.spec.width}×${a.spec.height} · ${a.spec.elements.length} elementos`;
     case 'app': return 'Prévia interativa';
+    case 'vibe': return a.files.length ? `${a.files.length} arquivo${a.files.length === 1 ? '' : 's'} na prévia` : 'Projeto no Vibe Code';
     case 'music': return `${a.tracks.length} faixa${a.tracks.length === 1 ? '' : 's'}`;
     case 'spotify': return `${a.tracks.length} faixa${a.tracks.length === 1 ? '' : 's'} · ouça aqui`;
     case 'ebook': return `${Math.max(1, Math.round(a.content.split(/\s+/).length / 250))} páginas aprox.`;
@@ -226,6 +230,14 @@ export function ArtifactCard({ artifact, onOpen, active }: { artifact: Artifact;
               <audio controls preload="none" src={t.audioUrl} className="h-9 w-full" />
             </div>
           ))}
+        </div>
+      )}
+      {artifact.kind === 'vibe' && (
+        <div className="flex items-center justify-between gap-3 border-t border-border/50 px-4 py-3">
+          <p className="line-clamp-2 min-w-0 flex-1 text-xs text-muted-foreground">{artifact.summary}</p>
+          <Link to={vibeCodeHref(artifact.conversationId)} className={primaryBtn}>
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden /> Abrir no Vibe Code
+          </Link>
         </div>
       )}
       {artifact.kind === 'notebook' && (
@@ -575,6 +587,26 @@ export function ArtifactViewer({ artifact, actions }: { artifact: Artifact; acti
         </>
       );
       body = a.html ? <AppView html={a.html} /> : <p className="text-sm text-muted-foreground">Este app está salvo no Dev Code. Abra por lá para ver a prévia.</p>;
+      break;
+    case 'vibe':
+      toolbar = (
+        <Link to={vibeCodeHref(a.conversationId)} className={primaryBtn}>
+          <ExternalLink className="h-3.5 w-3.5" aria-hidden /> Abrir no Vibe Code
+        </Link>
+      );
+      body = (
+        <div className="space-y-4">
+          <ChatMarkdown text={a.summary || 'Pedido enviado ao Vibe Code.'} />
+          {a.files.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">Arquivos na prévia (revise e aplique no Vibe Code)</p>
+              <ul className="space-y-1 font-mono text-xs text-foreground/80">
+                {a.files.map((f) => <li key={f}>{f}</li>)}
+              </ul>
+            </div>
+          )}
+        </div>
+      );
       break;
     case 'spotify':
       body = (
