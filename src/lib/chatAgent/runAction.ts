@@ -18,6 +18,7 @@ import { activeFigcraftDesignId, sendFigcraftCommands } from '@/lib/figcraft/act
 import { generateCad } from '@/lib/cad/cadService';
 import { getCadDraft, sendCadToStudio } from '@/lib/cad/cadBridge';
 import { cadElementCount } from '@/lib/cad/model';
+import { summarizeVibeStream, vibeCodeRequestBody, vibeHttpError } from './vibeBridge';
 
 export interface ApiApprovalRequest {
   method: string;
@@ -44,6 +45,8 @@ export interface ActionContext {
   chargeAppEdit: () => Promise<unknown>;
   /** O usuário pediu para ficar só no chat (ou voltar a abrir ao lado). */
   setChatOnly: (chatOnly: boolean) => void;
+  /** Id da conversa do Vertal Chat (vai no handoff do Vibe Code). */
+  chatConversationId?: string | null;
 }
 
 export interface ActionOutcome {
@@ -188,6 +191,90 @@ async function runOffice(action: Extract<AgentAction, { tool: 'document' | 'spre
   return {
     artifact: { id: prev?.id ?? ctx.newId(), kind: 'email', title: out.subject, subject: out.subject, body: out.body },
     result: { tool: action.tool, ok: true, summary: `Rascunho de e-mail: "${out.subject}".` },
+  };
+}
+
+const VIBE_AGENT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/vibe-code-agent`;
+const VIBE_CONVERSATIONS = 'vibe_conversations' as never;
+const VIBE_MESSAGES = 'vibe_messages' as never;
+
+/**
+ * Ponte Chat → Vibe Code: chama o mesmo vibe-code-agent do editor, sempre em
+ * preview e com origin 'vertal_chat' (o servidor barra nova delegação). Devolve o
+ * resumo e o id da conversa, que vira o cartão "Abrir no Vibe Code".
+ */
+export async function runVibeCode(action: Extract<AgentAction, { tool: 'vibe_code' }>, ctx: ActionContext): Promise<ActionOutcome> {
+  const tool = 'vibe_code';
+  const previous = action.conversationId
+    ? (ctx.artifacts.find((a) => a.kind === 'vibe' && a.conversationId === action.conversationId) as Extract<Artifact, { kind: 'vibe' }> | undefined)
+    : undefined;
+
+  if (action.op === 'status') {
+    const { data: conv } = await supabase
+      .from(VIBE_CONVERSATIONS)
+      .select('id, title, summary, message_count, last_message_at')
+      .eq('id', action.conversationId ?? '')
+      .maybeSingle();
+    const row = conv as { id: string; title: string; summary: string | null; message_count: number; last_message_at: string } | null;
+    if (!row) return fail(tool, 'Não encontrei essa conversa no Vibe Code.');
+    const { data: last } = await supabase
+      .from(VIBE_MESSAGES)
+      .select('content')
+      .eq('conversation_id', row.id)
+      .eq('role', 'assistant')
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const lastReply = ((last ?? []) as unknown as Array<{ content: string }>)[0]?.content ?? '';
+    const summary = [
+      `Vibe Code "${row.title}" (conversa ${row.id}): ${row.message_count} mensagem(ns).`,
+      row.summary ? `Resumo: ${row.summary}` : '',
+      lastReply ? `Última resposta: ${lastReply.slice(0, 1200)}` : '',
+    ].filter(Boolean).join(' ');
+    return {
+      artifact: { id: previous?.id ?? ctx.newId(), kind: 'vibe', title: row.title, conversationId: row.id, summary: row.summary ?? lastReply.slice(0, 600), files: previous?.files ?? [] },
+      result: { tool, ok: true, summary },
+      needsFollowUp: true,
+    };
+  }
+
+  const body = vibeCodeRequestBody(action, ctx.chatConversationId);
+  if (!body) return fail(tool, 'Pedido ao Vibe Code inválido.');
+  const { data: auth } = await supabase.auth.getSession();
+  const token = auth?.session?.access_token;
+  if (!token) return fail(tool, 'Sua sessão expirou. Entre novamente.');
+
+  let raw = '';
+  try {
+    const resp = await fetch(VIBE_AGENT_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      },
+      body: JSON.stringify(body),
+    });
+    raw = await resp.text();
+    if (!resp.ok) return fail(tool, vibeHttpError(resp.status, raw));
+  } catch {
+    return fail(tool, 'Não consegui falar com o Vibe Code agora.');
+  }
+
+  const out = summarizeVibeStream(raw);
+  const conversationId = out.conversationId ?? action.conversationId;
+  if (out.error && !out.reply) return fail(tool, out.error);
+  if (!conversationId) return fail(tool, out.error ?? 'O Vibe Code não abriu uma conversa para este projeto.');
+  const reply = out.reply || out.done || 'Pedido enviado ao Vibe Code.';
+  const files = [...new Set([...(previous?.files ?? []), ...out.files])].slice(0, 40);
+  const title = out.title ?? previous?.title ?? titleFrom(action.prompt);
+  const filesNote = out.files.length ? ` Prévia com ${out.files.length} arquivo(s): ${out.files.slice(0, 8).join(', ')}.` : '';
+  return {
+    artifact: { id: previous?.id ?? ctx.newId(), kind: 'vibe', title, conversationId, summary: reply.slice(0, 2000), files },
+    result: {
+      tool,
+      ok: !out.error,
+      summary: `Vibe Code (conversa ${conversationId}): ${reply.slice(0, 1500)}${filesNote} Para seguir, use {"tool":"vibe_code","op":"continue","conversationId":"${conversationId}"}.`,
+    },
   };
 }
 
@@ -659,6 +746,8 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
       }
       case 'app':
         return await runApp(action, ctx);
+      case 'vibe_code':
+        return await runVibeCode(action, ctx);
       case 'music':
         return await runMusic(action, ctx);
       case 'ebook': {
@@ -971,5 +1060,7 @@ export function actionLabel(action: AgentAction): string {
     case 'world_time': return 'Consultando o horário no mundo';
     case 'alarm': return 'Ajustando alarmes';
     case 'timer': return 'Ajustando timer';
+    case 'vibe_code':
+      return action.op === 'status' ? 'Consultando o Vibe Code' : action.op === 'ask' ? 'Perguntando ao Vibe Code' : 'Trabalhando no Vibe Code (pode levar alguns minutos)';
   }
 }

@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { 
   Bot, 
   Globe, 
@@ -32,6 +33,7 @@ import { useVibeConversations } from "@/hooks/useVibeConversations";
 import { useWorkspaceProject } from "@/hooks/useWorkspaceProject";
 import type { VibeConversationsApi } from "@/hooks/useVibeConversations";
 import { cn } from "@/lib/utils";
+import { vibeConversationFromSearch } from "@/lib/chatAgent/vibeBridge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 export default function VibeCodeLayout() {
@@ -42,6 +44,23 @@ export default function VibeCodeLayout() {
   // Arquivo aberto a partir de uma caixinha de código do chat.
   const [openedFile, setOpenedFile] = useState<CodeFile | null>(null);
   const [centerTab, setCenterTab] = useState("preview");
+
+  // Vindo do Vertal Chat ("Abrir no Vibe Code"): /vibe-code?conversation=<id> abre essa conversa.
+  // A chave inclui o projeto porque trocar de projeto zera a conversa ativa.
+  const { search } = useLocation();
+  const linkedConversation = vibeConversationFromSearch(search);
+  const openedFromLink = useRef<string | null>(null);
+  const openConversation = conversations.open;
+  useEffect(() => {
+    if (!linkedConversation) return;
+    const key = `${linkedConversation}|${projectId ?? ""}`;
+    if (openedFromLink.current === key) return;
+    openedFromLink.current = key;
+    setActiveTab("agent");
+    void openConversation(linkedConversation).catch(() => {
+      /* conversa apagada ou de outra conta: fica na tela inicial */
+    });
+  }, [linkedConversation, projectId, openConversation]);
 
   // Trocar de conversa fecha o arquivo da conversa anterior.
   useEffect(() => {

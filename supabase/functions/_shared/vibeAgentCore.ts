@@ -7,8 +7,10 @@
 //  - buildHistory / formatObservations: contexto da conversa e das leituras
 
 import type { ExtractedMemory, MemoryKind, MemoryScope } from "./primeMemory.ts";
+import { type JsonRepair, repairAgentJson } from "./chatOrchestrator.ts";
 
-export type AgentActionType = "read_file" | "edit_file" | "message" | "ask_user";
+/** ask_chat: pergunta de pesquisa/imagem ao Vertal Chat (ponte Vibe → Chat, profundidade 1). */
+export type AgentActionType = "read_file" | "edit_file" | "message" | "ask_user" | "ask_chat";
 
 export interface AgentAction {
   type: AgentActionType;
@@ -27,30 +29,82 @@ export interface AgentTurn {
   title?: string;
   /** true quando o modelo não precisa ler mais nada antes de entregar. */
   final: boolean;
+  /** Como o JSON foi lido: ok, consertado, cortado (fechado à força) ou sem conserto. */
+  parse?: JsonRepair | "failed";
+  /** Nada aproveitável (JSON ilegível ou cortado sem nenhuma ação): pedir de novo ao modelo. */
+  retry?: boolean;
 }
 
 export type ChatMsg = { role: "system" | "user" | "assistant"; content: string };
 
-const ACTION_TYPES: AgentActionType[] = ["read_file", "edit_file", "message", "ask_user"];
+const ACTION_TYPES: AgentActionType[] = ["read_file", "edit_file", "message", "ask_user", "ask_chat"];
 
 const asString = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : undefined);
 
-/** Lê uma volta do agente. Tolera cercas ```json e texto antes/depois do objeto. */
-export function parseAgentTurn(raw: string): AgentTurn {
-  let text = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start === -1 || end <= start) throw new Error("plan_parse_failed");
-  text = text.slice(start, end + 1);
+/**
+ * O último item do array "actions" ficou aberto no texto cru? (saída cortada
+ * no limite de tokens). Respeita strings e escapes.
+ */
+function lastActionWasCut(raw: string): boolean {
+  const key = /"actions"\s*:\s*\[/.exec(raw);
+  if (!key) return false;
+  let depth = 0; // profundidade dentro do array de ações
+  let inString = false;
+  let escaped = false;
+  let lastClosed = true;
+  for (let i = key.index + key[0].length; i < raw.length; i++) {
+    const c = raw[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (c === "\\") escaped = true;
+      else if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') inString = true;
+    else if (c === "{" || c === "[") {
+      if (depth === 0) lastClosed = false;
+      depth++;
+    } else if (c === "}" || c === "]") {
+      if (depth === 0) return false; // o array fechou: nada cortado
+      depth--;
+      if (depth === 0) lastClosed = true;
+    }
+  }
+  return !lastClosed;
+}
 
-  let data: Record<string, unknown>;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    throw new Error("plan_parse_failed");
+const EMPTY_TURN = (): AgentTurn => ({
+  summary: "",
+  actions: [],
+  requirements: undefined,
+  memories: undefined,
+  final: false,
+  parse: "failed",
+  retry: true,
+});
+
+/**
+ * Lê uma volta do agente. Tolera cercas ```json, texto antes/depois do objeto,
+ * vírgula sobrando e saída cortada (via repairAgentJson). Nunca lança: quando
+ * nada se aproveita devolve `retry: true` para o loop pedir de novo.
+ */
+export function parseAgentTurn(raw: string): AgentTurn {
+  const fixed = repairAgentJson(raw ?? "");
+  if (!fixed) return EMPTY_TURN();
+  const data = fixed.value;
+
+  // Saída cortada: um edit_file aberto no fim tem conteúdo pela metade. Nunca gravar.
+  let rawActions: unknown[] = Array.isArray(data.actions) ? [...data.actions] : [];
+  let droppedCutEdit = false;
+  if (fixed.repair === "truncated" && rawActions.length && lastActionWasCut(raw)) {
+    const last = rawActions[rawActions.length - 1] as Record<string, unknown> | null;
+    if (last && typeof last === "object" && last.type === "edit_file") {
+      rawActions = rawActions.slice(0, -1);
+      droppedCutEdit = true;
+    }
   }
 
-  const actions: AgentAction[] = (Array.isArray(data.actions) ? data.actions : [])
+  const actions: AgentAction[] = rawActions
     .map((raw: unknown): AgentAction | null => {
       if (!raw || typeof raw !== "object") return null;
       const a = raw as Record<string, unknown>;
@@ -66,7 +120,8 @@ export function parseAgentTurn(raw: string): AgentTurn {
     .filter((a): a is AgentAction => a !== null)
     .slice(0, 30);
 
-  const needsMoreReading = actions.some((a) => a.type === "read_file");
+  // ask_chat também espera resposta (do Vertal Chat) antes de entregar.
+  const needsMoreReading = actions.some((a) => a.type === "read_file" || a.type === "ask_chat");
   return {
     thought: asString(data.thought, 400),
     summary: asString(data.summary, 300) ?? "",
@@ -75,7 +130,10 @@ export function parseAgentTurn(raw: string): AgentTurn {
     memories: data.memories,
     conversationSummary: asString(data.conversation_summary, 1500),
     title: asString(data.title, 80),
-    final: typeof data.final === "boolean" ? data.final : !needsMoreReading,
+    // Cortado e sem o edit_file final: não dá para tratar como entrega completa.
+    final: droppedCutEdit ? false : typeof data.final === "boolean" ? data.final : !needsMoreReading,
+    parse: fixed.repair,
+    retry: fixed.repair === "truncated" && actions.length === 0,
   };
 }
 
@@ -380,4 +438,56 @@ export function composeAgentReply(input: ReplyInput): string {
 
   const text = parts.length ? parts.join("\n\n") : "Pronto. Me diga o próximo passo.";
   return text.length > MAX_REPLY ? `${text.slice(0, MAX_REPLY - 1).trimEnd()}…` : text;
+}
+
+// ---------------------------------------------------------------------------
+// Origem do pedido (ponte Chat → Vibe Code)
+// ---------------------------------------------------------------------------
+
+/** Quem chamou o agente. "vertal_chat" = delegado pelo Vertal Chat (profundidade 1). */
+export const VIBE_ORIGINS = ["vibe_code", "vertal_chat"] as const;
+export type VibeOrigin = (typeof VIBE_ORIGINS)[number];
+
+/**
+ * Lê `origin` do corpo e aplica o limite de delegação: um pedido que já veio
+ * do Vertal Chat não pode delegar de novo (nem pedir outra delegação, nem
+ * gravar/reverter direto — o chat só usa preview e perguntas).
+ */
+export function checkVibeOrigin(body: Record<string, unknown>): { ok: true; origin: VibeOrigin } | { ok: false; error: string } {
+  const raw = body.origin;
+  if (raw === undefined || raw === null || raw === "") return { ok: true, origin: "vibe_code" };
+  if (typeof raw !== "string" || !(VIBE_ORIGINS as readonly string[]).includes(raw)) return { ok: false, error: "invalid_origin" };
+  const origin = raw as VibeOrigin;
+  if (origin !== "vertal_chat") return { ok: true, origin };
+  const depth = body.delegationDepth;
+  if (body.delegate !== undefined || (depth !== undefined && depth !== 1)) return { ok: false, error: "delegation_depth_exceeded" };
+  if (body.mode === "apply" || body.apply !== undefined || body.revertSha !== undefined || body.revertCheckpointId !== undefined || body.plan !== undefined) {
+    return { ok: false, error: "delegation_preview_only" };
+  }
+  return { ok: true, origin };
+}
+
+// ---------------------------------------------------------------------------
+// Ponte Vibe Code → Vertal Chat (ação ask_chat)
+// ---------------------------------------------------------------------------
+
+/** Perguntas ao Vertal Chat por pedido (cada uma custa rodadas do chat). */
+export const MAX_CHAT_DELEGATIONS = 1;
+
+/** Linha da ação no protocolo do agente (vai dentro do array "actions" do SYSTEM). */
+export const ASK_CHAT_ACTION_LINE =
+  '{"type":"ask_chat","reason":"pergunta objetiva de pesquisa (documentação, versão de lib, API, preço) ou pedido de imagem ao Vertal Chat"}';
+
+/** Regra do prompt: quando e como usar ask_chat. */
+export const ASK_CHAT_RULE =
+  `Você não acessa a internet diretamente. Para pesquisar (documentação, versões, endpoints de API) ou gerar uma imagem, use UMA ação ask_chat (no máximo ${MAX_CHAT_DELEGATIONS} por pedido) com "final": false; o Vertal Chat responde e você continua na volta seguinte. Não use ask_chat para o que está no código (use read_file).`;
+
+/**
+ * Pedido vindo do Vertal Chat (origin "vertal_chat") não pode perguntar ao chat
+ * de volta (profundidade 1). Também respeita o limite por pedido.
+ */
+export function canAskChat(origin: VibeOrigin, used: number): { ok: true } | { ok: false; reason: string } {
+  if (origin === "vertal_chat") return { ok: false, reason: "delegation_depth_exceeded" };
+  if (used >= MAX_CHAT_DELEGATIONS) return { ok: false, reason: "chat_delegation_limit" };
+  return { ok: true };
 }

@@ -30,6 +30,8 @@ export type Artifact =
   | (Base & { kind: 'email'; subject: string; body: string })
   | (Base & { kind: 'canvas'; spec: CanvasSpec })
   | (Base & { kind: 'app'; html: string; prompt: string; projectId?: string })
+  /** Projeto delegado ao Vibe Code: abre a conversa lá (/vibe-code?conversation=<id>). */
+  | (Base & { kind: 'vibe'; conversationId: string; summary: string; files: string[] })
   | (Base & { kind: 'music'; tracks: Array<{ title: string; audioUrl: string; imageUrl?: string }>; prompt: string })
   | (Base & { kind: 'spotify'; query: string; tracks: Array<{ id: string; title: string; artist: string; imageUrl?: string }> })
   | (Base & { kind: 'ebook'; content: string; cover?: string })
@@ -125,6 +127,7 @@ export const KIND_LABEL: Record<ArtifactKind, string> = {
   email: 'E-mail',
   canvas: 'Canvas',
   app: 'Aplicativo',
+  vibe: 'Vibe Code',
   music: 'Música',
   spotify: 'Spotify',
   ebook: 'Ebook',
@@ -145,7 +148,11 @@ export const KIND_LABEL: Record<ArtifactKind, string> = {
 
 /** O que o agente enxerga do histórico: o texto e uma nota por artefato, com o id para editar. */
 export function historyContent(text: string, extras: MessageExtras): string {
-  const notes = extras.artifacts.map((a) => `[artefato ${a.id}: ${KIND_LABEL[a.kind].toLowerCase()} "${a.title}"]`);
+  const notes = extras.artifacts.map((a) =>
+    a.kind === 'vibe'
+      ? `[artefato ${a.id}: vibe code "${a.title}", conversationId ${a.conversationId}]`
+      : `[artefato ${a.id}: ${KIND_LABEL[a.kind].toLowerCase()} "${a.title}"]`,
+  );
   const failed = extras.errors.map((e) => `[falhou: ${e}]`);
   return [text, ...notes, ...failed].filter(Boolean).join('\n') || '(sem texto)';
 }
@@ -177,6 +184,8 @@ export function artifactSourceText(a: Artifact): string {
       return a.content;
     case 'api':
       return a.body;
+    case 'vibe':
+      return `${a.title}\n${a.summary}`;
     default:
       return a.title;
   }

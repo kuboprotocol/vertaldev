@@ -9,6 +9,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Send,
+  Square,
   Undo2,
   Eye,
   MessageSquare,
@@ -69,8 +70,11 @@ import { matchPlanSlashHints, parsePlanSlash, type ParsedPlanSlash } from "@/lib
 import { runAllDecision } from "@/lib/vibePlan/runAll";
 import { createWriterLock, WriterBusyError } from "@/lib/vibePlan/writerLock";
 import type { WriterKind } from "@/lib/vibePlan/engine";
+import { askVertalChatFromVibe, delegateCardFromStep, insertDelegateAnswer, type ChatDelegateResult } from "@/lib/chatAgent/vibeBridge";
 
 const AGENT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/vibe-code-agent`;
+/** Ponte Vibe → Chat: o mesmo creative-router (agent_chat) do Vertal Chat, com origin 'vibe_code'. */
+const CHAT_ROUTER_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/creative-router`;
 
 /** Passos que "Executar todas" dá antes de parar para o Dev conferir. */
 const RUN_ALL_MAX_STEPS = 20;
@@ -123,6 +127,8 @@ const STEP_ICON: Record<VibeStepKind, typeof Brain> = {
   plan_state: ListChecks,
   staged: FileDiff,
   design: Palette,
+  delegate: MessagesSquare,
+  handoff: MessagesSquare,
   reply: MessageSquare,
   error: AlertCircle,
   done: CheckCircle2,
@@ -165,6 +171,49 @@ function ReplyText({ text }: { text: string }) {
         ),
       )}
     </p>
+  );
+}
+
+/** Resposta do Vertal Chat com o botão "Usar no pedido" (ponte Vibe → Chat). */
+function ChatAnswerCard({
+  result,
+  onUse,
+  onClose,
+  disabled,
+}: {
+  result: ChatDelegateResult;
+  onUse: (answer: string) => void;
+  onClose?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className={`${surfaceCard} space-y-2 px-3 py-2.5`} data-testid="vibe-chat-answer">
+      <p className="flex items-center gap-1.5 text-[11px] font-medium text-primary">
+        <MessagesSquare className="h-3.5 w-3.5" /> Vertal Chat respondeu
+        {result.tools.length > 0 && (
+          <span className="font-normal text-muted-foreground/70">· {result.tools.map((t) => t.tool).join(", ")}</span>
+        )}
+      </p>
+      {result.question && <p className="text-[11px] text-muted-foreground">Pergunta: {result.question}</p>}
+      <ReplyText text={result.answer} />
+      {result.images.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {result.images.map((src) => (
+            <img key={src} src={src} alt="Imagem gerada pelo Vertal Chat" className="h-20 w-20 rounded-md object-cover" />
+          ))}
+        </div>
+      )}
+      <div className="flex gap-1.5">
+        <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-[11px]" onClick={() => onUse(result.answer)} disabled={disabled}>
+          Usar no pedido
+        </Button>
+        {onClose && (
+          <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px] text-muted-foreground" onClick={onClose}>
+            Fechar
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -213,6 +262,11 @@ export function VibeCodeAgentChat({
   }, [startNew]);
   const [input, setInput] = useState("");
   const [running, setRunning] = useState(false);
+  // Ponte Vibe → Chat: pergunta avulsa ao Vertal Chat e as respostas desta sessão.
+  const [chatAskOpen, setChatAskOpen] = useState(false);
+  const [chatQuestion, setChatQuestion] = useState("");
+  const [chatAsking, setChatAsking] = useState(false);
+  const [chatAnswers, setChatAnswers] = useState<Array<ChatDelegateResult & { id: string }>>([]);
   const [autoApply, setAutoApply] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -626,6 +680,11 @@ export function VibeCodeAgentChat({
     }
   }, [runPlan, runningAll]);
 
+  // "Parar": aborta a execução em curso; o servidor sai sem cobrar nem commitar.
+  const stopRun = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
+
   const stopAll = useCallback(() => {
     runAllCancelRef.current = true;
     runAllResumeRef.current = false;
@@ -720,6 +779,42 @@ export function VibeCodeAgentChat({
     [onOpenFile],
   );
 
+  /** "Usar no pedido": a resposta do Vertal Chat entra no campo do Vibe Code. */
+  const applyChatAnswer = useCallback((answer: string) => {
+    setInput((prev) => insertDelegateAnswer(prev, answer));
+  }, []);
+
+  /** "Perguntar ao Vertal Chat": agent_chat com origin 'vibe_code' (só leitura/pesquisa/imagem). */
+  const askChat = async () => {
+    const question = chatQuestion.trim();
+    if (question.length < 3 || chatAsking) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      toast.error("Entre na sua conta para perguntar ao Vertal Chat.");
+      return;
+    }
+    setChatAsking(true);
+    try {
+      const result = await askVertalChatFromVibe(question, {
+        url: CHAT_ROUTER_URL,
+        token: session.access_token,
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        context: input.trim() ? `Pedido em edição no Vibe Code: ${input.trim()}` : undefined,
+      });
+      if (!result.ok) {
+        toast.error(result.error ?? "O Vertal Chat não respondeu.");
+        return;
+      }
+      setChatAnswers((prev) => [...prev, { ...result, id: crypto.randomUUID() }].slice(-5));
+      setChatQuestion("");
+      setChatAskOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "O Vertal Chat não respondeu.");
+    } finally {
+      setChatAsking(false);
+    }
+  };
+
   const send = async () => {
     const prompt = input.trim();
     if (!prompt || running) return;
@@ -772,7 +867,8 @@ export function VibeCodeAgentChat({
       if (autoApply) await withWriter("manual", call);
       else await call();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Agent failed");
+      if (e instanceof DOMException && e.name === "AbortError") toast("Agente parado.");
+      else toast.error(e instanceof Error ? e.message : "Agent failed");
     } finally {
       setRunning(false);
       abortRef.current = null;
@@ -947,6 +1043,18 @@ export function VibeCodeAgentChat({
                     ))}
                   </div>
                 )}
+
+                {(() => {
+                  const cards = (m.steps ?? []).map(delegateCardFromStep).filter((c): c is ChatDelegateResult => c !== null);
+                  if (!cards.length) return null;
+                  return (
+                    <div className="space-y-2 pl-8" data-testid="vibe-delegate-cards">
+                      {cards.map((c, i) => (
+                        <ChatAnswerCard key={i} result={c} onUse={applyChatAnswer} disabled={running} />
+                      ))}
+                    </div>
+                  );
+                })()}
 
                 {(() => {
                   const reviewStep = [...(m.steps ?? [])].reverse().find(
@@ -1134,7 +1242,54 @@ export function VibeCodeAgentChat({
       )}
 
       <div className="border-t border-border/40 bg-white/[0.01] p-4">
+        {chatAnswers.length > 0 && (
+          <div className="mb-2 max-h-64 space-y-2 overflow-y-auto" data-testid="vibe-chat-answers">
+            {chatAnswers.map((a) => (
+              <ChatAnswerCard
+                key={a.id}
+                result={a}
+                onUse={applyChatAnswer}
+                onClose={() => setChatAnswers((prev) => prev.filter((x) => x.id !== a.id))}
+                disabled={running}
+              />
+            ))}
+          </div>
+        )}
         <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5" data-testid="vibe-quick-actions">
+          <Popover open={chatAskOpen} onOpenChange={setChatAskOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 shrink-0 gap-1.5 rounded-full border-border/30 bg-black/40 px-2.5 text-[10px] hover:border-primary/40 hover:text-primary"
+                disabled={chatAsking}
+              >
+                {chatAsking ? <Loader2 className="h-3 w-3 animate-spin" /> : <MessagesSquare className="h-3 w-3" />} Perguntar ao Vertal Chat
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-80 space-y-2">
+              <p className="text-xs text-muted-foreground">
+                O Vertal Chat pesquisa na web, lê páginas e gera imagens. A resposta aparece aqui e você decide se usa no pedido.
+              </p>
+              <Textarea
+                value={chatQuestion}
+                onChange={(e) => setChatQuestion(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void askChat();
+                  }
+                }}
+                placeholder="Ex.: qual a versão atual do SDK do Stripe e como criar um checkout?"
+                aria-label="Pergunta ao Vertal Chat"
+                className="min-h-[70px] text-xs"
+                disabled={chatAsking}
+              />
+              <Button size="sm" className="w-full gap-1.5" onClick={() => void askChat()} disabled={chatAsking || chatQuestion.trim().length < 3}>
+                {chatAsking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Perguntar
+              </Button>
+            </PopoverContent>
+          </Popover>
           <Button
             size="sm"
             variant="outline"
@@ -1206,6 +1361,19 @@ export function VibeCodeAgentChat({
             className="min-h-[60px] w-full resize-none border-border/20 bg-black/60 pl-3 pr-12 pt-3 text-xs font-medium placeholder:text-muted-foreground/40 focus:border-primary/50 focus:ring-primary/20 rounded-xl transition-all"
             disabled={running}
           />
+          {running && (
+            <Button
+              type="button"
+              onClick={stopRun}
+              variant="outline"
+              size="sm"
+              aria-label="Parar o agente"
+              className="absolute bottom-2.5 right-12 h-8 gap-1 rounded-lg border-destructive/40 px-2 text-[11px] text-destructive hover:bg-destructive hover:text-destructive-foreground"
+            >
+              <Square className="h-3 w-3" />
+              Parar
+            </Button>
+          )}
           <Button 
             onClick={() => void send()} 
             disabled={running || !input.trim()} 

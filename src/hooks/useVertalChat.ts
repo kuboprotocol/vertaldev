@@ -386,6 +386,7 @@ export function useVertalChat(options: {
           },
           chargeAppEdit: () => planRef.current.incrementEdit(),
           setChatOnly: (value) => optionsRef.current.onChatOnly(value),
+          chatConversationId: conversationForAgent,
         }).catch((e: unknown): ActionOutcome => {
           // runAction não lança, mas um painel novo poderia: vira falha da ação, não do turno.
           const message = e instanceof Error && e.message ? e.message : 'Algo deu errado ao executar esta ferramenta.';
@@ -568,6 +569,7 @@ export function useVertalChat(options: {
       },
       chargeAppEdit: () => planRef.current.incrementEdit(),
       setChatOnly: (value) => optionsRef.current.onChatOnly(value),
+      chatConversationId: conversationRef.current,
     });
     if (outcome.panel) optionsRef.current.onOpenPanel(outcome.panel, outcome.figcraft);
     if (outcome.artifact) optionsRef.current.onArtifact(outcome.artifact);

@@ -71,6 +71,14 @@ export const API_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 export const SPOTIFY_CHAT_OPS = ["search", "play", "queue", "pause", "next", "previous", "now_playing", "devices"] as const;
 export type SpotifyChatOp = (typeof SPOTIFY_CHAT_OPS)[number];
 
+/** Operações da ponte Chat → Vibe Code (o chat delega um projeto de app/site ao agente do Vibe Code). */
+export const VIBE_CODE_OPS = ["start", "continue", "ask", "status"] as const;
+export type VibeCodeOp = (typeof VIBE_CODE_OPS)[number];
+/** Origem gravada no vibe-code-agent quando o pedido vem do chat (profundidade de delegação 1). */
+export const VIBE_CODE_CHAT_ORIGIN = "vertal_chat";
+const VIBE_CONVERSATION_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const isVibeConversationId = (v: unknown): v is string => typeof v === "string" && VIBE_CONVERSATION_RE.test(v);
+
 export type AgentAction =
   | { tool: "image"; prompt: string }
   | { tool: "design"; prompt: string; format: (typeof DESIGN_FORMATS)[number]; tier: "simple" | "premium" }
@@ -119,7 +127,9 @@ export type AgentAction =
   | { tool: "web_read"; url: string }
   | { tool: "memory"; op: "list" }
   | { tool: "memory"; op: "forget"; query: string }
-  | { tool: "plan"; goal: string; tasks: ChatPlanTask[] };
+  | { tool: "plan"; goal: string; tasks: ChatPlanTask[] }
+  // Ponte Chat → Vibe Code: start/continue/ask levam prompt; continue/status exigem a conversa.
+  | { tool: "vibe_code"; op: VibeCodeOp; prompt: string; conversationId?: string };
 
 /** Conexão que o próprio cliente adicionou (API ou servidor MCP). Só nome, endereço e NOME do segredo. */
 export interface UserConnection {
@@ -179,8 +189,8 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   weather: "grátis",
   web_search: "grátis",
   podcast_studio: "2-4 créditos por episódio (varia com duração e qualidade)",
-  news_feed: "grátis (notícias em tempo real com geolocalização)",
-  news_weather: "grátis (previsão do tempo localizada)",
+  news_feed: "grátis",
+  news_weather: "grátis",
   gmail_search: "grátis",
   gmail_send: "grátis",
   spotify: "grátis",
@@ -193,10 +203,11 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   world_time: "grátis",
   alarm: "grátis",
   timer: "grátis",
-  schedule_alarm: "grátis (agendamento de alarme com 18 sons pré-definidos ou galeria personalizada)",
+  schedule_alarm: "grátis",
   web_read: "grátis",
   memory: "grátis",
   plan: "grátis (cada tarefa usa as ferramentas e custos normais)",
+  vibe_code: "créditos do Vibe Code; status grátis",
 };
 
 export interface AgentPromptContext {
@@ -314,6 +325,7 @@ export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
     `- {"tool":"figcraft","op":"open","design_id":"uuid"} → abre um design salvo no figCraft.`,
     `- {"tool":"figcraft","op":"list"} → lista os designs do usuário. Você recebe a lista na rodada seguinte e responde com ela.`,
     `- {"tool":"figcraft","op":"run","design_id":"uuid (opcional: o design aberto)","commands":[{"command":"nome.do.comando","params":{}}]} → executa comandos do engine do figCraft no design, em ordem, até ${FIGCRAFT_MAX_COMMANDS} por pedido. Comandos: ${FIGCRAFT_COMMAND_HINT}. Se o design não estiver aberto, o figCraft abre ao lado e aplica os comandos.`,
+    `- {"tool":"vibe_code","op":"start|continue|ask|status","prompt":"...","conversationId":"uuid"} → cria/continua projeto de app/site no Vertal Vibe Code; continue/status usam o conversationId (${TOOL_COSTS.vibe_code}).`,
     `- {"tool":"cad","op":"new","prompt":"o que o arquiteto quer: cômodos, medidas, área, orientação"} → desenha uma planta baixa profissional no Auto Cadê (CAD, com carimbo e escala) e abre ao lado. Use quando pedirem planta, desenho técnico, layout de casa/apartamento/escritório (${TOOL_COSTS.cad}). Com "op":"edit", ajusta o desenho que está aberto no Auto Cadê. {"tool":"cad","op":"open"} abre o editor vazio para desenhar à mão.`,
     `- {"tool":"world_time","places":["Tóquio","Lisboa"]} → hora local agora em outras cidades (${TOOL_COSTS.world_time}).`,
     `- {"tool":"schedule_alarm","time":"07:30","label":"...","repeatDays":[1,2,3,4,5],"soundId":"nome do som (opcional)","ringTimes":1} → agenda um alarme no Vertal Clock; "repeatDays" 0=domingo…6=sábado, vazio = uma vez (${TOOL_COSTS.schedule_alarm}).`,
@@ -423,6 +435,22 @@ function canvasElement(raw: unknown, width: number, height: number): CanvasEleme
     };
   }
   return null;
+}
+
+/** Ponte Chat → Vibe Code. start/ask pedem prompt; continue pede prompt e conversa; status pede conversa. */
+export function parseVibeCodeAction(a: Record<string, unknown>): Extract<AgentAction, { tool: "vibe_code" }> | null {
+  const op = typeof a.op === "string" && (VIBE_CODE_OPS as readonly string[]).includes(a.op) ? (a.op as VibeCodeOp) : null;
+  if (!op) return null;
+  const prompt = str(a.prompt, AGENT_LIMITS.maxPromptChars);
+  const rawId = a.conversationId ?? a.conversation_id;
+  if (rawId !== undefined && rawId !== null && rawId !== "" && !isVibeConversationId(rawId)) return null;
+  const conversationId = isVibeConversationId(rawId) ? rawId.toLowerCase() : undefined;
+  if (op === "status") return conversationId ? { tool: "vibe_code", op, prompt: "", conversationId } : null;
+  if (prompt.length < 3) return null;
+  if (op === "continue" && !conversationId) return null;
+  // "start" sempre abre uma conversa nova no Vibe Code: ignora um id que tenha vindo junto.
+  if (op === "start") return { tool: "vibe_code", op, prompt };
+  return conversationId ? { tool: "vibe_code", op, prompt, conversationId } : { tool: "vibe_code", op, prompt };
 }
 
 /** Valida uma ação. Devolve null quando não dá para executar com segurança. */
@@ -609,6 +637,8 @@ export function parseAgentAction(raw: unknown): AgentAction | null {
     }
     case "plan":
       return parsePlanAction(a);
+    case "vibe_code":
+      return parseVibeCodeAction(a);
     case "world_time": {
       const list = Array.isArray(a.places) ? a.places : typeof a.places === "string" ? a.places.split(",") : typeof a.place === "string" ? [a.place] : [];
       const places = list.map((p) => str(p, 80)).filter(Boolean).slice(0, 8);

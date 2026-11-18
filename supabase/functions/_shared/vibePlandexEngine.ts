@@ -696,7 +696,71 @@ export interface VibeAgentState {
   debug: { taskId: number | null; attempts: number } | null;
   /** Pilha do que o executor aplicou (para /voltar). */
   applied: AppliedEntry[];
+  /** Passagem de bastão Chat ↔ Vibe Code (opcional; sem migração, vive no agent_state). */
+  handoff?: VibeHandoff;
   updatedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Handoff (Chat ↔ Vibe Code)
+// ---------------------------------------------------------------------------
+
+export const HANDOFF_STATUSES = ["open", "running", "waiting_user", "done", "failed"] as const;
+export type HandoffStatus = (typeof HANDOFF_STATUSES)[number];
+export const HANDOFF_ORIGINS = ["vertal_chat", "vibe_code"] as const;
+export type HandoffOrigin = (typeof HANDOFF_ORIGINS)[number];
+
+export interface VibeHandoff {
+  chatConversationId?: string;
+  goal?: string;
+  status?: HandoffStatus;
+  lastSummary?: string;
+  origin?: HandoffOrigin;
+  updatedAt?: string;
+}
+
+const HANDOFF_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const HANDOFF_MAX_GOAL = 600;
+const HANDOFF_MAX_SUMMARY = 1500;
+
+const handoffText = (v: unknown, max: number) => {
+  if (typeof v !== "string") return undefined;
+  const t = v.replace(/\s+/g, " ").trim();
+  return t ? t.slice(0, max) : undefined;
+};
+
+/** Lê o handoff guardado de forma defensiva; campos inválidos somem, nada lança. Vazio = undefined. */
+export function normalizeHandoff(raw: unknown): VibeHandoff | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const r = raw as Record<string, unknown>;
+  const out: VibeHandoff = {};
+  if (typeof r.chatConversationId === "string" && HANDOFF_UUID_RE.test(r.chatConversationId)) out.chatConversationId = r.chatConversationId.toLowerCase();
+  const goal = handoffText(r.goal, HANDOFF_MAX_GOAL);
+  if (goal) out.goal = goal;
+  if ((HANDOFF_STATUSES as readonly unknown[]).includes(r.status)) out.status = r.status as HandoffStatus;
+  const lastSummary = handoffText(r.lastSummary, HANDOFF_MAX_SUMMARY);
+  if (lastSummary) out.lastSummary = lastSummary;
+  if ((HANDOFF_ORIGINS as readonly unknown[]).includes(r.origin)) out.origin = r.origin as HandoffOrigin;
+  if (typeof r.updatedAt === "string" && !Number.isNaN(Date.parse(r.updatedAt))) out.updatedAt = r.updatedAt;
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** Junta um patch (já validado) ao handoff atual; campos ausentes no patch ficam como estavam. */
+export function mergeHandoff(prev: VibeHandoff | undefined, patch: VibeHandoff, now = new Date().toISOString()): VibeHandoff {
+  const clean = normalizeHandoff(patch) ?? {};
+  return { ...(prev ?? {}), ...clean, updatedAt: now };
+}
+
+/**
+ * Corpo `handoff` do vibe-code-agent: {action:"note", chatConversationId?, goal?, status?, lastSummary?, origin?}.
+ * Devolve o patch validado, ou null quando a ação é desconhecida ou não sobra nenhum campo.
+ */
+export function parseHandoffNote(raw: unknown): VibeHandoff | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  if (r.action !== "note") return null;
+  const { action: _action, updatedAt: _updatedAt, ...rest } = r;
+  return normalizeHandoff(rest) ?? null;
 }
 
 const MAX_STATE_STAGED_CHARS = 400_000;
@@ -715,6 +779,7 @@ export function normalizeAgentState(raw: unknown, knobs: Pick<PlanKnobs, "autono
   const staged = (Array.isArray(r.staged) ? r.staged : []).filter(
     (s): s is StagedChange => !!s && typeof s === "object" && typeof (s as StagedChange).path === "string" && typeof (s as StagedChange).content === "string" && typeof (s as StagedChange).baseContent === "string",
   );
+  const handoff = normalizeHandoff(r.handoff);
   return {
     version: 1,
     graph,
@@ -724,6 +789,7 @@ export function normalizeAgentState(raw: unknown, knobs: Pick<PlanKnobs, "autono
     repoMap: r.repoMap && typeof r.repoMap === "object" && Array.isArray((r.repoMap as RepoMap).tree) ? (r.repoMap as RepoMap) : null,
     debug: r.debug && typeof r.debug === "object" ? { taskId: typeof (r.debug as { taskId?: unknown }).taskId === "number" ? (r.debug as { taskId: number }).taskId : null, attempts: Number((r.debug as { attempts?: unknown }).attempts) || 0 } : null,
     applied: (Array.isArray(r.applied) ? r.applied : []).filter((a): a is AppliedEntry => !!a && typeof a === "object" && Array.isArray((a as AppliedEntry).files)).slice(-MAX_APPLIED),
+    ...(handoff ? { handoff } : {}),
     updatedAt: typeof r.updatedAt === "string" ? r.updatedAt : base.updatedAt,
   };
 }
