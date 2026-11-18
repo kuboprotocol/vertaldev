@@ -77,6 +77,9 @@ export default defineConfig(({ command, mode }) => {
             /^\/photocraft(\/|$)/,
             // figCraft: mesmo motivo do photocraft (editor WebAssembly em public/figcraft).
             /^\/figcraft(\/|$)/,
+            // API do Worker (ex.: /api/spotify/callback, volta do OAuth do Spotify): precisa
+            // chegar ao servidor. Com o index.html do cache o React mostrava 404 e a conexão não terminava.
+            /^\/api(\/|$)/,
           ],
           runtimeCaching: [
             {
