@@ -29,11 +29,12 @@ export function vibeConversationFromSearch(search: string): string | null {
  * projeto) e com origin 'vertal_chat', que o servidor usa para barrar nova delegação.
  * "status" não chama a função (lê a conversa direto do banco).
  */
-export function vibeCodeRequestBody(action: VibeCodeAction): Record<string, unknown> | null {
+export function vibeCodeRequestBody(action: VibeCodeAction, chatConversationId?: string | null): Record<string, unknown> | null {
   const base = {
     origin: VIBE_CODE_CHAT_ORIGIN,
     delegationDepth: 1,
     ...(action.conversationId ? { conversationId: action.conversationId } : {}),
+    ...(chatConversationId ? { chatConversationId } : {}),
   };
   switch (action.op) {
     case 'start':

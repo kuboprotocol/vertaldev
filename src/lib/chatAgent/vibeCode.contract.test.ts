@@ -71,6 +71,11 @@ describe('vibe_code: ponte com o vibe-code-agent', () => {
     expect(vibeCodeRequestBody({ tool: 'vibe_code', op: 'status', prompt: '', conversationId: CONV })).toBeNull();
   });
 
+  it('leva o id da conversa do Chat para o handoff', () => {
+    expect(vibeCodeRequestBody({ tool: 'vibe_code', op: 'start', prompt: 'App' }, CONV)).toMatchObject({ chatConversationId: CONV });
+    expect(vibeCodeRequestBody({ tool: 'vibe_code', op: 'start', prompt: 'App' }, null)).not.toHaveProperty('chatConversationId');
+  });
+
   it('o corpo gerado passa no limite de origem do servidor', () => {
     const body = vibeCodeRequestBody({ tool: 'vibe_code', op: 'start', prompt: 'App de notas' })!;
     expect(checkVibeOrigin(body)).toEqual({ ok: true, origin: 'vertal_chat' });

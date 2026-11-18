@@ -45,6 +45,8 @@ export interface ActionContext {
   chargeAppEdit: () => Promise<unknown>;
   /** O usuário pediu para ficar só no chat (ou voltar a abrir ao lado). */
   setChatOnly: (chatOnly: boolean) => void;
+  /** Id da conversa do Vertal Chat (vai no handoff do Vibe Code). */
+  chatConversationId?: string | null;
 }
 
 export interface ActionOutcome {
@@ -235,7 +237,7 @@ export async function runVibeCode(action: Extract<AgentAction, { tool: 'vibe_cod
     };
   }
 
-  const body = vibeCodeRequestBody(action);
+  const body = vibeCodeRequestBody(action, ctx.chatConversationId);
   if (!body) return fail(tool, 'Pedido ao Vibe Code inválido.');
   const { data: auth } = await supabase.auth.getSession();
   const token = auth?.session?.access_token;
