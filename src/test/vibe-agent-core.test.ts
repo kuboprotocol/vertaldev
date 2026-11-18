@@ -33,9 +33,9 @@ describe("parseAgentTurn", () => {
     expect(t.summary).toBe("");
   });
 
-  it("falha com plan_parse_failed quando não há JSON", () => {
-    expect(() => parseAgentTurn("sem json")).toThrow("plan_parse_failed");
-    expect(() => parseAgentTurn("{quebrado")).toThrow("plan_parse_failed");
+  it("sem JSON aproveitável não lança: devolve retry", () => {
+    expect(parseAgentTurn("sem json")).toMatchObject({ actions: [], parse: "failed", retry: true });
+    expect(parseAgentTurn("{quebrado")).toMatchObject({ actions: [], parse: "failed", retry: true });
   });
 });
 

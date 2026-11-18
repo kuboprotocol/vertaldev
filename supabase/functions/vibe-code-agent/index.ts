@@ -1070,6 +1070,7 @@ Deno.serve(async (req) => {
         let designProblems: Record<string, string[]> = {};
         const readCache = new Map<string, Observation>();
         let switchedNotice = false;
+        let parseRetried = false;
         // Primeiros problemas que a auto-revisão achou: viram lição para os próximos pedidos.
         let firstProblems: string[] = [];
 
@@ -1085,7 +1086,7 @@ Deno.serve(async (req) => {
                 json: true,
                 maxTokens: 6000,
                 temperature: 0.2,
-                noCache: mode === "apply" || turn > 1,
+                noCache: mode === "apply" || turn > 1 || parseRetried,
                 messages,
               },
               { cache: supabaseGatewayCache(admin) },
@@ -1105,16 +1106,25 @@ Deno.serve(async (req) => {
             });
           }
 
-          let parsed: ReturnType<typeof parseAgentTurn>;
-          try {
-            parsed = parseAgentTurn(llm.content);
-          } catch (parseErr) {
+          const parsed = parseAgentTurn(llm.content);
+          if (parsed.retry) {
+            // JSON ilegível ou cortado sem nada aproveitável: pede de novo UMA vez (sem cache).
+            if (!parseRetried) {
+              parseRetried = true;
+              send({ kind: "message", status: "skipped", title: "O modelo respondeu fora do formato; pedindo de novo" });
+              messages.push({
+                role: "user",
+                content: "Sua última resposta veio cortada ou fora do formato. Responda de novo APENAS com o objeto JSON válido; se os arquivos forem grandes, edite menos arquivos nesta volta.",
+              });
+              turn--;
+              continue;
+            }
             // Volta tardia mal formada: entrega o que já foi proposto em vez de perder tudo.
             if (turn > 1 && finalTurn) {
               send({ kind: "message", status: "skipped", title: "O modelo respondeu fora do formato; entregando o que já estava pronto" });
               break;
             }
-            throw parseErr;
+            throw new Error("plan_parse_failed");
           }
           finalTurn = parsed;
           send({
