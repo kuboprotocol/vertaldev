@@ -48,6 +48,7 @@ import {
   parseChatOrigin,
 } from "../_shared/chatDelegate.ts";
 import { validatePublicUrl } from "../_shared/security.ts";
+import { decodeImageDataUrl, generateChatImage } from "../_shared/chatImage.ts";
 
 const InputSchema = z.object({
   messages: z.array(z.object({
@@ -74,7 +75,7 @@ const InputSchema = z.object({
 const COSTS: Record<string, number> = {
   chat: 1,      // Message via OpenRouter
   chat_premium: 4, // Message premium frontier (Claude Sonnet)
-  image: 1,     // Pollinations / Nano Banana
+  image: 1,     // Nano Banana (OpenRouter), gerada no servidor
   video: 36,    // MusKAI / Sogni (est.)
   music: 1,     // MusKAI / Suno
   slide: 5,     // Content + Template
@@ -224,59 +225,60 @@ async function handleChat(userId: string, messages: any[], requestedModel?: stri
   });
 }
 
+/**
+ * Gera a imagem de verdade no servidor (Nano Banana via OpenRouter) e só responde
+ * ok quando há imagem. Antes, o caminho padrão só montava uma URL da Pollinations
+ * anônima: o modelo dela não entende português (o "sapo de língua vermelha" virava
+ * uma mulher), o limite de 1 imagem/45 s por IP quebrava a imagem e o crédito era
+ * cobrado mesmo assim. Falha → 502/503 e o withRefundOnFailure devolve o crédito.
+ */
 async function handleImage(userId: string, prompt: string, metadata?: any, cost?: number) {
-  // Image logic: Pollinations (Free/Fixed-ish) or Nano Banana (via Lovable/Gemini)
-  // Prompt says: Pollinations for imagen (free/flat)
-  const engine = metadata?.engine === "premium" ? "lovable" : "pollinations";
-  
-  if (engine === "pollinations") {
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random() * 1000000)}`;
-    
-    await recordAsset(userId, {
-      tool: "image",
-      prompt,
-      output_url: imageUrl,
-      credits_spent: cost ?? 1,
-      metadata: { engine: "pollinations" },
-    }).catch(console.error);
-
-    return new Response(JSON.stringify({ ok: true, image_url: imageUrl, engine: "pollinations" }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  const gen = await generateChatImage({ prompt, apiKey: Deno.env.get("OPENROUTER_API_KEY") });
+  if (!gen.ok) {
+    console.warn("[creative-router] image failed:", { error: gen.error, detail: gen.detail, attempts: gen.attempts });
+    return jsonResponse(gen.error === "image_provider_unavailable" ? 503 : 502, { error: gen.error });
   }
 
-  // Lovable/Gemini Premium path
-  const LK = Deno.env.get("LOVABLE_API_KEY");
-  if (!LK) return new Response(JSON.stringify({ error: "premium_image_provider_unavailable" }), { status: 503, headers: corsHeaders });
+  // Guarda no bucket público `uploads`: a conversa salva uma URL curta e durável
+  // (e o Vibe Code recebe um link, não um data URL de megabytes).
+  const imageUrl = (await rehostChatImage(gen.url, userId)) ?? gen.url;
+  const source = typeof metadata?.source === "string" ? metadata.source.slice(0, 40) : undefined;
 
-  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${LK}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "google/gemini-2.0-flash-exp",
-      messages: [{ role: "user", content: prompt }],
-      modalities: ["image", "text"],
-    }),
-  });
+  // "nano_banana" é o valor aceito por creative_assets_tool_check ("image" era recusado).
+  await recordAsset(userId, {
+    tool: "nano_banana",
+    prompt: prompt.slice(0, 1000),
+    output_url: imageUrl.startsWith("data:") ? undefined : imageUrl,
+    credits_spent: cost ?? 1,
+    metadata: { engine: "openrouter", model: gen.model, attempts: gen.attempts, ...(source ? { source } : {}) },
+  }).catch(console.error);
 
-  const data = await r.json();
-  const imageUrl = data?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-  
-  if (imageUrl) {
-    await recordAsset(userId, {
-      tool: "image",
-      prompt,
-      output_url: imageUrl,
-      credits_spent: cost ?? 1,
-      metadata: { engine: "lovable_gemini" },
-    }).catch(console.error);
+  return jsonResponse(200, { ok: true, image_url: imageUrl, engine: "openrouter", model: gen.model });
+}
 
-    return new Response(JSON.stringify({ ok: true, image_url: imageUrl, engine: "lovable" }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+/** Sobe a imagem gerada para `uploads/<user>/chat/`. Devolve a URL pública ou null. */
+async function rehostChatImage(url: string, userId: string): Promise<string | null> {
+  try {
+    let file = decodeImageDataUrl(url);
+    if (!file) {
+      const r = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+      const type = r.headers.get("content-type") ?? "";
+      if (!r.ok || !type.startsWith("image/")) return null;
+      const ext = type.includes("jpeg") ? "jpg" : type.includes("webp") ? "webp" : "png";
+      file = { type, ext, bytes: new Uint8Array(await r.arrayBuffer()) };
+    }
+    const path = `${userId}/chat/${crypto.randomUUID()}.${file.ext}`;
+    const storage = supaAdmin().storage.from("uploads");
+    const { error } = await storage.upload(path, file.bytes, { contentType: file.type, upsert: false });
+    if (error) {
+      console.warn("[creative-router] image rehost failed:", error.message);
+      return null;
+    }
+    return storage.getPublicUrl(path).data.publicUrl;
+  } catch (e) {
+    console.warn("[creative-router] image rehost error:", sanitizeError(e));
+    return null;
   }
-
-  return new Response(JSON.stringify({ error: "image_generation_failed" }), { status: 502, headers: corsHeaders });
 }
 
 async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3) {

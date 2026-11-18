@@ -150,6 +150,8 @@ async function runDelegatedTool(action: Record<string, unknown>, router: RouterC
       const { status, data } = await router({ tool: "image", prompt: String(action.prompt ?? ""), metadata: { source: "vibe_code" } });
       const url = (data as { image_url?: unknown } | null)?.image_url;
       if (status >= 400 || typeof url !== "string") return { tool, ok: false, summary: "Não foi possível gerar a imagem." };
+      // Só links vão para o modelo: um data URL (megabytes de base64) estouraria o contexto.
+      if (!/^https?:\/\//i.test(url)) return { tool, ok: true, summary: "Imagem gerada (sem link público para usar no código)." };
       return { tool, ok: true, summary: `Imagem gerada: ${url}`, image: url };
     }
   } catch (e) {
