@@ -23,7 +23,8 @@
 // aplicações manuais gravem ao mesmo tempo. Ver ./plan.ts.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { classifyComplexity } from "../_shared/deepseekRouter.ts";
-import { inferTaskKind, providersFromProfiles, runGateway, type Provider } from "../_shared/aiGateway.ts";
+import { GatewayError, inferTaskKind, providersFromProfiles, runGateway, type Provider } from "../_shared/aiGateway.ts";
+import { type AgentTier, callWithTierFallback, mapWithConcurrency } from "../_shared/chatOrchestrator.ts";
 import {
   applyOverrides,
   creditsFor,
@@ -78,6 +79,12 @@ import { type PlanActionName, PlanError, parsePlanRequest, READ_ONLY_PLAN_ACTION
 
 /** Erro com mensagem já pronta para o Dev (pt-BR). */
 class UserFacingError extends Error {}
+
+/** O Dev apertou "Parar" (o cliente abortou a requisição): sai sem cobrar nem commitar. */
+class AbortedByUserError extends Error {}
+
+/** Leituras de arquivo de uma mesma volta rodam em paralelo, até este limite. */
+const READ_CONCURRENCY = 4;
 
 const WRITER_FOR_ACTION: Partial<Record<PlanActionName, WriterKind>> = {
   debug: "debug",
@@ -491,7 +498,11 @@ Deno.serve(async (req) => {
       const recorded: Array<Record<string, unknown>> = [];
       const send = (event: Record<string, unknown>) => {
         const full: Record<string, unknown> = { id: `s${++seq}`, ...event };
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(full)}\n\n`));
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(full)}\n\n`));
+        } catch {
+          /* cliente desconectou (ex.: "Parar"): o histórico abaixo ainda é gravado */
+        }
         if (recorded.length < MAX_STORED_STEPS) {
           const review = full.review as { files?: unknown } | undefined;
           recorded.push({
@@ -1073,29 +1084,59 @@ Deno.serve(async (req) => {
         let parseRetried = false;
         // Primeiros problemas que a auto-revisão achou: viram lição para os próximos pedidos.
         let firstProblems: string[] = [];
+        // "Parar" no chat aborta a requisição: conferido entre as voltas e antes de cobrar/commitar.
+        const abortIfRequested = () => {
+          if (req.signal.aborted) throw new AbortedByUserError("aborted_by_user");
+        };
+        // Rotas por tier: a do tier escolhido já está pronta; a do outro só se a volta precisar.
+        const tierRoutes = new Map<AgentTier, Promise<{ routedProviders?: Provider[] }>>([
+          [tier as AgentTier, Promise.resolve({ routedProviders })],
+        ]);
+        const routeForTier = (t: AgentTier) => {
+          if (!tierRoutes.has(t)) tierRoutes.set(t, routeModels(admin, prompt, t));
+          return tierRoutes.get(t)!;
+        };
 
         for (let turn = 1; turn <= MAX_TURNS; turn++) {
+          abortIfRequested();
           send({ kind: "thinking", status: "running", title: turn === 1 ? "Analisando o pedido" : `Raciocinando (volta ${turn})` });
-          let llm;
-          try {
-            llm = await runGateway(
-              {
-                kind: "code",
-                tier,
-                ...(routedProviders?.length ? { providers: routedProviders } : { deepseekOnly: true }),
-                json: true,
-                maxTokens: 6000,
-                temperature: 0.2,
-                noCache: mode === "apply" || turn > 1 || parseRetried,
-                messages,
-              },
-              { cache: supabaseGatewayCache(admin) },
-            );
-          } catch (err) {
-            await recordGatewayFailure(admin, userId, projectId, "code", err).catch(() => {});
-            throw err;
-          }
-          await recordGatewayRun(admin, userId, projectId, llm).catch(() => null);
+          const noCache = mode === "apply" || turn > 1 || parseRetried;
+          const callModel = async (t: AgentTier) => {
+            const route = await routeForTier(t);
+            try {
+              const res = await runGateway(
+                {
+                  kind: "code",
+                  tier: t,
+                  ...(route.routedProviders?.length ? { providers: route.routedProviders } : { deepseekOnly: true }),
+                  json: true,
+                  maxTokens: 6000,
+                  temperature: 0.2,
+                  noCache: noCache || t !== tier,
+                  messages,
+                },
+                { cache: supabaseGatewayCache(admin) },
+              );
+              await recordGatewayRun(admin, userId, projectId, res).catch(() => null);
+              return res;
+            } catch (err) {
+              await recordGatewayFailure(admin, userId, projectId, "code", err).catch(() => {});
+              throw err;
+            }
+          };
+          // Mesmo padrão do Vertal Chat (creative-router handleAgentChat): "pro" que falha
+          // volta ao flash, e saída ilegível ganha UMA nova tentativa no outro tier.
+          // A cobrança continua sendo a estimativa (estimatedCost), qualquer que seja o tier usado.
+          const attempt = await callWithTierFallback({
+            tier: tier as AgentTier,
+            call: callModel,
+            parse: (r) => parseAgentTurn(r.content),
+            needsRetry: (p) => p.retry === true,
+            better: (again) => !again.retry,
+            isRecoverable: (err) => err instanceof GatewayError,
+          });
+          if (attempt.fellBack) console.warn("[vibe-code-agent] pro falhou, voltando ao flash");
+          const llm = attempt.result;
           if (chosen && llm.provider !== chosen.id && !switchedNotice) {
             switchedNotice = true;
             send({
@@ -1106,7 +1147,7 @@ Deno.serve(async (req) => {
             });
           }
 
-          const parsed = parseAgentTurn(llm.content);
+          const parsed = attempt.parsed;
           if (parsed.retry) {
             // JSON ilegível ou cortado sem nada aproveitável: pede de novo UMA vez (sem cache).
             if (!parseRetried) {
@@ -1138,7 +1179,38 @@ Deno.serve(async (req) => {
           }
 
           // Executa as ações da volta. Leituras viram observações para o modelo.
+          // read_file é só leitura: as da volta rodam em paralelo (até READ_CONCURRENCY),
+          // e as observações saem na ordem em que o modelo pediu.
           const observations: Observation[] = [];
+          const readFile = async (path: string): Promise<Observation> => {
+            const cached = readCache.get(path);
+            if (cached) return cached;
+            send({ kind: "read_file", status: "running", title: `Lendo ${path}`, path });
+            const proposedHere = proposed.get(path);
+            const file = proposedHere ? { content: proposedHere.content, sha: undefined } : await store.read(path);
+            const obs: Observation = { path, found: proposedHere ? true : file.sha !== undefined || file.content !== "", content: file.content };
+            readCache.set(path, obs);
+            send({
+              kind: "read_file",
+              status: "success",
+              title: `Lido ${path}`,
+              path,
+              detail: obs.found ? `${file.content.split("\n").length} linhas` : "arquivo novo",
+            });
+            return obs;
+          };
+          // Leituras pendentes do trecho atual; são resolvidas antes de qualquer edit_file
+          // seguinte, para uma leitura nunca ver uma edição pedida depois dela.
+          let pendingReads: string[] = [];
+          const flushReads = async () => {
+            if (!pendingReads.length) return;
+            const batch = pendingReads;
+            pendingReads = [];
+            const unique = [...new Set(batch)];
+            const read = await mapWithConcurrency(unique, READ_CONCURRENCY, (path) => readFile(path));
+            const byPath = new Map(unique.map((path, i) => [path, read[i]]));
+            for (const path of batch) observations.push(byPath.get(path)!);
+          };
           for (const action of parsed.actions) {
             if (action.type === "message") {
               if (action.reason) {
@@ -1162,31 +1234,16 @@ Deno.serve(async (req) => {
             }
 
             if (action.type === "read_file") {
-              const cached = readCache.get(action.path);
-              if (cached) {
-                observations.push(cached);
-                continue;
-              }
-              send({ kind: "read_file", status: "running", title: `Lendo ${action.path}`, path: action.path });
-              const proposedHere = proposed.get(action.path);
-              const file = proposedHere ? { content: proposedHere.content, sha: undefined } : await store.read(action.path);
-              const obs: Observation = { path: action.path, found: proposedHere ? true : file.sha !== undefined || file.content !== "", content: file.content };
-              readCache.set(action.path, obs);
-              observations.push(obs);
-              send({
-                kind: "read_file",
-                status: "success",
-                title: `Lido ${action.path}`,
-                path: action.path,
-                detail: obs.found ? `${file.content.split("\n").length} linhas` : "arquivo novo",
-              });
+              pendingReads.push(action.path);
               continue;
             }
 
             if (action.type === "edit_file" && typeof action.content === "string") {
+              await flushReads();
               proposed.set(action.path, { content: action.content, reason: action.reason });
             }
           }
+          await flushReads();
 
           // Precisa ler mais? Devolve as observações ao modelo.
           if (!parsed.final && observations.length) {
@@ -1233,6 +1290,7 @@ Deno.serve(async (req) => {
         }
 
         if (!finalTurn) throw new Error("plan_parse_failed");
+        abortIfRequested();
 
         // Arquivos com problema grave não entram; sintaxe vira aviso.
         const rejected: string[] = [];
@@ -1267,6 +1325,8 @@ Deno.serve(async (req) => {
           }
         }
 
+        // Último ponto de saída: depois daqui cobra e commita.
+        abortIfRequested();
         if (mode === "apply" && proposed.size) {
           await chargeCredits(estimatedCost, "vibe_code_agent:direct_apply", { tier, prompt: prompt.slice(0, 200) });
         }
@@ -1423,6 +1483,13 @@ Deno.serve(async (req) => {
                 : "Todas as alterações commitadas",
         });
       } catch (err) {
+        if (err instanceof AbortedByUserError) {
+          // Parada pedida pelo Dev: nada foi cobrado nem commitado nesta execução.
+          replyText = "Parei a pedido seu. Nada foi cobrado nem commitado.";
+          send({ kind: "reply", status: "skipped", title: "Resposta do agente", detail: replyText });
+          send({ kind: "done", status: "skipped", title: "Parado" });
+          return;
+        }
         const message = err instanceof Error ? err.message : "internal_error";
         const friendly = err instanceof UserFacingError || err instanceof PlanError || err instanceof TaskGraphError;
         console.error("[vibe-code-agent]", message);

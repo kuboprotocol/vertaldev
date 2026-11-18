@@ -9,6 +9,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Send,
+  Square,
   Undo2,
   Eye,
   MessageSquare,
@@ -626,6 +627,11 @@ export function VibeCodeAgentChat({
     }
   }, [runPlan, runningAll]);
 
+  // "Parar": aborta a execução em curso; o servidor sai sem cobrar nem commitar.
+  const stopRun = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
+
   const stopAll = useCallback(() => {
     runAllCancelRef.current = true;
     runAllResumeRef.current = false;
@@ -772,7 +778,8 @@ export function VibeCodeAgentChat({
       if (autoApply) await withWriter("manual", call);
       else await call();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Agent failed");
+      if (e instanceof DOMException && e.name === "AbortError") toast("Agente parado.");
+      else toast.error(e instanceof Error ? e.message : "Agent failed");
     } finally {
       setRunning(false);
       abortRef.current = null;
@@ -1206,6 +1213,19 @@ export function VibeCodeAgentChat({
             className="min-h-[60px] w-full resize-none border-border/20 bg-black/60 pl-3 pr-12 pt-3 text-xs font-medium placeholder:text-muted-foreground/40 focus:border-primary/50 focus:ring-primary/20 rounded-xl transition-all"
             disabled={running}
           />
+          {running && (
+            <Button
+              type="button"
+              onClick={stopRun}
+              variant="outline"
+              size="sm"
+              aria-label="Parar o agente"
+              className="absolute bottom-2.5 right-12 h-8 gap-1 rounded-lg border-destructive/40 px-2 text-[11px] text-destructive hover:bg-destructive hover:text-destructive-foreground"
+            >
+              <Square className="h-3 w-3" />
+              Parar
+            </Button>
+          )}
           <Button 
             onClick={() => void send()} 
             disabled={running || !input.trim()} 
