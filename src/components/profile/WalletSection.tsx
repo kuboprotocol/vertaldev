@@ -188,9 +188,19 @@ export default function WalletSection({ variant = 'profile' }: { variant?: 'prof
     const url = new URL(window.location.href)
     const seti = url.searchParams.get('setup_intent')
     const status = url.searchParams.get('redirect_status')
-    if (!seti) return
-    ;['setup_intent', 'setup_intent_client_secret', 'redirect_status', 'wallet'].forEach((k) => url.searchParams.delete(k))
+    const setupSession = url.searchParams.get('setup_session')
+    if (!seti && !setupSession) return
+    ;['setup_intent', 'setup_intent_client_secret', 'redirect_status', 'wallet', 'setup_session'].forEach((k) => url.searchParams.delete(k))
     window.history.replaceState(null, '', url.pathname + (url.search ? url.search : '') + url.hash)
+    // Volta da página hospedada do Stripe (sem chave publicável configurada).
+    if (setupSession) {
+      if (!setupSession.startsWith('cs_')) { toast.message('Cadastro do cartão cancelado.'); return }
+      walletApi.cardAttachSession(setupSession)
+        .then(() => { toast.success('Cartão adicionado!'); refresh() })
+        .catch((e) => { if (!/já está/.test((e as Error).message)) toast.error((e as Error).message); refresh() })
+      return
+    }
+    if (!seti) return
     if (status !== 'succeeded') {
       toast.error('O banco não autorizou o cartão. Tente outro cartão.')
       return
@@ -720,7 +730,13 @@ function AddCardDialog({ open, onOpenChange, onAdded }: {
     setReady(false)
     ;(async () => {
       try {
-        const { clientSecret, publishableKey } = await walletApi.cardSetup()
+        const setup = await walletApi.cardSetup(['/pay', '/bank'].includes(window.location.pathname) ? '/pay' : '/profile')
+        if (setup.checkoutUrl) {
+          // Sem chave publicável: cadastro na página segura do Stripe.
+          if (!cancelled) window.location.assign(setup.checkoutUrl)
+          return
+        }
+        const { clientSecret, publishableKey } = setup as { clientSecret: string; publishableKey: string }
         const stripe = await loadStripe(publishableKey)
         if (cancelled) return
         const isDark = document.documentElement.classList.contains('dark')

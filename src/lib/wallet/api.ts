@@ -105,9 +105,18 @@ export async function call<T>(action: string, payload: Record<string, unknown> =
 
 export const walletApi = {
   list: () => call<{ cards: WalletCard[]; pix: WalletPix[]; publishableKey: string | null }>('list'),
-  cardSetup: () => call<{ clientSecret: string; publishableKey: string }>('card-setup'),
+  /**
+   * Inicia o cadastro de cartão. Com a chave publicável do Stripe configurada,
+   * devolve o `clientSecret` do SetupIntent (Payment Element); sem ela, devolve
+   * `checkoutUrl` (página hospedada do Stripe, modo setup).
+   */
+  cardSetup: (returnPath?: string) =>
+    call<{ clientSecret?: string; publishableKey: string | null; checkoutUrl?: string; hosted?: boolean }>('card-setup', { returnPath }),
   cardAttach: (setupIntentId: string, label?: string, makeDefault?: boolean) =>
     call<{ card: WalletCard }>('card-attach', { setupIntentId, label, makeDefault }),
+  /** Conclui o cadastro feito na página hospedada do Stripe (`?setup_session=cs_…`). */
+  cardAttachSession: (checkoutSessionId: string) =>
+    call<{ card: WalletCard }>('card-attach', { checkoutSessionId }),
   pixAdd: (p: { keyType: PixKeyType; key: string; label?: string; countries?: string[]; makeDefault?: boolean }) =>
     call<{ pix: WalletPix }>('pix-add', p),
   pixBrCode: (p: { id: string; amount?: number; merchantName: string; merchantCity: string; description?: string }) =>

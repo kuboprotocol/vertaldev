@@ -27,8 +27,19 @@ export class AsaasError extends Error {
 
 export type AsaasEnv = "sandbox" | "production";
 
+/** Ambiente pelo prefixo da chave: `$aact_prod_…` (produção) ou `$aact_hmlg_…` (sandbox). */
+export function asaasEnvFromKey(key: string | null | undefined): AsaasEnv | null {
+  const k = (key ?? "").trim();
+  if (/^\$?aact_prod_/i.test(k)) return "production";
+  if (/^\$?aact_hmlg_/i.test(k)) return "sandbox";
+  return null;
+}
+
+/** ASAAS_ENV explícito vence; sem ele, deduz do prefixo da ASAAS_API_KEY; senão sandbox. */
 export function asaasEnv(): AsaasEnv {
-  return (Deno.env.get("ASAAS_ENV") ?? "sandbox").toLowerCase() === "production" ? "production" : "sandbox";
+  const explicit = (Deno.env.get("ASAAS_ENV") ?? "").trim().toLowerCase();
+  if (explicit === "production" || explicit === "sandbox") return explicit;
+  return asaasEnvFromKey(Deno.env.get("ASAAS_API_KEY")) ?? "sandbox";
 }
 
 export function asaasBaseUrl(env: AsaasEnv = asaasEnv()) {

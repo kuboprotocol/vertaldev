@@ -21,8 +21,16 @@ redirecionam (301) para `/vibe-pay` no mesmo idioma (`worker/legacyRedirects.ts`
 existindo (rota antiga) com o atalho "Abrir Vertal Vibe Pay". A Edge Function
 continua se chamando **`wallet`** por compatibilidade.
 
-> **Status:** PR em rascunho. Nada foi publicado: migration não aplicada,
-> funções não publicadas, nenhuma chave nova configurada.
+> **Status (19/11/2026):** migration aplicada em produção; `asaas-webhook`,
+> `wallet` e `stripe-connect-webhook` publicados; ASAAS_API_KEY e
+> ASAAS_WEBHOOK_TOKEN configurados.
+>
+> **Onde aparece no app:** banner de divulgação na home pública (`Index`, leva a
+> `/vibe-pay`) e no dashboard (leva a `/pay`), botão "Vibe Pay" no menu do
+> dashboard e item "Vibe Pay" no menu da home, cartão no Painel Criativo
+> (`/creative`), conector em destaque no hub de Conectores
+> (`vertal-vibe-pay` → `/pay`, também no catálogo de requisitos do Vibe Code) e
+> cartão no topo do Perfil. Componente: `src/components/vibepay/VibePayPromo.tsx`.
 
 ---
 
@@ -53,6 +61,14 @@ continua se chamando **`wallet`** por compatibilidade.
    (`?setup_intent=…&redirect_status=succeeded`) agora conclui o `card-attach`
    sozinha (antes o cartão ficava no Stripe mas não aparecia no app).
 5. `set-default` / `remove` (detach no Stripe) continuam iguais.
+6. **Sem `STRIPE_PUBLISHABLE_KEY`** (ou com `hosted: true`), `card-setup` não
+   falha mais: cria uma **Checkout Session em modo `setup`** (página segura do
+   Stripe, cartão só no Stripe, PCI SAQ A) e devolve `checkoutUrl`. A volta
+   (`/pay?tab=cartoes&setup_session=cs_…` ou `/profile?setup_session=cs_…`)
+   chama `card-attach { checkoutSessionId }`, que confere modo/cliente/dono e
+   segue o fluxo normal. Com a `pk_live_…` configurada, volta o Payment
+   Element embutido. `GET /functions/v1/wallet?health=1` diz qual modo está
+   ativo (`stripeCardMode: elements | hosted_checkout`).
 
 ## 3. Roteamento entre provedores (`src/lib/bank/routing.ts`)
 
@@ -99,7 +115,7 @@ Aplique a migration **antes** de publicar a nova versão do `wallet` (ela grava
 | Secret | Situação |
 |---|---|
 | `STRIPE_SECRET_KEY` | configurado (chave restrita) |
-| `STRIPE_PUBLISHABLE_KEY` | **falta** (`pk_live_…`) — sem ela não dá para salvar cartão |
+| `STRIPE_PUBLISHABLE_KEY` | **falta** (`pk_live_…`) — opcional agora: sem ela o cartão é salvo na página hospedada do Stripe (Checkout modo setup); com ela, no formulário embutido |
 | `STRIPE_WEBHOOK_SECRET` | **falta** (endpoint da plataforma) |
 | `STRIPE_CONNECT_WEBHOOK_SECRET` | **falta** (endpoint Connect) |
 
@@ -115,7 +131,7 @@ No endpoint Connect, assine também `payout.paid`, `payout.failed`,
 | Secret | Uso |
 |---|---|
 | `ASAAS_API_KEY` | chave da **conta-pai** (CNPJ) — só cria subcontas. Sem ela, tudo de ASAAS fica desligado (`asaas_not_configured`) |
-| `ASAAS_ENV` | `sandbox` (padrão) ou `production` |
+| `ASAAS_ENV` | `sandbox` ou `production`. Sem ele, o ambiente é deduzido do prefixo da chave (`$aact_prod_…` = produção, `$aact_hmlg_…` = sandbox); sem prefixo, sandbox. `GET /functions/v1/wallet?health=1&probe=1` mostra o ambiente e qual base aceita a chave |
 | `ASAAS_WEBHOOK_TOKEN` | token aleatório (32+ caracteres, **não** use uma API key). Vai no `authToken` do webhook de cada subconta e é conferido no header `asaas-access-token` |
 | `ASAAS_WEBHOOK_EMAIL` | opcional — e-mail que o ASAAS avisa se o webhook falhar |
 | `ASAAS_PLATFORM_WALLET_ID` | opcional — `walletId` da conta-pai; quando existe, cada cobrança tem **split de 1%** para a VERTAL |

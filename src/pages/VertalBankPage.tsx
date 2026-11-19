@@ -25,7 +25,7 @@ export default function VertalBankPage() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const initialTab = (TABS as readonly string[]).includes(params.get('tab') ?? '') ? (params.get('tab') as Tab) : 'inicio'
-  const [tab, setTab] = useState<Tab>(params.get('wallet')?.startsWith('connect') ? 'contas' : params.get('setup_intent') ? 'cartoes' : initialTab)
+  const [tab, setTab] = useState<Tab>(params.get('wallet')?.startsWith('connect') ? 'contas' : (params.get('setup_intent') || params.get('setup_session')) ? 'cartoes' : initialTab)
   const [overview, setOverview] = useState<BankOverview | null>(null)
   const [items, setItems] = useState<BankTransaction[]>([])
   const [loading, setLoading] = useState(true)

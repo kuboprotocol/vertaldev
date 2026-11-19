@@ -17,13 +17,13 @@ export default function Navbar() {
         </Link>
 
         <div className="hidden xl:flex items-center gap-1">
-          {['Home', 'Ecossistema', 'Download', 'Pricing', 'Alternativas', 'Docs', 'Shortlinks', 'Support'].map((item) => (
+          {['Home', 'Ecossistema', 'Vibe Pay', 'Download', 'Pricing', 'Alternativas', 'Docs', 'Shortlinks', 'Support'].map((item) => (
             <Button
               key={item}
               variant="ghost"
               size="sm"
               className="text-muted-foreground font-medium rounded-xl hover:text-foreground hover:bg-secondary/80 transition-all"
-              onClick={() => navigate(item === 'Home' ? '/' : `/${item.toLowerCase()}`)}
+              onClick={() => navigate(item === 'Home' ? '/' : item === 'Vibe Pay' ? '/vibe-pay' : `/${item.toLowerCase()}`)}
             >
               {item}
             </Button>

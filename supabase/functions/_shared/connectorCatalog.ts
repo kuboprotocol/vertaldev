@@ -90,6 +90,16 @@ export const CONNECTOR_CATALOG: CatalogEntry[] = [
     signals: [/\bstripe\b/i, /api\.stripe\.com/i, /\b(checkout|assinaturas?|subscriptions?|cobran[çc]a|pagamentos?|payments?)\b/i],
   },
   {
+    slug: "vertal-vibe-pay",
+    label: "Vertal Vibe Pay (Pix, boleto, cartão e conta global)",
+    kind: "connector",
+    description: "Conta digital do Vertal Dev: Pix, boleto, cartão, links de pagamento e conta global multimoeda (Stripe + ASAAS).",
+    secrets: [],
+    connectPath: "/pay",
+    siteUrl: "https://vertal.dev/vibe-pay",
+    signals: [/\bvertal ?vibe ?pay\b/i, /\bvibe ?pay\b/i],
+  },
+  {
     slug: "mercadopago",
     keyUrl: "https://www.mercadopago.com.br/developers/panel/app",
     siteUrl: "https://www.mercadopago.com.br/developers",

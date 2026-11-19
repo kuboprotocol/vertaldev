@@ -22,6 +22,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@^2";
 import { handleBankAction, BANK_ACTIONS } from "./bank.ts";
+import { asaasEnv, asaasEnvFromKey, asaasBaseUrl } from "../_shared/asaas.ts";
 import { findConnectCountry } from "../_shared/bankCountries.ts";
 import Stripe from "npm:stripe@^14";
 import { createStaticPix, hasError } from "npm:pix-utils@^2.8.2";
@@ -121,6 +122,30 @@ function toPix(r: Row) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  // Diagnóstico sem segredos (só nomes de ambiente e se está configurado).
+  if (req.method === "GET" && new URL(req.url).searchParams.get("health") === "1") {
+    const asaasKey = Deno.env.get("ASAAS_API_KEY");
+    const health: Row = {
+      ok: true,
+      stripeCardMode: Deno.env.get("STRIPE_PUBLISHABLE_KEY") ? "elements" : "hosted_checkout",
+      asaasConfigured: Boolean(asaasKey),
+      asaasEnv: asaasEnv(),
+      asaasEnvSource: Deno.env.get("ASAAS_ENV") ? "ASAAS_ENV" : asaasEnvFromKey(asaasKey) ? "key_prefix" : "default",
+    };
+    // ?probe=1: testa a chave nos dois ambientes (GET /myAccount/status) e diz qual aceita.
+    if (asaasKey && new URL(req.url).searchParams.get("probe") === "1") {
+      const probe: Row = {};
+      for (const env of ["production", "sandbox"] as const) {
+        try {
+          const r = await fetch(`${asaasBaseUrl(env)}/myAccount/status`, { headers: { access_token: asaasKey, "User-Agent": "VERTAL-Pay/1.0" } });
+          probe[env] = r.status;
+          await r.body?.cancel();
+        } catch { probe[env] = "network_error"; }
+      }
+      health.asaasProbe = probe;
+    }
+    return json(health);
+  }
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
   const authHeader = req.headers.get("Authorization") ?? "";
@@ -204,9 +229,27 @@ Deno.serve(async (req) => {
     // ── Cartão: iniciar (SetupIntent) ─────────────────────────────────────
     if (action === "card-setup") {
       if ((await countKind("card")) >= MAX_ITEMS_PER_KIND) return json({ error: "limit_reached" }, 400);
-      if (!publishableKey) return json({ error: "STRIPE_PUBLISHABLE_KEY not configured" }, 500);
       const stripe = stripeClient();
       const customer = await getOrCreateCustomer(stripe);
+      // Sem chave publicável (pk_…), o Payment Element não carrega. Em vez de
+      // falhar, usa a página hospedada do Stripe (Checkout em modo "setup"):
+      // o número do cartão continua indo só para o Stripe (PCI SAQ A) e a volta
+      // (`?setup_session=cs_…`) conclui o card-attach.
+      if (!publishableKey || body.hosted === true) {
+        const origin = appOrigin(req);
+        const back = body.returnPath === "/pay" || body.returnPath === "/bank" ? "/pay?tab=cartoes&" : "/profile?";
+        const session = await stripe.checkout.sessions.create({
+          mode: "setup",
+          customer,
+          payment_method_types: ["card"],
+          locale: "pt-BR",
+          setup_intent_data: { metadata: { supabase_user_id: user.id, source: "wallet" } },
+          metadata: { supabase_user_id: user.id, source: "wallet" },
+          success_url: `${origin}${back}setup_session={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${origin}${back}setup_session=cancelled`,
+        });
+        return json({ checkoutUrl: session.url, hosted: true, publishableKey: null });
+      }
       const intent = await stripe.setupIntents.create({
         customer,
         payment_method_types: ["card"],
@@ -218,11 +261,23 @@ Deno.serve(async (req) => {
 
     // ── Cartão: concluir (depois do confirmSetup no navegador) ────────────
     if (action === "card-attach") {
-      const setupIntentId = String(body.setupIntentId ?? "");
-      if (!/^seti_[A-Za-z0-9]+$/.test(setupIntentId)) return json({ error: "invalid_setup_intent" }, 400);
-
       const stripe = stripeClient();
-      const customer = await getOrCreateCustomer(stripe);
+      let setupIntentId = String(body.setupIntentId ?? "");
+      const checkoutSessionId = String(body.checkoutSessionId ?? "");
+      let customer: string | undefined;
+      if (checkoutSessionId) {
+        // Volta do Checkout hospedado (modo setup): o SetupIntent vem da sessão.
+        if (!/^cs_(live|test)_[A-Za-z0-9]+$/.test(checkoutSessionId)) return json({ error: "invalid_setup_intent" }, 400);
+        customer = await getOrCreateCustomer(stripe);
+        const session = await stripe.checkout.sessions.retrieve(checkoutSessionId);
+        if (session.mode !== "setup" || session.customer !== customer || session.metadata?.supabase_user_id !== user.id) {
+          return json({ error: "forbidden" }, 403);
+        }
+        if (session.status !== "complete") return json({ error: `setup_${session.status ?? "open"}` }, 400);
+        setupIntentId = typeof session.setup_intent === "string" ? session.setup_intent : session.setup_intent?.id ?? "";
+      }
+      if (!/^seti_[A-Za-z0-9]+$/.test(setupIntentId)) return json({ error: "invalid_setup_intent" }, 400);
+      customer ??= await getOrCreateCustomer(stripe);
       const intent = await stripe.setupIntents.retrieve(setupIntentId, { expand: ["payment_method"] });
       if (intent.customer !== customer || intent.metadata?.supabase_user_id !== user.id) {
         return json({ error: "forbidden" }, 403);

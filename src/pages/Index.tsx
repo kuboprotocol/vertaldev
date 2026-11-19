@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import LandingSkeleton from "@/components/landing/LandingSkeleton";
+import { VibePayPromo } from "@/components/vibepay/VibePayPromo";
 
 const HeroSection = lazy(() => import("@/components/landing/HeroSection"));
 const CreditsPromoSection = lazy(() => import("@/components/landing/CreditsPromoSection"));
@@ -35,6 +36,13 @@ const Index = () => {
       <Suspense fallback={<LandingSkeleton />}>
         <main>
           <SafeSection name="HeroSection"><HeroSection /></SafeSection>
+
+          {/* Divulgação: Vertal Vibe Pay (landing pública /vibe-pay) */}
+          <ErrorBoundary resourceName="VibePayPromo" fallback={null}>
+            <div className="px-6 py-10">
+              <VibePayPromo to="/vibe-pay" className="max-w-6xl mx-auto" />
+            </div>
+          </ErrorBoundary>
 
           <div className="max-w-xl mx-auto gold-line" aria-hidden="true" />
 
