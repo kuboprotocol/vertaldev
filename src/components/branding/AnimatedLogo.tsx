@@ -18,7 +18,7 @@ export const LOGO_SRC = '/vertal-dev-logo.webp'
 export const LOGO_HORIZONTAL_SRC = '/vertal-dev-logo-horizontal.webp'
 
 const VARIANTS = {
-  horizontal: { src: LOGO_HORIZONTAL_SRC, width: 781, height: 200, scale: 2.8 },
+  horizontal: { src: LOGO_HORIZONTAL_SRC, width: 843, height: 240, scale: 2.8 },
   stacked: { src: LOGO_SRC, width: 480, height: 446, scale: 2.4 },
 } as const
 
