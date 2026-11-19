@@ -60,7 +60,7 @@ async function call(path: string, body?: unknown, method: "GET" | "POST" = "POST
 
 let statusItem: vscode.StatusBarItem | undefined;
 
-/** Atualiza a barra de status com o saldo do Vibe Bank (best-effort). */
+/** Atualiza a barra de status com o saldo do Vibe Pay (best-effort). */
 async function refreshBalance() {
   if (!statusItem) return;
   try {

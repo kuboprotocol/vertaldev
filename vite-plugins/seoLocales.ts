@@ -15,6 +15,7 @@ import { ALTERNATIVES, type Alternative } from "../src/config/alternatives";
 import { ROOT_LOCALE } from "../src/config/locales";
 import { SEO_LOCALES, type LocaleSeo } from "../src/config/seoLocales";
 import { DESCRIPTION_MAX, TITLE_MAX, clampText } from "../src/config/seo";
+import { VIBE_PAY, VIBE_PAY_COPY, vibePayPath } from "../src/config/vibePay";
 
 /** Ferramentas citadas nos títulos dos índices ({names}). */
 const TOP_NAMES = "Lovable, Replit, Cursor, Vercel";
@@ -161,7 +162,9 @@ ${body}
       <div>${esc(l.languages)}</div>
       <nav class="langs" aria-label="${esc(l.languages)}">${langSwitcher(origin, key, l.lang)}</nav>
       <p class="small">${esc(fill(l.notice))}</p>
-      <p class="small">© ${BRAND.company} · <a href="${origin}/">${BRAND.domain}</a></p>
+      <p class="small">© ${BRAND.company} · <a href="${origin}/">${BRAND.domain}</a> · <a href="${origin}${vibePayPath(
+        VIBE_PAY_COPY.some((c) => c.code === l.code) ? l.code : "en",
+      )}">${esc(VIBE_PAY.name)}</a></p>
     </footer>
   </body>
 </html>

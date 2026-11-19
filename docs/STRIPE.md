@@ -4,6 +4,10 @@ Como o Vertal Dev cobra com o Stripe: a conta da plataforma, o Stripe Connect
 da Carteira (perfil → Carteira), as Edge Functions, os secrets, os webhooks e o
 que falta para ir para produção.
 
+> A Carteira agora se chama **Vertal Vibe Pay** (`/pay`, antes `/bank`; landing pública em `/vibe-pay`) e também usa o ASAAS.
+> Veja `docs/VERTAL_BANK.md` para a conta global (país do titular, saldos
+> multimoeda, saques) e a conta Brasil (Pix, boleto, subcontas ASAAS).
+
 ## 1. Conta da plataforma
 
 | Campo | Valor |
@@ -28,7 +32,8 @@ Cada usuário pode ativar recebimentos na Carteira. O fluxo fica todo em
 
 1. **Ativar com Stripe** → `connect-onboard`.
 2. Sem conta vinculada, a função tenta **adotar uma conta existente** (ver §6);
-   se não achar, cria uma conta `type: "express"`, `country: "BR"`, com
+   se não achar, cria uma conta `type: "express"` no país escolhido
+   (`country`, padrão `BR`; lista em `src/lib/bank/countries.ts`), com
    `card_payments` e `transfers` e `metadata.supabase_user_id`, e grava em
    `connected_accounts`.
 3. Devolve um **account link** (`account_onboarding`) com

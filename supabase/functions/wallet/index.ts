@@ -1,4 +1,6 @@
-// Edge Function: carteira do perfil (cartões de crédito/débito e chaves Pix).
+// Edge Function: Vertal Vibe Pay (antiga "Carteira") — cartões, Pix, conta global
+// Stripe Connect e conta ASAAS. O nome `wallet` da função foi mantido por
+// compatibilidade (app, deploy e webhooks já apontam para ele).
 //
 // POST /functions/v1/wallet  body: { action, ... }
 //   list                                   -> { cards, pix, publishableKey }
@@ -10,6 +12,8 @@
 //   remove        { id }
 //   connect-status | connect-onboard | connect-dashboard
 //   connect-charge { amount, currency, description? }
+//   connect-onboard { country?, returnPath? }  (conta global: país do titular)
+//   bank-* / asaas-*                       -> ver ./bank.ts (e-bank Stripe + ASAAS)
 //
 // Cartões nunca chegam aqui: o número é digitado no Stripe Elements e vira um
 // PaymentMethod do Customer do Stripe. Guardamos só a referência e os dados de
@@ -17,6 +21,9 @@
 // Chaves Pix são cifradas com CONNECTOR_ENC_KEY (AES-GCM).
 
 import { createClient } from "npm:@supabase/supabase-js@^2";
+import { handleBankAction, BANK_ACTIONS } from "./bank.ts";
+import { asaasEnv, asaasEnvFromKey, asaasBaseUrl } from "../_shared/asaas.ts";
+import { findConnectCountry } from "../_shared/bankCountries.ts";
 import Stripe from "npm:stripe@^14";
 import { createStaticPix, hasError } from "npm:pix-utils@^2.8.2";
 import { encryptSecret, decryptSecret } from "../_shared/connectorCrypto.ts";
@@ -115,6 +122,30 @@ function toPix(r: Row) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  // Diagnóstico sem segredos (só nomes de ambiente e se está configurado).
+  if (req.method === "GET" && new URL(req.url).searchParams.get("health") === "1") {
+    const asaasKey = Deno.env.get("ASAAS_API_KEY");
+    const health: Row = {
+      ok: true,
+      stripeCardMode: Deno.env.get("STRIPE_PUBLISHABLE_KEY") ? "elements" : "hosted_checkout",
+      asaasConfigured: Boolean(asaasKey),
+      asaasEnv: asaasEnv(),
+      asaasEnvSource: Deno.env.get("ASAAS_ENV") ? "ASAAS_ENV" : asaasEnvFromKey(asaasKey) ? "key_prefix" : "default",
+    };
+    // ?probe=1: testa a chave nos dois ambientes (GET /myAccount/status) e diz qual aceita.
+    if (asaasKey && new URL(req.url).searchParams.get("probe") === "1") {
+      const probe: Row = {};
+      for (const env of ["production", "sandbox"] as const) {
+        try {
+          const r = await fetch(`${asaasBaseUrl(env)}/myAccount/status`, { headers: { access_token: asaasKey, "User-Agent": "VERTAL-Pay/1.0" } });
+          probe[env] = r.status;
+          await r.body?.cancel();
+        } catch { probe[env] = "network_error"; }
+      }
+      health.asaasProbe = probe;
+    }
+    return json(health);
+  }
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
   const authHeader = req.headers.get("Authorization") ?? "";
@@ -155,6 +186,16 @@ Deno.serve(async (req) => {
     const { data: profile } = await db
       .from("profiles").select("stripe_customer_id, display_name").eq("id", user.id).maybeSingle();
     let customerId = (profile as Row | null)?.stripe_customer_id as string | undefined;
+    // Customer apagado no Stripe ou criado em outro modo (test x live): cria outro.
+    if (customerId) {
+      try {
+        const c = await stripe.customers.retrieve(customerId);
+        if ((c as Stripe.DeletedCustomer).deleted) customerId = undefined;
+      } catch (e) {
+        if ((e as { code?: string }).code === "resource_missing") customerId = undefined;
+        else throw e;
+      }
+    }
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: user.email ?? undefined,
@@ -188,9 +229,27 @@ Deno.serve(async (req) => {
     // ── Cartão: iniciar (SetupIntent) ─────────────────────────────────────
     if (action === "card-setup") {
       if ((await countKind("card")) >= MAX_ITEMS_PER_KIND) return json({ error: "limit_reached" }, 400);
-      if (!publishableKey) return json({ error: "STRIPE_PUBLISHABLE_KEY not configured" }, 500);
       const stripe = stripeClient();
       const customer = await getOrCreateCustomer(stripe);
+      // Sem chave publicável (pk_…), o Payment Element não carrega. Em vez de
+      // falhar, usa a página hospedada do Stripe (Checkout em modo "setup"):
+      // o número do cartão continua indo só para o Stripe (PCI SAQ A) e a volta
+      // (`?setup_session=cs_…`) conclui o card-attach.
+      if (!publishableKey || body.hosted === true) {
+        const origin = appOrigin(req);
+        const back = body.returnPath === "/pay" || body.returnPath === "/bank" ? "/pay?tab=cartoes&" : "/profile?";
+        const session = await stripe.checkout.sessions.create({
+          mode: "setup",
+          customer,
+          payment_method_types: ["card"],
+          locale: "pt-BR",
+          setup_intent_data: { metadata: { supabase_user_id: user.id, source: "wallet" } },
+          metadata: { supabase_user_id: user.id, source: "wallet" },
+          success_url: `${origin}${back}setup_session={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${origin}${back}setup_session=cancelled`,
+        });
+        return json({ checkoutUrl: session.url, hosted: true, publishableKey: null });
+      }
       const intent = await stripe.setupIntents.create({
         customer,
         payment_method_types: ["card"],
@@ -202,11 +261,23 @@ Deno.serve(async (req) => {
 
     // ── Cartão: concluir (depois do confirmSetup no navegador) ────────────
     if (action === "card-attach") {
-      const setupIntentId = String(body.setupIntentId ?? "");
-      if (!/^seti_[A-Za-z0-9]+$/.test(setupIntentId)) return json({ error: "invalid_setup_intent" }, 400);
-
       const stripe = stripeClient();
-      const customer = await getOrCreateCustomer(stripe);
+      let setupIntentId = String(body.setupIntentId ?? "");
+      const checkoutSessionId = String(body.checkoutSessionId ?? "");
+      let customer: string | undefined;
+      if (checkoutSessionId) {
+        // Volta do Checkout hospedado (modo setup): o SetupIntent vem da sessão.
+        if (!/^cs_(live|test)_[A-Za-z0-9]+$/.test(checkoutSessionId)) return json({ error: "invalid_setup_intent" }, 400);
+        customer = await getOrCreateCustomer(stripe);
+        const session = await stripe.checkout.sessions.retrieve(checkoutSessionId);
+        if (session.mode !== "setup" || session.customer !== customer || session.metadata?.supabase_user_id !== user.id) {
+          return json({ error: "forbidden" }, 403);
+        }
+        if (session.status !== "complete") return json({ error: `setup_${session.status ?? "open"}` }, 400);
+        setupIntentId = typeof session.setup_intent === "string" ? session.setup_intent : session.setup_intent?.id ?? "";
+      }
+      if (!/^seti_[A-Za-z0-9]+$/.test(setupIntentId)) return json({ error: "invalid_setup_intent" }, 400);
+      customer ??= await getOrCreateCustomer(stripe);
       const intent = await stripe.setupIntents.retrieve(setupIntentId, { expand: ["payment_method"] });
       if (intent.customer !== customer || intent.metadata?.supabase_user_id !== user.id) {
         return json({ error: "forbidden" }, 403);
@@ -383,6 +454,8 @@ Deno.serve(async (req) => {
         requirements_disabled_reason: r?.disabled_reason ?? null,
         requirements_due: Array.from(new Set([...(r?.past_due ?? []), ...(r?.currently_due ?? [])])),
         status_synced_at: new Date().toISOString(),
+        country: a.country ?? null,
+        default_currency: a.default_currency ?? null,
       } as Row).eq("stripe_account_id", a.id).eq("user_id", user.id);
       if (error) console.warn("wallet: sync de connected_accounts falhou", error.message);
     };
@@ -423,15 +496,21 @@ Deno.serve(async (req) => {
       return byEmail.id;
     };
 
+    // Volta para /pay (Vertal Vibe Pay; /bank, antiga, também é aceita) ou /profile.
+    const returnPath = body.returnPath === "/pay" || body.returnPath === "/bank" ? "/pay" : "/profile";
     const accountLink = (stripe: Stripe, accountId: string, type: "account_onboarding" | "account_update" = "account_onboarding") => {
       const origin = appOrigin(req);
       return stripe.accountLinks.create({
         account: accountId,
         type,
-        refresh_url: `${origin}/profile?wallet=connect-refresh`,
-        return_url: `${origin}/profile?wallet=connect-return`,
+        refresh_url: `${origin}${returnPath}?wallet=connect-refresh`,
+        return_url: `${origin}${returnPath}?wallet=connect-return`,
       });
     };
+
+    if (BANK_ACTIONS.has(action)) {
+      return await handleBankAction(action, { req, user, db, body, json, stripeClient, getConnected });
+    }
 
     if (action === "connect-status") {
       const stripe = stripeClient();
@@ -483,9 +562,13 @@ Deno.serve(async (req) => {
       const stripe = stripeClient();
       let accountId = (await getConnected()) ?? (await adoptExisting(stripe));
       if (!accountId) {
+        // Conta global: o titular escolhe o país (padrão BR). O país precisa
+        // estar habilitado em Connect → Settings → Onboarding no Stripe.
+        const country = findConnectCountry(body.country ?? "BR");
+        if (!country) return json({ error: "invalid_country" }, 400);
         const a = await stripe.accounts.create({
           type: "express",
-          country: "BR",
+          country: country.code,
           email: user.email ?? undefined,
           capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
           metadata: { supabase_user_id: user.id, platform_cnpj: PLATFORM_CNPJ, source: "wallet" },
@@ -493,6 +576,7 @@ Deno.serve(async (req) => {
         accountId = a.id;
         const { error } = await db.from("connected_accounts").insert({
           user_id: user.id, stripe_account_id: a.id, contact_email: user.email ?? null,
+          country: a.country ?? country.code, default_currency: a.default_currency ?? null,
         });
         if (error) throw error;
       }

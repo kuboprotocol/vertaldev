@@ -78,6 +78,10 @@ export default defineConfig(({ command, mode }) => {
             /\/[^/]+\.[a-z0-9]+$/i,
             new RegExp(`^/(${LOCALE_CODES.join('|')})(/|$)`),
             /^\/photocraft(\/|$)/,
+            // Landing estática do Vertal Vibe Pay (vibe-pay.html, gerada no build).
+            /^\/vibe-pay(\/|$)/,
+            // URLs antigas (/vibe-bank, /vertal-vibe-bank): o Worker responde 301 para /vibe-pay.
+            /^\/(vertal-)?vibe-bank(\/|$)/,
             // figCraft: mesmo motivo do photocraft (editor WebAssembly em public/figcraft).
             /^\/figcraft(\/|$)/,
             // API do Worker (ex.: /api/spotify/callback, volta do OAuth do Spotify): precisa

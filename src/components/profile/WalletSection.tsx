@@ -5,6 +5,7 @@ import {
   Lock, BadgeCheck, Fingerprint, MoreHorizontal, ArrowUpRight, Link2, Clock, CircleCheck, CircleX, Sparkles,
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
+import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -152,7 +153,12 @@ function Skeleton() {
   return <div className="aspect-[1.586] w-full animate-pulse rounded-2xl bg-muted/50" />
 }
 
-export default function WalletSection() {
+/**
+ * Vertal Vibe Pay — cartões e Pix (antiga "Carteira").
+ * variant="profile": bloco no perfil, com atalho para /pay.
+ * variant="bank": aba "Cartões e Pix" dentro do /pay.
+ */
+export default function WalletSection({ variant = 'profile' }: { variant?: 'profile' | 'bank' } = {}) {
   const [loading, setLoading] = useState(true)
   const [cards, setCards] = useState<WalletCard[]>([])
   const [pix, setPix] = useState<WalletPix[]>([])
@@ -168,13 +174,41 @@ export default function WalletSection() {
       setCards(data.cards)
       setPix(data.pix)
     } catch (e) {
-      toast.error((e as Error).message || 'Erro ao carregar a carteira')
+      toast.error((e as Error).message || 'Erro ao carregar o Vertal Vibe Pay')
     } finally {
       setLoading(false)
     }
   }, [])
 
   useEffect(() => { refresh() }, [refresh])
+
+  // Volta de um redirecionamento do Stripe (3D Secure / autenticação do banco)
+  // no cadastro de cartão: conclui o card-attach que o navegador não chegou a fazer.
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    const seti = url.searchParams.get('setup_intent')
+    const status = url.searchParams.get('redirect_status')
+    const setupSession = url.searchParams.get('setup_session')
+    if (!seti && !setupSession) return
+    ;['setup_intent', 'setup_intent_client_secret', 'redirect_status', 'wallet', 'setup_session'].forEach((k) => url.searchParams.delete(k))
+    window.history.replaceState(null, '', url.pathname + (url.search ? url.search : '') + url.hash)
+    // Volta da página hospedada do Stripe (sem chave publicável configurada).
+    if (setupSession) {
+      if (!setupSession.startsWith('cs_')) { toast.message('Cadastro do cartão cancelado.'); return }
+      walletApi.cardAttachSession(setupSession)
+        .then(() => { toast.success('Cartão adicionado!'); refresh() })
+        .catch((e) => { if (!/já está/.test((e as Error).message)) toast.error((e as Error).message); refresh() })
+      return
+    }
+    if (!seti) return
+    if (status !== 'succeeded') {
+      toast.error('O banco não autorizou o cartão. Tente outro cartão.')
+      return
+    }
+    walletApi.cardAttach(seti)
+      .then(() => { toast.success('Cartão adicionado!'); refresh() })
+      .catch((e) => { if (!/já está/.test((e as Error).message)) toast.error((e as Error).message); refresh() })
+  }, [refresh])
 
   const run = async (id: string, fn: () => Promise<unknown>, ok: string) => {
     setBusyId(id)
@@ -207,10 +241,19 @@ export default function WalletSection() {
             <Wallet className="h-5 w-5 text-primary-foreground" />
           </span>
           <div>
-            <h3 id="wallet-title" className="font-display text-lg font-semibold text-foreground">Carteira</h3>
-            <p className="text-sm text-muted-foreground">Cartões e Pix para pagar e receber no Vertal Dev</p>
+            <h3 id="wallet-title" className="font-display text-lg font-semibold text-foreground">
+              {variant === 'bank' ? 'Cartões e Pix' : <>VERTAL VIBE <span className="text-primary">PAY</span></>}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {variant === 'bank' ? 'Seus cartões salvos e chaves Pix' : 'Conta Brasil, conta global, cartões e Pix no Vertal Dev'}
+            </p>
           </div>
         </div>
+        {variant === 'profile' && (
+          <Button asChild size="sm" className="gap-1.5 gradient-primary text-primary-foreground">
+            <Link to="/pay"><ArrowUpRight className="h-4 w-4" />Abrir Vertal Vibe Pay</Link>
+          </Button>
+        )}
         <div className="flex gap-2 text-center">
           <div className="rounded-xl bg-secondary/50 px-3 py-1.5">
             <p className="font-display text-base font-bold text-foreground">{loading ? '–' : cards.length}</p>
@@ -224,10 +267,10 @@ export default function WalletSection() {
       </header>
 
       <Tabs defaultValue="cards" className="relative">
-        <TabsList className="grid h-11 w-full grid-cols-3 rounded-xl">
+        <TabsList className={`grid h-11 w-full rounded-xl ${variant === 'bank' ? 'grid-cols-2' : 'grid-cols-3'}`}>
           <TabsTrigger value="cards" className="gap-2 rounded-lg"><CreditCard className="h-4 w-4" />Cartões</TabsTrigger>
           <TabsTrigger value="pix" className="gap-2 rounded-lg"><PixLogo className="h-4 w-4" />Pix</TabsTrigger>
-          <TabsTrigger value="receive" className="gap-2 rounded-lg"><HandCoins className="h-4 w-4" />Receber</TabsTrigger>
+          {variant === 'profile' && <TabsTrigger value="receive" className="gap-2 rounded-lg"><HandCoins className="h-4 w-4" />Receber</TabsTrigger>}
         </TabsList>
 
         {/* ── Cartões ───────────────────────────────────────────── */}
@@ -368,7 +411,7 @@ export default function WalletSection() {
       <AlertDialog open={!!confirmRemove} onOpenChange={(o) => { if (!o) setConfirmRemove(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover da carteira?</AlertDialogTitle>
+            <AlertDialogTitle>Remover do Vertal Vibe Pay?</AlertDialogTitle>
             <AlertDialogDescription>
               Vamos remover {confirmRemove?.what}. Você pode adicionar de novo quando quiser.
             </AlertDialogDescription>
@@ -380,7 +423,7 @@ export default function WalletSection() {
               onClick={() => {
                 const target = confirmRemove
                 setConfirmRemove(null)
-                if (target) run(target.id, () => walletApi.remove(target.id), 'Removido da carteira')
+                if (target) run(target.id, () => walletApi.remove(target.id), 'Removido')
               }}
             >
               Remover
@@ -424,7 +467,11 @@ function ReceiveTab() {
   const go = async (kind: 'onboard' | 'dashboard') => {
     setBusy(kind)
     try {
-      const { url } = kind === 'onboard' ? await walletApi.connectOnboard() : await walletApi.connectDashboard()
+      // Conta nova: escolhe o país na conta global do Vertal Vibe Pay.
+      if (kind === 'onboard' && !account) { window.location.assign('/pay?tab=contas'); return }
+      const { url } = kind === 'onboard'
+        ? await walletApi.connectOnboard({ returnPath: '/profile' })
+        : await walletApi.connectDashboard('/profile')
       window.location.assign(url)
     } catch (e) {
       toast.error((e as Error).message)
@@ -457,7 +504,7 @@ function ReceiveTab() {
                   ? `Conta ${account?.country ?? ''} · repasse em ${account?.defaultCurrency ?? 'BRL'}${account?.payoutsEnabled ? '' : ' · saque pendente'}`
                   : account
                     ? connectPendingText(account)
-                    : 'Real, dólar, euro e mais 13 moedas, com cartão e carteiras digitais'}
+                    : 'Conta global: real, dólar, euro e mais 13 moedas, em 40+ países'}
               </p>
             </div>
           </div>
@@ -473,7 +520,7 @@ function ReceiveTab() {
           ) : (
             <Button className="gap-1.5 bg-[#635bff] text-white hover:bg-[#5249e0]" disabled={busy !== null} onClick={() => go('onboard')}>
               {busy === 'onboard' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              {account ? (account.pastDue ? 'Concluir verificação' : 'Continuar verificação') : 'Ativar com Stripe'}
+              {account ? (account.pastDue ? 'Concluir verificação' : 'Continuar verificação') : 'Abrir conta global'}
             </Button>
           )}
         </div>
@@ -683,7 +730,13 @@ function AddCardDialog({ open, onOpenChange, onAdded }: {
     setReady(false)
     ;(async () => {
       try {
-        const { clientSecret, publishableKey } = await walletApi.cardSetup()
+        const setup = await walletApi.cardSetup(['/pay', '/bank'].includes(window.location.pathname) ? '/pay' : '/profile')
+        if (setup.checkoutUrl) {
+          // Sem chave publicável: cadastro na página segura do Stripe.
+          if (!cancelled) window.location.assign(setup.checkoutUrl)
+          return
+        }
+        const { clientSecret, publishableKey } = setup as { clientSecret: string; publishableKey: string }
         const stripe = await loadStripe(publishableKey)
         if (cancelled) return
         const isDark = document.documentElement.classList.contains('dark')
@@ -720,7 +773,7 @@ function AddCardDialog({ open, onOpenChange, onAdded }: {
       const { error, setupIntent } = await stripeRef.current.confirmSetup({
         elements: elementsRef.current,
         redirect: 'if_required',
-        confirmParams: { return_url: `${window.location.origin}/profile?wallet=card` },
+        confirmParams: { return_url: `${window.location.origin}${window.location.pathname}${['/pay', '/bank'].includes(window.location.pathname) ? '?tab=cartoes' : ''}` },
       })
       if (error) throw new Error(error.message)
       await walletApi.cardAttach(setupIntent.id, label.trim() || undefined, makeDefault)
@@ -817,7 +870,7 @@ function AddPixDialog({ open, onOpenChange, onAdded }: {
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Adicionar chave Pix</DialogTitle>
-          <DialogDescription>A chave fica cifrada; na carteira aparece só a versão mascarada.</DialogDescription>
+          <DialogDescription>A chave fica cifrada; no Vertal Vibe Pay aparece só a versão mascarada.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">

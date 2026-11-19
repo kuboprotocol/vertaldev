@@ -24,6 +24,7 @@ import { SkillExecutionsList } from "@/components/creative/SkillExecutionsList";
 import { ApiStatusPanel } from "@/components/creative/ApiStatusPanel";
 import { CreativeSheets } from "@/components/CreativeSheets";
 import { OfficeSuite } from "@/components/office/OfficeSuite";
+import { VibePayPromo } from "@/components/vibepay/VibePayPromo";
 // O Notebook (pdf.js, leitor de fontes, estúdio) só carrega quando é aberto.
 const VertalNotebook = React.lazy(() => import("@/components/notebook/VertalNotebook").then((m) => ({ default: m.VertalNotebook })));
 // O Clock (relógio, alarmes, cronômetro, timer) carrega quando a aba é aberta.
@@ -1081,6 +1082,7 @@ export default function CreativePage() {
                  </span>
                  <ArrowRight className="h-5 w-5 shrink-0 text-primary transition group-hover:translate-x-0.5" aria-hidden />
                </button>
+               <VibePayPromo variant="compact" />
                <ApiStatusPanel />
                <ManusLauncher setActive={(k) => { setActive(k); navigate(k === "dashboard" ? "/creative" : `/creative/${MOVED_TO_DESIGN[k] ? "design" : k}`); }} />
                

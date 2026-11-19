@@ -14,16 +14,16 @@ import { VertalNotebook } from './VertalNotebook';
 async function createNotebookWithSource() {
   render(<VertalNotebook />);
   fireEvent.click(await screen.findByRole('button', { name: /Novo caderno/ }));
-  fireEvent.change(screen.getByLabelText('Nome do caderno'), { target: { value: 'Vibe Bank' } });
+  fireEvent.change(screen.getByLabelText('Nome do caderno'), { target: { value: 'Vibe Pay' } });
   fireEvent.click(screen.getByRole('button', { name: 'Criar caderno' }));
-  expect(await screen.findByRole('heading', { name: /Vibe Bank/ })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: /Vibe Pay/ })).toBeInTheDocument();
 
   fireEvent.click(screen.getAllByRole('button', { name: /Adicionar/ })[0]);
   const dialog = await screen.findByRole('dialog');
   fireEvent.click(within(dialog).getByRole('tab', { name: /Texto/ }));
   fireEvent.change(within(dialog).getByLabelText('Título do texto'), { target: { value: 'Whitepaper' } });
   fireEvent.change(within(dialog).getByLabelText('Texto da fonte'), {
-    target: { value: 'O Vibe Bank é a camada financeira do ecossistema KUBO, com tokens de recompensa.' },
+    target: { value: 'O Vibe Pay é a camada financeira do ecossistema KUBO, com tokens de recompensa.' },
   });
   // Sem insights automáticos neste teste.
   fireEvent.click(within(dialog).getByRole('checkbox'));
@@ -46,14 +46,14 @@ describe('Vertal Notebook', () => {
     });
     await createNotebookWithSource();
 
-    fireEvent.change(screen.getByLabelText('Pergunta para a IA'), { target: { value: 'O que é o Vibe Bank?' } });
+    fireEvent.change(screen.getByLabelText('Pergunta para a IA'), { target: { value: 'O que é o Vibe Pay?' } });
     fireEvent.click(screen.getByRole('button', { name: 'Enviar' }));
 
     const cite = await screen.findByRole('button', { name: /Citação 1: Whitepaper/ });
     expect(screen.getByText(/É a camada financeira/)).toBeInTheDocument();
     const req = runNotebookAi.mock.calls[0][0] as NotebookAiRequest;
-    expect(req.notebook?.name).toBe('Vibe Bank');
-    expect(req.messages?.at(-1)).toEqual({ role: 'user', content: 'O que é o Vibe Bank?' });
+    expect(req.notebook?.name).toBe('Vibe Pay');
+    expect(req.messages?.at(-1)).toEqual({ role: 'user', content: 'O que é o Vibe Pay?' });
 
     fireEvent.click(cite);
     const viewer = await screen.findByRole('dialog');
@@ -61,12 +61,12 @@ describe('Vertal Notebook', () => {
   });
 
   it('gera flashcards no Estúdio e mostra o cartão', async () => {
-    runNotebookAi.mockResolvedValue({ kind: 'flashcards', cards: [{ front: 'O que é o Vibe Bank?', back: 'A camada financeira' }] });
+    runNotebookAi.mockResolvedValue({ kind: 'flashcards', cards: [{ front: 'O que é o Vibe Pay?', back: 'A camada financeira' }] });
     await createNotebookWithSource();
 
     fireEvent.click(screen.getByRole('button', { name: /Flashcards/ }));
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText('O que é o Vibe Bank?')).toBeInTheDocument();
+    expect(within(dialog).getByText('O que é o Vibe Pay?')).toBeInTheDocument();
     expect(runNotebookAi.mock.calls[0][0]).toMatchObject({ action: 'study', study: 'flashcards' });
   });
 

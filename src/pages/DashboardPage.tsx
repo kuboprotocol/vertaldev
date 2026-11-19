@@ -15,7 +15,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Progress } from '@/components/ui/progress'
 import { PromoCards } from '@/components/dashboard/PromoCards'
 import CreditLedger from '@/components/CreditLedger'
-import { Gamepad2, Sparkles, Palette, Bot, NotebookPen, Mic2 } from 'lucide-react'
+import { VibePayPromo } from '@/components/vibepay/VibePayPromo'
+import { Gamepad2, Sparkles, Palette, Bot, NotebookPen, Mic2, Wallet } from 'lucide-react'
 import { useCreativeEconomyEntry } from '@/components/creative/CreativeEconomyComingSoon'
 
 interface Project {
@@ -131,6 +132,9 @@ const DashboardPage = forwardRef<HTMLDivElement, any>((props, ref) => {
             <Button variant="hero" size="sm" onClick={() => navigate('/builder')} className="rounded-xl gap-2">
               <Plus className="h-4 w-4" /> New Project
             </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate('/pay')} title="Vertal Vibe Pay" aria-label="Vertal Vibe Pay" className="rounded-xl gap-2 border-violet-400/40 text-violet-200 hover:bg-violet-500/10">
+              <Wallet className="h-4 w-4" /> Vibe Pay
+            </Button>
             <Button variant="ghost" size="icon" onClick={() => navigate('/profile')} title="Perfil" className="rounded-xl text-muted-foreground hover:text-foreground">
               <UserCircle className="h-5 w-5" />
             </Button>
@@ -184,6 +188,11 @@ const DashboardPage = forwardRef<HTMLDivElement, any>((props, ref) => {
             <p className="text-lg font-display font-bold text-foreground capitalize">{subscription?.plan ?? 'None'}</p>
             <p className="text-[10px] text-primary mt-1">Upgrade →</p>
           </div>
+        </motion.div>
+
+        {/* Divulgação: Vertal Vibe Pay */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.02 }} className="mb-8">
+          <VibePayPromo />
         </motion.div>
 
         {/* Promo Cards */}

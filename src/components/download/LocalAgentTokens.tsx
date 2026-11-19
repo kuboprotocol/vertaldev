@@ -22,7 +22,7 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('pt-
 /**
  * Tokens de longa duração do KUBO Local Agent. O usuário gera aqui, cola no
  * "KUBO: Pair this workspace" do VS Code/Cursor, e o agent passa a cobrar
- * as ações de IA direto no saldo do Vibe Bank — sem expirar em 1h como o
+ * as ações de IA direto no saldo do Vibe Pay — sem expirar em 1h como o
  * token de sessão.
  */
 export default function LocalAgentTokens() {

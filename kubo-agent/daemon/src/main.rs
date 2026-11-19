@@ -298,7 +298,7 @@ async fn ai(
     }
 }
 
-/// GET /balance — saldo atual no Vibe Bank + últimos gastos do agent local.
+/// GET /balance — saldo atual no Vibe Pay + últimos gastos do agent local.
 async fn balance(State(state): State<AppState>, headers: HeaderMap) -> (StatusCode, Json<serde_json::Value>) {
     if !check_secret(&state, &headers) {
         return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "ok": false, "error": "invalid_secret" })));

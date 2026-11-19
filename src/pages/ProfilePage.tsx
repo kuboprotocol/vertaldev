@@ -13,6 +13,7 @@ import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 import { AFFILIATE_RATE, formatCents, referralLink } from '@/lib/referral'
 import WalletSection from '@/components/profile/WalletSection'
+import { VibePayPromo } from '@/components/vibepay/VibePayPromo'
 
 export default function ProfilePage() {
   const navigate = useNavigate()
@@ -180,6 +181,9 @@ export default function ProfilePage() {
           transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           className="space-y-6"
         >
+          {/* Vertal Vibe Pay: atalho em destaque no topo do perfil */}
+          <VibePayPromo variant="compact" />
+
           {/* Avatar Section */}
           <div className="glass glass-border rounded-2xl p-8 flex flex-col sm:flex-row items-center gap-6">
             <div className="relative group shrink-0">

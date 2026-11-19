@@ -21,7 +21,7 @@ function with the user's **Local Agent token** (`kubo_la_...`, generated at
 kubovibe.dev/download and pasted into "KUBO: Pair this workspace"), which performs
 the atomic deduction. These tokens don't expire (only revoked), unlike the
 Supabase session JWT (~1h) the daemon used before; the JWT still works for
-agents paired the old way. `GET /balance` returns the current Vibe Bank
+agents paired the old way. `GET /balance` returns the current Vibe Pay
 balance, shown in the editor status bar — so `/admin/projects` and `/admin/teams` show local usage next to
 cloud usage automatically.
 

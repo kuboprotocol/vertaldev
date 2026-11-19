@@ -7,6 +7,7 @@
 //   checkout.session.async_payment_succeeded -> wallet_charges: paid
 //   checkout.session.async_payment_failed    -> wallet_charges: failed
 //   checkout.session.expired                 -> wallet_charges: expired
+//   payout.paid | payout.failed | payout.canceled -> bank_transactions (saques do Vertal Vibe Pay)
 //
 // Segredo de assinatura: STRIPE_CONNECT_WEBHOOK_SECRET (diferente do
 // STRIPE_WEBHOOK_SECRET do endpoint da plataforma).
@@ -83,6 +84,20 @@ Deno.serve(async (req: Request) => {
           payment_intent_id: pi,
           paid_at: status === "paid" ? new Date(event.created * 1000).toISOString() : null,
         }).eq("checkout_session_id", session.id).neq("status", "paid");
+        if (error) throw error;
+        break;
+      }
+
+      case "payout.paid":
+      case "payout.failed":
+      case "payout.canceled": {
+        const po = event.data.object as Stripe.Payout;
+        const status = event.type === "payout.paid" ? "paid" : event.type === "payout.failed" ? "failed" : "canceled";
+        const { error } = await db.from("bank_transactions").update({
+          status,
+          failure_reason: po.failure_message ?? null,
+          settled_at: status === "paid" ? new Date(event.created * 1000).toISOString() : null,
+        }).eq("provider", "stripe").eq("provider_ref", po.id);
         if (error) throw error;
         break;
       }
