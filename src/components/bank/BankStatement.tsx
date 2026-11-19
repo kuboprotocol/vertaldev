@@ -4,10 +4,11 @@ import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatMinor } from '@/lib/wallet/currency'
-import { METHOD_LABEL, TX_STATUS_LABEL, type BankTransaction, type TxStatus } from '@/lib/bank/api'
+import { METHOD_LABEL, TX_STATUS_LABEL, type BankTransaction, type TxProvider, type TxStatus } from '@/lib/bank/api'
 
 const STATUS_CLS: Record<TxStatus, string> = {
   pending: 'text-amber-400 bg-amber-400/10',
+  available: 'text-violet-300 bg-violet-400/10',
   paid: 'text-emerald-400 bg-emerald-400/10',
   failed: 'text-destructive bg-destructive/10',
   refunded: 'text-sky-400 bg-sky-400/10',
@@ -15,12 +16,18 @@ const STATUS_CLS: Record<TxStatus, string> = {
   canceled: 'text-muted-foreground bg-muted/40',
 }
 
-export function ProviderDot({ provider }: { provider: 'stripe' | 'asaas' }) {
+const PROVIDER_CLS: Record<TxProvider, string> = {
+  stripe: 'bg-[#635bff]/20 text-[#a5a0ff]',
+  asaas: 'bg-[#0030b9]/25 text-[#7ea2ff]',
+  internal: 'bg-primary/20 text-primary',
+}
+
+export function ProviderDot({ provider }: { provider: TxProvider }) {
   return (
     <span
-      className={`inline-flex h-4 items-center rounded px-1 text-[9px] font-bold uppercase tracking-wider ${provider === 'stripe' ? 'bg-[#635bff]/20 text-[#a5a0ff]' : 'bg-[#0030b9]/25 text-[#7ea2ff]'}`}
+      className={`inline-flex h-4 items-center rounded px-1 text-[9px] font-bold uppercase tracking-wider ${PROVIDER_CLS[provider] ?? PROVIDER_CLS.internal}`}
     >
-      {provider}
+      {provider === 'internal' ? 'vertal' : provider}
     </span>
   )
 }

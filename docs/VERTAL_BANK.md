@@ -364,3 +364,63 @@ rotas antigas respondem 301. Nomes internos de código/banco de dados
 (`bank-*`, `src/lib/bank`, migration `vertal_bank`) não aparecem ao usuário e
 ficaram como estão. Validar o nome final com advogado antes de divulgar
 continua recomendado.
+
+## 13. Indique e Ganhe → Vertal Vibe Pay
+
+A comissão de afiliado (**5%** de tudo que o indicado pagar: plano, renovação e
+créditos) passa a cair no Vertal Vibe Pay de quem indicou.
+
+**Antes (até 19/11/2026):** `record_affiliate_commission` só gravava a comissão
+em `affiliate_commissions` com status `pending`, em USD (moeda da compra). Nada
+pagava: não havia repasse.
+
+**Agora** (migration `20261119200000_referral_commission_vibe_pay.sql`,
+código em `supabase/functions/_shared/referralCommission.ts` (regras) e
+`referralPayout.ts` (I/O)):
+
+1. **Valor:** o `stripe-webhook` busca o `balance_transaction` da cobrança e
+   calcula 5% do valor **liquidado em BRL** na conta da plataforma (câmbio do
+   Stripe). Sem isso, cai no valor/moeda da compra (e não é repassado).
+2. **Extrato:** cada comissão cria uma linha em `bank_transactions`
+   (`method = 'referral'`, `provider = 'internal'`, descrição "Indique e
+   Ganhe", `provider_ref = 'referral:<sessão/fatura>'`). Idempotente:
+   `affiliate_commissions.source_ref` único + `(provider, provider_ref)` único;
+   a linha só nasce quando a comissão é nova.
+3. **Carência:** `available_at` = pagamento + `REFERRAL_HOLD_DAYS` (padrão 30,
+   igual ao prazo de liberação do Stripe BR desta conta), ou a data de
+   liberação do Stripe se for depois.
+4. **Repasse (dinheiro real):**
+   - **Stripe Connect** (conta BR, `charges_enabled` + `payouts_enabled`):
+     `transfers.create` da plataforma, em BRL, com `source_transaction` = a
+     cobrança do indicado (o Stripe só libera quando a cobrança liquida) e
+     `transfer_group = referral_<id>`, chave de idempotência
+     `referral-commission-<id>`. Marca "paga" quando a carência termina.
+   - **ASAAS** (subconta aprovada): depois da carência, `POST /v3/transfers`
+     `{ value, walletId }` com a chave da **conta-pai**, se ela tiver saldo.
+     Desliga com `REFERRAL_ASAAS_PAYOUTS_ENABLED=false`.
+   - **Sem conta:** depois da carência a linha fica **"Disponível"** e sai
+     sozinha quando o titular abre a conta (`account.updated` no
+     `stripe-connect-webhook`, `ACCOUNT_STATUS_*` aprovado no `asaas-webhook`)
+     ou na varredura diária.
+5. **Estorno** (`charge.refunded` no endpoint da plataforma): reduz a comissão
+   na proporção do estorno; se já foi transferida pelo Stripe, faz
+   `transfers.createReversal` da diferença. Transferência ASAAS não tem estorno
+   automático: grava `payout_error = asaas_clawback_due:<centavos>` para revisão.
+6. **Varredura diária:** `pg_cron` `referral-commission-sweep` (09:15 UTC)
+   → `public.kick_referral_sweep()` → `POST stripe-connect-webhook?task=referral-sweep`
+   com header `x-referral-sweep-secret` (Vault `referral_sweep_secret` ==
+   secret `REFERRAL_SWEEP_SECRET`, 32+ caracteres).
+7. **Tela:** extrato mostra "Indique e Ganhe" (selo "vertal" até o repasse);
+   status novo "Disponível"; o saldo do Vibe Pay soma as comissões ainda não
+   repassadas em "A liberar"; cartão "Indique e Ganhe" na aba Início; a página
+   de afiliados e o Perfil mostram "Comissões caem no seu Vertal Vibe Pay" com
+   link para `/pay`, valores em reais.
+
+**Para ir ao ar:** aplicar a migration; publicar `stripe-webhook`,
+`stripe-connect-webhook`, `asaas-webhook` e `wallet`; criar o secret
+`REFERRAL_SWEEP_SECRET` e o mesmo valor no Vault (`select
+vault.create_secret('<valor>', 'referral_sweep_secret');`); chave restrita do
+Stripe com **Transfers (escrita)** e **Charges / PaymentIntents / Invoices
+(leitura)**; assinar `charge.refunded` no endpoint da plataforma; para ASAAS,
+manter saldo na conta-pai e checar se transferências exigem autorização
+(SMS/validação por webhook).

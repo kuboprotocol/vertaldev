@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@^2";
 import Stripe from "npm:stripe@^14";
+import { recordReferralCommission, handleChargeRefunded } from "../_shared/referralPayout.ts";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
   // Versão de API usada em produção; os tipos do stripe@14 só listam 2023-10-16.
@@ -9,7 +10,8 @@ const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET")!;
 const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, stripe-signature" };
 const BUSINESS_PLANS = ["business_1","business_2","business_3","business_4","business_5","business_6","business_7","enterprise"];
 
-// Afiliação: 5% do valor pago vai para quem indicou o pagador (se houver).
+// Afiliação (Indique e Ganhe): 5% do valor pago vai para o Vertal Vibe Pay de
+// quem indicou o pagador (se houver). Ver _shared/referralPayout.ts.
 // Nunca derruba o webhook: o pagamento já foi aplicado antes disto.
 async function recordAffiliateCommission(
   // deno-lint-ignore no-explicit-any
@@ -19,22 +21,13 @@ async function recordAffiliateCommission(
   sourceRef: string,
   amountCents: number | null | undefined,
   currency: string | null | undefined,
+  settlementRef?: { paymentIntent?: string | null; invoice?: string | null; charge?: string | null },
 ) {
-  if (!amountCents || amountCents <= 0) return;
-  try {
-    const { data, error } = await supabase.rpc("record_affiliate_commission", {
-      _referred_id: referredId,
-      _source: source,
-      _source_ref: sourceRef,
-      _amount_cents: amountCents,
-      _currency: currency ?? "usd",
-    });
-    if (error) console.warn("affiliate commission failed:", error.message);
-    else if (Number(data) > 0) console.log(`💸 Affiliate commission ${data} cents (${source} ${sourceRef})`);
-  } catch (e) {
-    console.warn("affiliate commission failed:", e);
-  }
+  await recordReferralCommission(supabase, stripe, { referredId, source, sourceRef, amountMinor: amountCents, currency, settlementRef });
 }
+
+const idOf = (v: unknown): string | null =>
+  typeof v === "string" ? v : (v && typeof v === "object" && "id" in v ? String((v as { id: string }).id) : null);
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -83,7 +76,7 @@ Deno.serve(async (req: Request) => {
           return new Response("Topup failed", { status: 500 });
         }
         console.log(`✅ Credit top-up: ${credits} credits for user ${userId}`);
-        await recordAffiliateCommission(supabase, userId, "credit_topup", session.id, session.amount_total, session.currency);
+        await recordAffiliateCommission(supabase, userId, "credit_topup", session.id, session.amount_total, session.currency, { paymentIntent: idOf(session.payment_intent), invoice: idOf(session.invoice) });
         return new Response(JSON.stringify({ received: true }), { headers: { "Content-Type": "application/json" } });
       }
 
@@ -115,7 +108,7 @@ Deno.serve(async (req: Request) => {
         } catch (e) { console.warn("partnership email failed:", e); }
       }
       console.log(`✅ Plan activated: ${plan} (${period}) for user ${userId}`);
-      await recordAffiliateCommission(supabase, userId, "subscription", session.id, session.amount_total, session.currency);
+      await recordAffiliateCommission(supabase, userId, "subscription", session.id, session.amount_total, session.currency, { paymentIntent: idOf(session.payment_intent), invoice: idOf(session.invoice) });
     }
 
     if (event.type === "customer.subscription.deleted") {
@@ -136,10 +129,16 @@ Deno.serve(async (req: Request) => {
           await supabase.from("subscriptions").update({ is_active: true, paid_at: new Date().toISOString(), updated_at: new Date().toISOString() } as any).eq("user_id", userId);
           // A primeira fatura já gerou comissão no checkout.session.completed.
           if (invoice.billing_reason !== "subscription_create") {
-            await recordAffiliateCommission(supabase, userId, "renewal", invoice.id, invoice.amount_paid, invoice.currency);
+            await recordAffiliateCommission(supabase, userId, "renewal", invoice.id, invoice.amount_paid, invoice.currency, { charge: idOf((invoice as any).charge), paymentIntent: idOf((invoice as any).payment_intent) });
           }
         }
       }
+    }
+
+    // Estorno de compra de um indicado: reduz/anula a comissão (e reverte o
+    // transfer Stripe, se já saiu).
+    if (event.type === "charge.refunded") {
+      await handleChargeRefunded(supabase, stripe, event.data.object as Stripe.Charge);
     }
   } catch (err: any) {
     console.error("Webhook error:", err);

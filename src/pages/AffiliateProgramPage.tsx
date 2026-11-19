@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Gift, Zap, BarChart3, Loader2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Gift, Zap, BarChart3, Loader2, Wallet } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -10,23 +10,20 @@ import AnimatedLogo from '@/components/branding/AnimatedLogo'
 import AffiliateInstallsManager from '@/components/affiliate/AffiliateInstallsManager'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
-import { AFFILIATE_RATE, formatCents } from '@/lib/referral'
-
-interface CommissionSummary {
-  pending: number
-  paid: number
-  total: number
-}
+import {
+  AFFILIATE_RATE,
+  REFERRAL_PAYOUT_ROUTE,
+  formatCommissionTotals,
+  summarizeCommissions,
+  type CommissionRow,
+  type CommissionTotals,
+} from '@/lib/referral'
 
 export default function AffiliateProgramPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const [loading, setLoading] = useState(true)
-  const [commissions, setCommissions] = useState<CommissionSummary>({
-    pending: 0,
-    paid: 0,
-    total: 0,
-  })
+  const [commissions, setCommissions] = useState<CommissionTotals[]>([])
 
   useEffect(() => {
     if (!user) return
@@ -37,23 +34,12 @@ export default function AffiliateProgramPage() {
     try {
       const { data, error } = await supabase
         .from('affiliate_commissions' as never)
-        .select('commission_cents, status')
+        .select('commission_cents, status, currency, commission_currency')
         .eq('affiliate_id', user!.id)
 
       if (error) throw error
 
-      const stats = (data as Array<{ commission_cents: number; status: string }>).reduce(
-        (acc, c) => {
-          acc.total += c.commission_cents
-          if (c.status === 'paid') acc.paid += c.commission_cents
-          else if (c.status === 'pending' || c.status === 'approved')
-            acc.pending += c.commission_cents
-          return acc
-        },
-        { pending: 0, paid: 0, total: 0 }
-      )
-
-      setCommissions(stats)
+      setCommissions(summarizeCommissions((data ?? []) as unknown as CommissionRow[]))
     } catch (e: any) {
       toast.error(`Erro ao carregar comissões: ${e.message}`)
     } finally {
@@ -83,6 +69,28 @@ export default function AffiliateProgramPage() {
           transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           className="space-y-8"
         >
+          {/* Comissões → Vertal Vibe Pay */}
+          <div
+            className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-primary/25 bg-primary/5 p-5"
+            data-testid="affiliate-vibe-pay"
+          >
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                <Wallet className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="font-semibold text-foreground">Comissões caem no seu Vertal Vibe Pay</p>
+                <p className="text-sm text-muted-foreground">
+                  {AFFILIATE_RATE * 100}% de cada compra paga por quem você indicou, em reais, liberados após 30 dias
+                  (prazo de estorno). Sem conta aberta, o valor fica guardado e cai assim que você abrir.
+                </p>
+              </div>
+            </div>
+            <Button onClick={() => navigate(REFERRAL_PAYOUT_ROUTE)} className="gap-2">
+              Abrir Vibe Pay <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+
           {/* Overview Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <motion.div
@@ -103,7 +111,7 @@ export default function AffiliateProgramPage() {
                   ) : (
                     <>
                       <p className="text-2xl font-display font-bold text-foreground">
-                        {formatCents(commissions.pending)}
+                        {formatCommissionTotals(commissions, 'pending')}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         {AFFILIATE_RATE * 100}% das vendas de quem você indicou
@@ -132,10 +140,10 @@ export default function AffiliateProgramPage() {
                   ) : (
                     <>
                       <p className="text-2xl font-display font-bold text-foreground">
-                        {formatCents(commissions.paid)}
+                        {formatCommissionTotals(commissions, 'paid')}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Já transferidas para sua conta
+                        Já transferidas para seu Vertal Vibe Pay
                       </p>
                     </>
                   )}
@@ -161,7 +169,7 @@ export default function AffiliateProgramPage() {
                   ) : (
                     <>
                       <p className="text-2xl font-display font-bold text-foreground">
-                        {formatCents(commissions.total)}
+                        {formatCommissionTotals(commissions, 'total')}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         De todas as vendas do programa

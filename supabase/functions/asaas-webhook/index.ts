@@ -5,7 +5,7 @@
 //
 //   PAYMENT_*                 -> bank_transactions (cobranças Pix/boleto/cartão/link)
 //   TRANSFER_*                -> bank_transactions (Pix de saída)
-//   ACCOUNT_STATUS_*          -> bank_asaas_accounts.status
+//   ACCOUNT_STATUS_*          -> bank_asaas_accounts.status (+ repasse do Indique e Ganhe se aprovada)
 //
 // Autenticação: header `asaas-access-token` == ASAAS_WEBHOOK_TOKEN
 // (comparação em tempo constante). Sem o secret, responde 503 e não processa.
@@ -15,6 +15,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@^2";
 import { mapPaymentStatus, mapTransferStatus } from "../_shared/asaas.ts";
+import { sweepReferralCommissions } from "../_shared/referralPayout.ts";
 
 type Row = Record<string, any>;
 
@@ -126,6 +127,11 @@ Deno.serve(async (req) => {
         status_synced_at: new Date().toISOString(),
       }).eq("asaas_account_id", String(s.id));
       if (error) throw error;
+      // Conta aprovada: comissões do Indique e Ganhe que esperavam uma conta saem agora.
+      if (status === "approved") {
+        const { data: acc } = await db.from("bank_asaas_accounts").select("user_id").eq("asaas_account_id", String(s.id)).maybeSingle();
+        if (acc?.user_id) await sweepReferralCommissions(db, null, { userId: acc.user_id, limit: 100 });
+      }
     } else {
       console.log(`asaas-webhook: unhandled ${event} (${eventId})`);
     }

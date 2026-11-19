@@ -11,7 +11,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useAvatarUrl } from '@/hooks/useAvatarUrl'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
-import { AFFILIATE_RATE, formatCents, referralLink } from '@/lib/referral'
+import { AFFILIATE_RATE, formatCommissionTotals, referralLink, summarizeCommissions, type CommissionRow, type CommissionTotals } from '@/lib/referral'
 import WalletSection from '@/components/profile/WalletSection'
 import { VibePayPromo } from '@/components/vibepay/VibePayPromo'
 
@@ -29,8 +29,7 @@ export default function ProfilePage() {
   const [referralCount, setReferralCount] = useState(0)
   const [referralCredits, setReferralCredits] = useState(0)
   const [copied, setCopied] = useState(false)
-  const [commissionPending, setCommissionPending] = useState(0)
-  const [commissionPaid, setCommissionPaid] = useState(0)
+  const [commissionTotals, setCommissionTotals] = useState<CommissionTotals[]>([])
 
   useEffect(() => {
     if (!user) return
@@ -44,7 +43,7 @@ export default function ProfilePage() {
       supabase.rpc('get_my_referral_code'),
       supabase
         .from('affiliate_commissions' as never)
-        .select('commission_cents, status')
+        .select('commission_cents, status, currency, commission_currency')
         .eq('affiliate_id', user!.id),
     ])
 
@@ -57,11 +56,7 @@ export default function ProfilePage() {
       setReferralCount(referralsRes.data.length)
       setReferralCredits(referralsRes.data.reduce((sum, r) => sum + Number(r.credits_awarded), 0))
     }
-    const commissions = ((commissionsRes.data ?? []) as unknown) as Array<{ commission_cents: number; status: string }>
-    setCommissionPaid(commissions.filter((c) => c.status === 'paid').reduce((sum, c) => sum + c.commission_cents, 0))
-    setCommissionPending(
-      commissions.filter((c) => c.status === 'pending' || c.status === 'approved').reduce((sum, c) => sum + c.commission_cents, 0),
-    )
+    setCommissionTotals(summarizeCommissions(((commissionsRes.data ?? []) as unknown) as CommissionRow[]))
     setLoading(false)
   }
 
@@ -334,8 +329,9 @@ export default function ProfilePage() {
                   <Gift className="h-4 w-4 text-primary" />
                   <span className="text-xs text-muted-foreground">Comissões de afiliado ({AFFILIATE_RATE * 100}%)</span>
                 </div>
-                <p className="text-2xl font-display font-bold text-foreground">{formatCents(commissionPending)}</p>
-                <p className="text-[11px] text-muted-foreground">a receber · {formatCents(commissionPaid)} já pagos</p>
+                <p className="text-2xl font-display font-bold text-foreground">{formatCommissionTotals(commissionTotals, 'pending')}</p>
+                <p className="text-[11px] text-muted-foreground">a receber · {formatCommissionTotals(commissionTotals, 'paid')} já pagos</p>
+                <button type="button" onClick={() => navigate('/pay')} className="mt-1 text-[11px] text-primary hover:underline">Comissões caem no seu Vertal Vibe Pay</button>
               </div>
             </div>
 
