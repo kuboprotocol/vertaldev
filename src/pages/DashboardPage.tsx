@@ -15,7 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Progress } from '@/components/ui/progress'
 import { PromoCards } from '@/components/dashboard/PromoCards'
 import CreditLedger from '@/components/CreditLedger'
-import { Gamepad2, Sparkles, Palette, Bot, NotebookPen, Mic2 } from 'lucide-react'
+import { Gamepad2, Sparkles, Palette, Bot, NotebookPen, Mic2, Landmark } from 'lucide-react'
 import { useCreativeEconomyEntry } from '@/components/creative/CreativeEconomyComingSoon'
 
 interface Project {
@@ -130,6 +130,9 @@ const DashboardPage = forwardRef<HTMLDivElement, any>((props, ref) => {
             </Button>
             <Button variant="hero" size="sm" onClick={() => navigate('/builder')} className="rounded-xl gap-2">
               <Plus className="h-4 w-4" /> New Project
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => navigate('/bank')} title="VERTAL Bank" aria-label="VERTAL Bank" className="rounded-xl text-muted-foreground hover:text-foreground">
+              <Landmark className="h-5 w-5" />
             </Button>
             <Button variant="ghost" size="icon" onClick={() => navigate('/profile')} title="Perfil" className="rounded-xl text-muted-foreground hover:text-foreground">
               <UserCircle className="h-5 w-5" />

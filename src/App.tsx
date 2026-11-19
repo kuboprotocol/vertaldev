@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { lazy, Suspense, forwardRef } from "react";
@@ -30,6 +30,13 @@ const AlternativesPage = lazy(() => import("./pages/AlternativesPage"));
 const DownloadPage = lazy(() => import("./pages/DownloadPage"));
 const SupportPage = lazy(() => import("./pages/SupportPage"));
 const ConnectPage = lazy(() => import("./pages/ConnectPage"));
+const VertalBankPage = lazy(() => import("./pages/VertalBankPage"));
+
+/** Redireciona mantendo query string e hash (aliases do VERTAL Bank). */
+function KeepQueryRedirect({ to }: { to: string }) {
+  const { search, hash } = useLocation();
+  return <Navigate to={`${to}${search}${hash}`} replace />;
+}
 const ConnectorsHubPage = lazy(() => import("./pages/ConnectorsHubPage"));
 const ConnectorDetailPage = lazy(() => import("./pages/ConnectorDetailPage"));
 const ConnectorAboutPage = lazy(() => import("./pages/ConnectorAboutPage"));
@@ -231,6 +238,11 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
                 
                 <Route path="/connect" element={<ProtectedRoute><ConnectPage /></ProtectedRoute>} />
+                <Route path="/bank" element={<ProtectedRoute><VertalBankPage /></ProtectedRoute>} />
+                {/* Aliases do VERTAL Bank (antiga Carteira) */}
+                <Route path="/vertal-bank" element={<KeepQueryRedirect to="/bank" />} />
+                <Route path="/wallet" element={<KeepQueryRedirect to="/bank" />} />
+                <Route path="/carteira" element={<KeepQueryRedirect to="/bank" />} />
                 <Route path="/connectors" element={<ProtectedRoute><ConnectorsHubPage /></ProtectedRoute>} />
                 <Route path="/connectors/web3" element={<ProtectedRoute><ConnectorWeb3HubPage /></ProtectedRoute>} />
                 <Route path="/connectors/web3/:provider" element={<ProtectedRoute><ConnectorWeb3Page /></ProtectedRoute>} />

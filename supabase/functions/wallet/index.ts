@@ -1,4 +1,6 @@
-// Edge Function: carteira do perfil (cartões de crédito/débito e chaves Pix).
+// Edge Function: VERTAL Bank (antiga "Carteira") — cartões, Pix, conta global
+// Stripe Connect e conta ASAAS. O nome `wallet` da função foi mantido por
+// compatibilidade (app, deploy e webhooks já apontam para ele).
 //
 // POST /functions/v1/wallet  body: { action, ... }
 //   list                                   -> { cards, pix, publishableKey }
@@ -10,6 +12,8 @@
 //   remove        { id }
 //   connect-status | connect-onboard | connect-dashboard
 //   connect-charge { amount, currency, description? }
+//   connect-onboard { country?, returnPath? }  (conta global: país do titular)
+//   bank-* / asaas-*                       -> ver ./bank.ts (e-bank Stripe + ASAAS)
 //
 // Cartões nunca chegam aqui: o número é digitado no Stripe Elements e vira um
 // PaymentMethod do Customer do Stripe. Guardamos só a referência e os dados de
@@ -17,6 +21,8 @@
 // Chaves Pix são cifradas com CONNECTOR_ENC_KEY (AES-GCM).
 
 import { createClient } from "npm:@supabase/supabase-js@^2";
+import { handleBankAction, BANK_ACTIONS } from "./bank.ts";
+import { findConnectCountry } from "../_shared/bankCountries.ts";
 import Stripe from "npm:stripe@^14";
 import { createStaticPix, hasError } from "npm:pix-utils@^2.8.2";
 import { encryptSecret, decryptSecret } from "../_shared/connectorCrypto.ts";
@@ -155,6 +161,16 @@ Deno.serve(async (req) => {
     const { data: profile } = await db
       .from("profiles").select("stripe_customer_id, display_name").eq("id", user.id).maybeSingle();
     let customerId = (profile as Row | null)?.stripe_customer_id as string | undefined;
+    // Customer apagado no Stripe ou criado em outro modo (test x live): cria outro.
+    if (customerId) {
+      try {
+        const c = await stripe.customers.retrieve(customerId);
+        if ((c as Stripe.DeletedCustomer).deleted) customerId = undefined;
+      } catch (e) {
+        if ((e as { code?: string }).code === "resource_missing") customerId = undefined;
+        else throw e;
+      }
+    }
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: user.email ?? undefined,
@@ -383,6 +399,8 @@ Deno.serve(async (req) => {
         requirements_disabled_reason: r?.disabled_reason ?? null,
         requirements_due: Array.from(new Set([...(r?.past_due ?? []), ...(r?.currently_due ?? [])])),
         status_synced_at: new Date().toISOString(),
+        country: a.country ?? null,
+        default_currency: a.default_currency ?? null,
       } as Row).eq("stripe_account_id", a.id).eq("user_id", user.id);
       if (error) console.warn("wallet: sync de connected_accounts falhou", error.message);
     };
@@ -423,15 +441,21 @@ Deno.serve(async (req) => {
       return byEmail.id;
     };
 
+    // Volta para /bank (VERTAL Bank) ou /profile (rota antiga, mantida).
+    const returnPath = body.returnPath === "/bank" ? "/bank" : "/profile";
     const accountLink = (stripe: Stripe, accountId: string, type: "account_onboarding" | "account_update" = "account_onboarding") => {
       const origin = appOrigin(req);
       return stripe.accountLinks.create({
         account: accountId,
         type,
-        refresh_url: `${origin}/profile?wallet=connect-refresh`,
-        return_url: `${origin}/profile?wallet=connect-return`,
+        refresh_url: `${origin}${returnPath}?wallet=connect-refresh`,
+        return_url: `${origin}${returnPath}?wallet=connect-return`,
       });
     };
+
+    if (BANK_ACTIONS.has(action)) {
+      return await handleBankAction(action, { req, user, db, body, json, stripeClient, getConnected });
+    }
 
     if (action === "connect-status") {
       const stripe = stripeClient();
@@ -483,9 +507,13 @@ Deno.serve(async (req) => {
       const stripe = stripeClient();
       let accountId = (await getConnected()) ?? (await adoptExisting(stripe));
       if (!accountId) {
+        // Conta global: o titular escolhe o país (padrão BR). O país precisa
+        // estar habilitado em Connect → Settings → Onboarding no Stripe.
+        const country = findConnectCountry(body.country ?? "BR");
+        if (!country) return json({ error: "invalid_country" }, 400);
         const a = await stripe.accounts.create({
           type: "express",
-          country: "BR",
+          country: country.code,
           email: user.email ?? undefined,
           capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
           metadata: { supabase_user_id: user.id, platform_cnpj: PLATFORM_CNPJ, source: "wallet" },
@@ -493,6 +521,7 @@ Deno.serve(async (req) => {
         accountId = a.id;
         const { error } = await db.from("connected_accounts").insert({
           user_id: user.id, stripe_account_id: a.id, contact_email: user.email ?? null,
+          country: a.country ?? country.code, default_currency: a.default_currency ?? null,
         });
         if (error) throw error;
       }
