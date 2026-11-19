@@ -154,7 +154,7 @@ function Skeleton() {
 }
 
 /**
- * VERTAL Bank — cartões e Pix (antiga "Carteira").
+ * Vertal Vibe Bank — cartões e Pix (antiga "Carteira").
  * variant="profile": bloco no perfil, com atalho para /bank.
  * variant="bank": aba "Cartões e Pix" dentro do /bank.
  */
@@ -174,7 +174,7 @@ export default function WalletSection({ variant = 'profile' }: { variant?: 'prof
       setCards(data.cards)
       setPix(data.pix)
     } catch (e) {
-      toast.error((e as Error).message || 'Erro ao carregar o VERTAL Bank')
+      toast.error((e as Error).message || 'Erro ao carregar o Vertal Vibe Bank')
     } finally {
       setLoading(false)
     }
@@ -241,7 +241,7 @@ export default function WalletSection({ variant = 'profile' }: { variant?: 'prof
         </div>
         {variant === 'profile' && (
           <Button asChild size="sm" className="gap-1.5 gradient-primary text-primary-foreground">
-            <Link to="/bank"><ArrowUpRight className="h-4 w-4" />Abrir VERTAL Bank</Link>
+            <Link to="/bank"><ArrowUpRight className="h-4 w-4" />Abrir Vertal Vibe Bank</Link>
           </Button>
         )}
         <div className="flex gap-2 text-center">
@@ -401,7 +401,7 @@ export default function WalletSection({ variant = 'profile' }: { variant?: 'prof
       <AlertDialog open={!!confirmRemove} onOpenChange={(o) => { if (!o) setConfirmRemove(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover do VERTAL Bank?</AlertDialogTitle>
+            <AlertDialogTitle>Remover do Vertal Vibe Bank?</AlertDialogTitle>
             <AlertDialogDescription>
               Vamos remover {confirmRemove?.what}. Você pode adicionar de novo quando quiser.
             </AlertDialogDescription>
@@ -457,7 +457,7 @@ function ReceiveTab() {
   const go = async (kind: 'onboard' | 'dashboard') => {
     setBusy(kind)
     try {
-      // Conta nova: escolhe o país na conta global do VERTAL Bank.
+      // Conta nova: escolhe o país na conta global do Vertal Vibe Bank.
       if (kind === 'onboard' && !account) { window.location.assign('/bank?tab=contas'); return }
       const { url } = kind === 'onboard'
         ? await walletApi.connectOnboard({ returnPath: '/profile' })
@@ -854,7 +854,7 @@ function AddPixDialog({ open, onOpenChange, onAdded }: {
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Adicionar chave Pix</DialogTitle>
-          <DialogDescription>A chave fica cifrada; no VERTAL Bank aparece só a versão mascarada.</DialogDescription>
+          <DialogDescription>A chave fica cifrada; no Vertal Vibe Bank aparece só a versão mascarada.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">

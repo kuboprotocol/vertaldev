@@ -5,7 +5,7 @@ import { routeReceive, routeSend } from './routing'
 
 const both = { asaasReady: true, stripeReady: true }
 
-describe('VERTAL Bank routing', () => {
+describe('Vertal Vibe Bank routing', () => {
   it('Pix e boleto em BRL vão para o ASAAS', () => {
     expect(routeReceive({ method: 'pix', currency: 'BRL', ...both }).provider).toBe('asaas')
     expect(routeReceive({ method: 'boleto', currency: 'brl', ...both }).provider).toBe('asaas')
@@ -35,7 +35,7 @@ describe('VERTAL Bank routing', () => {
   })
 })
 
-describe('VERTAL Bank countries', () => {
+describe('Vertal Vibe Bank countries', () => {
   it('espelho do servidor é idêntico e BR é o primeiro', async () => {
     const { CONNECT_COUNTRIES } = await import('./countries')
     expect(CONNECT_COUNTRIES[0].code).toBe('BR')

@@ -1,4 +1,4 @@
-// VERTAL Bank: ações de e-bank da função `wallet` (Stripe conta global + ASAAS).
+// Vertal Vibe Bank: ações de e-bank da função `wallet` (Stripe conta global + ASAAS).
 //
 //   bank-overview                       -> saldos unificados, status dos provedores, flags
 //   bank-statement  { limit? }          -> extrato unificado (bank_transactions + wallet_charges)
@@ -425,7 +425,7 @@ export async function handleBankAction(action: string, ctx: BankCtx): Promise<Re
         province: String(body.province).trim().slice(0, 60),
         postalCode,
         webhooks: webhookToken ? [{
-          name: "VERTAL Bank",
+          name: "Vertal Vibe Bank",
           url: webhookUrl,
           email: Deno.env.get("ASAAS_WEBHOOK_EMAIL") ?? email,
           enabled: true,
@@ -489,7 +489,7 @@ export async function handleBankAction(action: string, ctx: BankCtx): Promise<Re
       if (method === "link") {
         const link = await ctxA.api<Row>("POST", "/paymentLinks", {
           body: {
-            name: (description ?? "Pagamento VERTAL Bank").slice(0, 100),
+            name: (description ?? "Pagamento Vertal Vibe Bank").slice(0, 100),
             description: description ?? undefined,
             value: fromCents(amountMinor),
             billingType: "UNDEFINED",

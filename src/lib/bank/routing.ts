@@ -1,4 +1,4 @@
-// VERTAL Bank: qual provedor atende cada operação.
+// Vertal Vibe Bank: qual provedor atende cada operação.
 // Espelho de supabase/functions/_shared/bankRouting.ts (teste garante igualdade).
 //
 //   BRL + Pix / boleto            -> ASAAS

@@ -1,4 +1,4 @@
-// Edge Function: VERTAL Bank (antiga "Carteira") — cartões, Pix, conta global
+// Edge Function: Vertal Vibe Bank (antiga "Carteira") — cartões, Pix, conta global
 // Stripe Connect e conta ASAAS. O nome `wallet` da função foi mantido por
 // compatibilidade (app, deploy e webhooks já apontam para ele).
 //
@@ -441,7 +441,7 @@ Deno.serve(async (req) => {
       return byEmail.id;
     };
 
-    // Volta para /bank (VERTAL Bank) ou /profile (rota antiga, mantida).
+    // Volta para /bank (Vertal Vibe Bank) ou /profile (rota antiga, mantida).
     const returnPath = body.returnPath === "/bank" ? "/bank" : "/profile";
     const accountLink = (stripe: Stripe, accountId: string, type: "account_onboarding" | "account_update" = "account_onboarding") => {
       const origin = appOrigin(req);

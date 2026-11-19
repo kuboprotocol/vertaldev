@@ -4,7 +4,7 @@ Como o Vertal Dev cobra com o Stripe: a conta da plataforma, o Stripe Connect
 da Carteira (perfil → Carteira), as Edge Functions, os secrets, os webhooks e o
 que falta para ir para produção.
 
-> A Carteira agora se chama **VERTAL Bank** (`/bank`) e também usa o ASAAS.
+> A Carteira agora se chama **Vertal Vibe Bank** (`/bank`; landing pública em `/vibe-bank`) e também usa o ASAAS.
 > Veja `docs/VERTAL_BANK.md` para a conta global (país do titular, saldos
 > multimoeda, saques) e a conta Brasil (Pix, boleto, subcontas ASAAS).
 

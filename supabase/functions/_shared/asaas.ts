@@ -85,7 +85,7 @@ export function asaasAs(apiKey: string) {
     asaasRequest<T>(apiKey, method, path, opts);
 }
 
-// ── Tipos e mapeamentos usados pelo VERTAL Bank ────────────────────────────
+// ── Tipos e mapeamentos usados pelo Vertal Vibe Bank ────────────────────────────
 
 export type AsaasBillingType = "PIX" | "BOLETO" | "CREDIT_CARD" | "UNDEFINED";
 

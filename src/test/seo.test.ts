@@ -86,7 +86,7 @@ describe('SEO: sitemap, robots e páginas de comparação', () => {
     expect(xml).toContain('<rss version="2.0"')
     expect(xml).toContain('<atom:link href="https://vertal.dev/rss.xml" rel="self"')
     for (const a of ALTERNATIVES) expect(xml).toContain(`<link>https://vertal.dev/alternativas/${a.slug}</link>`)
-    expect(xml.match(/<item>/g)?.length).toBe(ALTERNATIVES.length + 2)
+    expect(xml.match(/<item>/g)?.length).toBe(ALTERNATIVES.length + 3) // + landing do Vertal Vibe Bank
     expect(xml).toContain('<pubDate>Fri, 16 Oct 2026 00:00:00 GMT</pubDate>')
     expect(xml).not.toMatch(/&(?!amp;|lt;|gt;|quot;|apos;)/)
   })

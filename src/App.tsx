@@ -31,8 +31,9 @@ const DownloadPage = lazy(() => import("./pages/DownloadPage"));
 const SupportPage = lazy(() => import("./pages/SupportPage"));
 const ConnectPage = lazy(() => import("./pages/ConnectPage"));
 const VertalBankPage = lazy(() => import("./pages/VertalBankPage"));
+const VibeBankLandingPage = lazy(() => import("./pages/VibeBankLandingPage"));
 
-/** Redireciona mantendo query string e hash (aliases do VERTAL Bank). */
+/** Redireciona mantendo query string e hash (aliases do Vertal Vibe Bank). */
 function KeepQueryRedirect({ to }: { to: string }) {
   const { search, hash } = useLocation();
   return <Navigate to={`${to}${search}${hash}`} replace />;
@@ -239,7 +240,10 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 
                 <Route path="/connect" element={<ProtectedRoute><ConnectPage /></ProtectedRoute>} />
                 <Route path="/bank" element={<ProtectedRoute><VertalBankPage /></ProtectedRoute>} />
-                {/* Aliases do VERTAL Bank (antiga Carteira) */}
+                {/* Vertal Vibe Bank: landing pública (em produção é HTML estático, vite-plugins/vibeBank.ts) */}
+                <Route path="/vibe-bank" element={<VibeBankLandingPage />} />
+                <Route path="/vertal-vibe-bank" element={<KeepQueryRedirect to="/vibe-bank" />} />
+                {/* Aliases do app do Vertal Vibe Bank (antigo VERTAL Bank / Carteira) */}
                 <Route path="/vertal-bank" element={<KeepQueryRedirect to="/bank" />} />
                 <Route path="/wallet" element={<KeepQueryRedirect to="/bank" />} />
                 <Route path="/carteira" element={<KeepQueryRedirect to="/bank" />} />

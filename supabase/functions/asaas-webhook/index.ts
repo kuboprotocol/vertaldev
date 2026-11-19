@@ -1,5 +1,5 @@
 // ============================================================
-// Edge Function: asaas-webhook (VERTAL Bank)
+// Edge Function: asaas-webhook (Vertal Vibe Bank)
 // Recebe eventos do ASAAS das subcontas dos usuários (configurados na criação
 // da subconta, ação `asaas-open` da função `wallet`).
 //

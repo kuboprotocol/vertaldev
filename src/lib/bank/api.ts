@@ -1,4 +1,4 @@
-// VERTAL Bank: cliente das ações bank-* / asaas-* da Edge Function `wallet`.
+// Vertal Vibe Bank: cliente das ações bank-* / asaas-* da Edge Function `wallet`.
 import { call, ERRORS } from '@/lib/wallet/api'
 import type { PixKeyType } from '@/lib/wallet/pix'
 import type { BankProvider, ReceiveMethod } from './routing'
