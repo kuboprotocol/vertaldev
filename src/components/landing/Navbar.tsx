@@ -9,8 +9,11 @@ export default function Navbar() {
   return (
     <nav className="sticky top-0 z-50 glass glass-border">
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-        <Link to="/" aria-label={APP_NAME} className="flex items-center gap-3 group">
-          <AnimatedLogo size={17} className="group-hover:scale-105 transition-transform" />
+        <Link to="/" aria-label={APP_NAME} className="flex shrink-0 items-center group">
+          <AnimatedLogo
+            size={17}
+            className="!h-9 sm:!h-12 shrink-0 origin-left group-hover:scale-105 transition-transform"
+          />
         </Link>
 
         <div className="hidden xl:flex items-center gap-1">
