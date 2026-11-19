@@ -59,6 +59,9 @@
   // Cloudflare Browser Run. Funciona no plano Workers Free com limites baixos
   // (10 min/dia); para uso real, Workers Paid. Guia: docs/BROWSER_FORM_AGENT.md.
   "browser": { "binding": "BROWSER" },
+  // Logs do Worker (Workers Logs, cota grátis do plano): sem isso não há como ver
+  // falhas de /api/browser/* depois que acontecem.
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
   // Requerido pelo Wrangler 4.135.0+ para o comando `wrangler preview`.
   "previews": {}
 }

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { TOOL_COSTS, buildAgentSystemPrompt, parseAgentAction, parseAgentTurn } from './contract';
+import {
+  TOOL_COSTS, buildAgentSystemPrompt, fallbackReplyFromResults, parseAgentAction, parseAgentTurn, rerouteFormActions,
+} from './contract';
 import { wantsBrowserForm } from '@/lib/browserForm/formCore';
 
 describe('contrato: browser_form', () => {
@@ -79,5 +81,44 @@ describe('wantsBrowserForm', () => {
     expect(wantsBrowserForm(['crie uma imagem de um gato', { content: 'Pronto!' }])).toBe(false);
     const old = ['preencha o formulário', ...Array.from({ length: 10 }, () => 'e o clima?')];
     expect(wantsBrowserForm(old)).toBe(false);
+  });
+});
+
+describe('rede de segurança: formulário de link vai pelo navegador', () => {
+  const ask = 'preencha o formulário https://httpbin.org/forms/post com nome Teste Vertal, telefone 11999999999, email teste@example.com, tamanho medium, cobertura bacon e envie';
+
+  it('troca o POST direto (api_request) na página do usuário por browser_form inspect', () => {
+    const api = parseAgentAction({ tool: 'api_request', method: 'POST', url: 'https://httpbin.org/forms/post', body: 'custname=Teste' })!;
+    const out = rerouteFormActions([api], { lastUserText: ask, alreadyInspected: false });
+    expect(out.rerouted).toBe(1);
+    expect(out.actions).toEqual([{ tool: 'browser_form', op: 'inspect', url: 'https://httpbin.org/forms/post' }]);
+  });
+
+  it('troca web_read da mesma página e não duplica um inspect que já veio', () => {
+    const read = parseAgentAction({ tool: 'web_read', url: 'https://httpbin.org/forms/post' })!;
+    const inspect = parseAgentAction({ tool: 'browser_form', op: 'inspect', url: 'https://httpbin.org/forms/post' })!;
+    const out = rerouteFormActions([read, inspect], { lastUserText: ask, alreadyInspected: false });
+    expect(out.actions).toEqual([inspect]);
+  });
+
+  it('não mexe em outras URLs, em conversa sem formulário nem depois do inspect', () => {
+    const other = parseAgentAction({ tool: 'api_request', method: 'POST', url: 'https://api.example.com/v1/x' })!;
+    expect(rerouteFormActions([other], { lastUserText: ask, alreadyInspected: false }).rerouted).toBe(0);
+    const api = parseAgentAction({ tool: 'api_request', method: 'GET', url: 'https://httpbin.org/get' })!;
+    expect(rerouteFormActions([api], { lastUserText: 'chame https://httpbin.org/get', alreadyInspected: false }).rerouted).toBe(0);
+    const same = parseAgentAction({ tool: 'api_request', method: 'POST', url: 'https://httpbin.org/forms/post' })!;
+    expect(rerouteFormActions([same], { lastUserText: ask, alreadyInspected: true }).rerouted).toBe(0);
+  });
+
+  it('o prompt põe browser_form na lista de ferramentas, antes de api_request', () => {
+    const prompt = buildAgentSystemPrompt({ secretNames: [], browserForm: true });
+    expect(prompt.indexOf('"tool":"browser_form"')).toBeLessThan(prompt.indexOf('"tool":"api_request"'));
+    expect(prompt).toContain('nunca api_request nem web_read');
+  });
+
+  it('saída vazia depois de ferramenta vira resposta com a falha, não erro', () => {
+    const text = fallbackReplyFromResults([{ tool: 'api_request', ok: false, summary: 'HTTP 405' }]);
+    expect(text).toContain('api_request');
+    expect(text).toContain('HTTP 405');
   });
 });

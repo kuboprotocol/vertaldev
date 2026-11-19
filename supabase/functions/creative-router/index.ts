@@ -39,6 +39,8 @@ import {
   parseAgentOutput,
   parseConnections,
   secretPlaceholders,
+  rerouteFormActions,
+  fallbackReplyFromResults,
 } from "../_shared/chatAgent.ts";
 import { wantsBrowserForm } from "../_shared/browserForm.ts";
 import { listVisibleSecrets, resolveEnvForRun } from "../_shared/kuboSecrets.ts";
@@ -626,6 +628,8 @@ async function handleAgentChat(
   });
 
   const now = localNow(agent.data.context?.timezone);
+  // Ferramenta de formulários só quando a conversa fala disso (e nunca em pedido delegado pelo Vibe Code).
+  const browserFormOn = !delegated && wantsBrowserForm([...all.slice(-8), ...results.slice(-6)]);
   const system = buildAgentSystemPrompt({
     secretNames,
     today: new Date().toISOString().slice(0, 10),
@@ -637,8 +641,7 @@ async function handleAgentChat(
     recall: brain.recall,
     summary: brain.summary,
     plan: brain.planBlock,
-    // Ferramenta de formulários só quando a conversa fala disso (e nunca em pedido delegado pelo Vibe Code).
-    browserForm: !delegated && wantsBrowserForm([...all.slice(-8), ...results.slice(-6)]),
+    browserForm: browserFormOn,
   }) + (delegated ? DELEGATED_CHAT_PROMPT : "");
   const final = agent.data.final === true || brain.planPhase === "final";
   const convo = results.length
@@ -682,10 +685,26 @@ async function handleAgentChat(
     if (retried) {
       console.warn(`[creative-router] agent_chat saída ${parsed.status} após nova tentativa (${gw.provider}/${gw.model})`);
     }
-    const turn = parsed.turn;
-    if (!turn.reply && turn.actions.length === 0) return fail(502, "invalid_model_output");
+    let turn = parsed.turn;
+    if (!turn.reply && turn.actions.length === 0) {
+      // Depois de ferramentas, nunca 502: relata o que saiu (ex.: a ferramenta falhou).
+      if (results.length === 0) return fail(502, "invalid_model_output");
+      console.warn("[creative-router] agent_chat saída vazia após ferramentas: resposta de contingência");
+      turn = { reply: fallbackReplyFromResults(results), actions: [] };
+    }
     // Última rodada ou fase final do plano: sem novas ações. Durante um plano, sem plano dentro de plano.
     let actions = final ? [] : turn.actions;
+    // Pedido de formulário de site: api_request/web_read na página do usuário vira browser_form (inspect).
+    if (browserFormOn && actions.length) {
+      const reroute = rerouteFormActions(actions, {
+        lastUserText,
+        alreadyInspected: results.some((r) => r.tool === "browser_form"),
+      });
+      if (reroute.rerouted) {
+        console.warn(`[creative-router] agent_chat ${reroute.rerouted} ação(ões) de formulário trocada(s) por browser_form`);
+        actions = reroute.actions;
+      }
+    }
     if (brain.planPhase) actions = actions.filter((a) => a.tool !== "plan");
     // Pedido do Vibe Code: só leitura/pesquisa/imagem, filtrado AQUI no servidor (nunca vibe_code).
     const originFilter = filterActionsForOrigin(actions, origin);
