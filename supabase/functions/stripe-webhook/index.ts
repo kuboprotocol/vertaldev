@@ -87,7 +87,13 @@ Deno.serve(async (req: Request) => {
         return new Response(JSON.stringify({ received: true }), { headers: { "Content-Type": "application/json" } });
       }
 
-      if (!userId || !plan) return new Response("Missing metadata", { status: 400 });
+      // Sessões que não são de plano (p.ex. stripe-connect-checkout, destination
+      // charges) chegam aqui também: confirma o recebimento sem processar, para o
+      // Stripe não reenviar nem desativar o endpoint.
+      if (!userId || !plan) {
+        console.log(`stripe-webhook: ignoring checkout.session.completed ${session.id} (no plan metadata)`);
+        return new Response(JSON.stringify({ received: true, ignored: true }), { headers: { "Content-Type": "application/json" } });
+      }
 
 
       const now = new Date().toISOString();

@@ -43,3 +43,7 @@ project_id = "sccizjlpwezsgaxkclot"
     verify_jwt = false
   [functions.wallet]
     verify_jwt = true
+  [functions.stripe-webhook]
+    verify_jwt = false
+  [functions.stripe-connect-webhook]
+    verify_jwt = false

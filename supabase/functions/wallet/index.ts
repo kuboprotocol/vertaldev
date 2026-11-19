@@ -8,6 +8,8 @@
 //   pix-brcode    { id, amount?, merchantName, merchantCity, description? } -> { brCode }
 //   set-default   { id }
 //   remove        { id }
+//   connect-status | connect-onboard | connect-dashboard
+//   connect-charge { amount, currency, description? }
 //
 // Cartões nunca chegam aqui: o número é digitado no Stripe Elements e vira um
 // PaymentMethod do Customer do Stripe. Guardamos só a referência e os dados de
@@ -372,18 +374,74 @@ Deno.serve(async (req) => {
     }
 
     // ── Stripe Connect: receber em qualquer moeda ────────────────────────
+    const syncAccountRow = async (a: Stripe.Account) => {
+      const r = a.requirements;
+      const { error } = await db.from("connected_accounts").update({
+        charges_enabled: a.charges_enabled ?? false,
+        payouts_enabled: a.payouts_enabled ?? false,
+        details_submitted: a.details_submitted ?? false,
+        requirements_disabled_reason: r?.disabled_reason ?? null,
+        requirements_due: Array.from(new Set([...(r?.past_due ?? []), ...(r?.currently_due ?? [])])),
+        status_synced_at: new Date().toISOString(),
+      } as Row).eq("stripe_account_id", a.id).eq("user_id", user.id);
+      if (error) console.warn("wallet: sync de connected_accounts falhou", error.message);
+    };
+
     const getConnected = async () => {
       const { data } = await db.from("connected_accounts").select("stripe_account_id")
         .eq("user_id", user.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
       return (data?.stripe_account_id as string | undefined) ?? null;
     };
 
+    // Sem vínculo local: procura na plataforma uma conta conectada já criada
+    // para este usuário (metadata.supabase_user_id, p.ex. quando o insert
+    // falhou) ou, só com e-mail confirmado, uma conta com o mesmo e-mail que
+    // ainda não esteja vinculada a ninguém. Vincula e devolve o id.
+    const adoptExisting = async (stripe: Stripe): Promise<string | null> => {
+      const email = user.email_confirmed_at ? user.email?.toLowerCase() : undefined;
+      let byEmail: Stripe.Account | null = null;
+      let scanned = 0;
+      for await (const a of stripe.accounts.list({ limit: 100 })) {
+        if (++scanned > 500) break;
+        if (a.metadata?.supabase_user_id === user.id) { byEmail = a; break; }
+        if (!byEmail && email && !a.metadata?.supabase_user_id && a.email?.toLowerCase() === email) byEmail = a;
+      }
+      if (!byEmail) return null;
+      const { data: taken } = await db.from("connected_accounts").select("user_id")
+        .eq("stripe_account_id", byEmail.id).maybeSingle();
+      if (taken) return taken.user_id === user.id ? byEmail.id : null;
+      const { error } = await db.from("connected_accounts").insert({
+        user_id: user.id, stripe_account_id: byEmail.id, contact_email: byEmail.email ?? user.email ?? null,
+      });
+      if (error) { console.warn("wallet: vínculo da conta existente falhou", error.message); return null; }
+      if (!byEmail.metadata?.supabase_user_id) {
+        try {
+          await stripe.accounts.update(byEmail.id, { metadata: { supabase_user_id: user.id } });
+        } catch (e) { console.warn("wallet: metadata da conta não atualizada", (e as Error).message); }
+      }
+      await syncAccountRow(byEmail);
+      return byEmail.id;
+    };
+
+    const accountLink = (stripe: Stripe, accountId: string, type: "account_onboarding" | "account_update" = "account_onboarding") => {
+      const origin = appOrigin(req);
+      return stripe.accountLinks.create({
+        account: accountId,
+        type,
+        refresh_url: `${origin}/profile?wallet=connect-refresh`,
+        return_url: `${origin}/profile?wallet=connect-return`,
+      });
+    };
+
     if (action === "connect-status") {
       const stripe = stripeClient();
-      const accountId = await getConnected();
+      const accountId = (await getConnected()) ?? (await adoptExisting(stripe));
       let account = null;
       if (accountId) {
         const a = await stripe.accounts.retrieve(accountId);
+        await syncAccountRow(a);
+        const pastDue = a.requirements?.past_due ?? [];
+        const currentlyDue = a.requirements?.currently_due ?? [];
         account = {
           id: a.id,
           country: a.country,
@@ -391,7 +449,10 @@ Deno.serve(async (req) => {
           chargesEnabled: a.charges_enabled,
           payoutsEnabled: a.payouts_enabled,
           detailsSubmitted: a.details_submitted,
-          pendingRequirements: (a.requirements?.currently_due?.length ?? 0) + (a.requirements?.past_due?.length ?? 0),
+          pendingRequirements: new Set([...pastDue, ...currentlyDue]).size,
+          pastDue: pastDue.length,
+          disabledReason: a.requirements?.disabled_reason ?? null,
+          currentDeadline: a.requirements?.current_deadline ?? null,
         };
       }
 
@@ -420,7 +481,7 @@ Deno.serve(async (req) => {
 
     if (action === "connect-onboard") {
       const stripe = stripeClient();
-      let accountId = await getConnected();
+      let accountId = (await getConnected()) ?? (await adoptExisting(stripe));
       if (!accountId) {
         const a = await stripe.accounts.create({
           type: "express",
@@ -435,20 +496,23 @@ Deno.serve(async (req) => {
         });
         if (error) throw error;
       }
-      const origin = appOrigin(req);
-      const link = await stripe.accountLinks.create({
-        account: accountId,
-        type: "account_onboarding",
-        refresh_url: `${origin}/profile?wallet=connect-refresh`,
-        return_url: `${origin}/profile?wallet=connect-return`,
-      });
+      const link = await accountLink(stripe, accountId);
       return json({ url: link.url });
     }
 
     if (action === "connect-dashboard") {
       const accountId = await getConnected();
       if (!accountId) return json({ error: "connect_not_started" }, 400);
-      const link = await stripeClient().accounts.createLoginLink(accountId);
+      const stripe = stripeClient();
+      const a = await stripe.accounts.retrieve(accountId);
+      // Login link só existe para contas com painel Express; as demais
+      // (controller.stripe_dashboard.type = "none") editam dados via account link.
+      const dashboard = (a.controller as Row | undefined)?.stripe_dashboard?.type ?? (a.type === "express" ? "express" : a.type);
+      if (dashboard === "express") {
+        const link = await stripe.accounts.createLoginLink(accountId);
+        return json({ url: link.url });
+      }
+      const link = await accountLink(stripe, accountId, a.details_submitted ? "account_update" : "account_onboarding");
       return json({ url: link.url });
     }
 
