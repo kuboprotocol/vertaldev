@@ -17,6 +17,8 @@ const ORIGIN_ALLOWLIST = [
   'https://www.kubovibe.dev',
   'https://vertal.dev',
   'https://www.vertal.dev',
+  'https://vertal.app',
+  /^https:\/\/[a-z0-9-]+\.vertal\.app$/i,
   /^https:\/\/[a-z0-9-]+\.lovable\.app$/i,
   /^https:\/\/id-preview--[a-z0-9-]+\.lovable\.app$/i,
   /^http:\/\/localhost(:\d+)?$/i,
@@ -60,7 +62,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({})) as { returnUrl?: string; origin?: string }
     const returnUrl = body.returnUrl && isSafeReturnUrl(body.returnUrl) ? body.returnUrl : '/connectors/gmail'
-    const origin = body.origin && isAllowedOrigin(body.origin) ? body.origin : 'https://kubovibe.dev'
+    const origin = body.origin && isAllowedOrigin(body.origin) ? body.origin : (Deno.env.get('APP_ORIGIN') || 'https://vertal.dev')
 
     const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/gmail-oauth-callback`
     const nonce = crypto.randomUUID() + '.' + crypto.randomUUID()

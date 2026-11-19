@@ -6,7 +6,7 @@ const corsHeaders = {
 };
 import { encryptSecret } from '../_shared/gmailCrypto.ts'
 
-const DEFAULT_ORIGIN = Deno.env.get('APP_ORIGIN') || 'https://kubovibe.dev'
+const DEFAULT_ORIGIN = Deno.env.get('APP_ORIGIN') || 'https://vertal.dev'
 
 const REQUIRED_SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
