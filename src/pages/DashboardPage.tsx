@@ -131,7 +131,7 @@ const DashboardPage = forwardRef<HTMLDivElement, any>((props, ref) => {
             <Button variant="hero" size="sm" onClick={() => navigate('/builder')} className="rounded-xl gap-2">
               <Plus className="h-4 w-4" /> New Project
             </Button>
-            <Button variant="ghost" size="icon" onClick={() => navigate('/bank')} title="Vertal Vibe Bank" aria-label="Vertal Vibe Bank" className="rounded-xl text-muted-foreground hover:text-foreground">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/pay')} title="Vertal Vibe Pay" aria-label="Vertal Vibe Pay" className="rounded-xl text-muted-foreground hover:text-foreground">
               <Landmark className="h-5 w-5" />
             </Button>
             <Button variant="ghost" size="icon" onClick={() => navigate('/profile')} title="Perfil" className="rounded-xl text-muted-foreground hover:text-foreground">

@@ -23,8 +23,8 @@ export function GlobalAccountCard({ overview, onChange }: { overview: BankOvervi
     setBusy(kind)
     try {
       const { url } = kind === 'onboard'
-        ? await walletApi.connectOnboard({ country, returnPath: '/bank' })
-        : await walletApi.connectDashboard('/bank')
+        ? await walletApi.connectOnboard({ country, returnPath: '/pay' })
+        : await walletApi.connectDashboard('/pay')
       window.location.assign(url)
     } catch (e) {
       toast.error((e as Error).message)

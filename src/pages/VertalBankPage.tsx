@@ -1,12 +1,12 @@
-// Vertal Vibe Bank (antigo VERTAL Bank): conta digital do Vertal Dev sobre Stripe (conta global) + ASAAS (conta Brasil).
+// Vertal Vibe Pay (antigo VERTAL Bank): conta digital do Vertal Dev sobre Stripe (conta global) + ASAAS (conta Brasil).
 // Rotas: /bank (app, principal) · /wallet, /carteira, /vertal-bank redirecionam para cá.
-// Landing pública: /vibe-bank (HTML estático por idioma, vite-plugins/vibeBank.ts).
+// Landing pública: /vibe-pay (HTML estático por idioma, vite-plugins/vibePay.ts).
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowDownLeft, ArrowLeft, ArrowUpRight, CreditCard, Landmark, Loader2, RefreshCw, ScrollText, ShieldCheck, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
-import { VIBE_BANK } from '@/config/vibeBank'
+import { VIBE_PAY } from '@/config/vibePay'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import WalletSection from '@/components/profile/WalletSection'
@@ -38,7 +38,7 @@ export default function VertalBankPage() {
       setOverview(o)
       setItems(s.items)
     } catch (e) {
-      toast.error((e as Error).message || 'Erro ao carregar o Vertal Vibe Bank')
+      toast.error((e as Error).message || 'Erro ao carregar o Vertal Vibe Pay')
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -77,11 +77,11 @@ export default function VertalBankPage() {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <picture>
-              <source srcSet={VIBE_BANK.iconSmall} type="image/webp" />
-              <img src={VIBE_BANK.icon} alt="" width={36} height={36} className="h-9 w-9 rounded-xl" />
+              <source srcSet={VIBE_PAY.iconSmall} type="image/webp" />
+              <img src={VIBE_PAY.icon} alt="" width={36} height={36} className="h-9 w-9 rounded-xl" />
             </picture>
             <h1 className="font-display text-xl font-bold tracking-tight text-foreground">
-              Vertal Vibe <span className="bg-gradient-to-r from-primary to-fuchsia-400 bg-clip-text text-transparent">Bank</span>
+              Vertal Vibe <span className="bg-gradient-to-r from-primary to-fuchsia-400 bg-clip-text text-transparent">Pay</span>
             </h1>
           </div>
           <Button variant="ghost" size="icon" onClick={load} disabled={refreshing} aria-label="Atualizar">
@@ -190,7 +190,7 @@ export default function VertalBankPage() {
 
         <p className="flex items-start gap-2 rounded-xl bg-secondary/40 p-3 text-[11px] leading-relaxed text-muted-foreground">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-          O Vertal Vibe Bank é uma conta digital da plataforma Vertal Dev, não um banco: as contas são fornecidas pelo Stripe (Stripe Payments) e pelo ASAAS (instituição de pagamento autorizada pelo Banco Central), em nome de cada titular. A VERTAL não é banco nem instituição financeira.
+          O Vertal Vibe Pay é uma conta digital da plataforma Vertal Dev, não um banco: as contas são fornecidas pelo Stripe (Stripe Payments) e pelo ASAAS (instituição de pagamento autorizada pelo Banco Central), em nome de cada titular. A VERTAL não é banco nem instituição financeira.
         </p>
       </main>
     </div>

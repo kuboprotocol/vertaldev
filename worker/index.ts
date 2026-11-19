@@ -7,6 +7,7 @@
 import { crawlPriceFor, formatCrawlerPrice, isInBandPricing } from './payPerCrawl';
 import { isPaidPath, parsePaidPrefixes, verifyPaymentContext } from './monetizationGateway';
 import { siteVerificationResponse } from './siteVerification';
+import { legacyRedirect } from './legacyRedirects';
 import { handleSpotify, SPOTIFY_API_PREFIX, type SpotifyRoutesEnv } from './spotifyRoutes';
 import { BROWSER_API_PREFIX, handleBrowserForm, type BrowserFormEnv } from './browserFormRoutes';
 
@@ -45,6 +46,10 @@ export default {
 
     const verification = siteVerificationResponse(url.pathname);
     if (verification) return verification;
+
+    // Rotas antigas do Vertal Vibe Pay (/vibe-bank, /<idioma>/vibe-bank, /bank…) → 301.
+    const moved = legacyRedirect(url);
+    if (moved) return moved;
 
     if (url.pathname === SPOTIFY_API_PREFIX || url.pathname.startsWith(`${SPOTIFY_API_PREFIX}/`)) {
       const res = await handleSpotify(request, env, url);

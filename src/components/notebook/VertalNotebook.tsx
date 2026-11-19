@@ -326,7 +326,7 @@ function CreateNotebookDialog({
         >
           <div className="flex items-center gap-3">
             <span className={cn('flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-3xl shadow-lg', NOTEBOOK_COLORS[color])}>{emoji}</span>
-            <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Tokenomics do Vibe Bank" aria-label="Nome do caderno" className="border-white/10 bg-white/5" />
+            <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Tokenomics do Vibe Pay" aria-label="Nome do caderno" className="border-white/10 bg-white/5" />
           </div>
           <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Objetivo, público, perguntas que quer responder…" aria-label="Descrição do caderno" className="min-h-[80px] border-white/10 bg-white/5" />
           <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Ícone">

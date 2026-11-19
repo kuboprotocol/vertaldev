@@ -154,9 +154,9 @@ function Skeleton() {
 }
 
 /**
- * Vertal Vibe Bank — cartões e Pix (antiga "Carteira").
- * variant="profile": bloco no perfil, com atalho para /bank.
- * variant="bank": aba "Cartões e Pix" dentro do /bank.
+ * Vertal Vibe Pay — cartões e Pix (antiga "Carteira").
+ * variant="profile": bloco no perfil, com atalho para /pay.
+ * variant="bank": aba "Cartões e Pix" dentro do /pay.
  */
 export default function WalletSection({ variant = 'profile' }: { variant?: 'profile' | 'bank' } = {}) {
   const [loading, setLoading] = useState(true)
@@ -174,7 +174,7 @@ export default function WalletSection({ variant = 'profile' }: { variant?: 'prof
       setCards(data.cards)
       setPix(data.pix)
     } catch (e) {
-      toast.error((e as Error).message || 'Erro ao carregar o Vertal Vibe Bank')
+      toast.error((e as Error).message || 'Erro ao carregar o Vertal Vibe Pay')
     } finally {
       setLoading(false)
     }
@@ -232,7 +232,7 @@ export default function WalletSection({ variant = 'profile' }: { variant?: 'prof
           </span>
           <div>
             <h3 id="wallet-title" className="font-display text-lg font-semibold text-foreground">
-              {variant === 'bank' ? 'Cartões e Pix' : <>VERTAL <span className="text-primary">Bank</span></>}
+              {variant === 'bank' ? 'Cartões e Pix' : <>VERTAL VIBE <span className="text-primary">PAY</span></>}
             </h3>
             <p className="text-sm text-muted-foreground">
               {variant === 'bank' ? 'Seus cartões salvos e chaves Pix' : 'Conta Brasil, conta global, cartões e Pix no Vertal Dev'}
@@ -241,7 +241,7 @@ export default function WalletSection({ variant = 'profile' }: { variant?: 'prof
         </div>
         {variant === 'profile' && (
           <Button asChild size="sm" className="gap-1.5 gradient-primary text-primary-foreground">
-            <Link to="/bank"><ArrowUpRight className="h-4 w-4" />Abrir Vertal Vibe Bank</Link>
+            <Link to="/pay"><ArrowUpRight className="h-4 w-4" />Abrir Vertal Vibe Pay</Link>
           </Button>
         )}
         <div className="flex gap-2 text-center">
@@ -401,7 +401,7 @@ export default function WalletSection({ variant = 'profile' }: { variant?: 'prof
       <AlertDialog open={!!confirmRemove} onOpenChange={(o) => { if (!o) setConfirmRemove(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover do Vertal Vibe Bank?</AlertDialogTitle>
+            <AlertDialogTitle>Remover do Vertal Vibe Pay?</AlertDialogTitle>
             <AlertDialogDescription>
               Vamos remover {confirmRemove?.what}. Você pode adicionar de novo quando quiser.
             </AlertDialogDescription>
@@ -457,8 +457,8 @@ function ReceiveTab() {
   const go = async (kind: 'onboard' | 'dashboard') => {
     setBusy(kind)
     try {
-      // Conta nova: escolhe o país na conta global do Vertal Vibe Bank.
-      if (kind === 'onboard' && !account) { window.location.assign('/bank?tab=contas'); return }
+      // Conta nova: escolhe o país na conta global do Vertal Vibe Pay.
+      if (kind === 'onboard' && !account) { window.location.assign('/pay?tab=contas'); return }
       const { url } = kind === 'onboard'
         ? await walletApi.connectOnboard({ returnPath: '/profile' })
         : await walletApi.connectDashboard('/profile')
@@ -757,7 +757,7 @@ function AddCardDialog({ open, onOpenChange, onAdded }: {
       const { error, setupIntent } = await stripeRef.current.confirmSetup({
         elements: elementsRef.current,
         redirect: 'if_required',
-        confirmParams: { return_url: `${window.location.origin}${window.location.pathname}${window.location.pathname === '/bank' ? '?tab=cartoes' : ''}` },
+        confirmParams: { return_url: `${window.location.origin}${window.location.pathname}${['/pay', '/bank'].includes(window.location.pathname) ? '?tab=cartoes' : ''}` },
       })
       if (error) throw new Error(error.message)
       await walletApi.cardAttach(setupIntent.id, label.trim() || undefined, makeDefault)
@@ -854,7 +854,7 @@ function AddPixDialog({ open, onOpenChange, onAdded }: {
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Adicionar chave Pix</DialogTitle>
-          <DialogDescription>A chave fica cifrada; no Vertal Vibe Bank aparece só a versão mascarada.</DialogDescription>
+          <DialogDescription>A chave fica cifrada; no Vertal Vibe Pay aparece só a versão mascarada.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">

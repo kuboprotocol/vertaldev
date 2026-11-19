@@ -35,8 +35,8 @@ import {
   type RouteSeo,
 } from "../src/config/seo";
 import { hreflangLinks, localizedUrls, renderLocalizedPages } from "./seoLocales";
-import { renderVibeBankPages, vibeBankUrls } from "./vibeBank";
-import { VIBE_BANK, VIBE_BANK_COPY } from "../src/config/vibeBank";
+import { renderVibePayPages, vibePayUrls } from "./vibePay";
+import { VIBE_PAY, VIBE_PAY_COPY } from "../src/config/vibePay";
 
 /** Rotas públicas indexáveis (sem login). */
 const PUBLIC_ROUTES = [
@@ -58,7 +58,7 @@ export function sitemapUrls(origin: string = SITE_ORIGIN): string[] {
   ];
   return [
     ...paths.map((p) => `${origin}${p === "/" ? "/" : p}`),
-    ...vibeBankUrls(origin),
+    ...vibePayUrls(origin),
     ...localizedUrls(origin),
   ];
 }
@@ -85,7 +85,7 @@ export function renderRss(origin: string = SITE_ORIGIN, date: Date = new Date())
   const pubDate = date.toUTCString();
   const items: { title: string; link: string; description: string }[] = [
     { title: HOME_SEO.title, link: `${origin}/`, description: HOME_SEO.description },
-    { title: VIBE_BANK_COPY[0].title, link: `${origin}${VIBE_BANK.landingPath}`, description: VIBE_BANK_COPY[0].description },
+    { title: VIBE_PAY_COPY[0].title, link: `${origin}${VIBE_PAY.landingPath}`, description: VIBE_PAY_COPY[0].description },
     { title: ROUTE_SEO["/alternativas"].title, link: `${origin}/alternativas`, description: ROUTE_SEO["/alternativas"].description },
     ...ALTERNATIVES.map((a) => {
       const seo = alternativeSeo(a);
@@ -119,8 +119,8 @@ ${body}
 }
 
 export function renderRobots(origin: string = SITE_ORIGIN): string {
-  // Allow explícito das landings do Vertal Vibe Bank (todas as línguas).
-  return `User-agent: *\nAllow: /\nAllow: /vibe-bank\nAllow: /*/vibe-bank\nDisallow: /admin/\n\nSitemap: ${origin}/sitemap.xml\n`;
+  // Allow explícito das landings do Vertal Vibe Pay (todas as línguas).
+  return `User-agent: *\nAllow: /\nAllow: /vibe-pay\nAllow: /*/vibe-pay\nDisallow: /admin/\n\nSitemap: ${origin}/sitemap.xml\n`;
 }
 
 const esc = (v: string) =>
@@ -291,7 +291,7 @@ export function seoPlugin(): Plugin {
       } catch {
         return; // build sem index.html (ex.: bibliotecas, testes)
       }
-      const pages = new Map([...prerenderPages(indexHtml), ...renderLocalizedPages(), ...renderVibeBankPages()]);
+      const pages = new Map([...prerenderPages(indexHtml), ...renderLocalizedPages(), ...renderVibePayPages()]);
       for (const [file, html] of pages) {
         const out = join(dir, file);
         mkdirSync(dirname(out), { recursive: true });

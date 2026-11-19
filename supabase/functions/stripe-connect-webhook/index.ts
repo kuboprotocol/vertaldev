@@ -7,7 +7,7 @@
 //   checkout.session.async_payment_succeeded -> wallet_charges: paid
 //   checkout.session.async_payment_failed    -> wallet_charges: failed
 //   checkout.session.expired                 -> wallet_charges: expired
-//   payout.paid | payout.failed | payout.canceled -> bank_transactions (saques do Vertal Vibe Bank)
+//   payout.paid | payout.failed | payout.canceled -> bank_transactions (saques do Vertal Vibe Pay)
 //
 // Segredo de assinatura: STRIPE_CONNECT_WEBHOOK_SECRET (diferente do
 // STRIPE_WEBHOOK_SECRET do endpoint da plataforma).

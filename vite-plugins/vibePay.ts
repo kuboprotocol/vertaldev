@@ -1,9 +1,9 @@
 /**
- * Landing pública do Vertal Vibe Bank, gerada no build em HTML estático (sem
- * o bundle do React) a partir de `src/config/vibeBank.ts`:
+ * Landing pública do Vertal Vibe Pay, gerada no build em HTML estático (sem
+ * o bundle do React) a partir de `src/config/vibePay.ts`:
  *
- *   /vibe-bank          → vibe-bank.html          (pt-BR, raiz)
- *   /<código>/vibe-bank → <código>/vibe-bank.html (en, es, fr, de, it, ja, zh-CN, hi, ar, ko, ru, tr, id)
+ *   /vibe-pay          → vibe-pay.html          (pt-BR, raiz)
+ *   /<código>/vibe-pay → <código>/vibe-pay.html (en, es, fr, de, it, ja, zh-CN, hi, ar, ko, ru, tr, id)
  *
  * Cada página traz title/description próprios, canonical, hreflang de todos
  * os idiomas + x-default (inglês), Open Graph/Twitter com a imagem da marca e
@@ -13,10 +13,10 @@
  */
 import { APP_NAME, BRAND, SITE_ORIGIN } from "../src/config/brand";
 import { DESCRIPTION_MAX, TITLE_MAX, clampText } from "../src/config/seo";
-import { VIBE_BANK, VIBE_BANK_COPY, vibeBankPath, type VibeBankCopy } from "../src/config/vibeBank";
+import { VIBE_PAY, VIBE_PAY_COPY, vibePayPath, type VibePayCopy } from "../src/config/vibePay";
 
 /** Idioma do x-default: a página é global, então o inglês. */
-export const VIBE_BANK_X_DEFAULT = "en";
+export const VIBE_PAY_X_DEFAULT = "en";
 
 const esc = (v: string) =>
   v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -24,20 +24,20 @@ const esc = (v: string) =>
 const jsonLd = (data: unknown) =>
   `<script type="application/ld+json">${JSON.stringify(data).replace(/</g, "\\u003c")}</script>`;
 
-export function vibeBankUrls(origin: string = SITE_ORIGIN): string[] {
-  return VIBE_BANK_COPY.map((c) => `${origin}${vibeBankPath(c.code)}`);
+export function vibePayUrls(origin: string = SITE_ORIGIN): string[] {
+  return VIBE_PAY_COPY.map((c) => `${origin}${vibePayPath(c.code)}`);
 }
 
-export function vibeBankHreflang(origin: string = SITE_ORIGIN): string {
+export function vibePayHreflang(origin: string = SITE_ORIGIN): string {
   return [
-    ...VIBE_BANK_COPY.map((c) => `<link rel="alternate" hreflang="${c.lang}" href="${origin}${vibeBankPath(c.code)}" />`),
-    `<link rel="alternate" hreflang="x-default" href="${origin}${vibeBankPath(VIBE_BANK_X_DEFAULT)}" />`,
+    ...VIBE_PAY_COPY.map((c) => `<link rel="alternate" hreflang="${c.lang}" href="${origin}${vibePayPath(c.code)}" />`),
+    `<link rel="alternate" hreflang="x-default" href="${origin}${vibePayPath(VIBE_PAY_X_DEFAULT)}" />`,
   ].join("\n    ");
 }
 
-/** Arquivo de saída: a Cloudflare serve `/es/vibe-bank` a partir de `es/vibe-bank.html`. */
-export function vibeBankFile(c: VibeBankCopy): string {
-  return `${vibeBankPath(c.code).slice(1)}.html`;
+/** Arquivo de saída: a Cloudflare serve `/es/vibe-pay` a partir de `es/vibe-pay.html`. */
+export function vibePayFile(c: VibePayCopy): string {
+  return `${vibePayPath(c.code).slice(1)}.html`;
 }
 
 const STYLE = `
@@ -73,20 +73,20 @@ footer{border-top:1px solid #1e1e25;margin-top:40px;padding-top:24px;padding-bot
 `.trim();
 
 function langSwitcher(origin: string, current: string): string {
-  return VIBE_BANK_COPY.map((c) =>
+  return VIBE_PAY_COPY.map((c) =>
     c.lang === current
       ? `<strong lang="${c.lang}">${esc(c.label)}</strong>`
-      : `<a lang="${c.lang}" hreflang="${c.lang}" href="${origin}${vibeBankPath(c.code)}">${esc(c.label)}</a>`,
+      : `<a lang="${c.lang}" hreflang="${c.lang}" href="${origin}${vibePayPath(c.code)}">${esc(c.label)}</a>`,
   ).join("");
 }
 
-export function vibeBankJsonLd(c: VibeBankCopy, origin: string = SITE_ORIGIN): unknown[] {
-  const url = `${origin}${vibeBankPath(c.code)}`;
+export function vibePayJsonLd(c: VibePayCopy, origin: string = SITE_ORIGIN): unknown[] {
+  const url = `${origin}${vibePayPath(c.code)}`;
   const title = clampText(c.title, TITLE_MAX);
   const description = clampText(c.description, DESCRIPTION_MAX);
   const orgId = `${origin}/#organization`;
   const websiteId = `${origin}/#website`;
-  const appId = `${origin}${VIBE_BANK.landingPath}#app`;
+  const appId = `${origin}${VIBE_PAY.landingPath}#app`;
   return [
     {
       "@context": "https://schema.org",
@@ -115,27 +115,27 @@ export function vibeBankJsonLd(c: VibeBankCopy, origin: string = SITE_ORIGIN): u
       inLanguage: c.lang,
       isPartOf: { "@id": websiteId },
       about: { "@id": appId },
-      primaryImageOfPage: `${origin}${VIBE_BANK.ogImage}`,
+      primaryImageOfPage: `${origin}${VIBE_PAY.ogImage}`,
     },
     {
       "@context": "https://schema.org",
       "@type": "BreadcrumbList",
       itemListElement: [
         { "@type": "ListItem", position: 1, name: APP_NAME, item: `${origin}/` },
-        { "@type": "ListItem", position: 2, name: VIBE_BANK.name, item: url },
+        { "@type": "ListItem", position: 2, name: VIBE_PAY.name, item: url },
       ],
     },
     {
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
       "@id": appId,
-      name: VIBE_BANK.name,
-      alternateName: ["Vibe Bank", "Vertal Bank", "VERTAL VIBE BANK"],
+      name: VIBE_PAY.name,
+      alternateName: ["Vibe Pay", "VERTAL VIBE PAY"],
       applicationCategory: "FinanceApplication",
-      applicationSubCategory: "Digital account",
+      applicationSubCategory: "Digital account and digital wallet",
       operatingSystem: "Web, Android, iOS",
       url,
-      image: `${origin}${VIBE_BANK.logoPng}`,
+      image: `${origin}${VIBE_PAY.logoPng}`,
       description,
       inLanguage: c.lang,
       isPartOf: { "@type": "SoftwareApplication", name: APP_NAME, url: `${origin}/` },
@@ -152,13 +152,13 @@ export function vibeBankJsonLd(c: VibeBankCopy, origin: string = SITE_ORIGIN): u
   ];
 }
 
-export function renderVibeBankPage(c: VibeBankCopy, origin: string = SITE_ORIGIN): string {
+export function renderVibePayPage(c: VibePayCopy, origin: string = SITE_ORIGIN): string {
   const title = clampText(c.title, TITLE_MAX);
   const description = clampText(c.description, DESCRIPTION_MAX);
-  const url = `${origin}${vibeBankPath(c.code)}`;
-  const signup = `${origin}/auth?redirect=${encodeURIComponent(VIBE_BANK.appPath)}`;
-  const og = `${origin}${VIBE_BANK.ogImage}`;
-  const { width, height } = VIBE_BANK.logoSize;
+  const url = `${origin}${vibePayPath(c.code)}`;
+  const signup = `${origin}/auth?redirect=${encodeURIComponent(VIBE_PAY.appPath)}`;
+  const og = `${origin}${VIBE_PAY.ogImage}`;
+  const { width, height } = VIBE_PAY.logoSize;
   return `<!doctype html>
 <html lang="${c.lang}"${c.dir ? ` dir="${c.dir}"` : ""}>
   <head>
@@ -170,32 +170,32 @@ export function renderVibeBankPage(c: VibeBankCopy, origin: string = SITE_ORIGIN
     <meta name="keywords" content="${esc(c.keywords)}" />
     <meta name="robots" content="index, follow, max-image-preview:large" />
     <link rel="canonical" href="${url}" />
-    ${vibeBankHreflang(origin)}
+    ${vibePayHreflang(origin)}
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="${esc(APP_NAME)}" />
     <meta property="og:locale" content="${c.ogLocale}" />
-${VIBE_BANK_COPY.filter((o) => o.code !== c.code).map((o) => `    <meta property="og:locale:alternate" content="${o.ogLocale}" />`).join("\n")}
+${VIBE_PAY_COPY.filter((o) => o.code !== c.code).map((o) => `    <meta property="og:locale:alternate" content="${o.ogLocale}" />`).join("\n")}
     <meta property="og:url" content="${url}" />
     <meta property="og:title" content="${esc(title)}" />
     <meta property="og:description" content="${esc(description)}" />
     <meta property="og:image" content="${og}" />
-    <meta property="og:image:width" content="${VIBE_BANK.ogImageSize.width}" />
-    <meta property="og:image:height" content="${VIBE_BANK.ogImageSize.height}" />
-    <meta property="og:image:alt" content="${esc(VIBE_BANK.name)}" />
+    <meta property="og:image:width" content="${VIBE_PAY.ogImageSize.width}" />
+    <meta property="og:image:height" content="${VIBE_PAY.ogImageSize.height}" />
+    <meta property="og:image:alt" content="${esc(VIBE_PAY.name)}" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@KUBOPROTOCOL" />
     <meta name="twitter:title" content="${esc(title)}" />
     <meta name="twitter:description" content="${esc(description)}" />
     <meta name="twitter:image" content="${og}" />
-    <link rel="icon" type="image/png" href="${VIBE_BANK.icon}" />
-    <link rel="apple-touch-icon" href="${VIBE_BANK.appleTouchIcon}" />
-    <link rel="preload" as="image" href="${VIBE_BANK.logo}" type="image/webp" />
-    ${vibeBankJsonLd(c, origin).map(jsonLd).join("\n    ")}
+    <link rel="icon" type="image/png" href="${VIBE_PAY.icon}" />
+    <link rel="apple-touch-icon" href="${VIBE_PAY.appleTouchIcon}" />
+    <link rel="preload" as="image" href="${VIBE_PAY.logo}" type="image/webp" />
+    ${vibePayJsonLd(c, origin).map(jsonLd).join("\n    ")}
     <style>${STYLE}</style>
   </head>
   <body>
     <header>
-      <a class="brand" href="${url}"><img src="${VIBE_BANK.iconSmall}" alt="" width="36" height="36" />${esc(VIBE_BANK.wordmark)}</a>
+      <a class="brand" href="${url}"><img src="${VIBE_PAY.iconSmall}" alt="" width="36" height="36" />${esc(VIBE_PAY.wordmark)}</a>
       <a href="${origin}/auth">${esc(c.login)}</a>
     </header>
     <main>
@@ -210,8 +210,8 @@ ${VIBE_BANK_COPY.filter((o) => o.code !== c.code).map((o) => `    <meta property
           </div>
         </div>
         <picture>
-          <source srcset="${VIBE_BANK.logo}" type="image/webp" />
-          <img src="${VIBE_BANK.logoPng}" alt="${esc(VIBE_BANK.name)}" width="${width}" height="${height}" fetchpriority="high" />
+          <source srcset="${VIBE_PAY.logo}" type="image/webp" />
+          <img src="${VIBE_PAY.logoPng}" alt="${esc(VIBE_PAY.name)}" width="${width}" height="${height}" fetchpriority="high" />
         </picture>
       </section>
       <h2>${esc(c.featuresTitle)}</h2>
@@ -234,6 +234,6 @@ ${VIBE_BANK_COPY.filter((o) => o.code !== c.code).map((o) => `    <meta property
 }
 
 /** Todas as landings, indexadas pelo arquivo de saída. */
-export function renderVibeBankPages(origin: string = SITE_ORIGIN): Map<string, string> {
-  return new Map(VIBE_BANK_COPY.map((c) => [vibeBankFile(c), renderVibeBankPage(c, origin)]));
+export function renderVibePayPages(origin: string = SITE_ORIGIN): Map<string, string> {
+  return new Map(VIBE_PAY_COPY.map((c) => [vibePayFile(c), renderVibePayPage(c, origin)]));
 }

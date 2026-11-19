@@ -31,9 +31,9 @@ const DownloadPage = lazy(() => import("./pages/DownloadPage"));
 const SupportPage = lazy(() => import("./pages/SupportPage"));
 const ConnectPage = lazy(() => import("./pages/ConnectPage"));
 const VertalBankPage = lazy(() => import("./pages/VertalBankPage"));
-const VibeBankLandingPage = lazy(() => import("./pages/VibeBankLandingPage"));
+const VibePayLandingPage = lazy(() => import("./pages/VibePayLandingPage"));
 
-/** Redireciona mantendo query string e hash (aliases do Vertal Vibe Bank). */
+/** Redireciona mantendo query string e hash (aliases do Vertal Vibe Pay). */
 function KeepQueryRedirect({ to }: { to: string }) {
   const { search, hash } = useLocation();
   return <Navigate to={`${to}${search}${hash}`} replace />;
@@ -239,14 +239,17 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
                 
                 <Route path="/connect" element={<ProtectedRoute><ConnectPage /></ProtectedRoute>} />
-                <Route path="/bank" element={<ProtectedRoute><VertalBankPage /></ProtectedRoute>} />
-                {/* Vertal Vibe Bank: landing pública (em produção é HTML estático, vite-plugins/vibeBank.ts) */}
-                <Route path="/vibe-bank" element={<VibeBankLandingPage />} />
-                <Route path="/vertal-vibe-bank" element={<KeepQueryRedirect to="/vibe-bank" />} />
-                {/* Aliases do app do Vertal Vibe Bank (antigo VERTAL Bank / Carteira) */}
-                <Route path="/vertal-bank" element={<KeepQueryRedirect to="/bank" />} />
-                <Route path="/wallet" element={<KeepQueryRedirect to="/bank" />} />
-                <Route path="/carteira" element={<KeepQueryRedirect to="/bank" />} />
+                {/* Vertal Vibe Pay: app (/pay) e landing pública (em produção é HTML estático, vite-plugins/vibePay.ts) */}
+                <Route path="/pay" element={<ProtectedRoute><VertalBankPage /></ProtectedRoute>} />
+                <Route path="/vibe-pay" element={<VibePayLandingPage />} />
+                {/* Rotas antigas (Vertal Vibe Bank / VERTAL Bank / Carteira): em produção o Worker responde 301 (worker/legacyRedirects.ts) */}
+                <Route path="/vibe-bank" element={<KeepQueryRedirect to="/vibe-pay" />} />
+                <Route path="/vertal-vibe-bank" element={<KeepQueryRedirect to="/vibe-pay" />} />
+                <Route path="/vertal-vibe-pay" element={<KeepQueryRedirect to="/vibe-pay" />} />
+                <Route path="/bank" element={<KeepQueryRedirect to="/pay" />} />
+                <Route path="/vertal-bank" element={<KeepQueryRedirect to="/pay" />} />
+                <Route path="/wallet" element={<KeepQueryRedirect to="/pay" />} />
+                <Route path="/carteira" element={<KeepQueryRedirect to="/pay" />} />
                 <Route path="/connectors" element={<ProtectedRoute><ConnectorsHubPage /></ProtectedRoute>} />
                 <Route path="/connectors/web3" element={<ProtectedRoute><ConnectorWeb3HubPage /></ProtectedRoute>} />
                 <Route path="/connectors/web3/:provider" element={<ProtectedRoute><ConnectorWeb3Page /></ProtectedRoute>} />

@@ -1,4 +1,4 @@
-// Ponte entre o KUBO Local Agent (daemon) e o ledger de créditos (Vibe Bank).
+// Ponte entre o KUBO Local Agent (daemon) e o ledger de créditos (Vibe Pay).
 //   POST → debita uma ação de IA (idempotente por idempotency_key)
 //   GET  → saldo atual + últimos gastos do agent local
 //

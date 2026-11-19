@@ -1,22 +1,24 @@
-# Vertal Vibe Bank
+# Vertal Vibe Pay
 
-> **Novo nome (nov/2026):** o antigo "Vertal Vibe Bank" agora é **Vertal Vibe Bank**,
-> com logo próprio (`public/vibe-bank/`). O arquivo continua com este nome para
-> não quebrar links.
+> **Novo nome (19/11/2026):** VERTAL Bank → Vertal Vibe Bank → **Vertal Vibe Pay**,
+> com logo oficial próprio (`public/vibe-pay/`). A troca de "Bank" por "Pay" segue a
+> Res. Conjunta CMN/BCB nº 17/2025 e nº 16/2025 (ver §12.4). O arquivo continua com
+> este nome para não quebrar links.
 
-O Vertal Vibe Bank é a antiga **Carteira** do Vertal Dev, agora como uma conta
+O Vertal Vibe Pay é a antiga **Carteira** do Vertal Dev, agora como uma conta
 digital que junta dois provedores:
 
-| Provedor | Papel no Vertal Vibe Bank |
+| Provedor | Papel no Vertal Vibe Pay |
 |---|---|
 | **ASAAS** (API v3) | **Conta Brasil**: subconta white-label por usuário, Pix (QR/copia e cola), boleto, cartão em reais, links de pagamento, saldo, extrato e **Pix de saída** |
 | **Stripe** (Connect Express) | **Conta global**: conta conectada no país do titular (40+ países), recebimentos em 16 moedas, saldo multimoeda, saques para banco local, **cartões salvos** do usuário (SetupIntent) |
 
-Rotas no app: **`/bank`** (principal, logado). `/wallet`, `/carteira` e
-`/vertal-bank` redirecionam para `/bank` (mantendo query string).
-**Landing pública:** `/vibe-bank` (pt-BR) e `/<idioma>/vibe-bank` — ver §12.
-`/vertal-vibe-bank` redireciona para `/vibe-bank`. O bloco no **Perfil** continua
-existindo (rota antiga) com o atalho "Abrir Vertal Vibe Bank". A Edge Function
+Rotas no app: **`/pay`** (principal, logado). `/bank`, `/wallet`, `/carteira` e
+`/vertal-bank` redirecionam para `/pay` (301 no Worker, mantendo query string).
+**Landing pública:** `/vibe-pay` (pt-BR) e `/<idioma>/vibe-pay` — ver §12.
+`/vibe-bank`, `/<idioma>/vibe-bank`, `/vertal-vibe-bank` e `/vertal-vibe-pay`
+redirecionam (301) para `/vibe-pay` no mesmo idioma (`worker/legacyRedirects.ts`). O bloco no **Perfil** continua
+existindo (rota antiga) com o atalho "Abrir Vertal Vibe Pay". A Edge Function
 continua se chamando **`wallet`** por compatibilidade.
 
 > **Status:** PR em rascunho. Nada foi publicado: migration não aplicada,
@@ -160,7 +162,7 @@ No endpoint Connect, assine também `payout.paid`, `payout.failed`,
 ## 8. Conta Brasil (ASAAS)
 
 - **Abrir conta** (`asaas-open`): cria uma **subconta** com a chave da conta-pai
-  (`POST /v3/accounts`), já com o webhook do Vertal Vibe Bank configurado. A
+  (`POST /v3/accounts`), já com o webhook do Vertal Vibe Pay configurado. A
   `apiKey` da subconta só aparece nessa resposta: é cifrada e guardada. O ASAAS
   envia ao titular um e-mail para criar senha e mandar documentos (fluxo
   **não-BaaS**).
@@ -192,7 +194,7 @@ abertura, e `connect-status` sincroniza as cobranças Stripe.
 - **A VERTAL não vira banco.** Nem o Stripe nem o ASAAS tornam a VERTAL uma
   instituição financeira ou de pagamento. O dinheiro fica em contas no Stripe
   e no ASAAS, em nome de cada titular. Evite chamar de "banco" em material
-  público sem orientação jurídica: "Vertal Vibe Bank" é marca de produto. Ver também §12.4 (Resolução Conjunta BCB/CMN nº 17/2025). O rodapé da
+  público sem orientação jurídica: "Vertal Vibe Pay" é marca de produto. Ver também §12.4 (Resolução Conjunta BCB/CMN nº 17/2025). O rodapé da
   tela já diz isso.
 - **Subcontas ASAAS:** a conta-pai precisa ser **CNPJ** (Resoluções Conjuntas
   BCB nº 16 e 17). Novos integradores entram num **período de avaliação
@@ -231,26 +233,26 @@ abertura, e `connect-status` sincroniza as cobranças Stripe.
 ### 12.1 Páginas
 
 Geradas no build como **HTML estático** (sem React, conteúdo completo no
-HTML) por `vite-plugins/vibeBank.ts`, a partir de `src/config/vibeBank.ts`
+HTML) por `vite-plugins/vibePay.ts`, a partir de `src/config/vibePay.ts`
 (marca, rotas e todos os textos). O plugin de SEO (`vite-plugins/seo.ts`)
 grava os arquivos em `dist/` e põe as URLs no `sitemap.xml` e no `rss.xml`.
 
 | Idioma | URL | Arquivo em `dist/` |
 |---|---|---|
-| pt-BR (raiz) | https://vertal.dev/vibe-bank | `vibe-bank.html` |
-| en (x-default) | https://vertal.dev/en/vibe-bank | `en/vibe-bank.html` |
-| es | https://vertal.dev/es/vibe-bank | `es/vibe-bank.html` |
-| fr | https://vertal.dev/fr/vibe-bank | `fr/vibe-bank.html` |
-| de | https://vertal.dev/de/vibe-bank | `de/vibe-bank.html` |
-| it | https://vertal.dev/it/vibe-bank | `it/vibe-bank.html` |
-| ja | https://vertal.dev/ja/vibe-bank | `ja/vibe-bank.html` |
-| zh-CN | https://vertal.dev/zh-CN/vibe-bank | `zh-CN/vibe-bank.html` |
-| hi | https://vertal.dev/hi/vibe-bank | `hi/vibe-bank.html` |
-| ar (RTL) | https://vertal.dev/ar/vibe-bank | `ar/vibe-bank.html` |
-| ko | https://vertal.dev/ko/vibe-bank | `ko/vibe-bank.html` |
-| ru | https://vertal.dev/ru/vibe-bank | `ru/vibe-bank.html` |
-| tr | https://vertal.dev/tr/vibe-bank | `tr/vibe-bank.html` |
-| id | https://vertal.dev/id/vibe-bank | `id/vibe-bank.html` |
+| pt-BR (raiz) | https://vertal.dev/vibe-pay | `vibe-pay.html` |
+| en (x-default) | https://vertal.dev/en/vibe-pay | `en/vibe-pay.html` |
+| es | https://vertal.dev/es/vibe-pay | `es/vibe-pay.html` |
+| fr | https://vertal.dev/fr/vibe-pay | `fr/vibe-pay.html` |
+| de | https://vertal.dev/de/vibe-pay | `de/vibe-pay.html` |
+| it | https://vertal.dev/it/vibe-pay | `it/vibe-pay.html` |
+| ja | https://vertal.dev/ja/vibe-pay | `ja/vibe-pay.html` |
+| zh-CN | https://vertal.dev/zh-CN/vibe-pay | `zh-CN/vibe-pay.html` |
+| hi | https://vertal.dev/hi/vibe-pay | `hi/vibe-pay.html` |
+| ar (RTL) | https://vertal.dev/ar/vibe-pay | `ar/vibe-pay.html` |
+| ko | https://vertal.dev/ko/vibe-pay | `ko/vibe-pay.html` |
+| ru | https://vertal.dev/ru/vibe-pay | `ru/vibe-pay.html` |
+| tr | https://vertal.dev/tr/vibe-pay | `tr/vibe-pay.html` |
+| id | https://vertal.dev/id/vibe-pay | `id/vibe-pay.html` |
 
 Cada página tem: `<title>` (≤ 65) e meta description (≤ 155) próprios,
 `meta keywords` (Yandex/Baidu/Naver), canonical, `hreflang` de todas as
@@ -259,45 +261,62 @@ versões + `x-default` (inglês), Open Graph (`og:locale` + alternates, imagem
 `WebPage`, `BreadcrumbList`, `SoftwareApplication` com `applicationCategory:
 FinanceApplication`, `FAQPage`). **Não** usa `BankOrCreditUnion` nem
 `FinancialService` (a VERTAL não é banco; `FinancialService` é tipo de
-estabelecimento local). Os botões levam a `/auth?redirect=%2Fbank`.
+estabelecimento local). Os botões levam a `/auth?redirect=%2Fpay`.
 
-Para adicionar um idioma: acrescente um objeto em `VIBE_BANK_COPY` (o código
+Para adicionar um idioma: acrescente um objeto em `VIBE_PAY_COPY` (o código
 precisa existir em `src/config/locales.ts`); sitemap, hreflang e seletor de
-idioma se ajustam sozinhos. `src/test/vibe-bank-seo.test.ts` confere limites,
-idiomas obrigatórios e a linha de conformidade.
+idioma se ajustam sozinhos. `src/test/vibe-pay-seo.test.ts` confere limites,
+idiomas obrigatórios, a linha de conformidade, os redirecionamentos e que
+nenhum nome/título/descrição/H1/keywords usa "banco/bank" em qualquer idioma.
 
 Outros pontos:
-- **SPA:** `/vibe-bank` também é rota do React (`VibeBankLandingPage`, mesmo
+- **SPA:** `/vibe-pay` também é rota do React (`VibePayLandingPage`, mesmo
   texto em pt-BR) para navegação interna e `vite dev`. O service worker não
-  intercepta `/vibe-bank` (`navigateFallbackDenylist`), então quem já tem o
+  intercepta `/vibe-pay` (`navigateFallbackDenylist`), então quem já tem o
   PWA instalado recebe o HTML estático.
-- **Pay Per Crawl:** `/vibe-bank` e `/<idioma>/vibe-bank` têm preço 0
+- **Pay Per Crawl:** `/vibe-pay` e `/<idioma>/vibe-pay` têm preço 0
   (`worker/payPerCrawl.ts`).
-- **robots.txt:** `Allow: /vibe-bank` e `Allow: /*/vibe-bank` explícitos.
+- **robots.txt:** `Allow: /vibe-pay` e `Allow: /*/vibe-pay` explícitos.
 - **Links internos:** rodapé da home (`Index.tsx`) e rodapé das páginas
   traduzidas (`/<idioma>`, `/<idioma>/alternativas…`) apontam para a landing.
-- **Imagens** (`public/vibe-bank/`): `logo.webp`/`logo.png` (768×731),
+- **Redirecionamentos 301** (`worker/legacyRedirects.ts`, antes dos assets):
+  `/vibe-bank` → `/vibe-pay`, `/<idioma>/vibe-bank` → `/<idioma>/vibe-pay`,
+  `/vertal-vibe-bank` → `/vibe-pay`, `/vibe-bank/<arquivo>` → `/vibe-pay/<arquivo>`
+  (OG antigo em cache), `/bank`/`/wallet`/`/carteira`/`/vertal-bank` → `/pay`.
+  O React Router tem os mesmos aliases (navegação interna e `vite dev`).
+- **Imagens** (`public/vibe-pay/`): `logo.webp`/`logo.png` (960×640),
   `og-image.jpg` (1200×630), `icon-192.png`, `icon-512.png`,
-  `apple-touch-icon.png` (180), `icon-64.webp` — recortes do logo original.
+  `apple-touch-icon.png` (180), `icon-64.webp` (emblema "V") — gerados do logo
+  oficial 1536×1024 (fundo preto, "VERTAL VIBE PAY" com PAY em roxo).
 
-### 12.2 Conformidade dos textos
+### 12.2 Conformidade dos textos e palavras-chave
 
-Todos os idiomas dizem que o Vertal Vibe Bank é um recurso do Vertal Dev,
-**não um banco**, e que as contas são fornecidas pelo **Stripe e pelo ASAAS**
-(linha visível no fim da página e 1ª pergunta do FAQ). Não prometemos licença
-bancária, cartão emitido, rendimento, garantia do FGC nem tarifas zero (só o
-cadastro no Vertal Dev é grátis). Traduções de hi, ar, ja, zh-CN, ko, ru, tr e
-id foram feitas sem revisão nativa: vale revisar.
+Nenhum idioma chama o produto de banco: nome, `<title>`, description, H1 e
+keywords falam em **conta digital / conta global / carteira digital / conta
+multimoeda / receber pagamentos do exterior / Pix / links de pagamento** (e
+equivalentes: *global account, multi-currency account, digital wallet, receive
+payments worldwide; cuenta global, billetera digital; compte global, portefeuille
+numérique; globales Konto, digitale Wallet; conto globale, wallet digitale;
+グローバル口座, デジタルウォレット; 全球账户, 数字钱包; ग्लोबल खाता, डिजिटल वॉलेट;
+حساب عالمي, محفظة رقمية; 글로벌 계좌, 디지털 지갑; глобальный счёт, цифровой кошелёк;
+küresel hesap, dijital cüzdan; akun global, dompet digital*).
+A **única** menção a banco é para negar: a 1ª pergunta do FAQ ("O Vertal Vibe
+Pay é um banco? Não…", que também capta buscas por "banco digital") e a linha
+de conformidade no fim da página: as contas são fornecidas pelo **Stripe e pelo
+ASAAS**; a Vertal não é banco. Não prometemos licença bancária, cartão emitido,
+rendimento, garantia do FGC nem tarifas zero (só o cadastro no Vertal Dev é
+grátis). Traduções de hi, ar, ja, zh-CN, ko, ru, tr e id foram feitas sem
+revisão nativa: vale revisar.
 
 ### 12.3 Depois do deploy (não feito)
 
-1. Conferir no ar: `curl -s https://vertal.dev/en/vibe-bank | grep canonical`
+1. Conferir no ar: `curl -s https://vertal.dev/en/vibe-pay | grep canonical`
    e o `sitemap.xml` com as 14 URLs; validar no
    [Rich Results Test](https://search.google.com/test/rich-results) e no
    [Schema Markup Validator](https://validator.schema.org/).
 2. **Google Search Console** (propriedade de domínio `vertal.dev`): Sitemaps →
    enviar `https://vertal.dev/sitemap.xml`; Inspeção de URL → "Solicitar
-   indexação" para `/vibe-bank` e `/en/vibe-bank`. Conferir "Segmentação
+   indexação" para `/vibe-pay` e `/en/vibe-pay`. Conferir "Segmentação
    internacional"/hreflang em alguns dias.
 3. **Bing Webmaster Tools**: importar do Search Console ou adicionar o site e
    enviar o sitemap. O índice do Bing também alimenta **Yahoo, DuckDuckGo e
@@ -311,17 +330,21 @@ id foram feitas sem revisão nativa: vale revisar.
    com acesso rápido a partir da China; enviar o sitemap e as URLs `zh-CN`.
 7. **Naver Search Advisor** (searchadvisor.naver.com): enviar sitemap e
    `rss.xml` (a verificação do Naver já existe no Worker).
-8. Opcional: Seznam (cs), e compartilhar a URL `/vibe-bank` nas redes da KUBO
+8. Opcional: Seznam (cs), e compartilhar a URL `/vibe-pay` nas redes da KUBO
    (X, GitHub, Telegram) para os primeiros backlinks.
 
-### 12.4 Risco de nome (Brasil)
+### 12.4 Nome (Brasil) — por que "Pay"
 
-A **Resolução Conjunta BCB/CMN nº 17/2025** (28/11/2025) veda que instituições
-autorizadas pelo Banco Central usem "banco"/"bank" no nome, marca, domínio ou
-comunicação sem licença bancária; o prazo de adequação termina em
-**28/11/2026**. A VERTAL não é instituição autorizada, então a regra não a
-atinge diretamente, mas o nome "Vertal Vibe Bank" num serviço com contas de
-pagamento pode ser questionado (BCB, Procon, ou pelos próprios Stripe/ASAAS).
-**Recomendação:** validar o nome com advogado antes de divulgar no Brasil;
-se for preciso trocar, basta mudar `VIBE_BANK.name`/textos em
-`src/config/vibeBank.ts` (as rotas podem ficar).
+- **Resolução Conjunta CMN/BCB nº 17/2025:** veda "banco"/"bank" (e
+  variações) em nome, marca, domínio e comunicação de quem não tem licença
+  bancária; prazo de adequação até **28/11/2026**.
+- **Resolução Conjunta CMN/BCB nº 16/2025:** provedores de BaaS (como o ASAAS)
+  não podem contratar com parceiros que usem esses termos.
+
+Por isso o produto passou de "Vertal Vibe Bank" para **Vertal Vibe Pay** em
+19/11/2026 (aprovado pelo dono do produto): marca, rotas (`/vibe-pay`, `/pay`),
+textos em 14 idiomas, JSON-LD (`alternateName` sem "Bank"), OG e logo. As
+rotas antigas respondem 301. Nomes internos de código/banco de dados
+(`bank-*`, `src/lib/bank`, migration `vertal_bank`) não aparecem ao usuário e
+ficaram como estão. Validar o nome final com advogado antes de divulgar
+continua recomendado.
