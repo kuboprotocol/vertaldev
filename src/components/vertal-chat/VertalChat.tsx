@@ -22,6 +22,7 @@ import { PANEL_BY_KEY, PANEL_LIST, type PanelRequest } from './panelList';
 import { PanelHost } from './PanelHost';
 import { ConnectionsDialog } from './ConnectionsDialog';
 import { MemoryDialog } from './MemoryDialog';
+import { FormApprovalDialog } from './FormApprovalDialog';
 import { previewHtml } from '@/lib/chatAgent/previewHtml';
 import { toast } from 'sonner';
 import { DICTATION_ERROR_TEXT, useDictation } from '@/lib/voice/useDictation';
@@ -521,6 +522,7 @@ export function VertalChat() {
       )}
 
       <ApiApprovalDialog approval={chat.approval} />
+      <FormApprovalDialog approval={chat.formApproval} />
       <ConnectionsDialog open={connectionsOpen} onOpenChange={setConnectionsOpen} onOpenVault={() => navigate('/secrets')} />
       <MemoryDialog open={memoryOpen} onOpenChange={setMemoryOpen} />
     </div>

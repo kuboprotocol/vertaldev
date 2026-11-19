@@ -20,6 +20,12 @@ import { generateCad } from '@/lib/cad/cadService';
 import { getCadDraft, sendCadToStudio } from '@/lib/cad/cadBridge';
 import { cadElementCount } from '@/lib/cad/model';
 import { summarizeVibeStream, vibeCodeRequestBody, vibeHttpError } from './vibeBridge';
+import { callBrowserForm, type BrowserFormResponse } from '@/lib/browserForm/client';
+import {
+  BROWSER_FORM_LIMITS, BROWSER_FORM_MESSAGES, describeSchemaForAgent, planFill,
+  type FormField, type FormValues,
+} from '@/lib/browserForm/formCore';
+import type { BrowserFormFieldView, BrowserFormStage } from './artifacts';
 
 export interface ApiApprovalRequest {
   method: string;
@@ -30,6 +36,22 @@ export interface ApiApprovalRequest {
   hasBody: boolean;
 }
 
+/** Cartão de revisão antes de enviar um formulário de site. */
+export interface FormApprovalRequest {
+  url: string;
+  host: string;
+  fields: FormField[];
+  /** Valores já casados com as chaves dos campos (o usuário pode editar). */
+  values: FormValues;
+  screenshot?: string;
+  /** Erros de validação da pré-visualização e campos obrigatórios em branco. */
+  errors: string[];
+  missingRequired: string[];
+  credits: number;
+}
+
+export type FormApprovalDecision = { action: 'submit'; values: FormValues } | { action: 'cancel' };
+
 export interface ActionContext {
   userId: string;
   /** Artefatos já criados na conversa (para editar por id). */
@@ -38,6 +60,8 @@ export interface ActionContext {
   newId: () => string;
   /** Pede ao usuário para aprovar uma chamada de API externa. */
   approveApi: (request: ApiApprovalRequest) => Promise<boolean>;
+  /** Mostra o cartão de revisão do formulário e espera o clique do usuário (Enviar/Cancelar). */
+  approveForm?: (request: FormApprovalRequest) => Promise<FormApprovalDecision>;
   /** Prévia ao vivo do app enquanto o código chega. */
   onAppPreview?: (html: string) => void;
   /** Plano permite construir app? Devolve a mensagem de bloqueio, ou null. */
@@ -387,6 +411,118 @@ async function runApi(action: Extract<AgentAction, { tool: 'api_request' }>, ctx
     artifact: { id: ctx.newId(), kind: 'api', title: `${action.method} ${host}`, method: action.method, host, status, ok: !!data?.ok, body: body || note },
     result: { tool: 'api_request', ok: !!data?.ok, summary: `HTTP ${status}${data?.truncated ? ' (resposta cortada)' : ''}\n${body || note}` },
     needsFollowUp: true,
+  };
+}
+
+// ─── Formulários de sites (navegador na nuvem) ──────────────────────────
+
+/** Valores do agente casados com as chaves dos campos (para o cartão de revisão). */
+export function valuesByFieldKey(fields: FormField[], values: FormValues): FormValues {
+  const out: FormValues = {};
+  for (const fill of planFill(fields, values).fills) {
+    out[fill.key] = Array.isArray(fill.value) ? fill.value.join(', ') : fill.value;
+  }
+  return out;
+}
+
+/** Campos para mostrar no cartão (senhas mascaradas). */
+export function fieldViews(fields: FormField[], values: FormValues = {}): BrowserFormFieldView[] {
+  return fields.map((f) => {
+    const raw = values[f.key];
+    const value = raw === undefined ? f.current : typeof raw === 'boolean' ? (raw ? 'Sim' : 'Não') : raw;
+    return {
+      key: f.key, label: f.label, type: f.type, required: f.required,
+      ...(value ? { value: f.type === 'password' ? '••••••' : value.slice(0, 500) } : {}),
+    };
+  });
+}
+
+async function runBrowserForm(action: Extract<AgentAction, { tool: 'browser_form' }>, ctx: ActionContext): Promise<ActionOutcome> {
+  const tool = 'browser_form' as const;
+  const host = new URL(action.url).host;
+  const artifactOf = async (
+    stage: BrowserFormStage, ok: boolean, res: BrowserFormResponse, values: FormValues, extra: { confirmation?: string; notes?: string[] } = {},
+  ) => ({
+    id: ctx.newId(), kind: 'browser_form' as const,
+    title: `${stage === 'submitted' ? 'Enviado' : stage === 'preview' ? 'Prévia' : stage === 'cancelled' ? 'Cancelado' : stage === 'failed' ? 'Falhou' : 'Formulário'}: ${res.schema?.title || host}`.slice(0, 80),
+    url: action.url, host, stage, ok,
+    fields: fieldViews(res.schema?.fields ?? [], values),
+    ...(res.screenshot ? { screenshot: await storeImage(res.screenshot, ctx.userId) } : {}),
+    ...(extra.confirmation ? { confirmation: extra.confirmation } : {}),
+    ...(extra.notes?.length ? { notes: extra.notes } : {}),
+  });
+  const failure = (res: BrowserFormResponse) => res.message || BROWSER_FORM_MESSAGES[res.status as Exclude<typeof res.status, 'ok'>] || BROWSER_FORM_MESSAGES.error;
+
+  if (action.op === 'inspect') {
+    const res = await callBrowserForm('inspect', { url: action.url });
+    if (!res.schema || res.schema.fields.length === 0) {
+      const message = failure(res);
+      return { ...followUp(tool, false, `${message} (${host})`, message), ...(res.schema ? { artifact: await artifactOf('failed', false, res, {}) } : {}) };
+    }
+    const captcha = res.status === 'captcha' ? `\nATENÇÃO: a página tem captcha (${res.captchaKind ?? 'verificação'}). O envio automático vai parar nele; avise o usuário.` : '';
+    return {
+      ...followUp(tool, true, `${describeSchemaForAgent(res.schema)}${captcha}\nPróximo passo: peça ao usuário os campos obrigatórios que você não sabe; depois use "preview".`),
+      artifact: await artifactOf('inspect', true, res, {}),
+    };
+  }
+
+  if (action.op === 'preview') {
+    const res = await callBrowserForm('fill-preview', { url: action.url, values: action.values ?? {} });
+    if (!res.schema) return followUp(tool, false, failure(res), failure(res));
+    const values = valuesByFieldKey(res.schema.fields, action.values ?? {});
+    const notes = [
+      ...(res.errors ?? []),
+      ...((res.missingRequired ?? []).length ? [`Obrigatórios em branco: ${res.missingRequired!.join(', ')}`] : []),
+      ...((res.unknownKeys ?? []).length ? [`Chaves sem campo: ${res.unknownKeys!.join(', ')}`] : []),
+      ...(res.status === 'captcha' ? ['A página tem captcha: o envio automático não passa dele.'] : []),
+    ];
+    return {
+      ...followUp(tool, true, [
+        `Prévia preenchida em ${host} (nada foi enviado). Preenchidos: ${(res.filled ?? []).join(', ') || 'nenhum'}.`,
+        ...notes,
+        notes.length ? 'Resolva isso com o usuário antes de enviar.' : 'Tudo certo: se o usuário quiser, use "submit" (ele revisa e clica em Enviar).',
+      ].join('\n')),
+      artifact: await artifactOf('preview', notes.length === 0, res, values, { notes }),
+    };
+  }
+
+  // submit: refaz a prévia, mostra o cartão de revisão e só envia com o clique do usuário.
+  if (!ctx.approveForm) return fail(tool, 'O envio de formulários precisa da sua aprovação na tela do chat.');
+  const preview = await callBrowserForm('fill-preview', { url: action.url, values: action.values ?? {} });
+  if (!preview.schema) return followUp(tool, false, failure(preview), failure(preview));
+  if (preview.status === 'captcha') {
+    const message = `${BROWSER_FORM_MESSAGES.captcha} Link: ${action.url}`;
+    return { ...followUp(tool, false, message, message), artifact: await artifactOf('failed', false, preview, valuesByFieldKey(preview.schema.fields, action.values ?? {})) };
+  }
+  const decision = await ctx.approveForm({
+    url: action.url, host,
+    fields: preview.schema.fields,
+    values: valuesByFieldKey(preview.schema.fields, action.values ?? {}),
+    screenshot: preview.screenshot,
+    errors: preview.errors ?? [],
+    missingRequired: preview.missingRequired ?? [],
+    credits: BROWSER_FORM_LIMITS.submitCredits,
+  });
+  if (decision.action !== 'submit') {
+    return followUp(tool, false, 'O usuário cancelou o envio no cartão de revisão. Nada foi enviado.', 'Envio do formulário cancelado.');
+  }
+  const res = await callBrowserForm('submit', {
+    url: action.url, values: decision.values, confirmed: true, runId: crypto.randomUUID(),
+    ...(action.submitSelector ? { submitSelector: action.submitSelector } : {}),
+  });
+  const fields = res.schema?.fields ?? preview.schema.fields;
+  const shown = { ...res, schema: res.schema ?? preview.schema };
+  if (!res.ok) {
+    const message = failure(res);
+    const details = [...(res.errors ?? []), ...(res.pageErrors ?? []), ...((res.missingRequired ?? []).length ? [`Obrigatórios em branco: ${res.missingRequired!.join(', ')}`] : [])];
+    return {
+      ...followUp(tool, false, [message, ...details].join('\n'), message),
+      artifact: await artifactOf('failed', false, shown, valuesByFieldKey(fields, decision.values), { notes: details, confirmation: res.confirmation }),
+    };
+  }
+  return {
+    ...followUp(tool, true, `Formulário enviado em ${host}${res.charged ? ` (${res.charged} créditos)` : ''}. A página mostrou:\n${res.confirmation || '(sem texto de confirmação)'}`),
+    artifact: await artifactOf('submitted', true, shown, valuesByFieldKey(fields, decision.values), { confirmation: res.confirmation }),
   };
 }
 
@@ -863,6 +999,8 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
       }
       case 'api_request':
         return await runApi(action, ctx);
+      case 'browser_form':
+        return await runBrowserForm(action, ctx);
       case 'weather':
         return await runWeather(action);
       case 'web_search':
@@ -1033,6 +1171,8 @@ export function actionLabel(action: AgentAction): string {
     case 'voice_input': return 'Abrindo gravador de voz para capturar sua mensagem';
     case 'schedule_alarm': return 'Agendando alarme com som personalizado';
     case 'api_request': return 'Chamando API externa';
+    case 'browser_form':
+      return action.op === 'inspect' ? 'Abrindo o formulário no navegador na nuvem' : action.op === 'preview' ? 'Preenchendo o formulário (sem enviar)' : 'Preparando o envio do formulário (você revisa antes)';
     case 'open_panel': return 'Abrindo painel';
     case 'weather': return 'Consultando o clima';
     case 'web_search': return 'Buscando na web';

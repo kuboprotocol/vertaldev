@@ -2,7 +2,7 @@
 import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import {
-  AppWindow, BookMarked, BookOpen, Check, Cloud, Code2, Copy, Download, ExternalLink, FileText, Film, Sparkles, Globe, Image as ImageIcon,
+  AppWindow, BookMarked, ClipboardCheck, BookOpen, Check, Cloud, Code2, Copy, Download, ExternalLink, FileText, Film, Sparkles, Globe, Image as ImageIcon,
   LayoutTemplate, Loader2, Mail, Mic, Music, Newspaper, Palette, Presentation, Radio, Scissors, Table2, Thermometer, Clock,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -57,6 +57,7 @@ const KIND_ICON: Record<ArtifactKind, typeof FileText> = {
   podcast_studio: Radio,
   download: Download,
   api: Globe,
+  browser_form: ClipboardCheck,
 };
 
 /** Imagem guardada no bucket privado: renova a URL assinada quando a conversa é reaberta. */
@@ -157,6 +158,8 @@ function summary(a: Artifact): string {
     case 'emo': return 'Animar foto com movimento';
     case 'podcast_studio': return `${a.duration}min · ${a.style}`;
     case 'api': return `HTTP ${a.status}`;
+    case 'browser_form':
+      return `${a.host} · ${{ inspect: 'campos lidos', preview: 'prévia, não enviado', submitted: 'enviado', cancelled: 'cancelado', failed: 'não enviado' }[a.stage]}`;
     case 'download': return a.format.toUpperCase();
     case 'email': return 'Rascunho';
     case 'design': return `${a.images.length} variação${a.images.length === 1 ? '' : 'ões'}`;
@@ -798,6 +801,41 @@ export function ArtifactViewer({ artifact, actions }: { artifact: Artifact; acti
           <Download className="h-10 w-10 text-primary" aria-hidden />
           <p className="text-sm text-muted-foreground">Seu arquivo {a.format.toUpperCase()} está pronto.</p>
           <a href={a.url} target="_blank" rel="noreferrer noopener" className={primaryBtn}>Baixar arquivo</a>
+        </div>
+      );
+      break;
+    case 'browser_form':
+      toolbar = (
+        <a href={a.url} target="_blank" rel="noreferrer noopener" className={actionBtn}>
+          <ExternalLink className="h-3.5 w-3.5" /> Abrir o site
+        </a>
+      );
+      body = (
+        <div className="space-y-4">
+          <p className="text-sm">
+            <span className={cn('mr-2 rounded-md px-2 py-0.5 text-xs font-semibold', a.stage === 'submitted' ? 'bg-emerald-500/15 text-emerald-400' : a.ok ? 'bg-primary/15 text-primary' : 'bg-destructive/15 text-destructive')}>
+              {{ inspect: 'Campos lidos', preview: 'Prévia (não enviado)', submitted: 'Enviado', cancelled: 'Cancelado', failed: 'Não enviado' }[a.stage]}
+            </span>
+            <span className="text-muted-foreground">{a.host}</span>
+          </p>
+          {a.confirmation && (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm">
+              <p className="mb-1 text-xs font-semibold text-emerald-400">A página respondeu</p>
+              <p className="whitespace-pre-wrap">{a.confirmation}</p>
+            </div>
+          )}
+          {a.notes && a.notes.length > 0 && (
+            <ul className="list-disc space-y-1 pl-5 text-xs text-amber-400">{a.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>
+          )}
+          <dl className="grid gap-2 text-sm sm:grid-cols-2">
+            {a.fields.map((f) => (
+              <div key={f.key} className="rounded-lg border border-border/40 px-3 py-2">
+                <dt className="text-xs text-muted-foreground">{f.label}{f.required ? ' *' : ''}</dt>
+                <dd className="break-words font-medium">{f.value ?? '—'}</dd>
+              </div>
+            ))}
+          </dl>
+          {a.screenshot && <StoredImg image={a.screenshot} alt={`Captura de ${a.host}`} className="w-full rounded-xl border border-border/50" />}
         </div>
       );
       break;
