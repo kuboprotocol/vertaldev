@@ -40,6 +40,7 @@ import {
   parseConnections,
   secretPlaceholders,
 } from "../_shared/chatAgent.ts";
+import { wantsBrowserForm } from "../_shared/browserForm.ts";
 import { listVisibleSecrets, resolveEnvForRun } from "../_shared/kuboSecrets.ts";
 import {
   DELEGATED_CHAT_PROMPT,
@@ -636,6 +637,8 @@ async function handleAgentChat(
     recall: brain.recall,
     summary: brain.summary,
     plan: brain.planBlock,
+    // Ferramenta de formulários só quando a conversa fala disso (e nunca em pedido delegado pelo Vibe Code).
+    browserForm: !delegated && wantsBrowserForm([...all.slice(-8), ...results.slice(-6)]),
   }) + (delegated ? DELEGATED_CHAT_PROMPT : "");
   const final = agent.data.final === true || brain.planPhase === "final";
   const convo = results.length

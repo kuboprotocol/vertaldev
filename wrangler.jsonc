@@ -55,6 +55,10 @@
     "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_8n6OQz5s_ht_yibdyVMPlg_lyHIWHc1",
     "SPOTIFY_CLIENT_ID": "f190584b3d57481e8b17b7a4efc1dbfe"
   },
+  // Navegador na nuvem do Vertal Chat (/api/browser/*, worker/browserFormRoutes.ts):
+  // Cloudflare Browser Run. Funciona no plano Workers Free com limites baixos
+  // (10 min/dia); para uso real, Workers Paid. Guia: docs/BROWSER_FORM_AGENT.md.
+  "browser": { "binding": "BROWSER" },
   // Requerido pelo Wrangler 4.135.0+ para o comando `wrangler preview`.
   "previews": {}
 }

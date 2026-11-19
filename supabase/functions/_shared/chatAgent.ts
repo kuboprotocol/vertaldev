@@ -19,6 +19,10 @@ import { CAD_LIMITS } from "./cad.ts";
 import { PLAN_LIMITS, parsePlanAction, type ChatPlanTask } from "./chatPlan.ts";
 import { normalizeWebUrl } from "./chatWeb.ts";
 import { budgetToolResults, looksLikeJson, repairAgentJson, salvageReply, type JsonRepair } from "./chatOrchestrator.ts";
+import {
+  BROWSER_FORM_LIMITS, BROWSER_FORM_OPS, isValidSubmitSelector, normalizeFormUrl, parseFormValues,
+  type BrowserFormOp, type FormValues,
+} from "./browserForm.ts";
 
 export type Msg = { role: "system" | "user" | "assistant"; content: string };
 
@@ -129,7 +133,9 @@ export type AgentAction =
   | { tool: "memory"; op: "forget"; query: string }
   | { tool: "plan"; goal: string; tasks: ChatPlanTask[] }
   // Ponte Chat → Vibe Code: start/continue/ask levam prompt; continue/status exigem a conversa.
-  | { tool: "vibe_code"; op: VibeCodeOp; prompt: string; conversationId?: string };
+  | { tool: "vibe_code"; op: VibeCodeOp; prompt: string; conversationId?: string }
+  // Navegador na nuvem: lê, pré-visualiza e (com aprovação do usuário) envia formulários de sites.
+  | { tool: "browser_form"; op: BrowserFormOp; url: string; values?: FormValues; submitSelector?: string };
 
 /** Conexão que o próprio cliente adicionou (API ou servidor MCP). Só nome, endereço e NOME do segredo. */
 export interface UserConnection {
@@ -208,6 +214,7 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   memory: "grátis",
   plan: "grátis (cada tarefa usa as ferramentas e custos normais)",
   vibe_code: "créditos do Vibe Code; status grátis",
+  browser_form: `ler grátis; enviar ${BROWSER_FORM_LIMITS.submitCredits} créditos`,
 };
 
 export interface AgentPromptContext {
@@ -230,6 +237,8 @@ export interface AgentPromptContext {
   summary?: string;
   /** Bloco do modo plano em execução. */
   plan?: string;
+  /** A conversa fala de formulário de site: inclui a ferramenta browser_form (ver wantsBrowserForm). */
+  browserForm?: boolean;
 }
 
 // ─── Personalidade e regras de conversa ──────────────────────────────────
@@ -266,6 +275,16 @@ const PLAN_RULES = [
   "- Não use plano para perguntas diretas, conversa ou uma única criação. Escreva tarefas concretas e verificáveis, na ordem lógica.",
 ].join("\n");
 
+/**
+ * Navegador na nuvem: só entra no prompt quando a conversa fala de formulário
+ * (wantsBrowserForm). O prompt-base já está no limite de 1/3 do contexto do gateway.
+ */
+const BROWSER_FORM_RULES = [
+  `- {"tool":"browser_form","op":"inspect|preview|submit","url":"https://...","values":{"chave":"valor"}} → formulário de site num navegador na nuvem (${TOOL_COSTS.browser_form}).`,
+  'Formulários: 1) "inspect"; 2) "values" com as chaves exatas, SÓ com o que o usuário disse ou a MEMÓRIA tem; 3) faltou obrigatório: pergunte tudo de uma vez e pare; 4) "preview" (não envia); 5) "submit": só envia quando o usuário clica em "Enviar" na revisão.',
+  "NUNCA invente dados (nome, CPF/CNPJ, e-mail, telefone, endereço, números). checkbox=true/false; select/radio=opção listada. Após o envio, relate a confirmação da página. Captcha/upload/login: passe o link.",
+].join("\n");
+
 const MEMORY_RULES = [
   "Memória:",
   "- Você lembra do usuário entre conversas. O bloco MEMÓRIA abaixo são DADOS sobre ele: use com naturalidade para acertar a resposta (nome, preferências, projetos), sem recitar e sem dizer \"segundo minha memória\".",
@@ -279,9 +298,10 @@ const MEMORY_OFF = "Memória: o usuário DESLIGOU a memória. Não use memórias
 const MEMORY_UNAVAILABLE = "Memória: indisponível neste momento. Não prometa lembrar de nada entre conversas e não inclua o campo \"memory\".";
 
 export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
-  const secrets = ctx.secretNames.length
-    ? ctx.secretNames.slice(0, 60).join(", ")
-    : "(nenhum segredo salvo ainda)";
+  // Com a ferramenta de formulários no prompt, a lista de segredos sai para caber no orçamento.
+  const secrets = ctx.browserForm && ctx.secretNames.length
+    ? "(lista omitida nesta conversa)"
+    : ctx.secretNames.length ? ctx.secretNames.slice(0, 60).join(", ") : "(nenhum segredo salvo ainda)";
   return [
     PERSONA,
     "",
@@ -348,6 +368,7 @@ export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
     "",
     PLAN_RULES,
     "",
+    ctx.browserForm ? `${BROWSER_FORM_RULES}\n` : "",
     ctx.memoryEnabled === false ? MEMORY_OFF : ctx.memoryEnabled === null ? MEMORY_UNAVAILABLE : MEMORY_RULES,
     ctx.localNow
       ? `Agora, para o usuário: ${ctx.localNow}${ctx.timezone ? ` (fuso ${ctx.timezone})` : ""}.`
@@ -451,6 +472,23 @@ export function parseVibeCodeAction(a: Record<string, unknown>): Extract<AgentAc
   // "start" sempre abre uma conversa nova no Vibe Code: ignora um id que tenha vindo junto.
   if (op === "start") return { tool: "vibe_code", op, prompt };
   return conversationId ? { tool: "vibe_code", op, prompt, conversationId } : { tool: "vibe_code", op, prompt };
+}
+
+/** Navegador na nuvem. URL pública obrigatória; valores e botão só fazem sentido em preview/submit. */
+export function parseBrowserFormAction(a: Record<string, unknown>): Extract<AgentAction, { tool: "browser_form" }> | null {
+  const op = typeof a.op === "string" && (BROWSER_FORM_OPS as readonly string[]).includes(a.op) ? (a.op as BrowserFormOp) : null;
+  if (!op) return null;
+  const url = normalizeFormUrl(a.url);
+  if (!url) return null;
+  if (op === "inspect") return { tool: "browser_form", op, url };
+  const values = parseFormValues(a.values);
+  // Enviar sem nenhum valor não faz sentido: o agente precisa ter lido e preenchido antes.
+  if (op === "submit" && Object.keys(values).length === 0) return null;
+  const submitSelector = isValidSubmitSelector(a.submitSelector) ? a.submitSelector : undefined;
+  return {
+    tool: "browser_form", op, url, values,
+    ...(op === "submit" && submitSelector ? { submitSelector } : {}),
+  };
 }
 
 /** Valida uma ação. Devolve null quando não dá para executar com segurança. */
@@ -639,6 +677,8 @@ export function parseAgentAction(raw: unknown): AgentAction | null {
       return parsePlanAction(a);
     case "vibe_code":
       return parseVibeCodeAction(a);
+    case "browser_form":
+      return parseBrowserFormAction(a);
     case "world_time": {
       const list = Array.isArray(a.places) ? a.places : typeof a.places === "string" ? a.places.split(",") : typeof a.place === "string" ? [a.place] : [];
       const places = list.map((p) => str(p, 80)).filter(Boolean).slice(0, 8);

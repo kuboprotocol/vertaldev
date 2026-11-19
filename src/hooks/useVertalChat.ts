@@ -25,7 +25,9 @@ import {
   type Artifact,
   type MessageExtras,
 } from '@/lib/chatAgent/artifacts';
-import { actionLabel, runAction, type ActionOutcome, type ApiApprovalRequest } from '@/lib/chatAgent/runAction';
+import {
+  actionLabel, runAction, type ActionOutcome, type ApiApprovalRequest, type FormApprovalDecision, type FormApprovalRequest,
+} from '@/lib/chatAgent/runAction';
 import { loadConnections } from '@/lib/chatAgent/connections';
 import {
   PLAN_LIMITS,
@@ -62,6 +64,11 @@ export interface VertalMessage {
 
 export interface PendingApproval extends ApiApprovalRequest {
   resolve: (approved: boolean) => void;
+}
+
+/** Cartão de revisão de formulário aberto: só um clique do usuário em Enviar libera o envio. */
+export interface PendingFormApproval extends FormApprovalRequest {
+  resolve: (decision: FormApprovalDecision) => void;
 }
 
 /** Rodadas de ferramentas seguidas (ex.: buscar → ler → responder) antes de o agente ter de responder. */
@@ -161,6 +168,7 @@ export function useVertalChat(options: {
   const [conversations, setConversations] = useState<ConversationListItem[]>([]);
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [approval, setApproval] = useState<PendingApproval | null>(null);
+  const [formApproval, setFormApproval] = useState<PendingFormApproval | null>(null);
   /** Prévia ao vivo do app em construção. */
   const [livePreview, setLivePreview] = useState<string | null>(null);
 
@@ -178,6 +186,7 @@ export function useVertalChat(options: {
   const abortRef = useRef<AbortController | null>(null);
   /** Aprovação aberta agora (Parar responde "não" por ela). */
   const approvalRef = useRef<PendingApproval | null>(null);
+  const formApprovalRef = useRef<PendingFormApproval | null>(null);
   /** Fila de aprovações: com ações em paralelo, uma pergunta por vez na tela. */
   const approvalQueueRef = useRef<Promise<unknown>>(Promise.resolve());
 
@@ -278,12 +287,36 @@ export function useVertalChat(options: {
     return run;
   }, []);
 
+  /** Revisão de formulário: nunca é automática (nem para domínio já aprovado). Mesma fila das aprovações de API. */
+  const approveForm = useCallback((request: FormApprovalRequest) => {
+    const ask = (): Promise<FormApprovalDecision> => {
+      if (abortRef.current?.signal.aborted) return Promise.resolve({ action: 'cancel' });
+      return new Promise<FormApprovalDecision>((resolve) => {
+        const pending: PendingFormApproval = {
+          ...request,
+          resolve: (decision) => {
+            if (formApprovalRef.current !== pending) return;
+            formApprovalRef.current = null;
+            setFormApproval(null);
+            resolve(decision);
+          },
+        };
+        formApprovalRef.current = pending;
+        setFormApproval(pending);
+      });
+    };
+    const run = approvalQueueRef.current.then(ask, ask);
+    approvalQueueRef.current = run.catch(() => undefined);
+    return run;
+  }, []);
+
   /** Para o turno em andamento. O que já saiu (texto e criações) fica na conversa. */
   const stop = useCallback(() => {
     const controller = abortRef.current;
     if (!controller || controller.signal.aborted) return;
     controller.abort();
     approvalRef.current?.resolve(false);
+    formApprovalRef.current?.resolve({ action: 'cancel' });
   }, []);
 
   const send = useCallback(async (raw: string) => {
@@ -377,6 +410,7 @@ export function useVertalChat(options: {
           artifacts: [...known, ...made],
           newId,
           approveApi,
+          approveForm,
           onAppPreview: setLivePreview,
           appBlockedReason: () => {
             const plan = planRef.current;
@@ -540,7 +574,7 @@ export function useVertalChat(options: {
       setLivePreview(null);
       setBusy(false);
     }
-  }, [approveApi, busy, refetchCredits, refreshConversations, user?.id]);
+  }, [approveApi, approveForm, busy, refetchCredits, refreshConversations, user?.id]);
 
   /** Troca um artefato já entregue (ex.: imagem com URL renovada). */
   const replaceArtifact = useCallback((artifact: Artifact) => {
@@ -560,6 +594,7 @@ export function useVertalChat(options: {
       artifacts: messagesRef.current.flatMap((m) => m.extras.artifacts),
       newId: () => nextArtifactId(messagesRef.current.flatMap((m) => m.extras.artifacts)),
       approveApi,
+      approveForm,
       onAppPreview: setLivePreview,
       appBlockedReason: () => {
         const plan = planRef.current;
@@ -573,13 +608,13 @@ export function useVertalChat(options: {
     });
     if (outcome.panel) optionsRef.current.onOpenPanel(outcome.panel, outcome.figcraft);
     if (outcome.artifact) optionsRef.current.onArtifact(outcome.artifact);
-  }, [approveApi, user?.id]);
+  }, [approveApi, approveForm, user?.id]);
 
   return {
     messages, busy, error, clearError: () => setError(null),
     conversationId, conversations, loadingConversation,
     newConversation, openConversation, removeConversation, renameConversation, pinConversation,
-    send, stop, approval, livePreview, replaceArtifact, execute,
+    send, stop, approval, formApproval, livePreview, replaceArtifact, execute,
     credits: editsRemaining,
   };
 }

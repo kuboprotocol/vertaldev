@@ -47,7 +47,31 @@ export type Artifact =
   | (Base & { kind: 'emo'; description?: string })
   | (Base & { kind: 'podcast_studio'; topic: string; duration?: number; style?: string; podcastId?: string })
   | (Base & { kind: 'download'; url: string; format: string })
-  | (Base & { kind: 'api'; method: string; host: string; status: number; ok: boolean; body: string });
+  | (Base & { kind: 'api'; method: string; host: string; status: number; ok: boolean; body: string })
+  /** Formulário de site lido/preenchido/enviado pelo navegador na nuvem. */
+  | (Base & {
+    kind: 'browser_form';
+    url: string;
+    host: string;
+    stage: BrowserFormStage;
+    ok: boolean;
+    fields: BrowserFormFieldView[];
+    screenshot?: StoredImage;
+    /** Texto que a página mostrou depois do envio. */
+    confirmation?: string;
+    notes?: string[];
+  });
+
+export type BrowserFormStage = 'inspect' | 'preview' | 'submitted' | 'cancelled' | 'failed';
+
+export interface BrowserFormFieldView {
+  key: string;
+  label: string;
+  type: string;
+  required: boolean;
+  /** Valor preenchido (senhas nunca aparecem). */
+  value?: string;
+}
 
 export type ArtifactKind = Artifact['kind'];
 
@@ -86,6 +110,7 @@ function forStorage(a: Artifact): Artifact {
   const slim = (img: StoredImage): StoredImage => (img.url.startsWith('data:') ? { url: '', path: img.path } : img);
   if (a.kind === 'image') return { ...a, image: slim(a.image) };
   if (a.kind === 'design') return { ...a, images: a.images.map(slim) };
+  if (a.kind === 'browser_form' && a.screenshot) return { ...a, screenshot: slim(a.screenshot) };
   if (a.kind === 'app' && a.projectId && a.html.length > INLINE_HTML_MAX) return { ...a, html: '' };
   return a;
 }
@@ -144,6 +169,7 @@ export const KIND_LABEL: Record<ArtifactKind, string> = {
   podcast_studio: 'Podcast',
   download: 'Download',
   api: 'Resposta da API',
+  browser_form: 'Formulário',
 };
 
 /** O que o agente enxerga do histórico: o texto e uma nota por artefato, com o id para editar. */
@@ -184,6 +210,8 @@ export function artifactSourceText(a: Artifact): string {
       return a.content;
     case 'api':
       return a.body;
+    case 'browser_form':
+      return [a.url, ...a.fields.map((f) => `${f.label}: ${f.value ?? ''}`), a.confirmation ?? ''].filter(Boolean).join('\n');
     case 'vibe':
       return `${a.title}\n${a.summary}`;
     default:

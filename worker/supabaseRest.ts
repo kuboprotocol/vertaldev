@@ -30,6 +30,19 @@ export async function getUserId(env: SupabaseEnv, authorization: string | null):
   return user?.id ?? null;
 }
 
+/** Chama uma função SQL (PostgREST /rpc) com a chave secreta. Lança com a mensagem do banco. */
+export async function rpc<T>(env: SupabaseEnv, fn: string, args: Record<string, unknown>): Promise<T> {
+  if (!env.SUPABASE_SECRET_KEY) throw new SupabaseConfigError('SUPABASE_SECRET_KEY not configured');
+  const res = await fetch(`${baseUrl(env)}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: { apikey: env.SUPABASE_SECRET_KEY, Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify(args),
+  });
+  const text = await res.text().catch(() => '');
+  if (!res.ok) throw new Error(`supabase rpc ${fn} → ${res.status} ${text.slice(0, 300)}`);
+  return (text ? JSON.parse(text) : null) as T;
+}
+
 type Filters = Record<string, string>;
 
 /** Cliente PostgREST de uma tabela. Filtros no formato do PostgREST: { user_id: 'eq.<uuid>' }. */
