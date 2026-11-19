@@ -279,10 +279,12 @@ const PLAN_RULES = [
  * Navegador na nuvem: só entra no prompt quando a conversa fala de formulário
  * (wantsBrowserForm). O prompt-base já está no limite de 1/3 do contexto do gateway.
  */
+const BROWSER_FORM_TOOL =
+  `- {"tool":"browser_form","op":"inspect|preview|submit","url":"https://...","values":{"chave":"valor"}} → formulário de site num navegador na nuvem (${TOOL_COSTS.browser_form}). Formulário de link: SEMPRE browser_form, nunca api_request nem web_read.`;
+
 const BROWSER_FORM_RULES = [
-  `- {"tool":"browser_form","op":"inspect|preview|submit","url":"https://...","values":{"chave":"valor"}} → formulário de site num navegador na nuvem (${TOOL_COSTS.browser_form}).`,
-  'Formulários: 1) "inspect"; 2) "values" com as chaves exatas, SÓ com o que o usuário disse ou a MEMÓRIA tem; 3) faltou obrigatório: pergunte tudo de uma vez e pare; 4) "preview" (não envia); 5) "submit": só envia quando o usuário clica em "Enviar" na revisão.',
-  "NUNCA invente dados (nome, CPF/CNPJ, e-mail, telefone, endereço, números). checkbox=true/false; select/radio=opção listada. Após o envio, relate a confirmação da página. Captcha/upload/login: passe o link.",
+  'Formulários: 1) "inspect"; 2) "values" com as chaves exatas, SÓ com o que o usuário disse ou a MEMÓRIA tem; 3) faltou obrigatório: pergunte tudo junto e pare; 4) "preview" (não envia); 5) "submit": só envia quando o usuário clica em "Enviar" no cartão.',
+  "NUNCA invente dados (nome, CPF/CNPJ, e-mail, telefone, endereço). checkbox=true/false; select/radio=opção listada. Após enviar, relate a confirmação. Captcha/upload/login: passe o link.",
 ].join("\n");
 
 const MEMORY_RULES = [
@@ -300,7 +302,7 @@ const MEMORY_UNAVAILABLE = "Memória: indisponível neste momento. Não prometa 
 export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
   // Com a ferramenta de formulários no prompt, a lista de segredos sai para caber no orçamento.
   const secrets = ctx.browserForm && ctx.secretNames.length
-    ? "(lista omitida nesta conversa)"
+    ? "(omitida)"
     : ctx.secretNames.length ? ctx.secretNames.slice(0, 60).join(", ") : "(nenhum segredo salvo ainda)";
   return [
     PERSONA,
@@ -329,6 +331,7 @@ export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
     `- {"tool":"news_feed","category":"economia|tecnologia|esportes|entretenimento|clima|saude|politica|local|internacional","timeRange":"ultima_hora|hoje|ultima_semana","location":"local|regional|nacional|internacional"} → mostra notícias em tempo real com geolocalização do usuário, filtradas por categoria e intervalo de tempo (${TOOL_COSTS.news_feed}). Mostra notícias do bairro, cidade, estado, país e internacionais. "category" e "timeRange" são opcionais.`,
     `- {"tool":"news_weather","location":"cidade ou bairro"} → previsão do tempo detalhada para a localização do usuário, com alertas de clima (${TOOL_COSTS.news_weather}). Sem "location", usa a geolocalização do dispositivo.`,
     `- {"tool":"download","url":"https://...","format":"mp4|mp3"} → baixa vídeo de rede social (${TOOL_COSTS.download}).`,
+    ctx.browserForm ? BROWSER_FORM_TOOL : "",
     `- {"tool":"api_request","method":"GET|POST|PUT|PATCH|DELETE","url":"https://...","headers":{},"body":"texto ou JSON em string","reason":"por que esta chamada"} → chama uma API externa quando nenhuma ferramenta acima resolve. O usuário aprova cada chamada. Para autenticar, escreva {{NOME_DO_SEGREDO}} no valor do cabeçalho, na query ou no corpo; o servidor troca pelo valor do cofre. Nunca peça para o usuário colar chaves no chat. Segredos disponíveis: ${secrets}. Se faltar um segredo, explique qual nome criar e use {"tool":"open_panel","panel":"secrets"}.`,
     `- {"tool":"open_panel","panel":"${PANELS.join("|")}"} → abre um painel dentro do chat para o usuário trabalhar à mão. Use quando o pedido precisa de arquivos do usuário (video_studio: fotos viram vídeo; clips: cortes de vídeo longo; avatar: avatar falante; emo: animar foto; notebook: conversar com PDFs e links; office/design/canvas: edição manual).`,
     `- {"tool":"weather","place":"bairro ou cidade"} → clima atual e previsão de 3 dias. Sem "place", usa a localização do aparelho do usuário (ele autoriza). Nunca invente o clima: use sempre esta ferramenta.`,
@@ -817,6 +820,78 @@ export function parseAgentOutput(raw: string): { turn: AgentTurn; status: AgentO
     ...(memory && (memory.save.length || memory.forget.length) ? { memory } : {}),
   };
   return { turn, status: !reply && turn.actions.length === 0 ? "empty" : fixed.repair };
+}
+
+// ─── Rede de segurança: formulário de site vai pelo navegador ─────────────
+
+const FORM_FILL_INTENT_RE = /(preench|formul[aá]rio|inscrev|inscri[çc]|cadastr|candidat|\bfill\b|\bsubmit\b|\bforms?\b|sign[ -]?up)/i;
+
+/** URLs (normalizadas) que o usuário escreveu na mensagem. */
+function urlsInText(text: string): string[] {
+  const out: string[] = [];
+  for (const m of text.matchAll(/https?:\/\/[^\s<>"'`)\]]+/gi)) {
+    const url = normalizeFormUrl(m[0].replace(/[.,;:!?]+$/, ""));
+    if (url && !out.includes(url)) out.push(url);
+  }
+  return out;
+}
+
+function samePage(a: string, b: string): boolean {
+  try {
+    const x = new URL(a);
+    const y = new URL(b);
+    return x.host.toLowerCase() === y.host.toLowerCase() && x.pathname.replace(/\/+$/, "") === y.pathname.replace(/\/+$/, "");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * O usuário pediu para preencher/enviar o formulário de um link e o modelo tentou
+ * api_request (POST direto) ou web_read nessa mesma página: troca por browser_form
+ * "inspect". Só antes do primeiro resultado de browser_form (depois o modelo já
+ * está no fluxo certo). Nunca cria envio: inspect só lê a página.
+ */
+export function rerouteFormActions(
+  actions: AgentAction[],
+  opts: { lastUserText: string; alreadyInspected: boolean },
+): { actions: AgentAction[]; rerouted: number } {
+  if (opts.alreadyInspected || !FORM_FILL_INTENT_RE.test(opts.lastUserText)) return { actions, rerouted: 0 };
+  const urls = urlsInText(opts.lastUserText);
+  if (urls.length === 0) return { actions, rerouted: 0 };
+  const out: AgentAction[] = [];
+  let rerouted = 0;
+  for (const action of actions) {
+    if (action.tool === "api_request" || action.tool === "web_read") {
+      const target = urls.find((u) => samePage(u, action.url));
+      if (target) {
+        rerouted++;
+        const has = [...actions, ...out].some((b) => b.tool === "browser_form" && samePage(b.url, target));
+        if (!has) out.push({ tool: "browser_form", op: "inspect", url: target });
+        continue;
+      }
+    }
+    out.push(action);
+  }
+  return { actions: out, rerouted };
+}
+
+/**
+ * O modelo não devolveu nada aproveitável depois de rodar ferramentas: em vez de
+ * erro 502 (o usuário via "Não foi possível responder"), relata o que saiu.
+ */
+export function fallbackReplyFromResults(results: ToolResult[]): string {
+  const clip = (t: string) => t.replace(/\s+/g, " ").trim().slice(0, 300);
+  const failed = results.filter((r) => !r.ok).slice(-3);
+  if (failed.length) {
+    return [
+      "Não consegui concluir o pedido. O que aconteceu:",
+      ...failed.map((r) => `- **${r.tool}** falhou: ${clip(r.summary) || "sem detalhes"}`),
+      "Quer que eu tente de outro jeito?",
+    ].join("\n");
+  }
+  const last = results.slice(-3);
+  return ["Terminei as etapas, mas não consegui escrever o resumo. Resultado:", ...last.map((r) => `- **${r.tool}**: ${clip(r.summary)}`)].join("\n");
 }
 
 /** Saída que pede nova tentativa (no outro tier) antes de entregar ou falhar. */
