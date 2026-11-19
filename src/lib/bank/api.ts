@@ -69,15 +69,20 @@ export interface BankOverview {
     error: string | null
   }
   totals: ProviderBalance[]
+  /** Indique e Ganhe: comissões ainda não repassadas (a liberar / aguardando conta). */
+  referral?: { currency: string; pendingMinor: number; availableMinor: number }[]
 }
 
-export type TxStatus = 'pending' | 'paid' | 'failed' | 'refunded' | 'expired' | 'canceled'
+export type TxStatus = 'pending' | 'available' | 'paid' | 'failed' | 'refunded' | 'expired' | 'canceled'
+
+/** 'internal': lançamento do próprio Vertal (ex.: Indique e Ganhe antes do repasse). */
+export type TxProvider = BankProvider | 'internal'
 
 export interface BankTransaction {
   id: string
-  provider: BankProvider
+  provider: TxProvider
   direction: 'in' | 'out'
-  method: ReceiveMethod | 'transfer' | 'payout'
+  method: ReceiveMethod | 'transfer' | 'payout' | 'referral'
   status: TxStatus
   amountMinor: number
   netMinor: number | null
@@ -141,6 +146,7 @@ export const bankApi = {
 
 export const TX_STATUS_LABEL: Record<TxStatus, string> = {
   pending: 'Pendente',
+  available: 'Disponível',
   paid: 'Concluído',
   failed: 'Falhou',
   refunded: 'Estornado',
@@ -155,6 +161,7 @@ export const METHOD_LABEL: Record<BankTransaction['method'], string> = {
   link: 'Link de pagamento',
   transfer: 'Pix enviado',
   payout: 'Saque',
+  referral: 'Indique e Ganhe',
 }
 
 export const ASAAS_STATUS_LABEL: Record<NonNullable<BankOverview['asaas']['account']>['status'], string> = {

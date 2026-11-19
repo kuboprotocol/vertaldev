@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowDownLeft, ArrowLeft, ArrowUpRight, CreditCard, Landmark, Loader2, RefreshCw, ScrollText, ShieldCheck, Wallet } from 'lucide-react'
+import { ArrowDownLeft, ArrowLeft, ArrowUpRight, CreditCard, Gift, Landmark, Loader2, RefreshCw, ScrollText, ShieldCheck, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { VIBE_PAY } from '@/config/vibePay'
 import { Button } from '@/components/ui/button'
@@ -159,6 +159,7 @@ export default function VertalBankPage() {
                     {!overview?.stripe.account && <GlobalAccountCard overview={overview} onChange={load} />}
                   </div>
                 )}
+                <ReferralCard overview={overview} onOpenAccounts={() => changeTab('contas')} />
                 <h2 className="font-display text-sm font-semibold text-foreground">Últimas movimentações</h2>
                 <BankStatement items={items.slice(0, 8)} />
               </>
@@ -250,6 +251,32 @@ function ProviderStatements({ overview }: { overview: BankOverview | null }) {
           </div>
         )
       )}
+    </div>
+  )
+}
+
+/** Indique e Ganhe: comissões que ainda vão cair no Vibe Pay. */
+function ReferralCard({ overview, onOpenAccounts }: { overview: BankOverview | null; onOpenAccounts: () => void }) {
+  const navigate = useNavigate()
+  const rows = (overview?.referral ?? []).filter((r) => r.pendingMinor + r.availableMinor > 0)
+  if (rows.length === 0) return null
+  const waitingAccount = rows.some((r) => r.availableMinor > 0) && !overview?.stripe.account && !overview?.asaas.account
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/25 bg-primary/5 p-4" data-testid="bank-referral">
+      <div className="flex items-start gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary"><Gift className="h-4 w-4" /></span>
+        <div>
+          <p className="text-sm font-medium text-foreground">Indique e Ganhe</p>
+          <p className="text-xs text-muted-foreground">
+            {rows.map((r) => `${formatMinor(r.pendingMinor + r.availableMinor, r.currency)} a receber`).join(' · ')}
+            {waitingAccount ? ' — abra sua conta para receber.' : ' — cai aqui quando a carência termina.'}
+          </p>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        {waitingAccount && <Button size="sm" onClick={onOpenAccounts}>Abrir conta</Button>}
+        <Button size="sm" variant="outline" onClick={() => navigate('/affiliate-program')}>Ver indicações</Button>
+      </div>
     </div>
   )
 }

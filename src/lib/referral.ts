@@ -44,3 +44,46 @@ export function clearStoredReferralCode(): void {
 export function formatCents(cents: number, currency = 'usd'): string {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: currency.toUpperCase() }).format(cents / 100)
 }
+
+/** Para onde vão as comissões do Indique e Ganhe. */
+export const REFERRAL_PAYOUT_ROUTE = '/pay'
+
+export interface CommissionRow {
+  commission_cents: number
+  status: string
+  currency?: string | null
+  commission_currency?: string | null
+}
+
+export interface CommissionTotals {
+  currency: string
+  pending: number
+  paid: number
+  total: number
+}
+
+/**
+ * Soma as comissões por moeda (a comissão é em BRL, o valor liquidado pelo
+ * Stripe; linhas antigas podem estar na moeda da compra). Estornadas (void)
+ * não entram.
+ */
+export function summarizeCommissions(rows: CommissionRow[]): CommissionTotals[] {
+  const by = new Map<string, CommissionTotals>()
+  for (const r of rows) {
+    if (r.status === 'void') continue
+    const currency = String(r.commission_currency || r.currency || 'brl').toLowerCase()
+    const t = by.get(currency) ?? { currency, pending: 0, paid: 0, total: 0 }
+    const v = Number(r.commission_cents) || 0
+    t.total += v
+    if (r.status === 'paid') t.paid += v
+    else if (r.status === 'pending' || r.status === 'approved') t.pending += v
+    by.set(currency, t)
+  }
+  return [...by.values()].sort((a, b) => b.total - a.total)
+}
+
+/** "R$ 1,23 · US$ 0,50" para um campo das somas; R$ 0,00 quando vazio. */
+export function formatCommissionTotals(list: CommissionTotals[], key: 'pending' | 'paid' | 'total'): string {
+  if (list.length === 0) return formatCents(0, 'brl')
+  return list.map((t) => formatCents(t[key], t.currency)).join(' · ')
+}

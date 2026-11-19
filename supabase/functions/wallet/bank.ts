@@ -280,6 +280,20 @@ export async function handleBankAction(action: string, ctx: BankCtx): Promise<Re
       if (out.asaas.balance) {
         (totals.BRL ??= { availableMinor: 0, pendingMinor: 0 }).availableMinor += out.asaas.balance.availableMinor;
       }
+      // Indique e Ganhe: comissões ainda não repassadas a um provedor (provider
+      // 'internal'). As já transferidas aparecem no saldo do Stripe/ASAAS.
+      const { data: refRows } = await db.from("bank_transactions").select("amount_minor, currency, status")
+        .eq("user_id", user.id).eq("method", "referral").eq("provider", "internal").in("status", ["pending", "available"]);
+      const referral: Record<string, { pendingMinor: number; availableMinor: number }> = {};
+      for (const r of (refRows ?? []) as Row[]) {
+        const cur = String(r.currency).toUpperCase();
+        const ref = (referral[cur] ??= { pendingMinor: 0, availableMinor: 0 });
+        if (r.status === "available") ref.availableMinor += Number(r.amount_minor);
+        else ref.pendingMinor += Number(r.amount_minor);
+        // Ainda não sacável (falta a conta ou a carência): entra como "a liberar".
+        (totals[cur] ??= { availableMinor: 0, pendingMinor: 0 }).pendingMinor += Number(r.amount_minor);
+      }
+      out.referral = Object.entries(referral).map(([currency, v]) => ({ currency, ...v }));
       out.totals = Object.entries(totals).map(([currency, v]) => ({ currency, ...v }));
       return json(out);
     }

@@ -8,6 +8,11 @@
 //   checkout.session.async_payment_failed    -> wallet_charges: failed
 //   checkout.session.expired                 -> wallet_charges: expired
 //   payout.paid | payout.failed | payout.canceled -> bank_transactions (saques do Vertal Vibe Pay)
+//   account.updated (conta apta)             -> repassa comissões do Indique e Ganhe pendentes
+//
+// Tarefa agendada (pg_cron → public.kick_referral_sweep):
+//   POST ?task=referral-sweep com header x-referral-sweep-secret == REFERRAL_SWEEP_SECRET
+//   -> varre comissões do Indique e Ganhe e repassa as liberadas (ver _shared/referralPayout.ts)
 //
 // Segredo de assinatura: STRIPE_CONNECT_WEBHOOK_SECRET (diferente do
 // STRIPE_WEBHOOK_SECRET do endpoint da plataforma).
@@ -16,6 +21,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@^2";
 import Stripe from "npm:stripe@^14";
+import { sweepReferralCommissions } from "../_shared/referralPayout.ts";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", {
   apiVersion: "2024-06-20" as Stripe.LatestApiVersion,
@@ -37,8 +43,27 @@ function accountStatus(a: Stripe.Account) {
   };
 }
 
+function safeEqual(a: string, b: string) {
+  const ea = new TextEncoder().encode(a);
+  const eb = new TextEncoder().encode(b);
+  let diff = ea.length ^ eb.length;
+  for (let i = 0; i < Math.max(ea.length, eb.length); i++) diff |= (ea[i] ?? 0) ^ (eb[i] ?? 0);
+  return diff === 0;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+
+  // Varredura agendada das comissões do Indique e Ganhe.
+  if (new URL(req.url).searchParams.get("task") === "referral-sweep") {
+    const secret = Deno.env.get("REFERRAL_SWEEP_SECRET") ?? "";
+    const given = req.headers.get("x-referral-sweep-secret") ?? "";
+    if (secret.length < 32 || !safeEqual(secret, given)) return json({ error: "unauthorized" }, 401);
+    const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const out = await sweepReferralCommissions(db, Deno.env.get("STRIPE_SECRET_KEY") ? stripe : null);
+    console.log("referral sweep", JSON.stringify(out));
+    return json({ ok: true, ...out });
+  }
 
   const webhookSecret = Deno.env.get("STRIPE_CONNECT_WEBHOOK_SECRET");
   if (!webhookSecret) {
@@ -64,6 +89,11 @@ Deno.serve(async (req: Request) => {
         const { error } = await db.from("connected_accounts")
           .update(accountStatus(account)).eq("stripe_account_id", account.id);
         if (error) throw error;
+        // Conta apta: comissões do Indique e Ganhe que esperavam uma conta saem agora.
+        if (account.charges_enabled && account.payouts_enabled) {
+          const { data: ca } = await db.from("connected_accounts").select("user_id").eq("stripe_account_id", account.id).maybeSingle();
+          if (ca?.user_id) await sweepReferralCommissions(db, stripe, { userId: ca.user_id, limit: 100 });
+        }
         break;
       }
 
