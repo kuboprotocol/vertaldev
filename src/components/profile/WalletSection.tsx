@@ -22,7 +22,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { walletApi, brandLabel, isExpired, FUNDING_LABEL, type WalletCard, type WalletPix, type ConnectAccount, type WalletCharge } from '@/lib/wallet/api'
+import { walletApi, connectPendingText, brandLabel, isExpired, FUNDING_LABEL, type WalletCard, type WalletPix, type ConnectAccount, type WalletCharge } from '@/lib/wallet/api'
 import { CHARGE_CURRENCIES, platformFeeFor, formatMinor, toMinorUnits, findCurrency } from '@/lib/wallet/currency'
 import { loadStripe, type StripeJs } from '@/lib/wallet/stripe'
 import { PIX_KEY_TYPES, PIX_COUNTRIES, validatePixKey, type PixKeyType } from '@/lib/wallet/pix'
@@ -450,13 +450,13 @@ function ReceiveTab() {
             <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#635bff] text-lg font-bold text-white shadow-lg">S</span>
             <div>
               <p className="font-display font-semibold text-foreground">
-                {ready ? 'Recebimentos ativos' : account ? 'Verificação em andamento' : 'Receba em qualquer moeda'}
+                {ready ? 'Recebimentos ativos' : account ? (account.pastDue ? 'Verificação pendente' : 'Verificação em andamento') : 'Receba em qualquer moeda'}
               </p>
               <p className="text-sm text-muted-foreground">
                 {ready
                   ? `Conta ${account?.country ?? ''} · repasse em ${account?.defaultCurrency ?? 'BRL'}${account?.payoutsEnabled ? '' : ' · saque pendente'}`
                   : account
-                    ? `Faltam ${account.pendingRequirements || 'alguns'} dados no Stripe para liberar as cobranças`
+                    ? connectPendingText(account)
                     : 'Real, dólar, euro e mais 13 moedas, com cartão e carteiras digitais'}
               </p>
             </div>
@@ -473,7 +473,7 @@ function ReceiveTab() {
           ) : (
             <Button className="gap-1.5 bg-[#635bff] text-white hover:bg-[#5249e0]" disabled={busy !== null} onClick={() => go('onboard')}>
               {busy === 'onboard' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              {account ? 'Continuar verificação' : 'Ativar com Stripe'}
+              {account ? (account.pastDue ? 'Concluir verificação' : 'Continuar verificação') : 'Ativar com Stripe'}
             </Button>
           )}
         </div>

@@ -36,6 +36,25 @@ export interface ConnectAccount {
   payoutsEnabled: boolean
   detailsSubmitted: boolean
   pendingRequirements: number
+  /** Itens com prazo vencido (requirements.past_due). */
+  pastDue?: number
+  /** requirements.disabled_reason do Stripe, p.ex. "requirements.past_due". */
+  disabledReason?: string | null
+  /** Prazo (unix, s) dos itens pendentes, se houver. */
+  currentDeadline?: number | null
+}
+
+/** Texto de status da conta conectada quando ainda não pode cobrar. */
+export function connectPendingText(a: ConnectAccount): string {
+  const n = a.pendingRequirements
+  if (a.disabledReason === 'requirements.past_due' || (a.pastDue ?? 0) > 0) {
+    return `Cobranças pausadas: o Stripe pede ${n || 'alguns'} ${n === 1 ? 'item' : 'itens'} com prazo vencido (p.ex. verificação de identidade). Conclua a verificação para liberar.`
+  }
+  if (a.disabledReason === 'requirements.pending_verification' || (a.detailsSubmitted && n === 0)) {
+    return 'Dados enviados. O Stripe está analisando sua conta.'
+  }
+  if (a.disabledReason?.startsWith('rejected')) return 'Conta recusada pelo Stripe. Fale com o suporte.'
+  return `Faltam ${n || 'alguns'} dados no Stripe para liberar as cobranças`
 }
 
 export interface WalletCharge {

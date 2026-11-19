@@ -2440,7 +2440,7 @@ Leia mais: [Setting up a custom domain](https://docs.lovable.dev/features/custom
 | Backend | Supabase (PostgreSQL + Edge Functions + Realtime) |
 | Game Engine | Three.js, WebGPU, ECS custom, WGSL |
 | Auth | Supabase Auth, GitHub OAuth, Google OAuth |
-| Pagamentos | Stripe Checkout + Webhooks, Polar (fallback) |
+| Pagamentos | Stripe Checkout + Webhooks + Connect Express, Polar (fallback) — ver [`docs/STRIPE.md`](docs/STRIPE.md) |
 | Vídeo | Remotion + React + Tailwind |
 | Imagens | Lovable AI Gateway (Gemini) + mesh gradients |
 | Infra | Cloudflare (frontend e borda), Vertal Cloud (containers), Railway (API), Supabase (backend) |
@@ -2488,3 +2488,10 @@ Skills ativas em `.workspace/skills/` (verificar com `ls .workspace/skills/`):
 
 Regras de precedência, handoff, isolamento e fluxo para **registrar novas
 skills via ZIP** estão em [`docs/SKILLS_ORCHESTRATION.md`](docs/SKILLS_ORCHESTRATION.md).
+
+---
+
+## Stripe
+
+Conta da plataforma, Stripe Connect da Carteira, Edge Functions, secrets,
+webhooks e checklist de go-live em [`docs/STRIPE.md`](docs/STRIPE.md).
