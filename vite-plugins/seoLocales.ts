@@ -140,7 +140,7 @@ function renderPage({ l, key, title, description, body, ld }: PageParts, origin:
     <meta property="og:url" content="${url}" />
     <meta property="og:title" content="${esc(title)}" />
     <meta property="og:description" content="${esc(description)}" />
-    <meta property="og:image" content="${origin}/pwa-512x512.png" />
+    <meta property="og:image" content="${origin}/og-image.png" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="${esc(title)}" />
     <meta name="twitter:description" content="${esc(description)}" />
@@ -151,7 +151,7 @@ function renderPage({ l, key, title, description, body, ld }: PageParts, origin:
   </head>
   <body>
     <header>
-      <a class="brand" href="${home}"><img src="/pwa-192x192.png" alt="" width="32" height="32" />${esc(APP_NAME)}</a>
+      <a class="brand" href="${home}"><img src="/pwa-any-192x192.png" alt="" width="32" height="32" />${esc(APP_NAME)}</a>
       <a href="${origin}${localizedPath(l.code, "/alternativas")}">${esc(l.alternatives)}</a>
     </header>
     <main>
