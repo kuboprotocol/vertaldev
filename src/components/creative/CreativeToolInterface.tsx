@@ -29,7 +29,8 @@ import { ClipStudio } from "./ClipStudio";
 import { AvatarProgressSteps, type AvatarStepState, type AvatarStepKey } from "./AvatarProgressSteps";
 import { cn } from "@/lib/utils";
 import { PUTER_MODELS, creativeInvoke } from "@/lib/puterAI";
-import { AVATAR_LIMITS, quoteAvatar } from "@/config/avatarPricing";
+import { AVATAR_LIMITS, AVATAR_VOICE_CATALOG, DEFAULT_AVATAR_VOICE, quoteAvatar } from "@/config/avatarPricing";
+import { AvatarVoicePicker } from "./AvatarVoicePicker";
 import { functionErrorCode } from "@/lib/functionError";
 
 // supabase.functions.invoke hides the body of non-2xx responses; these map the codes creative-video returns.
@@ -40,6 +41,7 @@ function avatarErrorMessage(code: string | null): string {
     voice_generation_failed: "Não foi possível gerar a voz. Tente de novo.",
     avatar_submit_failed: "Não foi possível enviar o vídeo para a geração.",
     invalid_image_url: "A foto não pôde ser usada. Envie a imagem de novo.",
+    invalid_voice: "Essa voz não está mais disponível. Escolha outra.",
     unauthorized: "Sua sessão expirou. Entre novamente.",
   };
   return code && messages[code] ? messages[code] : `Não foi possível gerar o avatar${code ? ` (${code})` : ""}.`;
@@ -132,7 +134,7 @@ const TOOL_CONFIGS: Record<ToolKey, {
     promptLabel: "Texto para o avatar falar",
     placeholder: "Olá, bem-vindo ao futuro da criação de conteúdo...",
     options: [
-      { key: "voice", label: "Voz", type: "select", options: ["Male", "Female", "Neutral"], default: "Male" }
+      { key: "voice", label: "Voz", type: "select", options: AVATAR_VOICE_CATALOG.map((v) => v.id), default: DEFAULT_AVATAR_VOICE }
     ]
   },
   shorts: { 
@@ -349,6 +351,8 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
     const polling = pollingRef.current;
     return () => polling.clear();
   }, []);
+
+  const setAvatarVoice = useCallback((voice: string) => setMetadata(prev => ({ ...prev, voice })), []);
 
   const avatarQuote = toolKey === "avatar" ? quoteAvatar(prompt, !!avatarImageUrl) : null;
 
@@ -580,7 +584,9 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
 
           {config.options && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {config.options.map((opt) => (
+              {config.options.map((opt) => toolKey === "avatar" && opt.key === "voice" ? (
+                <AvatarVoicePicker key={opt.key} value={metadata.voice ?? DEFAULT_AVATAR_VOICE} onChange={setAvatarVoice} />
+              ) : (
                 <div key={opt.key} className="space-y-2">
                   <Label className="text-xs font-bold uppercase tracking-wider opacity-60">{opt.label}</Label>
                   {opt.type === "select" ? (

@@ -84,3 +84,28 @@ O grafo de tarefas (`supabase/functions/_shared/vibeTaskGraph.ts`, prompts do pl
 dependências, subtarefas e "próxima tarefa". Não contém código, prompts nem texto do Task Master. Nada
 dele foi copiado porque a licença do Task Master é MIT acrescida da Commons Clause, que proíbe vender o
 software ou um serviço cujo valor venha substancialmente dele.
+
+## Kokoro-82M (vozes da biblioteca do Vertal Avatar AI)
+
+- Projeto: Kokoro-82M, de hexgrad — https://huggingface.co/hexgrad/Kokoro-82M (código: https://github.com/hexgrad/kokoro)
+- Licença: Apache License 2.0 — https://www.apache.org/licenses/LICENSE-2.0
+- Uso: o modelo **não** é distribuído neste repositório. As vozes em português do Brasil `pf_dora`,
+  `pm_alex` e `pm_santa` são geradas pelo endpoint hospedado `fal-ai/kokoro/brazilian-portuguese` (fal.ai)
+  e aparecem no painel como "Dora (Kokoro)", "Alex (Kokoro)" e "Santa (Kokoro)"
+  (`supabase/functions/_shared/avatarConfig.ts`, `supabase/functions/creative-video/index.ts`).
+
+```
+Kokoro-82M by hexgrad.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+```
