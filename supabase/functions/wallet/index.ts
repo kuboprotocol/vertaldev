@@ -24,6 +24,7 @@
 import { createClient } from "npm:@supabase/supabase-js@^2";
 import { handleBankAction, BANK_ACTIONS } from "./bank.ts";
 import { handlePayAction, PAY_ACTIONS } from "./payOpen.ts";
+import { vibePayAllowed } from "../_shared/vibePayGate.ts";
 import { encKeyState } from "../_shared/encKey.ts";
 import { asaasEnv, asaasEnvFromKey, asaasBaseUrl } from "../_shared/asaas.ts";
 import { findConnectCountry } from "../_shared/bankCountries.ts";
@@ -513,6 +514,11 @@ Deno.serve(async (req) => {
         return_url: `${origin}${returnPath}?wallet=connect-return`,
       });
     };
+
+    if ((PAY_ACTIONS.has(action) || BANK_ACTIONS.has(action)) &&
+        !vibePayAllowed(user.email, Deno.env.get("VIBE_PAY_OPEN") === "true")) {
+      return json({ error: "vibe_pay_em_desenvolvimento", message: "O Vertal Vibe Pay está em desenvolvimento." }, 403);
+    }
 
     if (PAY_ACTIONS.has(action)) {
       return await handlePayAction(action, {
