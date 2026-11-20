@@ -13,7 +13,8 @@ import { CONNECT_COUNTRIES, findConnectCountry } from '@/lib/bank/countries'
 import { bankApi, ASAAS_STATUS_LABEL, type AsaasOpenInput, type BankOverview } from '@/lib/bank/api'
 
 // ── Conta global (Stripe Connect) ──────────────────────────────────────────
-export function GlobalAccountCard({ overview, onChange }: { overview: BankOverview | null; onChange: () => void }) {
+/** `hideOpen`: sem conta, não mostra o botão de abrir (o /pay usa o cadastro único, PayOnboarding). */
+export function GlobalAccountCard({ overview, onChange, hideOpen = false }: { overview: BankOverview | null; onChange: () => void; hideOpen?: boolean }) {
   const [country, setCountry] = useState('BR')
   const [busy, setBusy] = useState<null | 'onboard' | 'dashboard' | 'mode'>(null)
   const acct = overview?.stripe.account ?? null
@@ -70,7 +71,9 @@ export function GlobalAccountCard({ overview, onChange }: { overview: BankOvervi
           )}
         </div>
 
-        {!acct ? (
+        {!acct && hideOpen ? (
+          <p className="rounded-xl bg-background/50 p-3 text-sm text-muted-foreground">Ainda não aberta. Use o cadastro único acima: ele abre a conta Brasil e a conta global juntas.</p>
+        ) : !acct ? (
           <div className="flex flex-wrap items-end gap-2">
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">País do titular (não muda depois)</Label>
@@ -157,7 +160,7 @@ const EMPTY: AsaasOpenInput = {
   address: '', addressNumber: '', complement: '', province: '', postalCode: '',
 }
 
-export function AsaasAccountCard({ overview, onChange }: { overview: BankOverview | null; onChange: () => void }) {
+export function AsaasAccountCard({ overview, onChange, hideOpen = false }: { overview: BankOverview | null; onChange: () => void; hideOpen?: boolean }) {
   const [form, setForm] = useState<AsaasOpenInput>(EMPTY)
   const [income, setIncome] = useState('')
   const [open, setOpen] = useState(false)
@@ -216,6 +219,8 @@ export function AsaasAccountCard({ overview, onChange }: { overview: BankOvervie
               <p className="max-w-xs text-xs text-muted-foreground">Conclua o cadastro pelo e-mail de ativação do ASAAS (documentos e conta bancária). Saques e Pix de saída só liberam após a aprovação.</p>
             )}
           </div>
+        ) : hideOpen ? (
+          <p className="rounded-xl bg-background/50 p-3 text-sm text-muted-foreground">Ainda não aberta. Use o cadastro único acima: ele abre a conta Brasil e a conta global juntas.</p>
         ) : !open ? (
           <Button className="gap-1.5 bg-[#0030b9] text-white hover:bg-[#0028a0]" onClick={() => setOpen(true)}>
             <Sparkles className="h-4 w-4" />Abrir conta Brasil

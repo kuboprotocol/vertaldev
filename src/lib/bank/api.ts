@@ -2,6 +2,7 @@
 import { call, ERRORS } from '@/lib/wallet/api'
 import type { PixKeyType } from '@/lib/wallet/pix'
 import type { BankProvider, ReceiveMethod } from './routing'
+import type { PayOpenInput, PayOpenResult, PayStatus, StripeSnapshot } from './payOnboarding'
 
 Object.assign(ERRORS, {
   asaas_not_configured: 'Pix, boleto e conta ASAAS ainda não foram ativados na plataforma',
@@ -25,6 +26,9 @@ Object.assign(ERRORS, {
   pix_out_limit: 'Valor acima do limite por Pix',
   payouts_not_enabled: 'Saques ainda não liberados pelo Stripe',
   invalid_method: 'Método inválido',
+  invalid_fields: 'Confira os campos destacados',
+  pay_config_error: 'Não conseguimos abrir a conta agora (configuração da plataforma). Tente de novo mais tarde.',
+  asaas_error: 'O ASAAS recusou a operação',
 })
 
 export interface ProviderBalance { currency: string; availableMinor: number; pendingMinor: number }
@@ -137,6 +141,15 @@ export const bankApi = {
   payoutMode: (mode: 'automatic' | 'manual') => call<{ ok: true; interval: string }>('bank-payout-mode', { mode }),
   asaasOpen: (p: AsaasOpenInput) => call<{ ok: true; status: string; webhookConfigured: boolean }>('asaas-open', p as unknown as Record<string, unknown>),
   asaasStatus: () => call<{ account: BankOverview['asaas']['account'] }>('asaas-status'),
+  /** Cadastro único: abre a conta Brasil (ASAAS) e a conta global (Stripe) de uma vez. Idempotente. */
+  payOpen: (p: PayOpenInput) =>
+    call<PayOpenResult>('pay-open', { ...p, returnPath: '/pay' } as unknown as Record<string, unknown>),
+  payStatus: () =>
+    call<{
+      status: PayStatus
+      asaas: { status: string; holderName: string | null; document: string | null; personType: string | null } | null
+      stripe: (StripeSnapshot & { error: string | null }) | null
+    }>('pay-status'),
 }
 
 export const TX_STATUS_LABEL: Record<TxStatus, string> = {

@@ -195,6 +195,51 @@ No endpoint Connect, assine também `payout.paid`, `payout.failed`,
   passa pela Edge Function a caminho do ASAAS, o que coloca o app no escopo
   PCI-DSS mais pesado (SAQ D). O caminho padrão é a fatura hospedada do ASAAS.
 
+## 8.1 Cadastro único (`pay-open`)
+
+Uma tela, um envio: `src/components/bank/PayOnboarding.tsx` coleta o que os
+dois provedores pedem (nome/razão social, CPF/CNPJ, nascimento (CPF) ou tipo
+de empresa (CNPJ), e-mail, celular, CEP com preenchimento pelo ViaCEP,
+endereço, bairro, cidade, UF e renda/faturamento mensal). A mesma validação
+roda no navegador e na Edge Function (`supabase/functions/_shared/payOnboarding.ts`).
+
+A ação `pay-open` da função `wallet` (`wallet/payOpen.ts`):
+
+1. valida (`400 invalid_fields` com a lista de campos e mensagens);
+2. **ASAAS** — pula se já há subconta; **não chama o ASAAS se a
+   `CONNECTOR_ENC_KEY` não serve** (a `apiKey` só vem uma vez); procura subconta
+   da plataforma com o mesmo CPF/CNPJ ou e-mail (`GET /v3/accounts`) e, se
+   achar uma órfã, tenta gerar nova chave (`POST /v3/accounts/{id}/accessTokens`,
+   exige gerenciamento de chaves habilitado no painel do ASAAS + whitelist de
+   IP); senão cria (`POST /v3/accounts`), cifra e grava;
+3. **Stripe** — usa a conta já vinculada/adotada ou cria uma Express BR **já
+   preenchida** (`business_type`, `individual` com nome, CPF, nascimento,
+   telefone e endereço, ou `company` com razão social e CNPJ), com chave de
+   idempotência derivada dos dados; conta antiga sem onboarding recebe o mesmo
+   pré-preenchimento (melhor esforço);
+4. devolve `{ asaas, stripe, status, nextUrl }`. Os provedores são
+   independentes: se um falha, o outro fica aberto e a tela mostra a mensagem
+   em português e "Tentar de novo" (idempotente). `nextUrl` (link do Stripe)
+   só vem se o Stripe ainda pede algo — no mínimo o aceite dos termos e a
+   conta bancária, que o Stripe sempre coleta na própria página.
+
+`pay-status` devolve o status combinado (`not_started | partial |
+action_required | in_review | active`) e o próximo passo. `asaas-open` e
+`connect-onboard` continuam funcionando (legado / titular fora do Brasil).
+
+`GET /functions/v1/wallet?health=1` mostra `encKey: ok | missing | invalid`.
+
+### Incidente 2026-11-19: "o cadastro do Pay não está entrando"
+
+`asaas-open` criou a subconta no ASAAS e falhou ao cifrar a `apiKey`
+(`CONNECTOR_ENC_KEY must be 32 bytes base64`): a chave do secret não
+decodifica para 32 bytes em base64 (provável chave hex de 64 caracteres, que
+`render.ts` já aceitava). A subconta ficou órfã e as tentativas seguintes
+receberam do ASAAS "O email … já está em uso". Correções: `encKey.ts` aceita
+base64, base64url e hex; o cadastro checa a chave antes de chamar o ASAAS e
+trata subconta órfã. Se o health continuar `invalid`, gere outra chave
+(`openssl rand -base64 32`) — nenhuma linha cifrada existia até então.
+
 ## 9. Webhooks a cadastrar
 
 | Provedor | URL | Eventos |
