@@ -13,6 +13,8 @@ import AdGate from "@/components/AdGate";
 import { CreativeEconomyGate } from "@/components/creative/CreativeEconomyComingSoon";
 import { shouldRedirect, buildTarget } from "@/lib/canonicalRedirect";
 
+import { VibePayDevGate } from "@/components/vibepay/VibePayDevGate";
+
 // Lazy loading all pages
 const Index = lazy(() => import("./pages/Index"));
 const AuthPage = lazy(() => import("./pages/AuthPage"));
@@ -240,7 +242,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 
                 <Route path="/connect" element={<ProtectedRoute><ConnectPage /></ProtectedRoute>} />
                 {/* Vertal Vibe Pay: app (/pay) e landing pública (em produção é HTML estático, vite-plugins/vibePay.ts) */}
-                <Route path="/pay" element={<ProtectedRoute><VertalBankPage /></ProtectedRoute>} />
+                <Route path="/pay" element={<ProtectedRoute><VibePayDevGate><VertalBankPage /></VibePayDevGate></ProtectedRoute>} />
                 <Route path="/vibe-pay" element={<VibePayLandingPage />} />
                 {/* Rotas antigas (Vertal Vibe Bank / VERTAL Bank / Carteira): em produção o Worker responde 301 (worker/legacyRedirects.ts) */}
                 <Route path="/vibe-bank" element={<KeepQueryRedirect to="/vibe-pay" />} />
