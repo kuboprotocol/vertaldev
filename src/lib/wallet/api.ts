@@ -83,22 +83,39 @@ export const ERRORS: Record<string, string> = {
   'STRIPE_PUBLISHABLE_KEY not configured': 'Pagamentos com cartão ainda não estão configurados',
 }
 
+/** Erro de uma ação da função `wallet`: `code` é o código do servidor e `details` o corpo inteiro. */
+export class WalletError extends Error {
+  code: string
+  details: Record<string, unknown> | null
+  constructor(message: string, code: string, details: Record<string, unknown> | null = null) {
+    super(message)
+    this.code = code
+    this.details = details
+  }
+}
+
+function toWalletError(code: string, body: Record<string, unknown> | null) {
+  // Sem tradução conhecida, prefere a mensagem do provedor (ex.: asaas_error) ao código cru.
+  const providerMsg = body && typeof body.message === 'string' ? body.message : null
+  return new WalletError(ERRORS[code] ?? providerMsg ?? code, code, body)
+}
+
 export async function call<T>(action: string, payload: Record<string, unknown> = {}): Promise<T> {
   const { data, error } = await supabase.functions.invoke<T & { error?: string }>('wallet', {
     body: { action, ...payload },
   })
   if (error) {
     // FunctionsHttpError carrega o corpo da resposta em error.context
-    let msg = error.message
+    let code = error.message
+    let body: Record<string, unknown> | null = null
     try {
-      const body = await (error as { context?: Response }).context?.json()
-      if (body?.error) msg = body.error
+      body = await (error as { context?: Response }).context?.json()
+      if (typeof body?.error === 'string') code = body.error
     } catch { /* corpo não-JSON */ }
-    throw new Error(ERRORS[msg] ?? msg)
+    throw toWalletError(code, body)
   }
   if (data && (data as { error?: string }).error) {
-    const msg = (data as { error: string }).error
-    throw new Error(ERRORS[msg] ?? msg)
+    throw toWalletError((data as { error: string }).error, data as unknown as Record<string, unknown>)
   }
   return data as T
 }

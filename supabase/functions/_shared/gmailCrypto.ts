@@ -1,5 +1,6 @@
 // Helpers de criptografia AES-256-GCM compartilhados pelo conector Gmail.
 // Reusa CONNECTOR_ENC_KEY (mesma chave do conector de API keys).
+import { parseEncKey } from './encKey.ts'
 
 function b64(buf: ArrayBuffer | Uint8Array) {
   const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf)
@@ -18,8 +19,9 @@ function fromB64(s: string) {
 async function importKey(usage: 'encrypt' | 'decrypt') {
   const raw = Deno.env.get('CONNECTOR_ENC_KEY')
   if (!raw) throw new Error('CONNECTOR_ENC_KEY not configured')
-  const keyBytes = fromB64(raw)
-  if (keyBytes.length !== 32) throw new Error('CONNECTOR_ENC_KEY must be 32 bytes base64')
+  // base64, base64url ou hex de 32 bytes (ver encKey.ts)
+  const keyBytes = parseEncKey(raw)
+  if (!keyBytes) throw new Error('CONNECTOR_ENC_KEY must be 32 bytes (base64 or hex)')
   return crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, [usage])
 }
 

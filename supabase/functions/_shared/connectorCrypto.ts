@@ -1,5 +1,6 @@
 // Shared encryption/decryption helpers for connectors.
-// Reuses CONNECTOR_ENC_KEY (32-byte base64).
+// Reuses CONNECTOR_ENC_KEY (32 bytes, base64 or hex — see encKey.ts).
+import { parseEncKey } from './encKey.ts'
 
 function b64(buf: ArrayBuffer | Uint8Array) {
   const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf)
@@ -18,8 +19,9 @@ function fromB64(s: string) {
 async function importKey(usage: 'encrypt' | 'decrypt') {
   const raw = Deno.env.get('CONNECTOR_ENC_KEY')
   if (!raw) throw new Error('CONNECTOR_ENC_KEY not configured')
-  const keyBytes = fromB64(raw)
-  if (keyBytes.length !== 32) throw new Error('CONNECTOR_ENC_KEY must be 32 bytes base64')
+  // base64, base64url ou hex de 32 bytes (ver encKey.ts)
+  const keyBytes = parseEncKey(raw)
+  if (!keyBytes) throw new Error('CONNECTOR_ENC_KEY must be 32 bytes (base64 or hex)')
   return crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, [usage])
 }
 
@@ -42,4 +44,9 @@ export async function decryptSecret(parts: { ciphertext: string; iv: string; tag
   full.set(ct, 0); full.set(tag, ct.length)
   const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, full)
   return new TextDecoder().decode(plain)
+}
+
+/** true se a CONNECTOR_ENC_KEY existe e decodifica para 32 bytes (sem lançar). */
+export function encryptionReady(): boolean {
+  return parseEncKey(Deno.env.get('CONNECTOR_ENC_KEY')) !== null
 }

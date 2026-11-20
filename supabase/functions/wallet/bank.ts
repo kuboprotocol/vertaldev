@@ -8,6 +8,7 @@
 //   bank-payout     { amount, currency }                                 -> saque Stripe para o banco da conta conectada
 //   bank-payout-mode { mode: automatic | manual }
 //   asaas-open      { ...dados cadastrais }                              -> cria a subconta ASAAS do usuário
+//                   (legado: o /pay usa o cadastro único `pay-open`, ver ./payOpen.ts)
 //   asaas-status                                                         -> situação cadastral da subconta
 //   asaas-card-charge { amount, description?, payer, card | tokenId, saveCard? } (flag ASAAS_DIRECT_CARD_ENABLED)
 //   asaas-card-tokens                                                    -> tokens de cartão salvos (pagadores)
@@ -16,7 +17,7 @@
 
 import type Stripe from "npm:stripe@^14";
 import type { SupabaseClient, User } from "npm:@supabase/supabase-js@^2";
-import { encryptSecret, decryptSecret } from "../_shared/connectorCrypto.ts";
+import { encryptSecret, decryptSecret, encryptionReady } from "../_shared/connectorCrypto.ts";
 import {
   asaasConfigured, asaasEnv, asaasRoot, asaasAs, AsaasError, AsaasNotConfigured,
   mapPaymentStatus, mapTransferStatus, PIX_KEY_TYPE_TO_ASAAS, ASAAS_WEBHOOK_EVENTS, dueDateIn,
@@ -407,6 +408,13 @@ export async function handleBankAction(action: string, ctx: BankCtx): Promise<Re
       if (!isPf && !["MEI", "LIMITED", "INDIVIDUAL", "ASSOCIATION"].includes(companyType)) return json({ error: "invalid_company_type" }, 400);
       for (const f of ["address", "addressNumber", "province"]) {
         if (!String(body[f] ?? "").trim()) return json({ error: "missing_fields" }, 400);
+      }
+
+      // A apiKey da subconta só vem nesta resposta: sem chave de cifragem
+      // utilizável ela se perderia e a subconta ficaria órfã (2026-11-19).
+      if (!encryptionReady()) {
+        console.error("bank: CONNECTOR_ENC_KEY inválida; asaas-open bloqueado antes de chamar o ASAAS");
+        return json({ error: "pay_config_error" }, 503);
       }
 
       const webhookToken = Deno.env.get("ASAAS_WEBHOOK_TOKEN");

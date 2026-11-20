@@ -14,6 +14,7 @@ import { BankStatement, ProviderDot } from '@/components/bank/BankStatement'
 import { BankReceive } from '@/components/bank/BankReceive'
 import { BankSend } from '@/components/bank/BankSend'
 import { AsaasAccountCard, GlobalAccountCard } from '@/components/bank/BankAccounts'
+import { PayOnboarding } from '@/components/bank/PayOnboarding'
 import { bankApi, type BankOverview, type BankTransaction, type ProviderStatementItem } from '@/lib/bank/api'
 import { formatMinor, findCurrency } from '@/lib/wallet/currency'
 import type { BankProvider } from '@/lib/bank/routing'
@@ -64,6 +65,11 @@ export default function VertalBankPage() {
     setParams(next, { replace: true })
   }
 
+  // Falta alguma das contas disponíveis (ou a conta global ainda pede dados).
+  const needsOnboarding = Boolean(overview) && (
+    (overview!.flags.asaasConfigured && !overview!.asaas.account) ||
+    (overview!.stripe.configured && (!overview!.stripe.account || !overview!.stripe.account.detailsSubmitted))
+  )
   const totals = overview?.totals ?? []
   const brl = totals.find((t) => t.currency === 'BRL')
   const others = totals.filter((t) => t.currency !== 'BRL')
@@ -153,12 +159,8 @@ export default function VertalBankPage() {
           <TabsContent value="inicio" className="space-y-4 pt-5">
             {loading ? <Spinner /> : (
               <>
-                {(!overview?.asaas.account || !overview?.stripe.account) && (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {!overview?.asaas.account && <AsaasAccountCard overview={overview} onChange={load} />}
-                    {!overview?.stripe.account && <GlobalAccountCard overview={overview} onChange={load} />}
-                  </div>
-                )}
+                {/* Cadastro único: abre ASAAS + Stripe juntos (pay-open). */}
+                {needsOnboarding && <PayOnboarding overview={overview} onChange={load} />}
                 <h2 className="font-display text-sm font-semibold text-foreground">Últimas movimentações</h2>
                 <BankStatement items={items.slice(0, 8)} />
               </>
@@ -182,9 +184,12 @@ export default function VertalBankPage() {
             <WalletSection variant="bank" />
           </TabsContent>
 
-          <TabsContent value="contas" className="grid gap-4 pt-5 md:grid-cols-2">
-            <AsaasAccountCard overview={overview} onChange={load} />
-            <GlobalAccountCard overview={overview} onChange={load} />
+          <TabsContent value="contas" className="space-y-4 pt-5">
+            {needsOnboarding && <PayOnboarding overview={overview} onChange={load} />}
+            <div className="grid gap-4 md:grid-cols-2">
+              <AsaasAccountCard overview={overview} onChange={load} hideOpen />
+              <GlobalAccountCard overview={overview} onChange={load} hideOpen />
+            </div>
           </TabsContent>
         </Tabs>
 

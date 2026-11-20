@@ -14,6 +14,7 @@
 //   connect-charge { amount, currency, description? }
 //   connect-onboard { country?, returnPath? }  (conta global: país do titular)
 //   bank-* / asaas-*                       -> ver ./bank.ts (e-bank Stripe + ASAAS)
+//   pay-open | pay-status                  -> ver ./payOpen.ts (cadastro único ASAAS + Stripe)
 //
 // Cartões nunca chegam aqui: o número é digitado no Stripe Elements e vira um
 // PaymentMethod do Customer do Stripe. Guardamos só a referência e os dados de
@@ -22,6 +23,8 @@
 
 import { createClient } from "npm:@supabase/supabase-js@^2";
 import { handleBankAction, BANK_ACTIONS } from "./bank.ts";
+import { handlePayAction, PAY_ACTIONS } from "./payOpen.ts";
+import { encKeyState } from "../_shared/encKey.ts";
 import { asaasEnv, asaasEnvFromKey, asaasBaseUrl } from "../_shared/asaas.ts";
 import { findConnectCountry } from "../_shared/bankCountries.ts";
 import Stripe from "npm:stripe@^14";
@@ -131,6 +134,9 @@ Deno.serve(async (req) => {
       asaasConfigured: Boolean(asaasKey),
       asaasEnv: asaasEnv(),
       asaasEnvSource: Deno.env.get("ASAAS_ENV") ? "ASAAS_ENV" : asaasEnvFromKey(asaasKey) ? "key_prefix" : "default",
+      // CONNECTOR_ENC_KEY: ok | missing | invalid (cifra a apiKey da subconta ASAAS e as chaves Pix).
+      encKey: encKeyState(Deno.env.get("CONNECTOR_ENC_KEY")),
+      stripeConfigured: Boolean(Deno.env.get("STRIPE_SECRET_KEY")),
     };
     // ?probe=1: testa a chave nos dois ambientes (GET /myAccount/status) e diz qual aceita.
     if (asaasKey && new URL(req.url).searchParams.get("probe") === "1") {
@@ -507,6 +513,14 @@ Deno.serve(async (req) => {
         return_url: `${origin}${returnPath}?wallet=connect-return`,
       });
     };
+
+    if (PAY_ACTIONS.has(action)) {
+      return await handlePayAction(action, {
+        user, db, body, json, stripeClient, getConnected, adoptExisting, syncAccountRow,
+        accountLink: (stripe, accountId) => accountLink(stripe, accountId),
+        platformCnpj: PLATFORM_CNPJ,
+      });
+    }
 
     if (BANK_ACTIONS.has(action)) {
       return await handleBankAction(action, { req, user, db, body, json, stripeClient, getConnected });
