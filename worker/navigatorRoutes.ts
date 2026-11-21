@@ -39,6 +39,10 @@ export interface NavigatorEnv extends SupabaseEnv, E2BEnv {
   NAVIGATOR_CREDITS_PER_MINUTE?: string;
   /** Mesma chave AES-GCM das edge functions (cofre e conectores). */
   CONNECTOR_ENC_KEY?: string;
+  /** Chave própria do Navigator (sessões e cookies). Se ausente, usa CONNECTOR_ENC_KEY. */
+  NAVIGATOR_ENC_KEY?: string;
+  /** Token interno compartilhado com a edge function kubo-secrets (fill_secret). */
+  NAVIGATOR_INTERNAL_TOKEN?: string;
 }
 
 const startLimiter = createRateLimiter(6, 10 * 60_000);
@@ -120,11 +124,11 @@ async function activeSessionOf(env: NavigatorEnv, userId: string): Promise<Sessi
 
 async function secretsOf(env: NavigatorEnv, row: SessionRow): Promise<SessionSecrets> {
   if (!row.secret_ciphertext || !row.secret_iv || !row.secret_tag) throw new Error('session_without_secrets');
-  return JSON.parse(await decryptWithConnectorKey(env.CONNECTOR_ENC_KEY, { ciphertext: row.secret_ciphertext, iv: row.secret_iv, tag: row.secret_tag })) as SessionSecrets;
+  return JSON.parse(await decryptWithConnectorKey(navKey(env), { ciphertext: row.secret_ciphertext, iv: row.secret_iv, tag: row.secret_tag })) as SessionSecrets;
 }
 
 async function sealSecrets(env: NavigatorEnv, s: SessionSecrets) {
-  const enc = await encryptWithConnectorKey(env.CONNECTOR_ENC_KEY, JSON.stringify(s));
+  const enc = await encryptWithConnectorKey(navKey(env), JSON.stringify(s));
   return { secret_ciphertext: enc.ciphertext, secret_iv: enc.iv, secret_tag: enc.tag };
 }
 
@@ -173,7 +177,7 @@ async function loadProfileCookies(env: NavigatorEnv, userId: string): Promise<Co
   const rows = await table(env, 'navigator_profiles').select<{ ciphertext: string; iv: string; tag: string }>({ user_id: `eq.${userId}`, select: 'ciphertext,iv,tag', limit: '1' });
   if (!rows[0]) return [];
   try {
-    const parsed = JSON.parse(await decryptWithConnectorKey(env.CONNECTOR_ENC_KEY, rows[0]));
+    const parsed = JSON.parse(await decryptWithConnectorKey(navKey(env), rows[0]));
     return Array.isArray(parsed) ? (parsed as Cookie[]) : [];
   } catch {
     return []; // chave trocada ou dado corrompido: começa sem cookies
@@ -195,7 +199,7 @@ async function saveProfile(env: NavigatorEnv, userId: string, target: NavdTarget
     const cookies = filterCookies(data.cookies);
     const plain = JSON.stringify(cookies);
     if (plain.length > NAVIGATOR_LIMITS.maxProfileBytes) return null;
-    const enc = await encryptWithConnectorKey(env.CONNECTOR_ENC_KEY, plain);
+    const enc = await encryptWithConnectorKey(navKey(env), plain);
     await table(env, 'navigator_profiles').upsert(
       { user_id: userId, ciphertext: enc.ciphertext, iv: enc.iv, tag: enc.tag, cookie_count: cookies.length, bytes: plain.length, updated_at: new Date().toISOString() },
       'user_id',
@@ -208,6 +212,27 @@ async function saveProfile(env: NavigatorEnv, userId: string, target: NavdTarget
 }
 
 // ─── Cofre (fill_secret) ─────────────────────────────────────────────────
+const navKey = (env: NavigatorEnv): string | undefined => env.NAVIGATOR_ENC_KEY || env.CONNECTOR_ENC_KEY;
+
+/** Valor do cofre: decifra local se houver CONNECTOR_ENC_KEY; senão pede à edge function kubo-secrets (que audita). */
+async function resolveVaultValue(env: NavigatorEnv, userId: string, secretId: string, host: string, sessionId: string): Promise<string | null> {
+  if (env.CONNECTOR_ENC_KEY) {
+    const rows = await table(env, 'kubo_secrets').select<{ ciphertext: string; iv: string; tag: string }>({ id: `eq.${secretId}`, select: 'ciphertext,iv,tag', limit: '1' });
+    if (!rows[0]) return null;
+    const v = await decryptWithConnectorKey(env.CONNECTOR_ENC_KEY, rows[0]);
+    await table(env, 'kubo_secret_audit').insert({ secret_id: secretId, actor_id: userId, action: 'inject', meta: { target: 'navigator', host, session_id: sessionId } }).catch(() => undefined);
+    return v;
+  }
+  if (!env.NAVIGATOR_INTERNAL_TOKEN || !env.SUPABASE_URL) return null;
+  const res = await fetch(`${env.SUPABASE_URL.replace(/\/+$/, '')}/functions/v1/kubo-secrets`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-navigator-token': env.NAVIGATOR_INTERNAL_TOKEN, apikey: env.SUPABASE_SECRET_KEY ?? '', Authorization: `Bearer ${env.SUPABASE_SECRET_KEY ?? ''}` },
+    body: JSON.stringify({ id: secretId, user_id: userId, host, session_id: sessionId }),
+  });
+  if (!res.ok) return null;
+  const data = (await res.json().catch(() => ({}))) as { value?: unknown };
+  return typeof data.value === 'string' ? data.value : null;
+}
 async function visibleSecrets(env: NavigatorEnv, userId: string): Promise<VaultSecretMeta[]> {
   const cols = 'id,owner_id,env_key,bound_to';
   const owned = await table(env, 'kubo_secrets').select<Omit<VaultSecretMeta, 'role'>>({ owner_id: `eq.${userId}`, bound_to: 'not.is.null', select: cols });
@@ -227,9 +252,8 @@ async function fulfillSecret(env: NavigatorEnv, userId: string, row: SessionRow,
     await navd(env, target, 'POST', '/input', { id: pending.id, kind: 'secret', value: null }).catch(() => undefined);
     return false;
   }
-  const rows = await table(env, 'kubo_secrets').select<{ ciphertext: string; iv: string; tag: string }>({ id: `eq.${secret.id}`, select: 'ciphertext,iv,tag', limit: '1' });
-  if (!rows[0]) return false;
-  let value: string | null = await decryptWithConnectorKey(env.CONNECTOR_ENC_KEY, rows[0]);
+  let value: string | null = await resolveVaultValue(env, userId, secret.id, host, row.id);
+  if (value === null) return false;
   try {
     await navd(env, target, 'POST', '/input', { id: pending.id, kind: 'secret', value });
   } finally {
@@ -237,10 +261,6 @@ async function fulfillSecret(env: NavigatorEnv, userId: string, row: SessionRow,
   }
   const now = new Date().toISOString();
   await table(env, 'kubo_secrets').update({ id: `eq.${secret.id}` }, { last_used_at: now }).catch(() => undefined);
-  await table(env, 'kubo_secret_audit').insert({
-    secret_id: secret.id, owner_id: secret.owner_id, actor_id: userId, action: 'inject', env_key: secret.env_key,
-    meta: { target: 'navigator', host, session_id: row.id },
-  }).catch((e) => console.error('navigator: auditoria falhou', e instanceof Error ? e.message.slice(0, 120) : e));
   return true;
 }
 
@@ -258,7 +278,7 @@ export async function handleNavigator(request: Request, env: NavigatorEnv, url: 
     return fail(request, 'not_configured', {}, 503);
   }
   if (!userId) return fail(request, 'unauthorized', {}, 401);
-  if (!env.E2B_API_KEY || !env.SUPABASE_SECRET_KEY || !env.CONNECTOR_ENC_KEY) return fail(request, 'not_configured', {}, 503);
+  if (!env.E2B_API_KEY || !env.SUPABASE_SECRET_KEY || !navKey(env) || (!env.CONNECTOR_ENC_KEY && !env.NAVIGATOR_INTERNAL_TOKEN)) return fail(request, 'not_configured', {}, 503);
 
   const body = await readBody(request);
   if (!body) return fail(request, 'bad_request', {}, 400);

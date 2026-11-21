@@ -84,9 +84,41 @@ function warningsFor(entries: PlanEntry[]): string[] {
   return out;
 }
 
+function timingSafeEqualStr(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return fail("method_not_allowed", 405);
+
+  // Vertal Navigator: o Worker pede o valor para digitar direto no navegador (fill_secret).
+  // Autenticado por token interno compartilhado; o valor nunca vai ao modelo nem ao cliente.
+  const navToken = req.headers.get("x-navigator-token");
+  if (navToken !== null) {
+    const expected = Deno.env.get("NAVIGATOR_INTERNAL_TOKEN") ?? "";
+    if (expected.length < 32 || !timingSafeEqualStr(navToken, expected)) return fail("unauthorized", 401);
+    try {
+      const nb = (await req.json()) as { id?: unknown; user_id?: unknown; host?: unknown; session_id?: unknown };
+      const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const uid = String(nb.user_id ?? "");
+      if (!/^[0-9a-f-]{36}$/i.test(uid)) return fail("user_id inválido");
+      const { row, error: idErr } = await loadSecret(admin, nb.id);
+      if (idErr) return fail(idErr);
+      if (!row) return fail("Segredo não encontrado", 404);
+      if (row.owner_id !== uid && !(await grantOf(admin, row.id, uid))) return fail("Segredo não encontrado", 404);
+      const value = await decryptSecret({ ciphertext: row.ciphertext, iv: row.iv, tag: row.tag });
+      await audit(admin, { secretId: row.id, ownerId: row.owner_id, actorId: uid, action: "inject", envKey: row.env_key });
+      return json({ value });
+    } catch (e) {
+      return fail(e instanceof Error ? e.message.slice(0, 120) : "erro", 500);
+    }
+  }
 
   const authHeader = req.headers.get("Authorization") ?? "";
   if (!authHeader.startsWith("Bearer ")) return fail("missing auth", 401);
