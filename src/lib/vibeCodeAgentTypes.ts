@@ -36,6 +36,8 @@ export type VibeStepKind =
   | "delegate"
   /** agent_state.handoff atualizado (passagem de bastão Chat ↔ Vibe Code). */
   | "handoff"
+  /** Fase 4: cartão do Vertal Navigator no chat (/navegar ou ação use_browser do agente). */
+  | "navigator"
   /** Resposta em texto do agente ao usuário (o balão do chat). */
   | "reply"
   | "error"
@@ -74,6 +76,10 @@ export interface VibeStep {
   planState?: VibePlanState;
   /** Pergunta/resposta do Vertal Chat (kind "delegate"). */
   delegate?: unknown;
+  /** Cartão do Vertal Navigator (kind "navigator"; ver src/lib/navigator/vibeCard.ts). */
+  navigator?: unknown;
+  /** Botão de ação do passo (só rota interna, ex.: /connectors/github). */
+  link?: { href: string; label: string };
   /** O cliente deve seguir sozinho para a próxima tarefa (autonomia semi/full). */
   continueNext?: boolean;
   /** Model tier chosen by the DeepSeek router for this cycle. */

@@ -35,6 +35,7 @@ import {
   rankModels,
 } from "../_shared/modelRouter.ts";
 import { listVisibleSecrets } from "../_shared/kuboSecrets.ts";
+import { parseVibeRecord } from "../_shared/vibeRecord.ts";
 import { recordGatewayFailure, recordGatewayRun, supabaseGatewayCache } from "../_shared/aiGatewayStore.ts";
 import { extractMemories, formatMemoriesForPrompt, loadMemories, saveMemories } from "../_shared/primeMemory.ts";
 import {
@@ -48,6 +49,10 @@ import {
   type Observation,
   ASK_CHAT_ACTION_LINE,
   ASK_CHAT_RULE,
+  USE_BROWSER_ACTION_LINE,
+  USE_BROWSER_RULE,
+  canUseBrowser,
+  parseBrowserRequest,
   canAskChat,
   checkVibeOrigin,
   parseAgentTurn,
@@ -387,7 +392,8 @@ Você trabalha em voltas. A cada volta responda com UM objeto JSON ESTRITO (sem 
     {"type":"edit_file","path":"src/..","reason":"o que muda","content":"CONTEÚDO FINAL COMPLETO do arquivo"},
     {"type":"message","reason":"nota ao usuário"},
     {"type":"ask_user","reason":"pergunta objetiva, só se for impossível decidir sozinho"},
-    ${ASK_CHAT_ACTION_LINE}
+    ${ASK_CHAT_ACTION_LINE},
+    ${USE_BROWSER_ACTION_LINE}
   ],
   "requirements": [{"slug":"stripe","reason":"cobrança mensal"},{"name":"API de Frete","secrets":["FRETE_API_KEY"],"reason":"calcular frete"}],
   "memories": [{"scope":"user|project","kind":"preference|constraint|architecture|design|integration|decision|note","content":"fato durável"}],
@@ -405,7 +411,8 @@ Como trabalhar:
 7. Você não executa comandos; diga em "message" o que depender do usuário (credencial, decisão, deploy). ${ASK_CHAT_RULE}
 8. Você conversa com o usuário: "summary" é a sua resposta direta a ele, em português, em 1 a 3 frases. Se o pedido for só uma pergunta ou conversa, responda em "summary" (e em "message" se precisar de mais) sem editar arquivos.
 9. Para APIs fora do catálogo, inclua em "requirements" "key_url" (página oficial onde se gera a chave) e "site_url" (página oficial de cadastro), só https e só sites oficiais. Nunca invente um link que você não tem certeza que é oficial: deixe sem.
-10. Seja educado, claro e direto, como um engenheiro sênior gentil: diga o que fez, o que falta e o próximo passo.`;
+10. Seja educado, claro e direto, como um engenheiro sênior gentil: diga o que fez, o que falta e o próximo passo.
+11. ${USE_BROWSER_RULE}`;
 
 /** Saúde recente dos modelos (todas as execuções da plataforma, últimos 7 dias). */
 async function loadModelHealth(admin: any) {
@@ -519,6 +526,8 @@ Deno.serve(async (req) => {
     chatConversationId?: string;
     /** Atualiza agent_state.handoff sem rodar o agente: {action:"note", goal?, status?, lastSummary?, ...}. */
     handoff?: unknown;
+    /** Fase 4: grava uma troca feita no chat (/navegar, /github, navegador do agente) sem rodar o agente. */
+    record?: unknown;
   };
   try {
     body = await req.json();
@@ -774,6 +783,25 @@ Deno.serve(async (req) => {
         if (typeof body.projectId === "string" && UUID_RE.test(body.projectId)) {
           const { data: proj } = await userClient.from("projects").select("id").eq("id", body.projectId).maybeSingle();
           projectId = proj?.id ?? null;
+        }
+
+        // ------------------------------------------------------------------
+        // Registro (fase 4): troca feita no chat do Vibe Code (/navegar, /github,
+        // navegador pedido pelo agente). Só grava na conversa: sem modelo, sem créditos.
+        // ------------------------------------------------------------------
+        if (body.record !== undefined) {
+          if (origin === "vertal_chat") throw new UserFacingError("Registro de conversa só pelo próprio Vibe Code.");
+          const rec = parseVibeRecord(body.record);
+          if (!rec) throw new UserFacingError("Registro inválido: envie prompt, reply e passos.");
+          const conv = await resolveConversation(true, rec.prompt ?? rec.reply);
+          conversationId = conv?.id ?? null;
+          if (!conversationId) throw new UserFacingError("Não consegui abrir a conversa para guardar esta troca.");
+          userPrompt = rec.prompt ?? null;
+          replyText = rec.reply;
+          send({ kind: "done", status: "success", title: "Troca registrada na conversa" });
+          // O histórico guarda só os passos enviados (cartão do navegador, resposta do GitHub…).
+          recorded.splice(0, recorded.length, ...rec.steps.map((st, i) => ({ id: `rec${i + 1}`, ...st })));
+          return;
         }
 
         // ------------------------------------------------------------------
@@ -1094,6 +1122,7 @@ Deno.serve(async (req) => {
         }
         // Ponte Vibe → Chat: perguntas ao Vertal Chat feitas neste pedido.
         let chatDelegations = 0;
+        let browserRequests = 0;
         const store = makeStore(admin, userId, projectId, conversationId);
         const planSummary = await loadPlanSummary(conversationId).catch(() => "");
 
@@ -1330,6 +1359,31 @@ Deno.serve(async (req) => {
                 questions.push(action.reason);
                 send({ kind: "question", status: "success", title: action.reason });
               }
+              continue;
+            }
+            if (action.type === "use_browser") {
+              // Fase 4: o navegador roda no chat do usuário (JWT dele, Worker /api/navigator,
+              // mesmas regras: cofre, TOTP, gate de pagamento, auditoria). Aqui só registramos o pedido.
+              const reqBrowser = parseBrowserRequest(action);
+              if (!reqBrowser) continue;
+              const allowedBrowser = canUseBrowser(origin, browserRequests);
+              if (!allowedBrowser.ok) {
+                send({
+                  kind: "navigator",
+                  status: "skipped",
+                  title: allowedBrowser.reason === "delegation_depth_exceeded" ? "Pedido veio do Vertal Chat: o navegador fica com o chat" : "Limite de tarefas de navegador neste pedido",
+                  detail: reqBrowser.task,
+                });
+                continue;
+              }
+              browserRequests++;
+              send({
+                kind: "navigator",
+                status: "success",
+                title: "O agente vai usar o navegador na nuvem",
+                detail: reqBrowser.task,
+                navigator: { state: "requested", origin: "agent", taskId: crypto.randomUUID(), startedAt: Date.now(), ...reqBrowser },
+              });
               continue;
             }
             if (action.type === "ask_chat") {

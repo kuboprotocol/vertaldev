@@ -10,7 +10,8 @@ import type { ExtractedMemory, MemoryKind, MemoryScope } from "./primeMemory.ts"
 import { type JsonRepair, repairAgentJson } from "./chatOrchestrator.ts";
 
 /** ask_chat: pergunta de pesquisa/imagem ao Vertal Chat (ponte Vibe → Chat, profundidade 1). */
-export type AgentActionType = "read_file" | "edit_file" | "message" | "ask_user" | "ask_chat";
+/** use_browser (fase 4 do Navigator): tarefa para o navegador na nuvem, executada no chat do usuário. */
+export type AgentActionType = "read_file" | "edit_file" | "message" | "ask_user" | "ask_chat" | "use_browser";
 
 export interface AgentAction {
   type: AgentActionType;
@@ -37,7 +38,7 @@ export interface AgentTurn {
 
 export type ChatMsg = { role: "system" | "user" | "assistant"; content: string };
 
-const ACTION_TYPES: AgentActionType[] = ["read_file", "edit_file", "message", "ask_user", "ask_chat"];
+const ACTION_TYPES: AgentActionType[] = ["read_file", "edit_file", "message", "ask_user", "ask_chat", "use_browser"];
 
 const asString = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : undefined);
 
@@ -489,5 +490,40 @@ export const ASK_CHAT_RULE =
 export function canAskChat(origin: VibeOrigin, used: number): { ok: true } | { ok: false; reason: string } {
   if (origin === "vertal_chat") return { ok: false, reason: "delegation_depth_exceeded" };
   if (used >= MAX_CHAT_DELEGATIONS) return { ok: false, reason: "chat_delegation_limit" };
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Ponte Vibe Code → Vertal Navigator (ação use_browser, fase 4)
+// ---------------------------------------------------------------------------
+
+/** Tarefas de navegador por pedido (cada uma abre/usa o navegador na nuvem, cobrado por minuto). */
+export const MAX_BROWSER_REQUESTS = 1;
+
+export const USE_BROWSER_ACTION_LINE =
+  '{"type":"use_browser","reason":"tarefa objetiva para o navegador na nuvem (ex.: entrar no painel da Cloudflare e configurar o DNS de meu-app.com)","path":"https://url-inicial (opcional)"}';
+
+export const USE_BROWSER_RULE =
+  `Quando a tarefa exigir operar um site/painel (Cloudflare, Supabase, Vercel, Hostinger, registro de domínio, ver um erro no painel), use UMA ação use_browser (no máximo ${MAX_BROWSER_REQUESTS} por pedido) com "final": true e diga em "summary" que vai abrir o navegador: ele roda no chat, ao vivo, com login do cofre, 2FA e aprovação do usuário para qualquer pagamento. Não use para pesquisa (use ask_chat) nem para o que está no código.`;
+
+export interface BrowserRequest {
+  task: string;
+  url?: string;
+}
+
+/** Lê a ação use_browser: tarefa (3–2000 caracteres) e URL inicial só https/http públicas (a guarda SSRF final é no Worker). */
+export function parseBrowserRequest(action: AgentAction): BrowserRequest | null {
+  if (action.type !== "use_browser") return null;
+  const task = (action.reason ?? action.content ?? "").replace(/\s+/g, " ").trim().slice(0, 2_000);
+  if (task.length < 3) return null;
+  const rawUrl = (action.path ?? "").trim();
+  const url = /^https?:\/\/[^\s<>"']{3,500}$/i.test(rawUrl) ? rawUrl : undefined;
+  return url ? { task, url } : { task };
+}
+
+/** Pedido do Vertal Chat não abre navegador pelo Vibe Code (o chat já tem o Navigator); respeita o limite. */
+export function canUseBrowser(origin: VibeOrigin, used: number): { ok: true } | { ok: false; reason: string } {
+  if (origin === "vertal_chat") return { ok: false, reason: "delegation_depth_exceeded" };
+  if (used >= MAX_BROWSER_REQUESTS) return { ok: false, reason: "browser_request_limit" };
   return { ok: true };
 }

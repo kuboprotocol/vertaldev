@@ -147,6 +147,10 @@ export function parseGithubCommand(input: string): GithubOp | null {
   const words = main.trim().split(/\s+/).filter(Boolean);
   switch (sub) {
     case "repos":
+    case "repositorios":
+    case "repositórios":
+    case "list":
+    case "ls":
       return parseGithubOp({ op: "list_repos" });
     case "repo": {
       const [name, vis] = words;
@@ -171,9 +175,17 @@ export function parseGithubCommand(input: string): GithubOp | null {
       return parseGithubOp({ op: "create_pr", repo, head, base, title: titleWords.join(" "), body });
     }
     default:
+      // Fase 4: linguagem natural ("/github liste meus repositórios", "/github quais são meus repos?").
+      if (GITHUB_LIST_VERBS.test(`${sub} ${rest}`) && /\brepo(s|sit[oó]rios?)?\b/i.test(`${sub} ${rest}`)) return parseGithubOp({ op: "list_repos" });
       return null;
   }
 }
+
+const GITHUB_LIST_VERBS = /\b(list[ae]?|listar|lista|mostr[ae]r?|mostre|ver|veja|quais|meus|todos)\b/i;
+
+/** Ajuda do comando /github (mostrada no chat quando o comando não é reconhecido). */
+export const GITHUB_COMMAND_HELP =
+  "Comandos do GitHub: /github repos (lista seus repositórios) · /github repo <nome> [publico] · /github issue <dono/repo> <título> [| corpo] · /github branch <dono/repo> <branch> [de <base>] · /github pr <dono/repo> <head> [-> <base>] <título> [| corpo]. Também entendo \"/github liste meus repositórios\".";
 
 /** A conversa recente fala de GitHub/repositório/issue/PR? (liga a ferramenta github no prompt) */
 const GITHUB_HINTS = /\b(github|reposit[oó]rio|repo|issue|pull request|pr|branch|commit)\b/i;
