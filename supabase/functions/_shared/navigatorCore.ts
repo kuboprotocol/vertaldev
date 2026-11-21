@@ -275,11 +275,13 @@ export function pickNavigatorModel(requested: unknown, opts: { defaultModel?: st
  * Curto de propósito (o prompt do browser-use já é grande).
  */
 export function framedNavigatorTask(task: string, url?: string): string {
-  const head = url ? `Comece abrindo ${url}. ` : "";
+  // Sem URL, o navegador começa em branco: o agente precisa ABRIR um buscador e pesquisar.
+  // Sem essa instrução explícita, ele podia responder sem navegar (bug: "não faz a busca").
+  const head = url ? `Comece abrindo ${url}. ` : "Comece abrindo um buscador público (https://duckduckgo.com) e pesquise os termos da tarefa; abra os resultados antes de responder. ";
   return [
     `${head}${task}`,
     "",
-    "Como trabalhar: 1) no 1º passo, escreva em next_goal um plano curto (2–4 etapas); 2) para ler respostas, use read_page_text (se não existir, a ação de extrair conteúdo) em vez de adivinhar pela imagem; 3) pode abrir outra aba se precisar comparar páginas e voltar depois; 4) na resposta final (done), responda em português e cite entre aspas o trecho exato lido na página que comprova a resposta, com a URL.",
+    "Como trabalhar: 1) no 1º passo, escreva em next_goal um plano curto (2–4 etapas); 2) para ler respostas, use read_page_text (se não existir, a ação de extrair conteúdo) em vez de adivinhar pela imagem; 3) pode abrir outra aba se precisar comparar páginas e voltar depois; 4) não responda de memória: a resposta precisa vir do que você abriu e leu na página; 5) na resposta final (done), responda em português e cite entre aspas o trecho exato lido na página que comprova a resposta, com a URL.",
   ].join("\n");
 }
 
