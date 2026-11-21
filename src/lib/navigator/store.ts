@@ -210,12 +210,14 @@ export async function runNavigatorTask(
   url?: string,
   opts: { timeoutMs?: number; maxSteps?: number; model?: string; origin?: string; onStart?: (t: CurrentTask) => void } = {},
 ): Promise<TaskOutcome> {
+  // Em dia com o sandbox antes de marcar o início da tarefa. Se a sessão que existia
+  // terminou (expirou, sandbox sumiu, sem créditos), o poll zera o sessionId: aí abrimos
+  // outra (ou mostramos o motivo real), em vez de mandar a tarefa com sessionId vazio
+  // e cair no "Pedido inválido para o navegador".
+  if (state.sessionId) await poll();
   if (!state.sessionId) {
     const started = await startNavigator();
     if (!started.ok) return { ok: false, message: messageOf(started), steps: 0 };
-  } else {
-    // Em dia com o sandbox antes de marcar o início da tarefa.
-    await poll();
   }
   const baseSeq = state.lastSeq;
   const res = await callNavigator('task', {
