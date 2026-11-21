@@ -16,6 +16,7 @@ import CloneDialog from '@/components/builder/CloneDialog'
 import AILoadingAnimation, { detectLanguage } from '@/components/builder/AILoadingAnimation'
 import FilePreview from '@/components/builder/FilePreview'
 import KuboFlowSelector, { autoDetectMode, type KuboFlowMode } from '@/components/builder/KuboFlowSelector'
+import { clampBuilderMode } from '@/lib/planAccess'
 import { uploadFile, validateFile, getAllAllowedTypes, type UploadedFile } from '@/lib/fileUpload'
 import { Progress } from '@/components/ui/progress'
 import { subscribePreviewLogs, type PreviewLogEntry } from '@/lib/iframePreview'
@@ -43,7 +44,7 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
   const navigate = useNavigate()
   const { projectId } = useParams<{ projectId?: string }>()
   const location = useLocation()
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const { subscription, canEdit, editsRemaining, incrementEdit } = useSubscription()
   const initialPrompt = (location.state as any)?.initialPrompt as string | undefined
 
@@ -114,10 +115,8 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
   useEffect(() => {
     if (manualModeRef.current || !input.trim()) return
     let detected = autoDetectMode(input)
-    const plan = userPlan.toLowerCase()
-    // Downgrade if locked
-    if (detected === 'ship' && !['ultra'].includes(plan)) detected = ['pro', 'starter'].includes(plan) ? 'think' : 'flow'
-    if (detected === 'think' && !['pro', 'ultra', 'starter'].includes(plan)) detected = 'flow'
+    // Downgrade if locked (plano exigido ou acima libera; admin libera tudo)
+    detected = clampBuilderMode(detected, userPlan, isAdmin)
     if (detected !== flowMode) {
       setFlowMode(detected)
       setAutoDetectedMode(true)
@@ -160,7 +159,9 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
   // seeing a "black screen" because the overlay sat on top of the empty
   // preview long after generation completed). The Ready CTA inside the
   // animation lets users skip immediately when generation finishes early.
-  const MIN_LOADING_MS = 8_000
+  // 12 s (antes 8 s): a animação do robô fica alguns segundos a mais na tela.
+  // O botão "Ver agora" continua aparecendo assim que a geração termina.
+  const MIN_LOADING_MS = 12_000
   const loadingStartRef = useRef<number>(0)
   const [showLoading, setShowLoading] = useState(false)
   const generationDoneRef = useRef(false)
@@ -536,7 +537,7 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
 
           <div className="space-y-2 border-t border-border/60 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:pb-3">
             <div className="flex items-center justify-between gap-2 px-0.5">
-              <KuboFlowSelector mode={flowMode} onChange={handleModeChange} autoDetected={autoDetectedMode} userPlan={userPlan} />
+              <KuboFlowSelector mode={flowMode} onChange={handleModeChange} autoDetected={autoDetectedMode} userPlan={userPlan} isAdmin={isAdmin} />
               <span className="hidden text-[10px] text-muted-foreground font-display tracking-widest min-[360px]:inline">VERTAL FLOW AI</span>
             </div>
             {uploadProgress !== null && (

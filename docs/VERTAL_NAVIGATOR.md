@@ -316,3 +316,76 @@ regras de sempre — não há atalho:
   restrição a apps OAuth recusam (o resultado diz isso e sugere o navegador).
 - **YouTube:** a cota diária da Data API é limitada (search = 100 unidades); sem chave, depende do
   Navigator (créditos por minuto) ou da busca na web.
+
+---
+
+# Fase 4 — navegador dentro do chat do Vibe Code, agente que navega sozinho, mais inteligente
+
+## Navegador DENTRO do chat do Vibe Code (como Lovable/Bolt/Replit)
+
+- `/navegar <tarefa>` não abre mais tela cheia nem um cartão solto: vira uma **mensagem da conversa** com o
+  cartão `VibeNavigatorCard` (`src/components/vibe-code/VibeNavigatorCard.tsx`):
+  - **Ao vivo:** tela compacta (noVNC) na largura do chat, status · minutos · crédito/min · site, botão
+    **Expandir** (janela grande dentro do Vibe Code, nunca uma página nova), **Passos do agente** ao vivo,
+    **Assumir controle / Devolver ao agente**, **Fechar (salva o login)**, campo do **código 2FA** e o
+    **cartão de aprovação de pagamento inline** (mesma regra dura: só "Aprovar e clicar" envia
+    `approve + confirmed`). Enquanto o cartão está ao vivo, o diálogo global não duplica a aprovação
+    (`inlineApprovalHosts` no store).
+  - **Encerrado:** captura final + resposta (citando o que foi lido) + passos + plano, com "Usar no pedido" e
+    "Continuar com o agente".
+- **Guardado na conversa:** o cliente grava a troca com `vibe-code-agent` `{record:{prompt, reply, steps}}`
+  (só grava: sem modelo, sem créditos; cria a conversa se não existe). Sanitização em
+  `supabase/functions/_shared/vibeRecord.ts` (só passos `navigator|delegate|message|error`, captura JPEG
+  ≤ 160 KB, links só internos). O cartão volta ao recarregar.
+- Peças compartilhadas extraídas do `NavigatorPanel` para `src/components/navigator/NavigatorParts.tsx`
+  (`NavigatorLiveFrame`, `NavigatorStepList`, `NavigatorPendingInput`, `NavigatorControls`,
+  `NavigatorApprovalDetails`, `NavigatorApprovalInline`). O painel do Vertal Chat continua igual.
+
+## Resposta só da tarefa atual (bug da resposta de outra conversa)
+
+- O store marca cada tarefa (`currentTask`: id, runId, `baseSeq` = último evento antes da tarefa). Ao
+  reaproveitar uma sessão viva, sincroniza os eventos antigos **antes** de mandar a tarefa. Só o `done`
+  desta tarefa resolve a espera (`isDoneForTask`: compara `runId`; navd antigo sem runId → só eventos
+  depois de `baseSeq`). O navd agora manda `runId` em `step` e `done`.
+
+## /github no Vibe Code
+
+- Sempre responde no chat: entende linguagem natural (`/github liste meus repositórios` → `list_repos`),
+  mostra a ajuda quando não entende e, sem conexão, mostra **"Conectar o GitHub"** (→ `/connectors/github`).
+  Leitura sem confirmação; escrita continua com o cartão de confirmação.
+
+## O agente do Vibe Code usa o navegador sozinho (ação `use_browser`)
+
+- Nova ação do agente (`vibeAgentCore.ts`): `{"type":"use_browser","reason":"tarefa","path":"https://… (opcional)"}`,
+  no máximo 1 por pedido, nunca em pedido vindo do Vertal Chat. O servidor só registra o pedido (passo
+  `navigator` com `state: "requested"`); quando o agente termina, o chat abre o cartão ao vivo e roda a
+  tarefa pelo mesmo Worker (`/api/navigator/*`, JWT do usuário): `fill_secret` do cofre, TOTP, gate de
+  pagamento, auditoria em `navigator_audit` — nada muda nas regras. "Continuar com o agente" devolve o
+  resultado ao agente (não é automático para não gastar créditos sem o usuário ver).
+
+## Mais potente e inteligente
+
+- Tarefa enquadrada (`framedNavigatorTask`): plano curto no 1º passo, ler a página com a nova ferramenta
+  **`read_page_text`** (texto visível via CDP pelo navd, só leitura), abrir/alternar abas quando precisar
+  comparar páginas, resposta final **citando entre aspas** o trecho lido + URL.
+- **Modelo por tarefa:** `/api/navigator/task {model}` — só vale se estiver em `NAVIGATOR_ALLOWED_MODELS`
+  (var do Worker, separada por vírgula); padrão continua `google/gemini-3-flash-preview` (OpenRouter).
+- Abertura robusta: `waitNavd` espera até 40 s com backoff (400 ms → 2,5 s), `/init` com 60 s, e o Worker
+  tenta **2 vezes** (sandbox novo na 2ª, o que falhou é encerrado) antes de responder erro. O cliente
+  ainda repete 1 vez em silêncio se vier `sandbox_error`.
+
+## Vertal Chat: resposta final depois de mídia
+
+- Se o modelo devolver saída vazia depois das ferramentas, há uma 2ª chance barata em texto simples
+  (`plainReplyPrompt`); se falhar, a contingência agora é uma frase normal ("Pronto! ▶️ Está tocando …"),
+  nunca "não consegui escrever o resumo". O resultado do YouTube pede uma frase curta ao modelo.
+
+## Deploy da fase 4
+
+1. **Sem migration nova.**
+2. **Edge functions (já existentes):** `supabase functions deploy vibe-code-agent` (op `record`, ação
+   `use_browser`) e `supabase functions deploy creative-router` (resposta final após mídia).
+3. **Template E2B:** reconstruir `vertal-browser` (o `navd.py` mudou: `runId` nos eventos, ferramenta
+   `read_page_text`, regras de plano/abas/citação) — mesmo comando da fase 1 (só a última camada).
+   Sem rebuild tudo funciona (o cliente filtra por `baseSeq`), só sem `read_page_text`/`runId`.
+4. **Worker:** merge → Workers Builds. Opcional: `NAVIGATOR_ALLOWED_MODELS`.

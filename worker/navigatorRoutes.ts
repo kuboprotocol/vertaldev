@@ -20,7 +20,7 @@ import { createRateLimiter } from '../supabase/functions/_shared/browserForm';
 import {
   DEFAULT_NAVIGATOR_SETTINGS, NAVIGATOR_LIMITS, NAVIGATOR_MESSAGES, auditDetail, autoApproveDecision, extractCheckoutSummary, formatCents,
   liveViewUrl, minutesDue, normalizeNavigatorUrl, parseInputBody, parseSessionBody, parseSettingsBody, parseStartBody, parseTaskBody,
-  pickSecretForHost, pickTotpForHost, isTotpSecretName, sanitizeEvents, sanitizePending, isBlockedHost,
+  pickSecretForHost, pickTotpForHost, isTotpSecretName, sanitizeEvents, sanitizePending, isBlockedHost, framedNavigatorTask, pickNavigatorModel,
   type CheckoutSummary, type NavigatorAuditKind, type NavigatorPending, type NavigatorSettings, type NavigatorStatus, type VaultSecretMeta,
 } from '../supabase/functions/_shared/navigatorCore.ts';
 import { parseTotpSeed, totpNow } from '../supabase/functions/_shared/totp.ts';
@@ -35,6 +35,8 @@ export interface NavigatorEnv extends SupabaseEnv, E2BEnv {
   OPENROUTER_API_KEY?: string;
   /** Modelo do agente via OpenRouter (padrão google/gemini-3-flash-preview). */
   NAVIGATOR_MODEL?: string;
+  /** Fase 4: modelos que uma tarefa pode pedir (separados por vírgula). Vazio = só o padrão. */
+  NAVIGATOR_ALLOWED_MODELS?: string;
   /** "openrouter" (padrão) ou "deepseek" (alternativa sem visão; usa DEEPSEEK_API_KEY e NAVIGATOR_MODEL=deepseek-flash). */
   NAVIGATOR_LLM_PROVIDER?: string;
   DEEPSEEK_API_KEY?: string;
@@ -429,7 +431,7 @@ async function start(request: Request, env: NavigatorEnv, userId: string, body: 
   // Reaproveita a sessão viva do usuário.
   const existing = await activeSessionOf(env, userId);
   if (existing) {
-    if (existing.status === 'starting' && Date.now() - Date.parse(existing.started_at) < 60_000) return fail(request, 'busy', { detail: 'starting' }, 409);
+    if (existing.status === 'starting' && Date.now() - Date.parse(existing.started_at) < 180_000) return fail(request, 'busy', { detail: 'starting' }, 409);
     const expired = Date.parse(existing.expires_at) <= Date.now();
     const alive = !expired && existing.status === 'active' && existing.sandbox_id && (await waitNavd(env, existing.sandbox_id, 4_000));
     if (alive) {
@@ -465,30 +467,45 @@ async function start(request: Request, env: NavigatorEnv, userId: string, body: 
     return fail(request, 'busy', { detail: 'starting' }, 409);
   }
 
-  try {
-    const sandbox = await createSandbox(env, { timeoutSeconds: NAVIGATOR_LIMITS.idleTimeoutSeconds, metadata: { app: 'vertal-navigator', session: id } });
-    row.sandbox_id = sandbox.sandboxId;
-    await sessions(env).update({ id: `eq.${id}` }, { sandbox_id: sandbox.sandboxId });
-    if (!(await waitNavd(env, sandbox.sandboxId))) throw new E2BError('navd_not_ready');
-    const cookies = await loadProfileCookies(env, userId);
-    const init = await navd<{ ok?: boolean; cookiesImported?: number }>(env, { sandboxId: sandbox.sandboxId }, 'POST', '/init', {
-      token: secrets.token, viewPassword: secrets.viewPassword, controlPassword: secrets.controlPassword,
-      cookies, ...(parsed.data.url ? { startUrl: parsed.data.url } : {}),
-    }, 45_000);
-    if (!init.data.ok) throw new E2BError('navd_init_failed');
-    if ((await bill(env, row, now)) === 'insufficient_credits') {
-      await endSession(env, row, 'insufficient_credits');
-      return fail(request, 'insufficient_credits', {}, 402);
+  // Fase 4: até 2 tentativas silenciosas (sandbox novo na 2ª). Na 1ª abertura o navd
+  // às vezes não respondia a tempo e o usuário via "start_failed"; a 2ª funcionava.
+  const cookies = await loadProfileCookies(env, userId);
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= NAVIGATOR_START_ATTEMPTS; attempt++) {
+    let sandboxId: string | null = null;
+    try {
+      const sandbox = await createSandbox(env, { timeoutSeconds: NAVIGATOR_LIMITS.idleTimeoutSeconds, metadata: { app: 'vertal-navigator', session: id } });
+      sandboxId = sandbox.sandboxId;
+      row.sandbox_id = sandbox.sandboxId;
+      await sessions(env).update({ id: `eq.${id}` }, { sandbox_id: sandbox.sandboxId });
+      if (!(await waitNavd(env, sandbox.sandboxId))) throw new E2BError('navd_not_ready');
+      const init = await navd<{ ok?: boolean; cookiesImported?: number }>(env, { sandboxId: sandbox.sandboxId }, 'POST', '/init', {
+        token: secrets.token, viewPassword: secrets.viewPassword, controlPassword: secrets.controlPassword,
+        cookies, ...(parsed.data.url ? { startUrl: parsed.data.url } : {}),
+      }, 60_000);
+      if (!init.data.ok) throw new E2BError('navd_init_failed');
+      if ((await bill(env, row, now)) === 'insufficient_credits') {
+        await endSession(env, row, 'insufficient_credits');
+        return fail(request, 'insufficient_credits', {}, 402);
+      }
+      await sessions(env).update({ id: `eq.${id}` }, { status: 'active', last_activity_at: new Date().toISOString() });
+      row.status = 'active';
+      await recordAudit(env, userId, id, 'session_start', { ...(parsed.data.url ? { url: parsed.data.url } : {}), ...(attempt > 1 ? { attempt } : {}) });
+      return json(request, { ok: true, status: 'ok', reused: false, cookiesRestored: init.data.cookiesImported ?? 0, ...sessionView(env, row, secrets) });
+    } catch (e) {
+      lastError = e;
+      console.warn(`[navigator] start tentativa ${attempt} falhou:`, e instanceof Error ? e.message : String(e));
+      // Sandbox que não subiu não fica para trás (nem ocupa vaga).
+      if (sandboxId) await killSandbox(env, sandboxId);
+      if (!(e instanceof E2BError)) break;
     }
-    await sessions(env).update({ id: `eq.${id}` }, { status: 'active', last_activity_at: new Date().toISOString() });
-    row.status = 'active';
-    await recordAudit(env, userId, id, 'session_start', parsed.data.url ? { url: parsed.data.url } : {});
-    return json(request, { ok: true, status: 'ok', reused: false, cookiesRestored: init.data.cookiesImported ?? 0, ...sessionView(env, row, secrets) });
-  } catch (e) {
-    await endSession(env, row, 'start_failed');
-    throw e;
   }
+  await endSession(env, row, 'start_failed');
+  throw lastError ?? new E2BError('start_failed');
 }
+
+/** Tentativas de abrir o sandbox antes de mostrar erro (a 2ª é silenciosa). */
+export const NAVIGATOR_START_ATTEMPTS = 2;
 
 async function withSession(request: Request, env: NavigatorEnv, userId: string, route: string, body: Record<string, unknown>): Promise<Response> {
   const base = parseSessionBody(body);
@@ -532,10 +549,12 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
       const llmKey = provider === 'deepseek' ? env.DEEPSEEK_API_KEY : (env.OPENROUTER_API_KEY || (await internalLlmKey(env)));
       if (!llmKey) return fail(request, 'not_configured', { detail: provider }, 503);
       const usable = (await visibleSecrets(env, userId)).map((x) => ({ name: x.env_key, boundTo: x.bound_to }));
-      const task = parsed.data.url ? `Comece abrindo ${parsed.data.url}. ${parsed.data.task}` : parsed.data.task;
+      // Fase 4: plano curto, leitura do texto da página e resposta citando o que foi lido.
+      const task = framedNavigatorTask(parsed.data.task, parsed.data.url);
+      const model = pickNavigatorModel(parsed.data.model, { defaultModel: env.NAVIGATOR_MODEL, allowed: env.NAVIGATOR_ALLOWED_MODELS, provider });
       const res = await navd<{ ok?: boolean; runId?: string; error?: string }>(env, target, 'POST', '/task', {
         task, provider, apiKey: llmKey,
-        model: env.NAVIGATOR_MODEL || (provider === 'deepseek' ? 'deepseek-flash' : 'google/gemini-3-flash-preview'),
+        model,
         maxSteps: parsed.data.maxSteps, secrets: usable,
       });
       if (res.status === 409) return fail(request, 'busy', {}, 409);

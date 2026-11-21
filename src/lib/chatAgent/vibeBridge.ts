@@ -221,7 +221,7 @@ export { parseGithubCommand as parseVibeGithubCommand } from '../../../supabase/
 export async function delegateToGithub(
   op: import('../../../supabase/functions/_shared/githubOps').GithubOp,
   confirm: (text: string) => Promise<boolean>,
-): Promise<ChatDelegateResult> {
+): Promise<ChatDelegateResult & { code?: string }> {
   const { callGithubOp, describeGithubOp, isGithubWrite } = await import('@/lib/github/client');
   const question = describeGithubOp(op);
   const base = { question, tools: [{ tool: 'github', ok: false }], images: [], refused: [] as string[] };
@@ -230,7 +230,58 @@ export async function delegateToGithub(
   }
   const res = await callGithubOp(op, { confirmed: isGithubWrite(op) });
   if (!res.ok) {
-    return { ...base, ok: false, answer: `${res.message} Plano B: use "/navegar" para fazer pelo navegador.`, error: res.message };
+    // Fase 4: sem conexão, o chat mostra o botão para /connectors/github (nunca falha em silêncio).
+    if (res.code === 'not_connected') return { ...base, ok: false, answer: res.message, error: res.message, code: 'not_connected' };
+    return { ...base, ok: false, answer: `${res.message} Plano B: use "/navegar" para fazer pelo navegador.`, error: res.message, ...(res.code ? { code: res.code } : {}) };
   }
   return { ...base, ok: true, answer: res.message, tools: [{ tool: 'github', ok: true }] };
+}
+
+export { GITHUB_COMMAND_HELP } from '../../../supabase/functions/_shared/githubOps';
+
+/** Rota do conector do GitHub (botão do cartão quando não está conectado). */
+export const GITHUB_CONNECTOR_ROUTE = '/connectors/github';
+
+// ---------------------------------------------------------------------------
+// Fase 4: guardar na conversa as trocas feitas no próprio chat do Vibe Code
+// (/navegar, /github, navegador pedido pelo agente) — vibe-code-agent {record}.
+// ---------------------------------------------------------------------------
+
+export interface VibeRecordRequest {
+  projectId?: string | null;
+  conversationId?: string | null;
+  prompt?: string;
+  reply: string;
+  steps: Array<Record<string, unknown>>;
+}
+
+/** Corpo enviado ao vibe-code-agent (só grava: sem modelo, sem créditos). */
+export function vibeRecordBody(req: VibeRecordRequest): Record<string, unknown> {
+  return {
+    ...(req.projectId ? { projectId: req.projectId } : {}),
+    ...(isVibeConversationId(req.conversationId) ? { conversationId: req.conversationId } : {}),
+    record: { ...(req.prompt ? { prompt: req.prompt } : {}), reply: req.reply, steps: req.steps },
+  };
+}
+
+/** Grava a troca na conversa (cria a conversa se ainda não existe). Nunca lança. */
+export async function recordVibeExchange(
+  req: VibeRecordRequest,
+  opts: { url: string; token: string; apikey?: string; fetchImpl?: typeof fetch },
+): Promise<{ ok: boolean; conversationId?: string; title?: string; error?: string }> {
+  const doFetch = opts.fetchImpl ?? fetch;
+  try {
+    const resp = await doFetch(opts.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${opts.token}`, ...(opts.apikey ? { apikey: opts.apikey } : {}) },
+      body: JSON.stringify(vibeRecordBody(req)),
+    });
+    const text = await resp.text();
+    if (!resp.ok) return { ok: false, error: vibeHttpError(resp.status, text) };
+    const summary = summarizeVibeStream(text);
+    if (summary.error) return { ok: false, error: summary.error };
+    return { ok: true, conversationId: summary.conversationId ?? (isVibeConversationId(req.conversationId) ? req.conversationId! : undefined), title: summary.title };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Falha ao guardar a conversa.' };
+  }
 }

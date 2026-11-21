@@ -41,6 +41,8 @@ import {
   secretPlaceholders,
   rerouteFormActions,
   fallbackReplyFromResults,
+  plainReplyPrompt,
+  cleanPlainReply,
 } from "../_shared/chatAgent.ts";
 import { wantsBrowserForm } from "../_shared/browserForm.ts";
 import { wantsNavigator } from "../_shared/navigatorCore.ts";
@@ -700,8 +702,28 @@ async function handleAgentChat(
     if (!turn.reply && turn.actions.length === 0) {
       // Depois de ferramentas, nunca 502: relata o que saiu (ex.: a ferramenta falhou).
       if (results.length === 0) return fail(502, "invalid_model_output");
-      console.warn("[creative-router] agent_chat saída vazia após ferramentas: resposta de contingência");
-      turn = { reply: fallbackReplyFromResults(results), actions: [] };
+      // Segunda chance barata: texto simples (sem JSON) só com o pedido e os resultados.
+      let plain = "";
+      try {
+        const again = await runGateway({
+          messages: [
+            { role: "system", content: "Você é o Vertal Chat. Responda curto e direto, em português do Brasil." },
+            { role: "user", content: plainReplyPrompt(results, lastUserText) },
+          ],
+          kind: "chat",
+          tier: "flash",
+          json: false,
+          temperature: 0.3,
+          maxTokens: 300,
+          contextChars: 12_000,
+          noCache: true,
+        });
+        plain = cleanPlainReply(again.content);
+      } catch (e) {
+        console.warn("[creative-router] agent_chat resposta simples falhou:", sanitizeError(e));
+      }
+      console.warn(`[creative-router] agent_chat saída vazia após ferramentas: ${plain ? "resposta simples" : "resposta de contingência"}`);
+      turn = { reply: plain || fallbackReplyFromResults(results), actions: [] };
     }
     // Última rodada ou fase final do plano: sem novas ações. Durante um plano, sem plano dentro de plano.
     let actions = final ? [] : turn.actions;

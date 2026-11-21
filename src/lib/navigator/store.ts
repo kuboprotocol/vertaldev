@@ -3,7 +3,7 @@
 // e pelo executor do chat (que espera a tarefa terminar).
 import { useSyncExternalStore } from 'react';
 import { callNavigator, type NavigatorResponse } from './client';
-import { NAVIGATOR_MESSAGES, type NavigatorEvent, type NavigatorPending } from './navigatorCore';
+import { NAVIGATOR_MESSAGES, eventsForTask, isDoneForTask, type NavigatorEvent, type NavigatorPending } from './navigatorCore';
 
 export type AgentStatus = NonNullable<NavigatorResponse['agentStatus']>;
 
@@ -26,19 +26,38 @@ export interface NavigatorState {
   error: string | null;
   /** Painéis montados agora (o cartão global só pede o código 2FA se nenhum estiver aberto). */
   panelsMounted: number;
+  /** Cartões no chat do Vibe Code que mostram a aprovação de pagamento inline (fase 4). */
+  inlineApprovalHosts: number;
+  /** Tarefa em andamento (fase 4): passos e resposta são só desta tarefa. */
+  currentTask: CurrentTask | null;
+}
+
+export interface CurrentTask {
+  /** Id local da tarefa (o cartão do chat guarda este id). */
+  id: string;
+  task: string;
+  url?: string;
+  runId: string | null;
+  /** Último seq conhecido antes da tarefa: eventos anteriores são de outra tarefa/conversa. */
+  baseSeq: number;
+  startedAt: number;
+  /** Quem pediu (ex.: 'vibe-code', 'vertal-chat'). */
+  origin?: string;
 }
 
 const INITIAL: NavigatorState = {
   sessionId: null, liveViewUrl: null, controlUrl: null, takeover: false, agentStatus: 'none', runId: null,
   events: [], lastSeq: 0, pending: [], filling: [], screenshot: null, url: null, billedMinutes: 0, creditsPerMinute: 1,
-  busy: false, error: null, panelsMounted: 0,
+  busy: false, error: null, panelsMounted: 0, inlineApprovalHosts: 0, currentTask: null,
 };
 
 let state: NavigatorState = INITIAL;
 const listeners = new Set<() => void>();
 let timer: ReturnType<typeof setTimeout> | null = null;
 let polling = false;
-const waiters = new Map<string, (event: NavigatorEvent | null) => void>();
+let inflight: Promise<void> | null = null;
+interface Waiter { runId: string; baseSeq: number; resolve: (event: NavigatorEvent | null) => void }
+const waiters = new Map<string, Waiter>();
 
 function set(patch: Partial<NavigatorState>) {
   state = { ...state, ...patch };
@@ -62,6 +81,16 @@ export function panelMounted(delta: 1 | -1) {
   set({ panelsMounted: Math.max(0, state.panelsMounted + delta) });
 }
 
+/** Cartão inline (Vibe Code) que mostra a aprovação de pagamento: o diálogo global não duplica. */
+export function inlineApprovalMounted(delta: 1 | -1) {
+  set({ inlineApprovalHosts: Math.max(0, state.inlineApprovalHosts + delta) });
+}
+
+/** Eventos da tarefa atual (ou de uma tarefa dada). */
+export function currentTaskEvents(st: NavigatorState = state, task: CurrentTask | null = st.currentTask): NavigatorEvent[] {
+  return eventsForTask(st.events, task);
+}
+
 /** Pede ao Vertal Chat para abrir o painel do navegador ao lado. */
 export function requestNavigatorPanel() {
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('vertal-navigator:open'));
@@ -80,9 +109,9 @@ function applySession(res: NavigatorResponse) {
 
 function ended(message: string) {
   stopPolling();
-  for (const [, resolve] of waiters) resolve(null);
+  for (const [, w] of waiters) w.resolve(null);
   waiters.clear();
-  set({ ...INITIAL, panelsMounted: state.panelsMounted, error: message });
+  set({ ...INITIAL, panelsMounted: state.panelsMounted, inlineApprovalHosts: state.inlineApprovalHosts, error: message });
 }
 
 function schedule() {
@@ -98,51 +127,67 @@ function stopPolling() {
 }
 
 export async function poll(): Promise<void> {
-  if (!state.sessionId || polling) return;
+  if (!state.sessionId) return;
+  // Já tem uma consulta em andamento: espera ela (quem chamou quer o estado em dia).
+  if (polling && inflight) return inflight;
   polling = true;
-  try {
-    const res = await callNavigator('status', { sessionId: state.sessionId, after: state.lastSeq });
-    if (!res.ok) {
-      if (res.status === 'session_ended' || res.status === 'no_session' || res.status === 'insufficient_credits') ended(messageOf(res));
-      else set({ error: messageOf(res) });
-      return;
-    }
-    applySession(res);
-    const fresh = res.events ?? [];
-    const events = [...state.events, ...fresh].slice(-200);
-    set({
-      events, lastSeq: res.lastSeq ?? state.lastSeq, pending: res.pending ?? [], filling: res.filling ?? [],
-      screenshot: res.screenshot ?? state.screenshot, url: res.url ?? state.url, takeover: !!res.takeover,
-      agentStatus: res.agentStatus ?? state.agentStatus, runId: res.runId ?? state.runId, error: null,
-    });
-    if ((res.pending ?? []).some((p) => p.kind === 'code' || p.kind === 'text')) requestNavigatorPanel();
-    for (const ev of fresh) {
-      if (ev.type !== 'done') continue;
-      for (const [runId, resolve] of waiters) {
-        resolve(ev);
-        waiters.delete(runId);
+  inflight = (async () => {
+    try {
+      const res = await callNavigator('status', { sessionId: state.sessionId, after: state.lastSeq });
+      if (!res.ok) {
+        if (res.status === 'session_ended' || res.status === 'no_session' || res.status === 'insufficient_credits') ended(messageOf(res));
+        else set({ error: messageOf(res) });
+        return;
       }
+      applySession(res);
+      const fresh = res.events ?? [];
+      const events = [...state.events, ...fresh].slice(-200);
+      set({
+        events, lastSeq: res.lastSeq ?? state.lastSeq, pending: res.pending ?? [], filling: res.filling ?? [],
+        screenshot: res.screenshot ?? state.screenshot, url: res.url ?? state.url, takeover: !!res.takeover,
+        agentStatus: res.agentStatus ?? state.agentStatus, runId: res.runId ?? state.runId, error: null,
+      });
+      if ((res.pending ?? []).some((p) => p.kind === 'code' || p.kind === 'text')) requestNavigatorPanel();
+      // Só o "done" DESTA tarefa resolve quem espera (fase 4: nada de resposta de outra conversa).
+      for (const ev of fresh) {
+        if (ev.type !== 'done') continue;
+        for (const [key, w] of waiters) {
+          if (!isDoneForTask(ev, w)) continue;
+          w.resolve(ev);
+          waiters.delete(key);
+        }
+      }
+    } finally {
+      polling = false;
+      inflight = null;
+      schedule();
     }
-  } finally {
-    polling = false;
-    schedule();
-  }
+  })();
+  return inflight;
 }
 
-/** Abre (ou reaproveita) o navegador do usuário. */
-export async function startNavigator(url?: string): Promise<NavigatorResponse> {
+/** Falhas de abertura que valem uma nova tentativa silenciosa (o sandbox não subiu a tempo). */
+const RETRYABLE_START = new Set(['sandbox_error', 'error']);
+
+/** Abre (ou reaproveita) o navegador do usuário. Fase 4: tenta de novo, em silêncio, uma vez. */
+export async function startNavigator(url?: string, opts: { retryDelayMs?: number } = {}): Promise<NavigatorResponse> {
   set({ busy: true, error: null });
-  const res = await callNavigator('start', url ? { url } : {});
+  let res = await callNavigator('start', url ? { url } : {});
+  if (!res.ok && RETRYABLE_START.has(res.status)) {
+    await new Promise((r) => setTimeout(r, opts.retryDelayMs ?? 1_500));
+    res = await callNavigator('start', url ? { url } : {});
+  }
   set({ busy: false });
   if (!res.ok) {
     set({ error: messageOf(res) });
     return res;
   }
   const changed = res.sessionId !== state.sessionId;
-  if (changed) set({ ...INITIAL, panelsMounted: state.panelsMounted });
+  if (changed) set({ ...INITIAL, panelsMounted: state.panelsMounted, inlineApprovalHosts: state.inlineApprovalHosts });
   applySession(res);
   set({ agentStatus: state.agentStatus === 'none' ? 'idle' : state.agentStatus });
-  void poll();
+  // Sessão reaproveitada: sincroniza os eventos antigos ANTES de qualquer tarefa nova.
+  await poll();
   return res;
 }
 
@@ -152,33 +197,54 @@ export interface TaskOutcome {
   result?: string;
   steps: number;
   url?: string | null;
+  /** Id local da tarefa (fase 4). */
+  taskId?: string;
+  runId?: string | null;
+  /** Última captura da tela quando a tarefa terminou (data:image/jpeg). */
+  screenshot?: string | null;
 }
 
 /** Envia uma tarefa e espera ela terminar (passos chegam pelo poller). */
-export async function runNavigatorTask(task: string, url?: string, opts: { timeoutMs?: number; maxSteps?: number } = {}): Promise<TaskOutcome> {
+export async function runNavigatorTask(
+  task: string,
+  url?: string,
+  opts: { timeoutMs?: number; maxSteps?: number; model?: string; origin?: string; onStart?: (t: CurrentTask) => void } = {},
+): Promise<TaskOutcome> {
   if (!state.sessionId) {
     const started = await startNavigator();
     if (!started.ok) return { ok: false, message: messageOf(started), steps: 0 };
+  } else {
+    // Em dia com o sandbox antes de marcar o início da tarefa.
+    await poll();
   }
-  const res = await callNavigator('task', { sessionId: state.sessionId, task, ...(url ? { url } : {}), ...(opts.maxSteps ? { maxSteps: opts.maxSteps } : {}) });
+  const baseSeq = state.lastSeq;
+  const res = await callNavigator('task', {
+    sessionId: state.sessionId, task, ...(url ? { url } : {}), ...(opts.maxSteps ? { maxSteps: opts.maxSteps } : {}), ...(opts.model ? { model: opts.model } : {}),
+  });
   if (!res.ok) return { ok: false, message: messageOf(res), steps: 0 };
-  const runId = res.runId ?? 'run';
-  const firstSeq = state.lastSeq;
-  set({ agentStatus: 'running', runId });
-  void poll();
+  const runId = res.runId ?? `run-${Date.now().toString(36)}`;
+  const current: CurrentTask = {
+    id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `t-${Date.now().toString(36)}`,
+    task, ...(url ? { url } : {}), runId, baseSeq, startedAt: Date.now(), ...(opts.origin ? { origin: opts.origin } : {}),
+  };
+  set({ agentStatus: 'running', runId, currentTask: current });
+  opts.onStart?.(current);
   const done = await new Promise<NavigatorEvent | null>((resolve) => {
-    waiters.set(runId, resolve);
+    waiters.set(runId, { runId, baseSeq, resolve });
+    void poll();
     setTimeout(() => {
-      if (waiters.get(runId) === resolve) {
+      const w = waiters.get(runId);
+      if (w && w.resolve === resolve) {
         waiters.delete(runId);
         resolve(null);
       }
     }, opts.timeoutMs ?? 20 * 60_000);
   });
-  const steps = state.events.filter((e) => e.seq > firstSeq && e.type === 'step').length;
-  if (!done) return { ok: false, message: 'A tarefa do navegador não terminou a tempo (ou a sessão foi encerrada).', steps, url: state.url };
+  const steps = eventsForTask(state.events, current).filter((e) => e.type === 'step').length;
+  const base = { steps, url: state.url, taskId: current.id, runId, screenshot: state.screenshot };
+  if (!done) return { ok: false, message: 'A tarefa do navegador não terminou a tempo (ou a sessão foi encerrada).', ...base };
   const result = typeof done.result === 'string' ? done.result : '';
-  return { ok: done.success === true, message: result || (done.success ? 'Tarefa concluída.' : 'A tarefa não foi concluída.'), result, steps, url: state.url };
+  return { ok: done.success === true, message: result || (done.success ? 'Tarefa concluída.' : 'A tarefa não foi concluída.'), result, ...base };
 }
 
 export async function answerNavigator(p: NavigatorPending, answer: { approve: boolean } | { value: string }): Promise<NavigatorResponse> {
@@ -244,9 +310,16 @@ export async function recordTotpConsent(name: string, boundTo: string): Promise<
   return callNavigator('settings', { consent: 'totp', name, boundTo, confirmed: true });
 }
 
+/** Só para testes: injeta estado (ex.: um pedido de aprovação chegando pelo poller). */
+export function __patchNavigatorStoreForTest(patch: Partial<NavigatorState>) {
+  set(patch);
+}
+
 /** Só para testes. */
 export function __resetNavigatorStore() {
   stopPolling();
   waiters.clear();
+  polling = false;
+  inflight = null;
   state = INITIAL;
 }

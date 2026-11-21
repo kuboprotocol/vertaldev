@@ -105,17 +105,32 @@ export async function navd<T = Record<string, unknown>>(
   return { status: res.status, data: data as T };
 }
 
-/** Espera o navd responder (o sandbox acabou de ser criado). */
-export async function waitNavd(env: E2BEnv, sandboxId: string, totalMs = 20_000): Promise<boolean> {
+/**
+ * Espera o navd responder (o sandbox acabou de ser criado). Fase 4: espera mais
+ * (padrão 40 s) e com backoff (400 ms → 2,5 s), porque na 1ª abertura do dia o
+ * proxy do E2B e o navd demoram mais para subir e o start falhava com
+ * "O navegador na nuvem não respondeu" (start_failed) — a 2ª tentativa funcionava.
+ */
+export async function waitNavd(env: E2BEnv, sandboxId: string, totalMs = 40_000, sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms))): Promise<boolean> {
   const deadline = Date.now() + totalMs;
+  let attempt = 0;
   while (Date.now() < deadline) {
     try {
-      const { data } = await navd<{ ok?: boolean }>(env, { sandboxId }, 'GET', '/health', undefined, 5_000);
+      const left = deadline - Date.now();
+      const { data } = await navd<{ ok?: boolean }>(env, { sandboxId }, 'GET', '/health', undefined, Math.max(1_000, Math.min(6_000, left)));
       if (data?.ok) return true;
     } catch {
       // ainda subindo
     }
-    await new Promise((r) => setTimeout(r, 700));
+    const wait = navdBackoffMs(attempt++);
+    if (Date.now() + wait >= deadline) break;
+    await sleep(wait);
   }
   return false;
+}
+
+/** Espera entre tentativas de /health: 400 ms, 700, 1.100, 1.600, 2.200, depois 2.500. */
+export function navdBackoffMs(attempt: number): number {
+  const steps = [400, 700, 1_100, 1_600, 2_200];
+  return steps[attempt] ?? 2_500;
 }

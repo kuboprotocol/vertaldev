@@ -269,7 +269,7 @@ export default function AILoadingAnimation({ isVisible, chatLanguage, isReady, o
 
           {/* Main content */}
           <motion.div
-            className="relative z-20 flex flex-col items-center gap-8"
+            className="relative z-20 flex flex-col items-center gap-6 px-4 sm:gap-8"
             initial={{ y: 20 }}
             animate={{ y: 0 }}
             transition={{ duration: 0.8, ease: 'easeOut' }}
@@ -277,8 +277,8 @@ export default function AILoadingAnimation({ isVisible, chatLanguage, isReady, o
             {/* Robot image with glow */}
             <motion.div
               className="relative"
-              animate={{ y: [-4, 4, -4] }}
-              transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+              animate={{ y: [-6, 6, -6] }}
+              transition={{ duration: 5.5, repeat: Infinity, ease: 'easeInOut' }}
             >
               <div
                 className="absolute inset-0 rounded-3xl"
@@ -291,7 +291,8 @@ export default function AILoadingAnimation({ isVisible, chatLanguage, isReady, o
               <img
                 src={robotImg}
                 alt="AI Working"
-                className="relative w-64 h-48 object-contain rounded-2xl"
+                // 1,5x maior que antes (w-64 h-48 → w-96 h-72), sem estourar no celular.
+                className="relative h-auto w-[min(24rem,82vw)] aspect-[4/3] max-h-[42vh] object-contain rounded-2xl"
               />
             </motion.div>
 

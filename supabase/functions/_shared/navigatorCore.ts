@@ -228,6 +228,8 @@ export interface TaskInput {
   task: string;
   url?: string;
   maxSteps: number;
+  /** Fase 4: modelo pedido para esta tarefa (o Worker só aceita os da lista permitida). */
+  model?: string;
 }
 
 export function parseTaskBody(body: Record<string, unknown>): ParsedNavigator<TaskInput> {
@@ -243,7 +245,59 @@ export function parseTaskBody(body: Record<string, unknown>): ParsedNavigator<Ta
   }
   const raw = Number(body.maxSteps ?? NAVIGATOR_LIMITS.defaultMaxSteps);
   const maxSteps = Number.isFinite(raw) ? Math.max(1, Math.min(Math.round(raw), NAVIGATOR_LIMITS.maxStepsCap)) : NAVIGATOR_LIMITS.defaultMaxSteps;
-  return { ok: true, data: { sessionId: body.sessionId, task, ...(url ? { url } : {}), maxSteps } };
+  const model = typeof body.model === "string" && MODEL_ID_RE.test(body.model.trim()) ? body.model.trim() : undefined;
+  return { ok: true, data: { sessionId: body.sessionId, task, ...(url ? { url } : {}), maxSteps, ...(model ? { model } : {}) } };
+}
+
+// ─── Fase 4: modelo por tarefa, enquadramento da tarefa, eventos da tarefa ───
+const MODEL_ID_RE = /^[a-z0-9][a-z0-9._-]{0,60}(\/[a-z0-9][a-z0-9._:-]{0,80})?$/i;
+
+/** Modelo padrão do agente do navegador (OpenRouter, com visão). */
+export const NAVIGATOR_DEFAULT_MODEL = "google/gemini-3-flash-preview";
+
+/**
+ * Modelo da tarefa: o pedido só vale se estiver na lista permitida
+ * (NAVIGATOR_ALLOWED_MODELS, separada por vírgula) ou for o próprio padrão.
+ * Sem lista = sempre o padrão (nada muda para quem não configurou).
+ */
+export function pickNavigatorModel(requested: unknown, opts: { defaultModel?: string; allowed?: string; provider?: "openrouter" | "deepseek" } = {}): string {
+  const fallback = opts.defaultModel || (opts.provider === "deepseek" ? "deepseek-flash" : NAVIGATOR_DEFAULT_MODEL);
+  const want = typeof requested === "string" ? requested.trim() : "";
+  if (!want || !MODEL_ID_RE.test(want)) return fallback;
+  if (want === fallback) return fallback;
+  const allowed = String(opts.allowed ?? "").split(",").map((m) => m.trim()).filter(Boolean);
+  return allowed.includes(want) ? want : fallback;
+}
+
+/**
+ * Instruções que vão junto da tarefa (fase 4, "mais inteligente"): planejar antes
+ * de agir, ler a página com read_page_text e responder citando o que foi lido.
+ * Curto de propósito (o prompt do browser-use já é grande).
+ */
+export function framedNavigatorTask(task: string, url?: string): string {
+  const head = url ? `Comece abrindo ${url}. ` : "";
+  return [
+    `${head}${task}`,
+    "",
+    "Como trabalhar: 1) no 1º passo, escreva em next_goal um plano curto (2–4 etapas); 2) para ler respostas, use read_page_text (se não existir, a ação de extrair conteúdo) em vez de adivinhar pela imagem; 3) pode abrir outra aba se precisar comparar páginas e voltar depois; 4) na resposta final (done), responda em português e cite entre aspas o trecho exato lido na página que comprova a resposta, com a URL.",
+  ].join("\n");
+}
+
+/**
+ * O evento "done" é desta tarefa? Com runId no evento (navd fase 4), compara o
+ * runId; sem runId (navd antigo), só aceita eventos posteriores ao início da tarefa.
+ * Evita mostrar a resposta de OUTRA conversa (bug: "You logged into a secure area!").
+ */
+export function isDoneForTask(ev: { type?: unknown; seq?: unknown; runId?: unknown }, task: { runId: string; baseSeq: number }): boolean {
+  if (ev.type !== "done" || typeof ev.seq !== "number") return false;
+  if (typeof ev.runId === "string" && ev.runId) return ev.runId === task.runId;
+  return ev.seq > task.baseSeq;
+}
+
+/** Eventos desta tarefa (passos ao vivo do cartão no chat). */
+export function eventsForTask<T extends { seq: number; runId?: unknown }>(events: T[], task: { runId: string | null; baseSeq: number } | null): T[] {
+  if (!task) return [];
+  return events.filter((e) => e.seq > task.baseSeq && (typeof e.runId !== "string" || !task.runId || e.runId === task.runId));
 }
 
 export type InputBody =

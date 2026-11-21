@@ -2,20 +2,17 @@ import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Zap, Brain, Rocket, Sparkles, Lock } from 'lucide-react'
 import { toast } from 'sonner'
+import { isBuilderModeLocked } from '@/lib/planAccess'
 
 export type KuboFlowMode = 'flow' | 'think' | 'ship'
-
-const MODE_PLAN_REQUIREMENTS: Record<KuboFlowMode, string[]> = {
-  flow: [],           // free for all
-  think: ['pro', 'ultra', 'starter'],
-  ship: ['ultra'],
-}
 
 interface KuboFlowSelectorProps {
   mode: KuboFlowMode
   onChange: (mode: KuboFlowMode) => void
   autoDetected?: boolean
   userPlan?: string
+  /** Admin libera todos os modos. */
+  isAdmin?: boolean
 }
 
 const MODES = [
@@ -54,19 +51,18 @@ const MODES = [
   },
 ]
 
-function isModeLocked(modeId: KuboFlowMode, plan: string): boolean {
-  const required = MODE_PLAN_REQUIREMENTS[modeId]
-  if (required.length === 0) return false
-  return !required.includes(plan.toLowerCase())
+/** Plano exigido OU acima dele libera o modo (enterprise/business liberam tudo); admin nunca trava. */
+function isModeLocked(modeId: KuboFlowMode, plan: string, isAdmin = false): boolean {
+  return isBuilderModeLocked(modeId, plan, isAdmin)
 }
 
 function getUpgradeLabel(modeId: KuboFlowMode): string {
-  if (modeId === 'think') return 'Pro'
+  if (modeId === 'think') return 'Starter'
   if (modeId === 'ship') return 'Ultra'
   return ''
 }
 
-export default function KuboFlowSelector({ mode, onChange, autoDetected, userPlan = 'free' }: KuboFlowSelectorProps) {
+export default function KuboFlowSelector({ mode, onChange, autoDetected, userPlan = 'free', isAdmin = false }: KuboFlowSelectorProps) {
   const activeIndex = MODES.findIndex(m => m.id === mode)
   const activeMode = MODES[activeIndex]
   const [showAutoLabel, setShowAutoLabel] = useState(false)
@@ -108,7 +104,7 @@ export default function KuboFlowSelector({ mode, onChange, autoDetected, userPla
         {MODES.map((m) => {
           const Icon = m.icon
           const isActive = mode === m.id
-          const locked = isModeLocked(m.id, userPlan)
+          const locked = isModeLocked(m.id, userPlan, isAdmin)
           return (
             <button
               key={m.id}

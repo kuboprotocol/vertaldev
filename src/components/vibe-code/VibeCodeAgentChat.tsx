@@ -31,6 +31,7 @@ import {
   Terminal,
   ListChecks,
   FileDiff,
+  Globe,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Link } from "react-router-dom";
@@ -70,7 +71,10 @@ import { matchPlanSlashHints, parsePlanSlash, type ParsedPlanSlash } from "@/lib
 import { runAllDecision } from "@/lib/vibePlan/runAll";
 import { createWriterLock, WriterBusyError } from "@/lib/vibePlan/writerLock";
 import type { WriterKind } from "@/lib/vibePlan/engine";
-import { askVertalChatFromVibe, delegateCardFromStep, delegateToGithub, delegateToNavigator, insertDelegateAnswer, parseVibeGithubCommand, parseVibeNavigatorCommand, type ChatDelegateResult } from "@/lib/chatAgent/vibeBridge";
+import { askVertalChatFromVibe, delegateCardFromStep, delegateToGithub, GITHUB_COMMAND_HELP, GITHUB_CONNECTOR_ROUTE, insertDelegateAnswer, parseVibeGithubCommand, parseVibeNavigatorCommand, recordVibeExchange, type ChatDelegateResult } from "@/lib/chatAgent/vibeBridge";
+import { VibeNavigatorCard } from "@/components/vibe-code/VibeNavigatorCard";
+import { finishNavigatorCard, navigatorCardFromStep, navigatorReplyText, navigatorResultForAgent, navigatorStep, withNavigatorCard, type NavigatorCardData } from "@/lib/navigator/vibeCard";
+import { currentTaskEvents, getNavigatorState, runNavigatorTask } from "@/lib/navigator/store";
 import { NavigatorApprovalDialog } from "@/components/vertal-chat/NavigatorApprovalDialog";
 import { GithubConfirmDialog } from "@/components/vibe-code/GithubConfirmDialog";
 import { confirmGithubAction } from "@/lib/github/confirm";
@@ -131,6 +135,7 @@ const STEP_ICON: Record<VibeStepKind, typeof Brain> = {
   staged: FileDiff,
   design: Palette,
   delegate: MessagesSquare,
+  navigator: Globe,
   handoff: MessagesSquare,
   reply: MessageSquare,
   error: AlertCircle,
@@ -192,7 +197,8 @@ function ChatAnswerCard({
   return (
     <div className={`${surfaceCard} space-y-2 px-3 py-2.5`} data-testid="vibe-chat-answer">
       <p className="flex items-center gap-1.5 text-[11px] font-medium text-primary">
-        <MessagesSquare className="h-3.5 w-3.5" /> Vertal Chat respondeu
+        <MessagesSquare className="h-3.5 w-3.5" />{" "}
+        {result.tools.some((t) => t.tool === "github") ? "GitHub respondeu" : result.tools.some((t) => t.tool === "navigator") ? "Vertal Navigator respondeu" : "Vertal Chat respondeu"}
         {result.tools.length > 0 && (
           <span className="font-normal text-muted-foreground/70">· {result.tools.map((t) => t.tool).join(", ")}</span>
         )}
@@ -265,6 +271,8 @@ export function VibeCodeAgentChat({
   }, [startNew]);
   const [input, setInput] = useState("");
   const [running, setRunning] = useState(false);
+  // Fase 4: navegador na nuvem rodando dentro do chat (cartão ao vivo).
+  const [navRunning, setNavRunning] = useState(false);
   // Ponte Vibe → Chat: pergunta avulsa ao Vertal Chat e as respostas desta sessão.
   const [chatAskOpen, setChatAskOpen] = useState(false);
   const [chatQuestion, setChatQuestion] = useState("");
@@ -818,43 +826,165 @@ export function VibeCodeAgentChat({
     }
   };
 
-  const send = async () => {
-    const prompt = input.trim();
+  /**
+   * Fase 4: grava na conversa uma troca feita no próprio chat (/navegar, /github,
+   * navegador do agente). Cria a conversa se ainda não existe, para o cartão
+   * sobreviver ao recarregar. Sem modelo e sem créditos.
+   */
+  const persistLocal = async (prompt: string | undefined, reply: string, steps: VibeStep[]) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
+    const res = await recordVibeExchange(
+      { projectId: projectId || null, conversationId: activeIdRef.current, ...(prompt ? { prompt } : {}), reply, steps: steps as unknown as Array<Record<string, unknown>> },
+      { url: AGENT_URL, token: session.access_token, apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+    );
+    if (!res.ok) {
+      toast.error(`Não consegui guardar esta troca na conversa: ${res.error ?? "erro desconhecido"}`);
+      return;
+    }
+    if (res.conversationId && activeIdRef.current !== res.conversationId) {
+      activeIdRef.current = res.conversationId;
+      streamOpenedRef.current = res.conversationId;
+      setActiveId(res.conversationId);
+    }
+    void refresh();
+  };
+
+  /** Mensagem do usuário + resposta local do assistente (ajuda de comando, erro…), já guardadas. */
+  const addLocalExchange = async (prompt: string, reply: string, steps: VibeStep[] = []) => {
+    setMessages((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), role: "user", content: prompt, createdAt: Date.now() },
+      { id: crypto.randomUUID(), role: "assistant", content: reply, steps, createdAt: Date.now() },
+    ]);
+    await persistLocal(prompt, reply, steps);
+  };
+
+  /**
+   * Fase 4: roda o Vertal Navigator DENTRO do chat. O cartão aparece na conversa
+   * com a tela ao vivo, passos, 2FA e aprovação inline; no fim guarda resposta,
+   * captura e passos (só desta tarefa: nada de resposta de outra conversa).
+   */
+  const runNavigatorInChat = async (task: string, url: string | undefined, opts: { prompt?: string; origin: "command" | "agent" }): Promise<NavigatorCardData | null> => {
+    if (navRunning) {
+      toast.info("O navegador já está trabalhando numa tarefa neste chat. Espere ela terminar.");
+      return null;
+    }
+    const step = navigatorStep(task, { url, origin: opts.origin });
+    let card = navigatorCardFromStep(step)!;
+    const assistantId = crypto.randomUUID();
+    setMessages((prev) => [
+      ...prev,
+      ...(opts.prompt ? [{ id: crypto.randomUUID(), role: "user" as const, content: opts.prompt, createdAt: Date.now() }] : []),
+      { id: assistantId, role: "assistant", content: "", steps: [step], createdAt: Date.now() },
+    ]);
+    const patch = (next: NavigatorCardData, content?: string) =>
+      setMessages((prev) =>
+        prev.map((m) => (m.id !== assistantId ? m : { ...m, ...(content !== undefined ? { content } : {}), steps: (m.steps ?? []).map((st) => (st.id === step.id ? withNavigatorCard(st, next) : st)) })),
+      );
+    setNavRunning(true);
+    try {
+      const out = await runNavigatorTask(task, url, {
+        origin: "vibe-code",
+        onStart: (t) => {
+          card = { ...card, taskId: t.id };
+          patch(card);
+        },
+      });
+      const st = getNavigatorState();
+      const events = st.currentTask && st.currentTask.id === card.taskId ? currentTaskEvents(st) : [];
+      card = finishNavigatorCard(card, out, events);
+    } catch (e) {
+      card = { ...card, state: "failed", ok: false, answer: e instanceof Error ? e.message : "O Vertal Navigator parou.", finishedAt: Date.now() };
+    } finally {
+      setNavRunning(false);
+    }
+    const reply = navigatorReplyText(card);
+    patch(card, reply);
+    await persistLocal(opts.prompt, reply, [withNavigatorCard(step, card)]);
+    return card;
+  };
+
+  /** "Continuar com o agente": manda o resultado do navegador ao agente do Vibe Code. */
+  const continueWithNavigator = (card: NavigatorCardData) => {
+    void send(navigatorResultForAgent(card));
+  };
+
+  // Fase 4: o agente pediu o navegador (ação use_browser) → roda aqui, no chat, uma vez.
+  const browserArmedRef = useRef<Set<string>>(new Set());
+  const browserHandledRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (running || navRunning || browserArmedRef.current.size === 0) return;
+    for (const id of [...browserArmedRef.current]) {
+      const msg = messages.find((m) => m.id === id);
+      browserArmedRef.current.delete(id);
+      const req = (msg?.steps ?? []).map(navigatorCardFromStep).find((c) => c && c.state === "requested" && !browserHandledRef.current.has(c.taskId));
+      if (!req) continue;
+      browserHandledRef.current.add(req.taskId);
+      void runNavigatorInChat(req.task, req.url, { origin: "agent" });
+      break;
+    }
+    // runNavigatorInChat muda a cada render; só reage ao fim do agente e às mensagens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, running, navRunning]);
+
+  const send = async (override?: string) => {
+    const prompt = (override ?? input).trim();
     if (!prompt || running) return;
 
-    // "/navegar <tarefa>": delega ao Vertal Navigator (navegador na nuvem); a resposta
-    // vira um cartão "Usar no pedido". Pagamento e 2FA pedem aprovação no cartão do Navigator.
+    // "/navegar <tarefa>": Vertal Navigator DENTRO do chat (fase 4): cartão com a tela ao
+    // vivo, passos, 2FA e aprovação de pagamento inline; fica guardado na conversa.
     const navCommand = parseVibeNavigatorCommand(prompt);
     if (navCommand) {
-      setInput("");
-      setChatAsking(true);
-      toast.info("Vertal Navigator trabalhando no navegador na nuvem…");
-      try {
-        const result = await delegateToNavigator(navCommand.task, navCommand.url);
-        if (!result.ok) toast.error(result.error ?? "O Vertal Navigator não concluiu a tarefa.");
-        setChatAnswers((prev) => [...prev, { ...result, id: crypto.randomUUID() }].slice(-5));
-      } finally {
-        setChatAsking(false);
-      }
+      if (!override) setInput("");
+      await runNavigatorInChat(navCommand.task, navCommand.url, { prompt, origin: "command" });
+      return;
+    }
+    if (/^\/navegar(\s|$)/i.test(prompt)) {
+      if (!override) setInput("");
+      await addLocalExchange(prompt, 'Diga o que o navegador deve fazer, por exemplo: "/navegar abra https://example.com e me diga o título da página".');
       return;
     }
 
-    // "/github repo|issue|branch|pr|repos …": GitHub pela conexão OAuth (escrita pede confirmação).
+    // "/github …": GitHub pela conexão OAuth. Leitura (listar repositórios) sem confirmação;
+    // escrita pede confirmação. Sempre responde no chat (nunca falha em silêncio).
     if (/^\/github(\s|$)/i.test(prompt)) {
+      if (!override) setInput("");
       const ghOp = parseVibeGithubCommand(prompt);
       if (!ghOp) {
-        toast.error('Use: /github repos · /github repo <nome> [publico] · /github issue <dono/repo> <título> [| corpo] · /github branch <dono/repo> <branch> [de <base>] · /github pr <dono/repo> <head> [-> <base>] <título> [| corpo]');
+        await addLocalExchange(prompt, GITHUB_COMMAND_HELP);
         return;
       }
-      setInput("");
+      const assistantId = crypto.randomUUID();
+      setMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), role: "user", content: prompt, createdAt: Date.now() },
+        { id: assistantId, role: "assistant", content: "", steps: [], createdAt: Date.now() },
+      ]);
       setChatAsking(true);
+      let reply: string;
+      let steps: VibeStep[];
       try {
         const result = await delegateToGithub(ghOp, confirmGithubAction);
-        if (!result.ok) toast.error(result.error ?? "O GitHub não concluiu a ação.");
-        setChatAnswers((prev) => [...prev, { ...result, id: crypto.randomUUID() }].slice(-5));
+        const notConnected = result.code === "not_connected";
+        reply = result.ok
+          ? "Pronto! Veja a resposta do GitHub abaixo."
+          : notConnected
+            ? "O GitHub ainda não está conectado à sua conta Vertal. Conecte para eu listar e criar repositórios por aqui."
+            : result.answer;
+        steps = [{
+          id: crypto.randomUUID(), kind: "delegate", status: result.ok ? "success" : "failed", title: result.ok ? "GitHub respondeu" : "GitHub",
+          detail: result.answer, delegate: { target: "github", ...result }, startedAt: Date.now(),
+          ...(notConnected ? { link: { href: GITHUB_CONNECTOR_ROUTE, label: "Conectar o GitHub" } } : {}),
+        }];
+      } catch (e) {
+        reply = e instanceof Error ? e.message : "O GitHub não respondeu.";
+        steps = [{ id: crypto.randomUUID(), kind: "error", status: "failed", title: "GitHub", detail: reply, startedAt: Date.now() }];
       } finally {
         setChatAsking(false);
       }
+      setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: reply, steps } : m)));
+      await persistLocal(prompt, reply, steps);
       return;
     }
 
@@ -886,12 +1016,12 @@ export function VibeCodeAgentChat({
 
     // Fila ativa: a mensagem do Dev vira uma pergunta sobre o item da vez.
     if (isQueueActive(queueRef.current)) {
-      setInput("");
+      if (!override) setInput("");
       await askAboutCurrent(prompt);
       return;
     }
 
-    setInput("");
+    if (!override) setInput("");
     setRunning(true);
 
     const assistantId = crypto.randomUUID();
@@ -900,6 +1030,8 @@ export function VibeCodeAgentChat({
       { id: crypto.randomUUID(), role: "user", content: prompt, createdAt: Date.now() },
       { id: assistantId, role: "assistant", content: "", steps: [], createdAt: Date.now() },
     ]);
+    // Se o agente pedir o navegador (use_browser), o cartão roda aqui quando ele terminar.
+    browserArmedRef.current.add(assistantId);
 
     try {
       const call = () => runStream({ prompt, mode: autoApply ? "apply" : "preview", devContext: buildDevContext() }, assistantId);
@@ -1090,6 +1222,33 @@ export function VibeCodeAgentChat({
                     <div className="space-y-2 pl-8" data-testid="vibe-delegate-cards">
                       {cards.map((c, i) => (
                         <ChatAnswerCard key={i} result={c} onUse={applyChatAnswer} disabled={running} />
+                      ))}
+                    </div>
+                  );
+                })()}
+
+                {(() => {
+                  const navCards = (m.steps ?? []).map(navigatorCardFromStep).filter((c): c is NavigatorCardData => c !== null);
+                  const links = (m.steps ?? []).filter((st) => st.link && /^\/[a-z0-9/_-]*$/i.test(st.link.href));
+                  if (!navCards.length && !links.length) return null;
+                  return (
+                    <div className="space-y-2 pl-8" data-testid="vibe-navigator-cards">
+                      {navCards.map((c) => (
+                        <VibeNavigatorCard
+                          key={c.taskId}
+                          card={c}
+                          onUse={applyChatAnswer}
+                          onContinue={continueWithNavigator}
+                          onRun={(card) => void runNavigatorInChat(card.task, card.url, { origin: "agent" })}
+                          disabled={running || navRunning}
+                        />
+                      ))}
+                      {links.map((st) => (
+                        <Button key={st.id} asChild size="sm" variant="outline" className="h-7 gap-1.5 px-2 text-[11px]">
+                          <Link to={st.link!.href}>
+                            <Plug className="h-3.5 w-3.5" /> {st.link!.label}
+                          </Link>
+                        </Button>
                       ))}
                     </div>
                   );
