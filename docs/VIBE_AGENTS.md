@@ -59,7 +59,8 @@ Valores em `VIBE_AGENT_PRICING`.
 - Uma sandbox por execução, criada no primeiro `python_run`, compartilhada com sub-agentes e destruída no fim (inclusive em falha).
 - Template padrão `code-interpreter-v1` (Pandas, NumPy, scikit-learn, Matplotlib já instalados); troque com `VIBE_SANDBOX_TEMPLATE`.
 - O código vai em base64 (o shell não interpreta nada dele), 60 s por execução, saída limitada, `pipefail` para erros do Python aparecerem com o traceback.
-- `pip install` só de uma lista permitida (`PYTHON_PACKAGES`).
+- `pip install` só de uma lista permitida (`PYTHON_PACKAGES`), derivada do catálogo de bibliotecas (`supabase/functions/_shared/vibeLibraries.ts`). São 144 pacotes instaláveis agora, entre eles Pandas, Polars, DuckDB, scikit-learn, XGBoost, Plotly, openpyxl, FastAPI, SQLAlchemy e OpenAI. Lista completa, incluindo Next, React, Go e Ghidra: `docs/VIBE_LIBRARIES.md`.
+- Bibliotecas pesadas (PyTorch, TensorFlow, Transformers, spaCy) e Ghidra estão no catálogo com status `template`: só entram com um template de sandbox que já as traga.
 
 ## Configuração (segredos das Edge Functions)
 
