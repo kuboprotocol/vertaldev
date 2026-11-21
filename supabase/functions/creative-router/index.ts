@@ -44,6 +44,8 @@ import {
 } from "../_shared/chatAgent.ts";
 import { wantsBrowserForm } from "../_shared/browserForm.ts";
 import { wantsNavigator } from "../_shared/navigatorCore.ts";
+import { wantsGithub } from "../_shared/githubOps.ts";
+import { wantsMedia } from "../_shared/youtubeCore.ts";
 import { listVisibleSecrets, resolveEnvForRun } from "../_shared/kuboSecrets.ts";
 import {
   DELEGATED_CHAT_PROMPT,
@@ -633,6 +635,9 @@ async function handleAgentChat(
   const browserFormOn = !delegated && wantsBrowserForm([...all.slice(-8), ...results.slice(-6)]);
   // Vertal Navigator: idem, só quando a conversa pede para operar um site.
   const navigatorOn = !delegated && wantsNavigator([...all.slice(-8), ...results.slice(-6)]);
+  // Fase 3: GitHub (Vibe Code) e YouTube só entram no prompt quando a conversa pede.
+  const githubOn = !delegated && wantsGithub([...all.slice(-8), ...results.slice(-6)]);
+  const mediaOn = wantsMedia([...all.slice(-6), ...results.slice(-4)]);
   const system = buildAgentSystemPrompt({
     secretNames,
     today: new Date().toISOString().slice(0, 10),
@@ -646,6 +651,8 @@ async function handleAgentChat(
     plan: brain.planBlock,
     browserForm: browserFormOn,
     navigator: navigatorOn,
+    github: githubOn,
+    media: mediaOn,
   }) + (delegated ? DELEGATED_CHAT_PROMPT : "");
   const final = agent.data.final === true || brain.planPhase === "final";
   const convo = results.length

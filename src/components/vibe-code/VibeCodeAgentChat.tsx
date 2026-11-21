@@ -70,8 +70,10 @@ import { matchPlanSlashHints, parsePlanSlash, type ParsedPlanSlash } from "@/lib
 import { runAllDecision } from "@/lib/vibePlan/runAll";
 import { createWriterLock, WriterBusyError } from "@/lib/vibePlan/writerLock";
 import type { WriterKind } from "@/lib/vibePlan/engine";
-import { askVertalChatFromVibe, delegateCardFromStep, delegateToNavigator, insertDelegateAnswer, parseVibeNavigatorCommand, type ChatDelegateResult } from "@/lib/chatAgent/vibeBridge";
+import { askVertalChatFromVibe, delegateCardFromStep, delegateToGithub, delegateToNavigator, insertDelegateAnswer, parseVibeGithubCommand, parseVibeNavigatorCommand, type ChatDelegateResult } from "@/lib/chatAgent/vibeBridge";
 import { NavigatorApprovalDialog } from "@/components/vertal-chat/NavigatorApprovalDialog";
+import { GithubConfirmDialog } from "@/components/vibe-code/GithubConfirmDialog";
+import { confirmGithubAction } from "@/lib/github/confirm";
 
 const AGENT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/vibe-code-agent`;
 /** Ponte Vibe → Chat: o mesmo creative-router (agent_chat) do Vertal Chat, com origin 'vibe_code'. */
@@ -837,6 +839,25 @@ export function VibeCodeAgentChat({
       return;
     }
 
+    // "/github repo|issue|branch|pr|repos …": GitHub pela conexão OAuth (escrita pede confirmação).
+    if (/^\/github(\s|$)/i.test(prompt)) {
+      const ghOp = parseVibeGithubCommand(prompt);
+      if (!ghOp) {
+        toast.error('Use: /github repos · /github repo <nome> [publico] · /github issue <dono/repo> <título> [| corpo] · /github branch <dono/repo> <branch> [de <base>] · /github pr <dono/repo> <head> [-> <base>] <título> [| corpo]');
+        return;
+      }
+      setInput("");
+      setChatAsking(true);
+      try {
+        const result = await delegateToGithub(ghOp, confirmGithubAction);
+        if (!result.ok) toast.error(result.error ?? "O GitHub não concluiu a ação.");
+        setChatAnswers((prev) => [...prev, { ...result, id: crypto.randomUUID() }].slice(-5));
+      } finally {
+        setChatAsking(false);
+      }
+      return;
+    }
+
     // Comandos de barra do plano/executor (/plano, /proxima, /aplicar …).
     const planSlash = parsePlanSlash(prompt);
     if (planSlash) {
@@ -1427,6 +1448,8 @@ export function VibeCodeAgentChat({
       </Sheet>
       {/* Vertal Navigator (/navegar): aprovação de pagamento e código 2FA. */}
       <NavigatorApprovalDialog />
+      {/* /github: confirmação antes de criar repositório, issue, branch ou PR. */}
+      <GithubConfirmDialog />
     </Card>
   );
 }

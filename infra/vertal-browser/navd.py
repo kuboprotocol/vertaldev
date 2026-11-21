@@ -14,14 +14,18 @@ O Worker do vertal.dev é o único cliente:
   POST /input     {id, value?, approve?} responde a um pedido pendente
   POST /takeover | /release | /stop
   GET  /cookies                      exporta os cookies (CDP Storage.getCookies)
+  GET  /pending                      pedidos pendentes (com texto da página, sem screenshot) — auditoria
 
 Regras de segurança aplicadas aqui (as mesmas do núcleo TS navigatorCore.ts):
   * Gate de pagamento: todo clique/tecla cujo alvo pareça pagar/comprar/confirmar
     pedido pausa e emite needs_approval; só segue com approve=true do usuário.
   * fill_secret: o modelo só vê o NOME do segredo. O valor chega do Worker em
     /input, é digitado direto no campo e nunca entra em evento, log ou resposta.
-  * 2FA: request_user_code pausa e emite needs_user_input; o código também é
-    digitado direto, sem voltar ao modelo.
+  * 2FA: request_user_code primeiro tenta o TOTP do cofre (segredo *_TOTP vinculado
+    ao site; o Worker gera o código no servidor e devolve só o código). Sem TOTP,
+    pausa e emite needs_user_input; o código é digitado direto, sem voltar ao modelo.
+  * Aprovação de pagamento (fase 2): o pedido leva screenshot e o texto visível da
+    página (só no pendente, nunca em evento) para o Worker ler loja/itens/total.
   * Navegação: só http/https públicos (guarda SSRF espelhada do browserForm.ts).
   * evaluate (JS arbitrário) e upload de arquivo ficam desligados; clique por
     coordenada também (o gate precisa saber qual elemento é).
@@ -155,6 +159,11 @@ def secret_matches_host(bound_to: str | None, host: str) -> bool:
     return len(labels) >= 2 and labels[-2] == slug
 
 
+def is_totp_name(name: str) -> bool:
+    """Semente de app autenticador (espelho de isTotpSecretName em totp.ts): nunca é digitada."""
+    return bool(re.fullmatch(r"[A-Z][A-Z0-9_]{0,58}_TOTP", str(name or "").strip().upper()))
+
+
 def secret_needs_password_field(name: str) -> bool:
     """Segredo que não é identificador (usuário/e-mail/login) só vai em <input type=password>,
     cujo valor o browser-use nunca mostra ao modelo."""
@@ -176,6 +185,7 @@ class State:
         self.takeover = False
         self.last_screenshot: str | None = None
         self.allowed_secrets: dict[str, str | None] = {}
+        self.totp_secrets: dict[str, str | None] = {}
         self.view_password: str | None = None
         self.lock = asyncio.Lock()
 
@@ -324,19 +334,34 @@ async def import_cookies(cookies: list[dict]) -> int:
     return len(clean)
 
 
+async def page_text(limit: int = 20000) -> str:
+    """Texto visível da página atual (para o cartão de aprovação). Roda pelo navd, não pelo agente."""
+    try:
+        target = await page_target()
+        if not target:
+            return ""
+        res = await cdp_call(target["webSocketDebuggerUrl"], "Runtime.evaluate",
+                             {"expression": f"(document.body && document.body.innerText || '').slice(0, {int(limit)})", "returnByValue": True}, timeout=8)
+        return str(((res or {}).get("result") or {}).get("value") or "")[:limit]
+    except Exception:
+        return ""
+
+
 async def export_cookies() -> list[dict]:
     res = await cdp_call(await browser_ws(), "Storage.getCookies", {})
     return list(res.get("cookies", []))
 
 
 # ── Pedidos ao usuário / ao Worker ───────────────────────────────────────────
-async def ask(kind: str, **meta: Any) -> Any:
+async def ask(kind: str, hidden: dict[str, Any] | None = None, **meta: Any) -> Any:
+    """Pausa até o usuário (ou o Worker) responder. `hidden` fica só no pendente
+    (texto da página, screenshot), nunca no evento."""
     rid = uuid.uuid4().hex[:16]
     fut: asyncio.Future = asyncio.get_running_loop().create_future()
-    S.pending[rid] = {"id": rid, "kind": kind, "future": fut, **meta}
+    S.pending[rid] = {"id": rid, "kind": kind, "future": fut, **meta, **(hidden or {})}
     prev = S.status
     S.status = "waiting"
-    event_type = {"approval": "needs_approval", "secret": "needs_secret"}.get(kind, "needs_user_input")
+    event_type = {"approval": "needs_approval", "secret": "needs_secret", "totp": "needs_totp"}.get(kind, "needs_user_input")
     S.emit(event_type, id=rid, kind=kind, **meta)
     try:
         return await asyncio.wait_for(fut, INPUT_TIMEOUT_S)
@@ -406,7 +431,13 @@ def build_agent(task: str, model: str, api_key: str, max_steps: int, provider: s
                 target = await describe_node(browser_session, params.get("index")) if isinstance(params, dict) else ""
                 reason = needs_payment_approval(name, target, url, title, str(params.get("keys", "")) if isinstance(params, dict) else "")
                 if reason:
-                    approved = await ask("approval", action=name, target=target[:200], url=url[:300], reason=reason,
+                    shot = await capture_screenshot()
+                    if shot:
+                        S.last_screenshot = shot
+                    hidden = {"pageText": await page_text(), "pageTitle": title[:200]}
+                    if shot:
+                        hidden["screenshot"] = shot
+                    approved = await ask("approval", hidden=hidden, action=name, target=target[:200], url=url[:300], reason=reason,
                                          question="O agente quer clicar num botão de pagamento/compra/confirmação de pedido. Aprovar?")
                     if approved is not True:
                         S.emit("approval_denied", action=name, target=target[:200])
@@ -420,6 +451,8 @@ def build_agent(task: str, model: str, api_key: str, max_steps: int, provider: s
                   "Você nunca vê o valor. Use só nomes da lista de segredos disponíveis.")
     async def fill_secret(secret_name: str, index: int, browser_session: BrowserSession):
         name = str(secret_name or "").strip().upper()
+        if is_totp_name(name):
+            return ActionResult(error=f"{name} é a chave de um app autenticador: não é digitada. Para o código 2FA use request_user_code (o código é gerado sozinho).")
         if name not in S.allowed_secrets:
             return ActionResult(error=f"Segredo {name} não está disponível para este usuário.")
         url = await browser_session.get_current_page_url()
@@ -450,7 +483,26 @@ def build_agent(task: str, model: str, api_key: str, max_steps: int, provider: s
     @tools.action("Pede ao usuário um código de verificação (2FA, SMS, e-mail, app autenticador) e digita direto no campo do índice dado. "
                   "Use quando o site pedir um código que só o usuário tem.")
     async def request_user_code(index: int, question: str, browser_session: BrowserSession):
-        code = await ask("code", question=str(question or "Digite o código de verificação")[:300])
+        host = ""
+        try:
+            host = (urlsplit(await browser_session.get_current_page_url()).hostname or "").lower()
+        except Exception:
+            pass
+        # 1) TOTP do cofre vinculado a este site: o Worker gera o código no servidor.
+        totp_name = next((n for n, b in S.totp_secrets.items() if host and secret_matches_host(b, host)), None)
+        if totp_name:
+            code = await ask("totp", name=totp_name, host=host)
+            if isinstance(code, str) and re.fullmatch(r"\d{6,8}", code.strip()):
+                try:
+                    err = await type_into(browser_session, index, code.strip())
+                finally:
+                    code = None  # noqa: F841
+                if not err:
+                    S.emit("totp_filled", name=totp_name, host=host)
+                    return ActionResult(extracted_content=f"Código do autenticador digitado no campo {index}.", long_term_memory="Código 2FA (TOTP) digitado.")
+            S.emit("log", message="totp_unavailable: pedindo o código ao usuário")
+        # 2) Sem TOTP (ou falhou): pede ao usuário, como antes.
+        code = await ask("code", question=str(question or "Digite o código de verificação")[:300], host=host)
         if not isinstance(code, str) or not code.strip():
             return ActionResult(error="O usuário não enviou o código.")
         err = await type_into(browser_session, index, code.strip())
@@ -466,11 +518,13 @@ def build_agent(task: str, model: str, api_key: str, max_steps: int, provider: s
         return ActionResult(extracted_content=f"Resposta do usuário: {answer[:500]}")
 
     secrets_hint = ", ".join(f"{n} (vinculado a {b})" for n, b in S.allowed_secrets.items()) or "nenhum"
+    totp_hint = ", ".join(str(b) for b in S.totp_secrets.values() if b)
     extend = (
         "Regras do Vertal Navigator: responda e resuma em português do Brasil. "
         "Para senhas/tokens use SEMPRE fill_secret com o nome do segredo; nunca peça senha ao usuário. "
         f"Segredos disponíveis: {secrets_hint}. "
-        "Se o site pedir código de verificação, use request_user_code. "
+        "Se o site pedir código de verificação, use request_user_code"
+        + (f" (para {totp_hint} o código do autenticador é gerado sozinho). " if totp_hint else ". ") +
         "Cliques de pagar/comprar/confirmar pedido exigem aprovação do usuário (o sistema pede); se negado, pare. "
         "Não resolva captcha: peça ao usuário para assumir o controle com ask_user."
     )
@@ -608,9 +662,11 @@ async def task(request: web.Request) -> web.Response:
     max_steps = max(1, min(int(body.get("maxSteps") or 25), MAX_STEPS_CAP))
     provider = "deepseek" if body.get("provider") == "deepseek" else "openrouter"
     S.allowed_secrets = {}
+    S.totp_secrets = {}
     for s in body.get("secrets") or []:
         if isinstance(s, dict) and re.fullmatch(r"[A-Z][A-Z0-9_]{1,63}", str(s.get("name", ""))):
-            S.allowed_secrets[s["name"]] = (str(s.get("boundTo")) if s.get("boundTo") else None)
+            bucket = S.totp_secrets if is_totp_name(s["name"]) else S.allowed_secrets
+            bucket[s["name"]] = (str(s.get("boundTo")) if s.get("boundTo") else None)
     S.run_id = uuid.uuid4().hex[:12]
     S.agent_task = asyncio.create_task(run_agent(text, model, api_key, max_steps, provider))
     return j({"ok": True, "runId": S.run_id})
@@ -635,6 +691,12 @@ async def events(request: web.Request) -> web.Response:
     return j({"ok": True, "status": S.status, "runId": S.run_id, "takeover": S.takeover, "url": url[:500],
               "events": [e for e in S.events if e["seq"] > after][-100:], "lastSeq": S.seq,
               "pending": pending, "screenshot": S.last_screenshot})
+
+
+async def pending_list(request: web.Request) -> web.Response:
+    if not authed(request):
+        return j({"ok": False, "error": "unauthorized"}, 401)
+    return j({"ok": True, "pending": [{k: v for k, v in p.items() if k not in ("future", "screenshot")} for p in S.pending.values()]})
 
 
 async def submit_input(request: web.Request) -> web.Response:
@@ -743,7 +805,7 @@ def main() -> None:
     app.add_routes([
         web.get("/health", health), web.post("/init", init), web.post("/task", task), web.get("/events", events),
         web.post("/input", submit_input), web.post("/takeover", takeover), web.post("/release", release),
-        web.post("/stop", stop), web.get("/cookies", cookies),
+        web.post("/stop", stop), web.get("/cookies", cookies), web.get("/pending", pending_list),
     ])
     signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
     web.run_app(app, host="0.0.0.0", port=PORT, access_log=None, print=None)

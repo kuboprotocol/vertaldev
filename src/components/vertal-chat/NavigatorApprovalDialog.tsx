@@ -2,6 +2,8 @@
 // Regra dura: clique de pagar/comprar/confirmar pedido só acontece depois do
 // "Aprovar" aqui. O modelo não tem como aprovar: o Worker exige confirmed: true,
 // que só este botão envia. Sem nenhum painel aberto, também pede aqui o código 2FA.
+// Fase 2: o cartão mostra loja, itens e total lidos da página (no servidor) e a
+// captura do momento do pedido; cada aprovação/recusa vai para a auditoria.
 import { useState } from 'react';
 import { CreditCard, KeyRound, ShieldAlert, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -60,14 +62,38 @@ export function NavigatorApprovalDialog() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-2 text-sm">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="rounded-lg border border-border/40 px-3 py-2">
+                  <p className="text-xs text-muted-foreground">Loja</p>
+                  <p className="break-words font-medium">{approval.store || hostOf(approval.url) || '—'}</p>
+                  {approval.pageTitle && <p className="line-clamp-2 text-xs text-muted-foreground">{approval.pageTitle}</p>}
+                </div>
+                <div className="rounded-lg border border-primary/40 bg-primary/5 px-3 py-2">
+                  <p className="text-xs text-muted-foreground">Valor total (lido da página)</p>
+                  <p className="text-lg font-semibold">{approval.total || 'Não identificado'}</p>
+                </div>
+              </div>
+              {approval.items && approval.items.length > 0 && (
+                <div className="rounded-lg border border-border/40 px-3 py-2">
+                  <p className="mb-1 text-xs text-muted-foreground">Itens</p>
+                  <ul className="space-y-0.5 text-xs">
+                    {approval.items.map((item) => <li key={item} className="break-words">{item}</li>)}
+                  </ul>
+                </div>
+              )}
               <div className="rounded-lg border border-border/40 px-3 py-2">
                 <p className="text-xs text-muted-foreground">Botão</p>
                 <p className="break-words font-medium">{approval.target || approval.action || '—'}</p>
               </div>
               {approval.url && <p className="break-all text-xs text-muted-foreground">{approval.url}</p>}
-              {nav.screenshot && <img src={nav.screenshot} alt="Página antes do clique" className="w-full rounded-lg border border-border/50" />}
+              {(approval.screenshot || nav.screenshot) && (
+                <img src={approval.screenshot || nav.screenshot || ''} alt="Página no momento do pedido de aprovação" className="max-h-72 w-full rounded-lg border border-border/50 object-contain" />
+              )}
               <p className="flex items-start gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
-                <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden /> Confira valor e itens na tela ao vivo antes de aprovar. Se tiver dúvida, recuse e assuma o controle.
+                <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                {approval.total
+                  ? 'Loja, itens e total são lidos automaticamente da página e podem falhar: confira na captura antes de aprovar. Se tiver dúvida, recuse e assuma o controle.'
+                  : 'Não consegui ler o valor total desta página: confira valor e itens na captura antes de aprovar. Se tiver dúvida, recuse e assuma o controle.'}
               </p>
             </div>
             <DialogFooter className="gap-2 sm:gap-2">

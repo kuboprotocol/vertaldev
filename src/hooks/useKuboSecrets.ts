@@ -217,6 +217,8 @@ export async function saveSecretValue(input: {
   value: string
   group_name?: string
   description?: string | null
+  /** Site a que o segredo fica vinculado (ex.: TOTP do Vertal Navigator). */
+  bound_to?: string | null
 }): Promise<{ env_key: string; masked_hint: string | null }> {
   const res = await call<{ secret: { env_key: string; masked_hint: string | null } }>(SECRETS_FN, {
     action: 'create',

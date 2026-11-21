@@ -1,8 +1,12 @@
 // Painel do Vertal Navigator dentro do Vertal Chat: tela ao vivo do navegador na
 // nuvem (noVNC em iframe), passos do agente, "Assumir controle" e o campo para o
 // código de verificação (2FA) quando o site pedir.
+// Fase 2: abas "Ao vivo", "Atividade" (auditoria) e "Segurança" (aprovação
+// automática até R$X e autenticador TOTP).
 import { useEffect, useState } from 'react';
 import { Globe, Hand, KeyRound, Loader2, MousePointerClick, Play, Power, ShieldCheck } from 'lucide-react';
+import { NavigatorActivity } from './NavigatorActivity';
+import { NavigatorSecurity } from './NavigatorSecurity';
 import type { NavigatorEvent, NavigatorPending } from '@/lib/navigator/navigatorCore';
 import {
   answerNavigator, panelMounted, releaseNavigator, runNavigatorTask, startNavigator, stopNavigator, takeoverNavigator, useNavigator,
@@ -29,6 +33,8 @@ function describe(ev: NavigatorEvent): string | null {
     case 'needs_user_input': return `Pergunta: ${String(ev.question ?? '')}`;
     case 'needs_secret': return `Preenchendo ${String(ev.name ?? 'credencial')} do cofre em ${String(ev.host ?? '')}`;
     case 'secret_filled': return `Credencial ${String(ev.name ?? '')} preenchida (o valor não passa pela IA).`;
+    case 'needs_totp': return `Gerando código 2FA do autenticador (${String(ev.name ?? '')}) para ${String(ev.host ?? '')}`;
+    case 'totp_filled': return 'Código 2FA do autenticador digitado (gerado no servidor, sem passar pela IA).';
     case 'takeover': return ev.active ? 'Você assumiu o controle.' : 'Controle devolvido ao agente.';
     case 'done': return `Fim: ${String(ev.result ?? '')}`;
     case 'input_timeout': return 'Pedido expirou sem resposta.';
@@ -70,6 +76,7 @@ export function NavigatorPanel() {
   const nav = useNavigator();
   const [task, setTask] = useState('');
   const [running, setRunning] = useState(false);
+  const [tab, setTab] = useState<'live' | 'activity' | 'security'>('live');
 
   useEffect(() => {
     panelMounted(1);
@@ -129,7 +136,21 @@ export function NavigatorPanel() {
 
       {nav.error && <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">{nav.error}</p>}
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div role="tablist" aria-label="Seções do Navigator" className="flex gap-1 border-b border-border/60">
+        {([['live', 'Ao vivo'], ['activity', 'Atividade'], ['security', 'Segurança']] as const).map(([key, label]) => (
+          <button
+            key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => setTab(key)}
+            className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium ${tab === key ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'activity' && <NavigatorActivity />}
+      {tab === 'security' && <NavigatorSecurity />}
+
+      <div className={`grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px] ${tab === 'live' ? '' : 'hidden'}`}>
         <div className="overflow-hidden rounded-xl border border-border/60 bg-black/90">
           {frameUrl ? (
             <iframe
@@ -158,7 +179,7 @@ export function NavigatorPanel() {
           {inputs.map((p) => <PendingInput key={p.id} pending={p} />)}
           {nav.filling.length > 0 && (
             <p className="flex items-center gap-1.5 rounded-lg border border-border/60 px-3 py-2 text-xs">
-              <ShieldCheck className="h-4 w-4 text-emerald-500" aria-hidden /> Preenchendo {nav.filling.map((f) => f.name).join(', ')} do cofre…
+              <ShieldCheck className="h-4 w-4 text-emerald-500" aria-hidden /> {nav.filling.some((f) => f.kind === 'totp') ? 'Gerando código 2FA do autenticador' : 'Preenchendo'} {nav.filling.map((f) => f.name).join(', ')} do cofre…
             </p>
           )}
           <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); void run(); }}>

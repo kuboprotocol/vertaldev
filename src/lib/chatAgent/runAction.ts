@@ -27,6 +27,9 @@ import {
 } from '@/lib/browserForm/formCore';
 import type { BrowserFormFieldView, BrowserFormStage } from './artifacts';
 import { requestNavigatorPanel, runNavigatorTask, startNavigator, stopNavigator } from '@/lib/navigator/store';
+import { callGithubOp, describeGithubOp, isGithubWrite } from '@/lib/github/client';
+import type { GithubOp } from '../../../supabase/functions/_shared/githubOps';
+import { searchYoutube, youtubeVideoId } from '@/lib/media/youtube';
 
 export interface ApiApprovalRequest {
   method: string;
@@ -561,6 +564,65 @@ export async function runNavigator(action: Extract<AgentAction, { tool: 'navigat
   };
 }
 
+// ─── Vibe Code + GitHub (fase 3) ─────────────────────────────────────────
+
+/**
+ * Operações no GitHub pela conexão OAuth (edge function github-repos). Criar
+ * repositório/issue/branch/PR sempre passa pelo cartão de confirmação do chat;
+ * o navegador (Navigator) é só o plano B, quando a API não resolve.
+ */
+export async function runGithub(action: Extract<AgentAction, { tool: 'github' }>, ctx: ActionContext): Promise<ActionOutcome> {
+  const { tool: _tool, ...op } = action;
+  const ghOp = op as GithubOp;
+  if (isGithubWrite(ghOp)) {
+    const ok = await ctx.approveApi({
+      method: 'GITHUB', url: describeGithubOp(ghOp), host: 'GitHub (sua conta conectada)',
+      reason: 'body' in ghOp && ghOp.body ? (ghOp.body.length > 400 ? `${ghOp.body.slice(0, 400)}…` : ghOp.body) : describeGithubOp(ghOp),
+      secrets: [], hasBody: true,
+    });
+    if (!ok) return followUp('github', false, 'O usuário não autorizou esta ação no GitHub.', 'Nada foi criado no GitHub.');
+  }
+  const res = await callGithubOp(ghOp, { confirmed: isGithubWrite(ghOp) });
+  if (res.code === 'not_connected') return { ...followUp('github', false, res.message), panel: 'connectors' };
+  if (!res.ok) {
+    return followUp('github', false, `${res.message} Se a API não resolver, ofereça fazer pelo navegador (navigator run).`, res.message);
+  }
+  return followUp('github', true, `${res.message}\n(DADOS do GitHub)`);
+}
+
+// ─── Mídia: YouTube (fase 3) ─────────────────────────────────────────────
+
+/**
+ * Toca YouTube num player embutido. Com link: toca direto. Com busca: usa a
+ * YouTube Data API do Worker; sem chave configurada, devolve ao agente a
+ * instrução de achar o link (Navigator ou web_search) e repetir com "url".
+ */
+export async function runYoutube(action: Extract<AgentAction, { tool: 'youtube' }>, ctx: ActionContext): Promise<ActionOutcome> {
+  const tool = 'youtube' as const;
+  const direct = action.url ? youtubeVideoId(action.url) : null;
+  if (direct) {
+    return {
+      ...followUp(tool, true, `Tocando o vídeo ${action.url} no player do chat.`),
+      artifact: { id: ctx.newId(), kind: 'youtube', title: action.query ? `YouTube: ${action.query}` : 'YouTube', query: action.query ?? '', videos: [{ id: direct, title: action.query || 'Vídeo do YouTube', channel: '' }] },
+    };
+  }
+  const query = action.query ?? '';
+  const res = await searchYoutube(query, action.op === 'search' ? 5 : 3);
+  if (!res.ok) {
+    const why = res.status === 'not_configured'
+      ? 'A busca do YouTube não está configurada (sem YOUTUBE_API_KEY).'
+      : res.status === 'quota' ? 'A cota da busca do YouTube acabou por hoje.' : 'A busca do YouTube falhou agora.';
+    return followUp(tool, false, `${why} Ache o link do vídeo com o navegador (navigator run: "pesquise no youtube.com '${query.slice(0, 120)}' e devolva o link do primeiro vídeo") ou web_search "site:youtube.com ${query.slice(0, 120)}", e repita {"tool":"youtube","op":"play","url":"<link>"}.`);
+  }
+  const videos = res.videos ?? [];
+  if (!videos.length) return followUp(tool, false, `Nenhum vídeo encontrado para "${query}".`);
+  const list = videos.map((v, i) => `${i + 1}. ${v.title} — ${v.channel} (https://www.youtube.com/watch?v=${v.id})`).join('\n');
+  return {
+    ...followUp(tool, true, `${action.op === 'play' ? `Tocando "${videos[0].title}".` : 'Vídeos encontrados.'}\n${list}`),
+    artifact: { id: ctx.newId(), kind: 'youtube', title: action.op === 'play' ? videos[0].title : `YouTube: ${query}`, query, videos: action.op === 'play' ? videos.slice(0, 1) : videos },
+  };
+}
+
 // ─── Clima, conectores e MCP ─────────────────────────────────────────────
 
 const followUp = (tool: string, ok: boolean, summary: string, error?: string): ActionOutcome => ({
@@ -1038,6 +1100,10 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
         return await runBrowserForm(action, ctx);
       case 'navigator':
         return await runNavigator(action);
+      case 'github':
+        return await runGithub(action, ctx);
+      case 'youtube':
+        return await runYoutube(action, ctx);
       case 'weather':
         return await runWeather(action);
       case 'web_search':
@@ -1212,6 +1278,8 @@ export function actionLabel(action: AgentAction): string {
       return action.op === 'inspect' ? 'Abrindo o formulário no navegador na nuvem' : action.op === 'preview' ? 'Preenchendo o formulário (sem enviar)' : 'Preparando o envio do formulário (você revisa antes)';
     case 'navigator':
       return action.op === 'stop' ? 'Fechando o navegador (salvando o login)' : action.op === 'open' ? 'Abrindo o navegador na nuvem' : 'Navegando no site (você acompanha ao vivo)';
+    case 'github': return action.op === 'list_repos' ? 'Lendo seus repositórios no GitHub' : 'Preparando ação no GitHub (você confirma antes)';
+    case 'youtube': return action.url ? 'Abrindo o vídeo no player' : 'Buscando no YouTube';
     case 'open_panel': return 'Abrindo painel';
     case 'weather': return 'Consultando o clima';
     case 'web_search': return 'Buscando na web';

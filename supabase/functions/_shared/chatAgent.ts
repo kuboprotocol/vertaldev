@@ -24,6 +24,8 @@ import {
   type BrowserFormOp, type FormValues,
 } from "./browserForm.ts";
 import { NAVIGATOR_LIMITS, normalizeNavigatorUrl } from "./navigatorCore.ts";
+import { parseGithubOp, type GithubOp } from "./githubOps.ts";
+import { YOUTUBE_LIMITS, youtubeVideoId } from "./youtubeCore.ts";
 
 export type Msg = { role: "system" | "user" | "assistant"; content: string };
 
@@ -141,7 +143,11 @@ export type AgentAction =
   // Não existe op de aprovar: pagamento só é aprovado no clique do usuário no cartão.
   | { tool: "navigator"; op: "run"; task: string; url?: string }
   | { tool: "navigator"; op: "open"; url?: string }
-  | { tool: "navigator"; op: "stop" };
+  | { tool: "navigator"; op: "stop" }
+  // Vibe Code + GitHub (fase 3): API OAuth já conectada; escrita pede confirmação do usuário no chat.
+  | ({ tool: "github" } & GithubOp)
+  // Mídia (fase 3): player embutido do YouTube. "play" com url (ou query, se houver busca).
+  | { tool: "youtube"; op: "play" | "search"; query?: string; url?: string };
 
 /** Conexão que o próprio cliente adicionou (API ou servidor MCP). Só nome, endereço e NOME do segredo. */
 export interface UserConnection {
@@ -222,6 +228,8 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   vibe_code: "créditos do Vibe Code; status grátis",
   browser_form: `ler grátis; enviar ${BROWSER_FORM_LIMITS.submitCredits} créditos`,
   navigator: `${NAVIGATOR_LIMITS.creditsPerMinute} crédito por minuto com o navegador aberto`,
+  github: "grátis (criar/abrir pede sua confirmação)",
+  youtube: "grátis",
 };
 
 export interface AgentPromptContext {
@@ -248,6 +256,10 @@ export interface AgentPromptContext {
   browserForm?: boolean;
   /** A conversa pede para operar um site (login, navegar): inclui a ferramenta navigator (ver wantsNavigator). */
   navigator?: boolean;
+  /** A conversa fala de GitHub/repositório/issue/PR: inclui a ferramenta github (ver wantsGithub). */
+  github?: boolean;
+  /** A conversa fala de vídeo/música/tocar: inclui a ferramenta youtube (ver wantsMedia). */
+  media?: boolean;
 }
 
 // ─── Personalidade e regras de conversa ──────────────────────────────────
@@ -301,7 +313,22 @@ const NAVIGATOR_TOOL =
   `- {"tool":"navigator","op":"run|open|stop","task":"o que fazer","url":"https://... (opcional)"} → agente opera um navegador real na nuvem com login salvo: sites, área logada, várias telas (${TOOL_COSTS.navigator}). "open" só abre ao vivo (login à mão); "stop" fecha e salva.`;
 
 const NAVIGATOR_RULES =
-  "Navegador: senhas vêm do cofre (nunca peça no chat). Código 2FA e pagar/comprar/confirmar pedido: o usuário responde e aprova no painel, nunca você.";
+  "Navegador: senhas vêm do cofre (nunca peça no chat). Código 2FA e pagar/comprar/confirmar pedido: o usuário responde e aprova no painel, nunca você. Publicar app em hospedagem (Hostinger etc.: logar, contratar VPS): navigator run; a contratação passa pela aprovação.";
+
+/** Vibe Code + GitHub (fase 3): só entra no prompt quando a conversa fala de GitHub (wantsGithub). */
+const GITHUB_TOOL =
+  `- {"tool":"github","op":"list_repos|create_repo|create_issue|create_branch|create_pr","repo":"dono/repo"} + name/title/body/branch/from/head/base/private/draft → GitHub conectado (OAuth), ${TOOL_COSTS.github}. Prefira ao navigator. Repo novo privado e PR rascunho, salvo pedido.`;
+
+/** Mídia (fase 3): só entra no prompt quando a conversa fala de vídeo/música (wantsMedia). */
+const YOUTUBE_TOOL =
+  `- {"tool":"youtube","op":"play|search","query":"…","url":"link (opcional)"} → vídeo no player do chat (${TOOL_COSTS.youtube}). Música do Spotify conectado: spotify. Sem busca, ache o link (navigator/web_search) e repita com "url".`;
+
+/**
+ * Orçamento do prompt (1/3 do contexto do gateway). As ferramentas opcionais da
+ * fase 3 (github, youtube) só entram se couberem; em conversas muito longas
+ * (memória, resumo e plano cheios) a de menor prioridade fica de fora.
+ */
+export const AGENT_PROMPT_BUDGET = 25_950;
 
 const MEMORY_RULES = [
   "Memória:",
@@ -316,6 +343,17 @@ const MEMORY_OFF = "Memória: o usuário DESLIGOU a memória. Não use memórias
 const MEMORY_UNAVAILABLE = "Memória: indisponível neste momento. Não prometa lembrar de nada entre conversas e não inclua o campo \"memory\".";
 
 export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
+  const full = buildPrompt(ctx);
+  if (full.length <= AGENT_PROMPT_BUDGET || (!ctx.github && !ctx.media)) return full;
+  // Prioridade: github (Vibe Code) > youtube (mídia).
+  if (ctx.github && ctx.media) {
+    const noMedia = buildPrompt({ ...ctx, media: false });
+    if (noMedia.length <= AGENT_PROMPT_BUDGET) return noMedia;
+  }
+  return buildPrompt({ ...ctx, github: false, media: false });
+}
+
+function buildPrompt(ctx: AgentPromptContext): string {
   // Com a ferramenta de formulários no prompt, a lista de segredos sai para caber no orçamento.
   // Navigator ligado: ele cobre formulários também; browser_form sai para caber no orçamento do prompt.
   const formOn = !!ctx.browserForm && !ctx.navigator;
@@ -351,6 +389,8 @@ export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
     `- {"tool":"download","url":"https://...","format":"mp4|mp3"} → baixa vídeo de rede social (${TOOL_COSTS.download}).`,
     formOn ? BROWSER_FORM_TOOL : "",
     ctx.navigator ? NAVIGATOR_TOOL : "",
+    ctx.github ? GITHUB_TOOL : "",
+    ctx.media ? YOUTUBE_TOOL : "",
     `- {"tool":"api_request","method":"GET|POST|PUT|PATCH|DELETE","url":"https://...","headers":{},"body":"texto ou JSON em string","reason":"por que esta chamada"} → chama uma API externa quando nenhuma ferramenta acima resolve. O usuário aprova cada chamada. Para autenticar, escreva {{NOME_DO_SEGREDO}} no valor do cabeçalho, na query ou no corpo; o servidor troca pelo valor do cofre. Nunca peça para o usuário colar chaves no chat. Segredos disponíveis: ${secrets}. Se faltar um segredo, explique qual nome criar e use {"tool":"open_panel","panel":"secrets"}.`,
     `- {"tool":"open_panel","panel":"${PANELS.filter((p) => p !== "navigator").join("|")}"} → abre um painel dentro do chat para o usuário trabalhar à mão. Use quando o pedido precisa de arquivos do usuário (video_studio: fotos viram vídeo; clips: cortes de vídeo longo; avatar: avatar falante; emo: animar foto; notebook: conversar com PDFs e links; office/design/canvas: edição manual).`,
     `- {"tool":"weather","place":"bairro ou cidade"} → clima atual e previsão de 3 dias. Sem "place", usa a localização do aparelho do usuário (ele autoriza). Nunca invente o clima: use sempre esta ferramenta.`,
@@ -725,6 +765,22 @@ export function parseAgentAction(raw: unknown): AgentAction | null {
       return parseBrowserFormAction(a);
     case "navigator":
       return parseNavigatorAction(a);
+    case "github": {
+      const op = parseGithubOp(a);
+      return op ? ({ tool: "github", ...op } as AgentAction) : null;
+    }
+    case "youtube": {
+      const op = a.op === "search" ? "search" : "play";
+      const id = a.url !== undefined && a.url !== null && a.url !== "" ? youtubeVideoId(a.url) : null;
+      if (a.url && !id) return null; // link que não é do YouTube
+      const query = str(a.query, YOUTUBE_LIMITS.maxQuery);
+      if (!id && query.length < 2) return null;
+      return {
+        tool: "youtube", op,
+        ...(id ? { url: `https://www.youtube.com/watch?v=${id}` } : {}),
+        ...(query.length >= 2 ? { query } : {}),
+      };
+    }
     case "world_time": {
       const list = Array.isArray(a.places) ? a.places : typeof a.places === "string" ? a.places.split(",") : typeof a.place === "string" ? [a.place] : [];
       const places = list.map((p) => str(p, 80)).filter(Boolean).slice(0, 8);

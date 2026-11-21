@@ -8,6 +8,10 @@
 //   POST { action: "grant", id, email, can_reveal? }           (só o dono)
 //   POST { action: "revoke", id, grantee_id }                  (só o dono)
 //   POST { action: "audit", id?, limit? }                      (só o dono)
+// Canal interno do Vertal Navigator (header x-navigator-token, só o Worker):
+//   POST { id, user_id, host, session_id }           → valor para fill_secret (nunca semente *_TOTP)
+//   POST { op: "totp", id, user_id, host, session_id } → { code, expiresIn } (2FA; a semente não sai)
+//   POST { op: "llm_key" }                            → chave do OpenRouter do Navigator
 // Orquestrador (antes era a função kubo-secrets-orchestrator; juntado aqui porque
 // o plano do Supabase limita o número de funções). Nunca devolve valores:
 //   POST { action: "targets" }
@@ -34,6 +38,8 @@ import {
   validateValue,
 } from "../_shared/kuboSecretsCore.ts";
 import { audit, listVisibleSecrets, SECRET_COLUMNS, type SecretRowRecord } from "../_shared/kuboSecrets.ts";
+import { isTotpSecretName, parseTotpSeed, totpNow } from "../_shared/totp.ts";
+import { secretMatchesHost } from "../_shared/navigatorCore.ts";
 
 function json(body: unknown, status = 200, extra: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
@@ -116,6 +122,24 @@ Deno.serve(async (req) => {
       if (idErr) return fail(idErr);
       if (!row) return fail("Segredo não encontrado", 404);
       if (row.owner_id !== uid && !(await grantOf(admin, row.id, uid))) return fail("Segredo não encontrado", 404);
+      // Fase 2: 2FA por TOTP. A semente (env_key *_TOTP) nunca sai daqui: só o código de agora,
+      // e só para o site a que o segredo está vinculado.
+      if (nb.op === "totp") {
+        if (!isTotpSecretName(row.env_key)) return fail("Não é um segredo TOTP", 400);
+        const host = String(nb.host ?? "");
+        if (!secretMatchesHost((row as unknown as { bound_to?: string | null }).bound_to ?? null, host)) return fail("Segredo não vinculado a este site", 403);
+        const seed = await decryptSecret({ ciphertext: row.ciphertext, iv: row.iv, tag: row.tag });
+        const params = parseTotpSeed(seed);
+        if (!params) return fail("Semente TOTP inválida", 422);
+        const { code, expiresIn } = await totpNow(params);
+        await audit(admin, {
+          secretId: row.id, ownerId: row.owner_id, actorId: uid, action: "inject", envKey: row.env_key,
+          meta: { target: "navigator", kind: "totp", host: host.slice(0, 200), session_id: String(nb.session_id ?? "").slice(0, 40) },
+        });
+        return json({ code, expiresIn });
+      }
+      if (nb.op !== undefined) return fail("op inválida", 400);
+      if (isTotpSecretName(row.env_key)) return fail("Semente TOTP não é entregue; use op totp", 403);
       const value = await decryptSecret({ ciphertext: row.ciphertext, iv: row.iv, tag: row.tag });
       await audit(admin, { secretId: row.id, ownerId: row.owner_id, actorId: uid, action: "inject", envKey: row.env_key });
       return json({ value });

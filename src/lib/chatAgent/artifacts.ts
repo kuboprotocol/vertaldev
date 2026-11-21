@@ -34,6 +34,8 @@ export type Artifact =
   | (Base & { kind: 'vibe'; conversationId: string; summary: string; files: string[] })
   | (Base & { kind: 'music'; tracks: Array<{ title: string; audioUrl: string; imageUrl?: string }>; prompt: string })
   | (Base & { kind: 'spotify'; query: string; tracks: Array<{ id: string; title: string; artist: string; imageUrl?: string }> })
+  /** Vídeos do YouTube com player embutido (fase 3). O primeiro toca no cartão. */
+  | (Base & { kind: 'youtube'; query: string; videos: Array<{ id: string; title: string; channel: string; thumbnail?: string }> })
   | (Base & { kind: 'ebook'; content: string; cover?: string })
   | (Base & { kind: 'notebook'; description: string; emoji?: string; notebookId?: string })
   | (Base & { kind: 'notebook_feed'; documentCount?: number; instructions?: string; notebookId?: string })
@@ -155,6 +157,7 @@ export const KIND_LABEL: Record<ArtifactKind, string> = {
   vibe: 'Vibe Code',
   music: 'Música',
   spotify: 'Spotify',
+  youtube: 'YouTube',
   ebook: 'Ebook',
   notebook: 'Notebook',
   notebook_feed: 'Notebook Alimentado',
