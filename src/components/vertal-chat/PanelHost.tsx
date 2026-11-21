@@ -12,6 +12,7 @@ const VertalClock = lazy(() => import('@/components/clock/VertalClock'));
 const CreativeSheets = lazy(() => import('@/components/CreativeSheets').then((m) => ({ default: m.CreativeSheets })));
 const FigcraftEditor = lazy(() => import('@/components/creative/FigcraftEditor').then((m) => ({ default: m.FigcraftEditor })));
 const CadStudio = lazy(() => import('@/components/creative/CadStudio').then((m) => ({ default: m.CadStudio })));
+const NavigatorPanel = lazy(() => import('./NavigatorPanel').then((m) => ({ default: m.NavigatorPanel })));
 const CreativeToolInterface = lazy(() =>
   import('@/components/creative/CreativeToolInterface').then((m) => ({ default: m.CreativeToolInterface })),
 );
@@ -58,6 +59,13 @@ export function PanelHost({ request, credits, userId }: { request: PanelRequest;
     return (
       <Suspense fallback={null}>
         <div className="mx-auto max-w-7xl p-3 sm:p-4"><CadStudio creditsAvailable={credits} /></div>
+      </Suspense>
+    );
+  }
+  if (key === 'navigator') {
+    return (
+      <Suspense fallback={null}>
+        <NavigatorPanel />
       </Suspense>
     );
   }

@@ -8,6 +8,7 @@ import {
   type RouterCall,
   runChatDelegation,
 } from '../../../supabase/functions/_shared/chatDelegate';
+import { NAVIGATOR_LIMITS, normalizeNavigatorUrl } from '../../../supabase/functions/_shared/navigatorCore';
 
 export type VibeCodeAction = Extract<AgentAction, { tool: 'vibe_code' }>;
 
@@ -164,5 +165,44 @@ export function delegateCardFromStep(step: { kind?: string; status?: string; del
     tools: Array.isArray(d.tools) ? d.tools : [],
     images: Array.isArray(d.images) ? d.images.filter((u): u is string => typeof u === 'string') : [],
     refused: Array.isArray(d.refused) ? d.refused : [],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Ponte Vibe Code → Vertal Navigator (comando "/navegar <tarefa>")
+// ---------------------------------------------------------------------------
+
+export const NAVIGATOR_VIBE_COMMAND = '/navegar';
+
+/**
+ * "/navegar abra https://x.com e veja o preço" → { task, url? }. URL só pública
+ * (mesma guarda SSRF do browser_form). Fora do comando, ou sem tarefa, devolve null.
+ */
+export function parseVibeNavigatorCommand(text: string): { task: string; url?: string } | null {
+  const m = /^\/navegar(?:\s+([\s\S]*))?$/i.exec(text.trim());
+  if (!m) return null;
+  const task = (m[1] ?? '').trim().slice(0, NAVIGATOR_LIMITS.maxTaskChars);
+  if (task.length < 3) return null;
+  const firstUrl = /https?:\/\/[^\s<>"')]+/i.exec(task)?.[0];
+  const url = firstUrl ? normalizeNavigatorUrl(firstUrl) ?? undefined : undefined;
+  return url ? { task, url } : { task };
+}
+
+/**
+ * Delegação mínima: o Vibe Code entrega a tarefa de navegador ao Vertal Navigator
+ * (mesma sessão do usuário, mesmo gate de pagamento) e recebe a resposta no formato
+ * dos cartões "Perguntar ao Vertal Chat" ("Usar no pedido").
+ */
+export async function delegateToNavigator(task: string, url?: string): Promise<ChatDelegateResult> {
+  const { runNavigatorTask } = await import('@/lib/navigator/store');
+  const out = await runNavigatorTask(task, url);
+  return {
+    ok: out.ok,
+    question: task,
+    answer: out.message,
+    tools: [{ tool: 'navigator', ok: out.ok }],
+    images: [],
+    refused: [],
+    ...(out.ok ? {} : { error: out.message }),
   };
 }

@@ -53,7 +53,10 @@
     "APP_ORIGIN": "https://vertal.dev",
     "SUPABASE_URL": "https://sccizjlpwezsgaxkclot.supabase.co",
     "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_8n6OQz5s_ht_yibdyVMPlg_lyHIWHc1",
-    "SPOTIFY_CLIENT_ID": "f190584b3d57481e8b17b7a4efc1dbfe"
+    "SPOTIFY_CLIENT_ID": "f190584b3d57481e8b17b7a4efc1dbfe",
+    // Vertal Navigator: E2B self-hosted (docs/VERTAL_NAVIGATOR.md)
+    "E2B_DOMAIN": "vertalrun.com",
+    "E2B_API_URL": "https://api.vertalrun.com"
   },
   // Navegador na nuvem do Vertal Chat (/api/browser/*, worker/browserFormRoutes.ts):
   // Cloudflare Browser Run. Funciona no plano Workers Free com limites baixos

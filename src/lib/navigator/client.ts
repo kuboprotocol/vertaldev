@@ -1,0 +1,63 @@
+// Cliente do Vertal Navigator servido pelo Worker do vertal.dev (/api/navigator/*).
+// Envia o JWT da sessão do Supabase, como o cliente do navegador de formulários.
+import { supabase } from '@/integrations/supabase/client';
+import { NAVIGATOR_MESSAGES, type NavigatorEvent, type NavigatorPending, type NavigatorStatus } from './navigatorCore';
+
+export type NavigatorRoute = 'start' | 'task' | 'status' | 'input' | 'takeover' | 'release' | 'stop' | 'forget';
+
+export interface NavigatorResponse {
+  ok: boolean;
+  status: NavigatorStatus;
+  message?: string;
+  detail?: string;
+  sessionId?: string;
+  liveViewUrl?: string | null;
+  controlUrl?: string;
+  expiresAt?: string;
+  billedMinutes?: number;
+  creditsPerMinute?: number;
+  reused?: boolean;
+  cookiesRestored?: number;
+  cookiesSaved?: number | null;
+  runId?: string;
+  agentStatus?: 'idle' | 'running' | 'paused' | 'waiting' | 'done' | 'failed' | 'stopped';
+  takeover?: boolean;
+  url?: string;
+  events?: NavigatorEvent[];
+  lastSeq?: number;
+  pending?: NavigatorPending[];
+  filling?: Array<{ name?: string; host?: string }>;
+  /** data:image/jpeg;base64,… */
+  screenshot?: string;
+}
+
+const PRODUCTION_ORIGIN = 'https://vertal.dev';
+
+/** No vertal.dev a API é do mesmo domínio; fora dele (localhost, previews, app nativo) chama o vertal.dev. */
+export function navigatorApiBase(
+  location: Pick<Location, 'hostname'> | undefined = typeof window !== 'undefined' ? window.location : undefined,
+  override: string | undefined = import.meta.env.VITE_BROWSER_API_BASE,
+): string {
+  if (override) return `${override.replace(/\/+$/, '').replace(/\/api\/browser$/, '')}/api/navigator`;
+  const host = location?.hostname ?? '';
+  return host === 'vertal.dev' || host === 'www.vertal.dev' ? '/api/navigator' : `${PRODUCTION_ORIGIN}/api/navigator`;
+}
+
+/** Chama uma rota do Navigator. Sempre devolve o mesmo formato, mesmo se o HTTP falhar. */
+export async function callNavigator(route: NavigatorRoute, body: Record<string, unknown> = {}): Promise<NavigatorResponse> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return { ok: false, status: 'unauthorized', message: NAVIGATOR_MESSAGES.unauthorized };
+  try {
+    const res = await fetch(`${navigatorApiBase()}/${route}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify(body),
+    });
+    const data = (await res.json().catch(() => null)) as NavigatorResponse | null;
+    if (data && typeof data.status === 'string') return data;
+    if (res.status === 404 || res.status === 405) return { ok: false, status: 'not_configured', message: NAVIGATOR_MESSAGES.not_configured };
+    return { ok: false, status: 'error', message: NAVIGATOR_MESSAGES.error };
+  } catch {
+    return { ok: false, status: 'error', message: NAVIGATOR_MESSAGES.error };
+  }
+}

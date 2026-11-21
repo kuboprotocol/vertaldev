@@ -1,0 +1,22 @@
+{
+  "URLBlocklist": [
+    "file://*",
+    "localhost",
+    "127.0.0.1",
+    "0.0.0.0",
+    "[::1]",
+    "169.254.169.254",
+    "metadata.google.internal",
+    "chrome://settings",
+    "chrome://flags",
+    "chrome://inspect"
+  ],
+  "PasswordManagerEnabled": false,
+  "BrowserSignin": 0,
+  "SyncDisabled": true,
+  "DownloadRestrictions": 3,
+  "DefaultNotificationsSetting": 2,
+  "DefaultGeolocationSetting": 2,
+  "PromotionalTabsEnabled": false,
+  "MetricsReportingEnabled": false
+}
