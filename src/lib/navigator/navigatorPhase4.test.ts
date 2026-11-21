@@ -236,4 +236,62 @@ describe('store do Navigator (fase 4)', () => {
     expect(store.getNavigatorState().error).toBeNull();
     store.__resetNavigatorStore();
   });
+
+  it('sessão que terminou entre as tarefas (expirou/sem créditos): abre outra antes da tarefa, sem sessionId vazio', async () => {
+    const store = await import('./store');
+    const SID2 = '66666666-7777-4888-8999-aaaaaaaaaaaa';
+    let starts = 0;
+    let statusCalls = 0;
+    const taskBodies: Array<Record<string, unknown>> = [];
+    callNavigator.mockImplementation(async (route: string, body: Record<string, unknown> = {}) => {
+      if (route === 'start') {
+        starts++;
+        return { ok: true, status: 'ok', sessionId: starts === 1 ? SID : SID2 };
+      }
+      if (route === 'status') {
+        statusCalls++;
+        // 1: sincronia ao abrir · 2: a sessão expirou · 3: sincronia da sessão nova · 4+: a tarefa termina
+        if (statusCalls === 2) return { ok: false, status: 'session_ended', message: 'Esta sessão do navegador terminou. Abra um novo.' };
+        if (statusCalls < 4) return { ok: true, status: 'ok', agentStatus: 'idle', lastSeq: 0, events: [] };
+        return { ok: true, status: 'ok', agentStatus: 'done', lastSeq: 1, events: [{ seq: 1, ts: 0, type: 'done', success: true, runId: 'run2', result: 'Feito.' }] };
+      }
+      if (route === 'task') {
+        taskBodies.push(body);
+        // Como o Worker de verdade: sem sessionId válido o pedido é recusado.
+        return body.sessionId === SID2
+          ? { ok: true, status: 'ok', runId: 'run2' }
+          : { ok: false, status: 'bad_request', message: 'Pedido inválido para o navegador.' };
+      }
+      return { ok: true, status: 'ok' };
+    });
+    await store.startNavigator(undefined, { retryDelayMs: 1 });
+    expect(store.getNavigatorState().sessionId).toBe(SID);
+
+    const out = await store.runNavigatorTask('me diga o título', 'https://example.com', { timeoutMs: 5_000 });
+
+    expect(starts).toBe(2);
+    expect(taskBodies).toHaveLength(1);
+    expect(taskBodies[0].sessionId).toBe(SID2);
+    expect(out.ok).toBe(true);
+    expect(out.message).toBe('Feito.');
+    store.__resetNavigatorStore();
+  });
+
+  it('sessão que terminou por falta de créditos: a mensagem é a do motivo, não "pedido inválido"', async () => {
+    const store = await import('./store');
+    let starts = 0;
+    callNavigator.mockImplementation(async (route: string) => {
+      if (route === 'start') {
+        starts++;
+        return starts === 1 ? { ok: true, status: 'ok', sessionId: SID } : { ok: false, status: 'insufficient_credits', message: 'Créditos insuficientes para usar o navegador na nuvem.' };
+      }
+      if (route === 'status') return { ok: false, status: 'insufficient_credits', message: 'Créditos insuficientes para usar o navegador na nuvem.' };
+      return { ok: false, status: 'bad_request', message: 'Pedido inválido para o navegador.' };
+    });
+    await store.startNavigator(undefined, { retryDelayMs: 1 });
+    const out = await store.runNavigatorTask('me diga o título', 'https://example.com', { timeoutMs: 5_000 });
+    expect(out.ok).toBe(false);
+    expect(out.message).toBe('Créditos insuficientes para usar o navegador na nuvem.');
+    store.__resetNavigatorStore();
+  });
 });
