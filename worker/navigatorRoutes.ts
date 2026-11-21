@@ -264,6 +264,23 @@ async function fulfillSecret(env: NavigatorEnv, userId: string, row: SessionRow,
   return true;
 }
 
+/** Chave do OpenRouter guardada como segredo do Supabase (NAVIGATOR_OPENROUTER_KEY), entregue pelo kubo-secrets. */
+let cachedLlmKey: { v: string; at: number } | null = null;
+async function internalLlmKey(env: NavigatorEnv): Promise<string | undefined> {
+  if (cachedLlmKey && Date.now() - cachedLlmKey.at < 10 * 60_000) return cachedLlmKey.v;
+  if (!env.NAVIGATOR_INTERNAL_TOKEN || !env.SUPABASE_URL) return undefined;
+  const res = await fetch(`${env.SUPABASE_URL.replace(/\/+$/, '')}/functions/v1/kubo-secrets`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-navigator-token': env.NAVIGATOR_INTERNAL_TOKEN, apikey: env.SUPABASE_SECRET_KEY ?? '', Authorization: `Bearer ${env.SUPABASE_SECRET_KEY ?? ''}` },
+    body: JSON.stringify({ op: 'llm_key' }),
+  }).catch(() => null);
+  if (!res?.ok) return undefined;
+  const data = (await res.json().catch(() => ({}))) as { value?: unknown };
+  if (typeof data.value !== 'string' || !data.value) return undefined;
+  cachedLlmKey = { v: data.value, at: Date.now() };
+  return data.value;
+}
+
 // ─── Rotas ────────────────────────────────────────────────────────────────
 export async function handleNavigator(request: Request, env: NavigatorEnv, url: URL): Promise<Response> {
   const route = url.pathname.slice(NAVIGATOR_API_PREFIX.length).replace(/^\/+|\/+$/g, '');
@@ -421,7 +438,7 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
       const parsed = parseTaskBody(body);
       if (!parsed.ok) return fail(request, parsed.status, { detail: parsed.detail }, 400);
       const provider = env.NAVIGATOR_LLM_PROVIDER === 'deepseek' ? 'deepseek' : 'openrouter';
-      const llmKey = provider === 'deepseek' ? env.DEEPSEEK_API_KEY : env.OPENROUTER_API_KEY;
+      const llmKey = provider === 'deepseek' ? env.DEEPSEEK_API_KEY : (env.OPENROUTER_API_KEY || (await internalLlmKey(env)));
       if (!llmKey) return fail(request, 'not_configured', { detail: provider }, 503);
       const usable = (await visibleSecrets(env, userId)).map((x) => ({ name: x.env_key, boundTo: x.bound_to }));
       const task = parsed.data.url ? `Comece abrindo ${parsed.data.url}. ${parsed.data.task}` : parsed.data.task;

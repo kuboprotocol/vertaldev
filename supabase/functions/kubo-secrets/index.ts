@@ -102,7 +102,11 @@ Deno.serve(async (req) => {
     const expected = Deno.env.get("NAVIGATOR_INTERNAL_TOKEN") ?? "";
     if (expected.length < 32 || !timingSafeEqualStr(navToken, expected)) return fail("unauthorized", 401);
     try {
-      const nb = (await req.json()) as { id?: unknown; user_id?: unknown; host?: unknown; session_id?: unknown };
+      const nb = (await req.json()) as { op?: unknown; id?: unknown; user_id?: unknown; host?: unknown; session_id?: unknown };
+      if (nb.op === "llm_key") {
+        const k = Deno.env.get("NAVIGATOR_OPENROUTER_KEY") ?? "";
+        return k ? json({ value: k }) : fail("not_configured", 503);
+      }
       const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
         auth: { persistSession: false, autoRefreshToken: false },
       });
