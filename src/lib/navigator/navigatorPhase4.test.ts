@@ -60,6 +60,13 @@ describe('modelo por tarefa e tarefa "mais inteligente"', () => {
     expect(t).toContain('cite entre aspas');
   });
 
+  it('sem URL, manda pesquisar num buscador antes de responder (bug: não fazia a busca)', () => {
+    const t = framedNavigatorTask('pesquise o preço do café em Santos');
+    expect(t.startsWith('Comece abrindo um buscador público')).toBe(true);
+    expect(t).toContain('pesquise o preço do café em Santos');
+    expect(t).toContain('não responda de memória');
+  });
+
   it('espera do navd com backoff crescente e teto', () => {
     expect([0, 1, 2, 3, 4, 5, 9].map(navdBackoffMs)).toEqual([400, 700, 1_100, 1_600, 2_200, 2_500, 2_500]);
   });
