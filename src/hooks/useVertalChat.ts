@@ -9,6 +9,8 @@
 // tarefas do plano sem dependência entre si rodam juntas; e o usuário pode
 // parar o turno a qualquer momento (o que já saiu fica salvo).
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { requestConsent } from '@/lib/consent/store';
+import { newTurnId } from '../../supabase/functions/_shared/turnBilling';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -103,6 +105,8 @@ interface AgentResponse {
   reply: string;
   actions: AgentAction[];
   memory?: { saved: number; forgotten: number };
+  /** F5: consent gate pediu o termo da categoria (o cartão abre no chat). */
+  consent?: { category: string; version: string; title: string };
 }
 
 interface AgentCallOptions {
@@ -113,6 +117,10 @@ interface AgentCallOptions {
   plan?: ChatPlanState;
   /** Cancela a chamada quando o usuário para o turno. */
   signal?: AbortSignal;
+  /** F5: já repetiu depois de assinar o termo (não abre o cartão de novo). */
+  consentRetried?: boolean;
+  /** F5: id do turno (1ª rodada) — chave de idempotência da cobrança; a repetição após o termo reaproveita. */
+  turnId?: string;
 }
 
 async function callAgent(
@@ -121,6 +129,8 @@ async function callAgent(
   options: AgentCallOptions = {},
 ): Promise<AgentResponse> {
   const results = budgetToolResults(toolResults, { max: MAX_TOOL_RESULTS, perResultMax: MAX_RESULT_SUMMARY_CHARS });
+  // F5: 1ª rodada leva o id do turno; a repetição depois de assinar o termo usa o MESMO id (cobra uma vez só).
+  const turnId = results.length === 0 ? (options.turnId ?? newTurnId()) : undefined;
   const { data, error } = await supabase.functions.invoke<AgentResponse>('creative-router', {
     ...(options.signal ? { signal: options.signal } : {}),
     body: {
@@ -130,6 +140,7 @@ async function callAgent(
         ...(results.length ? { tool_results: results } : {}),
         ...(options.final ? { final: true } : {}),
         ...(options.plan ? { plan: options.plan } : {}),
+        ...(turnId ? { turn_id: turnId } : {}),
         context: {
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           connections: loadConnections(),
@@ -145,6 +156,11 @@ async function callAgent(
     throw new Error((code && AGENT_ERRORS[code]) || 'Não foi possível responder agora. Tente de novo.');
   }
   if (!data || typeof data.reply !== 'string' || !Array.isArray(data.actions)) throw new Error('Resposta inesperada do chat.');
+  // F5: consent gate — pedido sensível sem o termo assinado. Abre o cartão; assinou, repete o pedido uma vez.
+  if (data.consent && results.length === 0 && !options.consentRetried) {
+    const accepted = await requestConsent(data.consent);
+    if (accepted) return callAgent(history, toolResults, { ...options, consentRetried: true, turnId });
+  }
   return data;
 }
 

@@ -15,6 +15,15 @@ O Worker do vertal.dev é o único cliente:
   POST /takeover | /release | /stop
   GET  /cookies                      exporta os cookies (CDP Storage.getCookies)
   GET  /pending                      pedidos pendentes (com texto da página, sem screenshot) — auditoria
+  POST /scrape    {mode, urls?|crawl?, selectors?, adaptive?, fingerprints?, includeText?, useSession?}
+                  F5: coleta com o Scrapling (fetch HTTP, dinâmico no Chromium, stealth). robots.txt,
+                  intervalo por domínio, teto de páginas/profundidade; captcha/login/paywall = bloqueio.
+  POST /init {mode:"scrape", token}  F5: sandbox só de coleta (sem VNC; Chromium sob demanda).
+
+F5 (Scrapling + captcha): captcha/desafio anti-bot NUNCA é resolvido automaticamente
+(solve_cloudflare=False, sem serviço de resolução). No agente, ao detectar captcha a
+tarefa pausa, /events traz "captcha" e o usuário resolve na tela ao vivo (assumir
+controle); ao devolver (/release) a tarefa continua.
 
 Regras de segurança aplicadas aqui (as mesmas do núcleo TS navigatorCore.ts):
   * Gate de pagamento: todo clique/tecla cujo alvo pareça pagar/comprar/confirmar
@@ -187,6 +196,10 @@ class State:
         self.allowed_secrets: dict[str, str | None] = {}
         self.totp_secrets: dict[str, str | None] = {}
         self.view_password: str | None = None
+        # F5: captcha detectado (tarefa pausada até o usuário devolver o controle).
+        self.captcha: dict[str, Any] | None = None
+        # F5: "session" (Navigator, com tela ao vivo) ou "scrape" (só coleta, sem VNC).
+        self.mode = "session"
         self.lock = asyncio.Lock()
 
     def emit(self, type_: str, **data: Any) -> dict[str, Any]:
@@ -578,6 +591,11 @@ def build_agent(task: str, model: str, api_key: str, max_steps: int, provider: s
                    memory=(output.memory or "")[:300], actions=actions)
         except Exception as e:  # nunca derruba o agente por causa do log
             S.emit("log", message=f"step_log_error: {type(e).__name__}")
+        # F5: captcha/desafio anti-bot → pausa e o usuário resolve na tela ao vivo (nunca automático).
+        try:
+            await check_captcha_and_pause(str(getattr(state, "url", "") or ""))
+        except Exception:
+            pass
 
     agent = Agent(task=task, llm=llm, browser_session=session, tools=tools, use_judge=False, use_vision=use_vision,
                   extend_system_message=extend, register_new_step_callback=on_step, max_actions_per_step=4,
@@ -617,6 +635,118 @@ async def run_agent(task: str, model: str, api_key: str, max_steps: int, provide
                 p["future"].set_result(None)
 
 
+# ── F5: coleta web com Scrapling (BSD-3-Clause) ──────────────────────────────
+# O Scrapling roda num venv próprio (/opt/scrapling) porque os fetchers dele pedem
+# anyio>=4.14 e o browser-use 0.13.14 fixa anyio==4.12.1. O navd chama
+# /opt/navigator/scraped.py como subprocesso (JSON no stdin/stdout) e cuida do resto:
+# autenticação, Chromium do modo dinâmico e aviso de captcha.
+# Espelho de supabase/functions/_shared/scrapeCore.ts (CAPTCHA_MARKERS).
+CAPTCHA_MARKERS = [
+    "g-recaptcha", "recaptcha/api", "hcaptcha.com", "h-captcha", "challenges.cloudflare.com", "cf-turnstile",
+    "cf-chl-", "/cdn-cgi/challenge-platform", "verify you are human", "verifique que voce e humano",
+    "i'm not a robot", "nao sou um robo", "attention required! | cloudflare", "just a moment...",
+    "px-captcha", "datadome", "arkoselabs", "funcaptcha",
+]
+SCRAPLING_PYTHON = os.environ.get("SCRAPLING_PYTHON", "/opt/scrapling/bin/python")
+SCRAPED = os.environ.get("SCRAPED_SCRIPT", "/opt/navigator/scraped.py")
+SCRAPE_TASK_TIMEOUT_S = 100
+SCRAPE_MAX_URLS = 5
+
+
+def detect_captcha(html: str, title: str = "") -> str | None:
+    hay = unicodedata.normalize("NFD", f"{title}\n{(html or '')[:400000]}".lower()).encode("ascii", "ignore").decode("ascii")
+    for m in CAPTCHA_MARKERS:
+        if m in hay:
+            return m
+    return None
+
+
+async def ensure_chromium() -> None:
+    try:
+        await cdp_json("/json/version")
+    except Exception:
+        await start_chromium()
+
+
+async def run_scraped(req: dict) -> dict:
+    """Roda o coletor (venv do Scrapling) e devolve o JSON dele."""
+    proc = await asyncio.create_subprocess_exec(
+        SCRAPLING_PYTHON, SCRAPED, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+        env={**os.environ, "DISPLAY": DISPLAY, "VERTAL_CHROME": CHROME, "CDP_PORT": str(CDP_PORT)},
+    )
+    try:
+        out, _ = await asyncio.wait_for(proc.communicate(json.dumps(req).encode()), SCRAPE_TASK_TIMEOUT_S)
+    except asyncio.TimeoutError:
+        proc.kill()
+        return {"ok": False, "error": "timeout"}
+    try:
+        return json.loads(out.decode("utf-8", "ignore").strip().splitlines()[-1])
+    except Exception:
+        return {"ok": False, "error": "scraper_output"}
+
+
+async def scrape_route(request: web.Request) -> web.Response:
+    if not authed(request):
+        return j({"ok": False, "error": "unauthorized"}, 401)
+    body = await request.json()
+    mode = body.get("mode") if body.get("mode") in ("fetch", "dynamic", "stealth") else "fetch"
+    crawl = body.get("crawl") if isinstance(body.get("crawl"), dict) else None
+    if crawl and mode == "stealth":
+        return j({"ok": False, "error": "crawl_stealth"}, 400)
+    sels = [s for s in (body.get("selectors") or []) if isinstance(s, dict) and (s.get("css") or s.get("xpath"))][:10]
+    req = {
+        "mode": mode, "urls": [str(u) for u in (body.get("urls") or []) if isinstance(u, str)][:SCRAPE_MAX_URLS],
+        "selectors": sels, "adaptive": body.get("adaptive", True) is not False,
+        "fingerprints": body.get("fingerprints") if isinstance(body.get("fingerprints"), dict) else {},
+        "includeText": bool(body.get("includeText")), "crawl": crawl,
+        # Só numa sessão do Navigator (o usuário resolveu o captcha na tela ao vivo).
+        "useSession": bool(body.get("useSession")) and mode == "dynamic" and S.mode == "session" and S.view_password is not None,
+    }
+    if not req["urls"] and not crawl:
+        return j({"ok": False, "error": "bad_request"}, 400)
+    if mode == "dynamic":
+        await ensure_chromium()
+    res = await run_scraped(req)
+    if not res.get("ok"):
+        return j({"ok": False, "error": str(res.get("error") or "scraper_failed")[:60]}, 504 if res.get("error") == "timeout" else 500)
+    pages = res.get("pages") or []
+    for p in pages:
+        if isinstance(p, dict) and p.get("blocked") == "captcha":
+            S.emit("captcha", source="scrape", url=str(p.get("url", ""))[:300], host=(urlsplit(str(p.get("url", ""))).hostname or ""))
+    S.emit("scrape", mode=mode, pages=len(pages))
+    return j({"ok": True, "pages": pages, "truncated": bool(res.get("truncated")), "engine": "scrapling"})
+
+
+# ── F5: captcha no agente do Navigator (pausar e entregar o controle) ────────
+async def page_html_probe(limit: int = 200000) -> str:
+    try:
+        target = await page_target()
+        if not target:
+            return ""
+        expr = (f"(()=>{{const h=(document.documentElement&&document.documentElement.outerHTML||'').slice(0,{int(limit)});"
+                "const f=[...document.querySelectorAll('iframe')].map(x=>x.src||'').join(' ');return document.title+'\\n'+f+'\\n'+h;}})()")
+        res = await cdp_call(target["webSocketDebuggerUrl"], "Runtime.evaluate", {"expression": expr, "returnByValue": True}, timeout=6)
+        return str(((res or {}).get("result") or {}).get("value") or "")
+    except Exception:
+        return ""
+
+
+async def check_captcha_and_pause(url: str) -> bool:
+    """Captcha/desafio na página: pausa o agente e avisa (o Worker/cliente entrega o controle ao usuário)."""
+    if S.captcha or S.takeover:
+        return False
+    marker = detect_captcha(await page_html_probe())
+    if not marker:
+        return False
+    host = (urlsplit(url).hostname or "").lower()
+    S.captcha = {"url": url[:300], "host": host, "marker": marker, "since": int(time.time() * 1000)}
+    if S.agent:
+        S.agent.pause()
+        S.status = "paused"
+    S.emit("captcha", source="navigator", url=url[:300], host=host, message="Apareceu um captcha, resolva na tela ao vivo")
+    return True
+
+
 # ── HTTP ─────────────────────────────────────────────────────────────────────
 def authed(request: web.Request) -> bool:
     if not S.token:
@@ -639,6 +769,14 @@ async def init(request: web.Request) -> web.Response:
             return j({"ok": False, "error": "already_initialized"}, 409)
         body = await request.json()
         token = str(body.get("token", ""))
+        if body.get("mode") == "scrape":
+            # F5: sandbox só de coleta (Scrapling): sem tela ao vivo; Chromium só sobe se o modo dinâmico pedir.
+            if len(token) < 32:
+                return j({"ok": False, "error": "bad_init"}, 400)
+            S.token = token
+            S.mode = "scrape"
+            S.emit("status", status="idle", message="Coletor pronto.")
+            return j({"ok": True, "mode": "scrape"})
         view_pw, ctl_pw = str(body.get("viewPassword", "")), str(body.get("controlPassword", ""))
         if len(token) < 32 or not (6 <= len(view_pw) <= 8) or not (6 <= len(ctl_pw) <= 8) or view_pw == ctl_pw:
             return j({"ok": False, "error": "bad_init"}, 400)
@@ -705,7 +843,7 @@ async def events(request: web.Request) -> web.Response:
     pending = [{k: v for k, v in p.items() if k != "future"} for p in S.pending.values()]
     return j({"ok": True, "status": S.status, "runId": S.run_id, "takeover": S.takeover, "url": url[:500],
               "events": [e for e in S.events if e["seq"] > after][-100:], "lastSeq": S.seq,
-              "pending": pending, "screenshot": S.last_screenshot})
+              "pending": pending, "screenshot": S.last_screenshot, "captcha": S.captcha})
 
 
 async def pending_list(request: web.Request) -> web.Response:
@@ -768,6 +906,10 @@ async def release(request: web.Request) -> web.Response:
     if not await rotate_control_password(request):
         return j({"ok": False, "error": "bad_password"}, 400)
     S.takeover = False
+    if S.captcha:
+        # F5: o usuário resolveu o captcha na tela ao vivo e devolveu: a tarefa continua.
+        S.emit("captcha_resumed", url=S.captcha.get("url", ""), host=S.captcha.get("host", ""))
+        S.captcha = None
     if S.agent:
         S.agent.resume()
         S.status = "running"
@@ -821,6 +963,8 @@ def main() -> None:
         web.get("/health", health), web.post("/init", init), web.post("/task", task), web.get("/events", events),
         web.post("/input", submit_input), web.post("/takeover", takeover), web.post("/release", release),
         web.post("/stop", stop), web.get("/cookies", cookies), web.get("/pending", pending_list),
+        # F5: coleta web com Scrapling
+        web.post("/scrape", scrape_route),
     ])
     signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
     web.run_app(app, host="0.0.0.0", port=PORT, access_log=None, print=None)

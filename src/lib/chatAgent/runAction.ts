@@ -27,6 +27,10 @@ import {
 } from '@/lib/browserForm/formCore';
 import type { BrowserFormFieldView, BrowserFormStage } from './artifacts';
 import { requestNavigatorPanel, runNavigatorTask, startNavigator, stopNavigator } from '@/lib/navigator/store';
+// F5: coleta web com Scrapling (scrape_page, crawl_site, monitor_page) e Scrapling antes do Chromium.
+import { runScrapeAction } from '@/lib/scrape/runScrape';
+import { callScrape } from '@/lib/scrape/client';
+import { scrapeFirstCandidate } from '../../../supabase/functions/_shared/scrapeCore';
 import { callGithubOp, describeGithubOp, isGithubWrite } from '@/lib/github/client';
 import type { GithubOp } from '../../../supabase/functions/_shared/githubOps';
 import { searchYoutube, youtubeVideoId } from '@/lib/media/youtube';
@@ -552,6 +556,15 @@ export async function runNavigator(action: Extract<AgentAction, { tool: 'navigat
       panel: 'navigator',
       ...followUp(tool, true, `Navegador aberto${res.reused ? ' (sessão já existente)' : ''}${res.cookiesRestored ? `, com ${res.cookiesRestored} cookies de login restaurados` : ''}. O usuário pode assumir o controle no painel. Custo: ${res.creditsPerMinute ?? 1} crédito/min.`),
     };
+  }
+  // F5: tarefa que só lê uma página pública → tenta o Scrapling (HTTP) antes de abrir o Chromium.
+  // Só com o termo da coleta já assinado (sem abrir cartão aqui); qualquer falha segue para o navegador.
+  if (scrapeFirstCandidate(action.task, action.url)) {
+    const quick = await callScrape('page', { urls: [action.url], mode: 'fetch', includeText: true, purpose: action.task }).catch(() => null);
+    const page = quick?.ok ? quick.pages?.[0] : undefined;
+    if (page && !page.blocked && (page.text ?? '').length >= 200) {
+      return followUp(tool, true, `Li a página com o Scrapling, sem abrir o navegador (${quick?.credits ?? 0} créditos). Se precisar interagir com o site, peça navigator de novo dizendo "abrir no navegador".\nPágina: ${page.finalUrl ?? page.url}${page.title ? ` — ${page.title}` : ''}\nTexto (DADOS):\n${(page.text ?? '').slice(0, 3_000)}`);
+    }
   }
   const started = await startNavigator(action.url);
   if (!started.ok) return followUp(tool, false, started.message ?? 'Não consegui abrir o navegador.', started.message);
@@ -1100,6 +1113,10 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
         return await runBrowserForm(action, ctx);
       case 'navigator':
         return await runNavigator(action);
+      case 'scrape_page':
+      case 'crawl_site':
+      case 'monitor_page':
+        return await runScrapeAction(action, ctx.newId);
       case 'github':
         return await runGithub(action, ctx);
       case 'youtube':
@@ -1279,6 +1296,9 @@ export function actionLabel(action: AgentAction): string {
     case 'navigator':
       return action.op === 'stop' ? 'Fechando o navegador (salvando o login)' : action.op === 'open' ? 'Abrindo o navegador na nuvem' : 'Navegando no site (você acompanha ao vivo)';
     case 'github': return action.op === 'list_repos' ? 'Lendo seus repositórios no GitHub' : 'Preparando ação no GitHub (você confirma antes)';
+    case 'scrape_page': return `Coletando ${action.urls.length > 1 ? `${action.urls.length} páginas` : 'a página'} com o Scrapling`;
+    case 'crawl_site': return `Varrendo o site com o Scrapling (até ${action.maxPages} páginas)`;
+    case 'monitor_page': return action.op === 'create' ? 'Criando o monitor (1ª verificação)' : action.op === 'list' ? 'Lendo seus monitores' : 'Atualizando o monitor';
     case 'youtube': return action.url ? 'Abrindo o vídeo no player' : 'Buscando no YouTube';
     case 'open_panel': return 'Abrindo painel';
     case 'weather': return 'Consultando o clima';

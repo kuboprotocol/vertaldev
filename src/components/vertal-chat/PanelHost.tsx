@@ -13,6 +13,8 @@ const CreativeSheets = lazy(() => import('@/components/CreativeSheets').then((m)
 const FigcraftEditor = lazy(() => import('@/components/creative/FigcraftEditor').then((m) => ({ default: m.FigcraftEditor })));
 const CadStudio = lazy(() => import('@/components/creative/CadStudio').then((m) => ({ default: m.CadStudio })));
 const NavigatorPanel = lazy(() => import('./NavigatorPanel').then((m) => ({ default: m.NavigatorPanel })));
+// F5: painel Monitores (coleta web com Scrapling).
+const MonitorsPanel = lazy(() => import('@/components/scrape/MonitorsPanel').then((m) => ({ default: m.MonitorsPanel })));
 const CreativeToolInterface = lazy(() =>
   import('@/components/creative/CreativeToolInterface').then((m) => ({ default: m.CreativeToolInterface })),
 );
@@ -66,6 +68,13 @@ export function PanelHost({ request, credits, userId }: { request: PanelRequest;
     return (
       <Suspense fallback={null}>
         <NavigatorPanel />
+      </Suspense>
+    );
+  }
+  if (key === 'monitors') {
+    return (
+      <Suspense fallback={null}>
+        <MonitorsPanel />
       </Suspense>
     );
   }

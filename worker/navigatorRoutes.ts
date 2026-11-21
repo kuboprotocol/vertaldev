@@ -20,7 +20,7 @@ import { createRateLimiter } from '../supabase/functions/_shared/browserForm';
 import {
   DEFAULT_NAVIGATOR_SETTINGS, NAVIGATOR_LIMITS, NAVIGATOR_MESSAGES, auditDetail, autoApproveDecision, extractCheckoutSummary, formatCents,
   liveViewUrl, minutesDue, normalizeNavigatorUrl, parseInputBody, parseSessionBody, parseSettingsBody, parseStartBody, parseTaskBody,
-  pickSecretForHost, pickTotpForHost, isTotpSecretName, sanitizeEvents, sanitizePending, isBlockedHost, framedNavigatorTask, pickNavigatorModel,
+  pickSecretForHost, pickTotpForHost, isTotpSecretName, sanitizeEvents, sanitizePending, isBlockedHost, framedNavigatorTask, pickNavigatorModel, sanitizeCaptcha,
   type CheckoutSummary, type NavigatorAuditKind, type NavigatorPending, type NavigatorSettings, type NavigatorStatus, type VaultSecretMeta,
 } from '../supabase/functions/_shared/navigatorCore.ts';
 import { parseTotpSeed, totpNow } from '../supabase/functions/_shared/totp.ts';
@@ -28,6 +28,10 @@ import { createSandbox, e2bDomain, E2BError, killSandbox, navd, setSandboxTimeou
 import { decryptWithConnectorKey, encryptWithConnectorKey, EncKeyMissingError, randomPassword, randomToken } from './navigatorCrypto';
 import { isAllowedOrigin } from './spotifyRoutes';
 import { getUserId, rpc, table, type SupabaseEnv } from './supabaseRest';
+// F5: consent gate (termo por categoria; proibido bloqueia sempre), captcha e coleta Scrapling na sessão.
+import { classifyByRules, decideGate } from '../supabase/functions/_shared/consentGate.ts';
+import { loadAcceptedVersions, recordConsentAudit } from './consentRoutes';
+import { registerSessionResolver } from './scrapeRoutes';
 
 export const NAVIGATOR_API_PREFIX = '/api/navigator';
 
@@ -545,6 +549,22 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
     case 'task': {
       const parsed = parseTaskBody(body);
       if (!parsed.ok) return fail(request, parsed.status, { detail: parsed.detail }, 400);
+      // F5: consent gate. Proibido (captcha, paywall, acesso não autorizado…) bloqueia sempre.
+      // Tarefa normal segue como antes, SEM termo; o termo só é pedido quando o pedido é
+      // classificado como sensível/ambíguo (sem toolCategory: o Navigator já existia sem termo).
+      const cls = classifyByRules(parsed.data.task);
+      const gate = cls.level === 'normal'
+        ? ({ action: 'allow' } as const)
+        : decideGate(cls, await loadAcceptedVersions(env, userId), { clarifiedBefore: true });
+      if (gate.action === 'block') {
+        await recordConsentAudit(env, { userId, surface: 'navigator', cls, action: 'block', text: parsed.data.task });
+        await recordAudit(env, userId, row.id, 'consent_blocked', { reason: cls.reason, task: parsed.data.task });
+        return fail(request, 'prohibited', { reason: cls.reason });
+      }
+      if (gate.action === 'require_terms') {
+        await recordConsentAudit(env, { userId, surface: 'navigator', cls: { ...cls, category: gate.category }, action: 'require_terms', text: parsed.data.task });
+        return fail(request, 'consent_required', { category: gate.category, version: gate.version, title: gate.title });
+      }
       const provider = env.NAVIGATOR_LLM_PROVIDER === 'deepseek' ? 'deepseek' : 'openrouter';
       const llmKey = provider === 'deepseek' ? env.DEEPSEEK_API_KEY : (env.OPENROUTER_API_KEY || (await internalLlmKey(env)));
       if (!llmKey) return fail(request, 'not_configured', { detail: provider }, 503);
@@ -563,7 +583,7 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
       return json(request, { ok: true, status: 'ok', runId: res.data.runId, ...sessionView(env, row, s) });
     }
     case 'status': {
-      const res = await navd<{ ok?: boolean; status?: string; runId?: string; takeover?: boolean; url?: string; events?: unknown; lastSeq?: number; pending?: unknown; screenshot?: string }>(
+      const res = await navd<{ ok?: boolean; status?: string; runId?: string; takeover?: boolean; url?: string; events?: unknown; lastSeq?: number; pending?: unknown; screenshot?: string; captcha?: unknown }>(
         env, target, 'GET', `/events?after=${base.data.after}`,
       );
       if (!res.data.ok) return fail(request, 'sandbox_error', {}, 502);
@@ -593,6 +613,11 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
         await fulfillTotp(env, userId, row, target, p);
       }
       const events = sanitizeEvents(res.data.events);
+      // F5: captcha detectado (tarefa pausada) e retomado depois que o usuário devolveu o controle.
+      for (const ev of events.filter((e) => e.type === 'captcha' || e.type === 'captcha_resumed')) {
+        await recordAudit(env, userId, row.id, ev.type === 'captcha' ? 'captcha_detected' : 'captcha_resumed', { url: typeof ev.url === 'string' ? ev.url : undefined, host: typeof ev.host === 'string' ? ev.host : undefined });
+      }
+      const captcha = sanitizeCaptcha(res.data.captcha);
       let cookiesSaved: number | null = null;
       if (events.some((e) => e.type === 'done')) cookiesSaved = await saveProfile(env, userId, target);
       const pageUrl = typeof res.data.url === 'string' && normalizeNavigatorUrl(res.data.url) ? res.data.url : undefined;
@@ -603,6 +628,7 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
         filling: pending.filter((p) => p.kind === 'secret' || p.kind === 'totp').map((p) => ({ name: p.name, host: p.host, kind: p.kind })),
         screenshot: typeof res.data.screenshot === 'string' && res.data.screenshot.startsWith('data:image/jpeg;base64,') ? res.data.screenshot : undefined,
         ...(cookiesSaved !== null ? { cookiesSaved } : {}),
+        captcha,
         ...sessionView(env, row, s),
       });
     }
@@ -681,6 +707,15 @@ async function activityRoute(request: Request, env: NavigatorEnv, userId: string
   ]);
   return json(request, { ok: true, status: 'ok', sessions: recentSessions, audit });
 }
+
+// F5: coleta Scrapling na sessão do Navigator (depois de o usuário resolver um captcha na tela ao vivo).
+registerSessionResolver(async (env, userId, sessionId) => {
+  if (!/^[0-9a-f-]{36}$/i.test(sessionId)) return null;
+  const row = await loadSession(env as NavigatorEnv, userId, sessionId);
+  if (!row || row.status !== 'active' || !row.sandbox_id || Date.parse(row.expires_at) <= Date.now()) return null;
+  const s = await secretsOf(env as NavigatorEnv, row);
+  return { sandboxId: row.sandbox_id, token: s.token };
+});
 
 /** Só para testes: o resumo que o cartão recebe a partir do pedido cru do navd. */
 export const __test = { withSummary, summaryAudit };

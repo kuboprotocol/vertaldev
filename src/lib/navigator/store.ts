@@ -3,7 +3,8 @@
 // e pelo executor do chat (que espera a tarefa terminar).
 import { useSyncExternalStore } from 'react';
 import { callNavigator, type NavigatorResponse } from './client';
-import { NAVIGATOR_MESSAGES, eventsForTask, isDoneForTask, type NavigatorEvent, type NavigatorPending } from './navigatorCore';
+import { CAPTCHA_HANDOFF_MESSAGE, NAVIGATOR_MESSAGES, eventsForTask, isDoneForTask, type NavigatorCaptcha, type NavigatorEvent, type NavigatorPending } from './navigatorCore';
+import { requestConsent } from '@/lib/consent/store';
 
 export type AgentStatus = NonNullable<NavigatorResponse['agentStatus']>;
 
@@ -30,6 +31,8 @@ export interface NavigatorState {
   inlineApprovalHosts: number;
   /** Tarefa em andamento (fase 4): passos e resposta são só desta tarefa. */
   currentTask: CurrentTask | null;
+  /** F5: captcha na página — a tarefa pausou e o controle foi entregue ao usuário. */
+  captcha: NavigatorCaptcha | null;
 }
 
 export interface CurrentTask {
@@ -48,7 +51,7 @@ export interface CurrentTask {
 const INITIAL: NavigatorState = {
   sessionId: null, liveViewUrl: null, controlUrl: null, takeover: false, agentStatus: 'none', runId: null,
   events: [], lastSeq: 0, pending: [], filling: [], screenshot: null, url: null, billedMinutes: 0, creditsPerMinute: 1,
-  busy: false, error: null, panelsMounted: 0, inlineApprovalHosts: 0, currentTask: null,
+  busy: false, error: null, panelsMounted: 0, inlineApprovalHosts: 0, currentTask: null, captcha: null,
 };
 
 let state: NavigatorState = INITIAL;
@@ -148,6 +151,16 @@ export async function poll(): Promise<void> {
         agentStatus: res.agentStatus ?? state.agentStatus, runId: res.runId ?? state.runId, error: null,
       });
       if ((res.pending ?? []).some((p) => p.kind === 'code' || p.kind === 'text')) requestNavigatorPanel();
+      // F5: captcha detectado → a tarefa já pausou no sandbox; entrega o controle ao usuário
+      // (fluxo "Assumir controle" de sempre) e avisa no chat. Nunca resolve sozinho.
+      const captcha = res.captcha ?? null;
+      if (captcha && !state.captcha) {
+        set({ captcha });
+        announceCaptcha(captcha);
+        if (!state.takeover) void takeoverNavigator();
+      } else if (!captcha && state.captcha) {
+        set({ captcha: null });
+      }
       // Só o "done" DESTA tarefa resolve quem espera (fase 4: nada de resposta de outra conversa).
       for (const ev of fresh) {
         if (ev.type !== 'done') continue;
@@ -218,9 +231,15 @@ export async function runNavigatorTask(
     await poll();
   }
   const baseSeq = state.lastSeq;
-  const res = await callNavigator('task', {
+  const taskBody = {
     sessionId: state.sessionId, task, ...(url ? { url } : {}), ...(opts.maxSteps ? { maxSteps: opts.maxSteps } : {}), ...(opts.model ? { model: opts.model } : {}),
-  });
+  };
+  let res = await callNavigator('task', taskBody);
+  // F5: consent gate — 1º uso pede o termo assinado; aceitou, tenta de novo uma vez.
+  if (!res.ok && res.status === 'consent_required' && res.category) {
+    const accepted = await requestConsent({ category: res.category, version: res.version, title: res.title });
+    if (accepted) res = await callNavigator('task', taskBody);
+  }
   if (!res.ok) return { ok: false, message: messageOf(res), steps: 0 };
   const runId = res.runId ?? `run-${Date.now().toString(36)}`;
   const current: CurrentTask = {
@@ -245,6 +264,58 @@ export async function runNavigatorTask(
   if (!done) return { ok: false, message: 'A tarefa do navegador não terminou a tempo (ou a sessão foi encerrada).', ...base };
   const result = typeof done.result === 'string' ? done.result : '';
   return { ok: done.success === true, message: result || (done.success ? 'Tarefa concluída.' : 'A tarefa não foi concluída.'), result, ...base };
+}
+
+// ─── F5: captcha (pausa + controle ao usuário) ───────────────────────────
+
+/** Avisa no chat (evento global; o Vertal Chat e o Vibe Code mostram a mensagem). */
+export function announceCaptcha(captcha: Pick<NavigatorCaptcha, 'url' | 'host'>) {
+  requestNavigatorPanel();
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('vertal-navigator:captcha', { detail: { message: CAPTCHA_HANDOFF_MESSAGE, url: captcha.url, host: captcha.host } }));
+  }
+}
+
+/** Espera o usuário devolver o controle (fim do "Assumir controle"). */
+export function waitForRelease(timeoutMs = 10 * 60_000): Promise<boolean> {
+  if (!state.takeover) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const unsubscribe = subscribeNavigator(() => {
+      if (!state.takeover || !state.sessionId) {
+        unsubscribe();
+        clearTimeout(timer);
+        resolve(!!state.sessionId);
+      }
+    });
+    const timer = setTimeout(() => {
+      unsubscribe();
+      resolve(false);
+    }, Math.max(0, timeoutMs - (Date.now() - started)));
+  });
+}
+
+/**
+ * Coleta (Scrapling) parou num captcha: abre a página no Navigator, entrega o controle ao
+ * usuário e espera ele resolver e devolver. Devolve a sessão para a coleta continuar nela.
+ */
+export async function solveCaptchaInNavigator(url: string, opts: { timeoutMs?: number } = {}): Promise<{ ok: boolean; sessionId?: string; message?: string }> {
+  const started = await startNavigator(url);
+  if (!started.ok) return { ok: false, message: messageOf(started) };
+  const host = (() => {
+    try {
+      return new URL(url).host;
+    } catch {
+      return '';
+    }
+  })();
+  set({ captcha: { url, host, since: Date.now() } });
+  announceCaptcha({ url, host });
+  const took = await takeoverNavigator();
+  if (!took.ok) return { ok: false, message: messageOf(took) };
+  const released = await waitForRelease(opts.timeoutMs);
+  set({ captcha: null });
+  return released && state.sessionId ? { ok: true, sessionId: state.sessionId } : { ok: false, message: 'O captcha não foi resolvido a tempo. Nada foi coletado dessa página.' };
 }
 
 export async function answerNavigator(p: NavigatorPending, answer: { approve: boolean } | { value: string }): Promise<NavigatorResponse> {

@@ -76,6 +76,10 @@ import { VibeNavigatorCard } from "@/components/vibe-code/VibeNavigatorCard";
 import { finishNavigatorCard, navigatorCardFromStep, navigatorReplyText, navigatorResultForAgent, navigatorStep, withNavigatorCard, type NavigatorCardData } from "@/lib/navigator/vibeCard";
 import { currentTaskEvents, getNavigatorState, runNavigatorTask } from "@/lib/navigator/store";
 import { NavigatorApprovalDialog } from "@/components/vertal-chat/NavigatorApprovalDialog";
+// F5: consent gate (termo assinado) e aviso de captcha também no Vibe Code.
+import { ConsentTermsDialog } from "@/components/consent/ConsentTermsDialog";
+import { ScrapeAlertsBanner } from "@/components/scrape/ScrapeAlertsBanner";
+import { requestConsent } from "@/lib/consent/store";
 import { GithubConfirmDialog } from "@/components/vibe-code/GithubConfirmDialog";
 import { confirmGithubAction } from "@/lib/github/confirm";
 
@@ -136,6 +140,8 @@ const STEP_ICON: Record<VibeStepKind, typeof Brain> = {
   design: Palette,
   delegate: MessagesSquare,
   navigator: Globe,
+  consent: ShieldCheck,
+  scrape: Globe,
   handoff: MessagesSquare,
   reply: MessageSquare,
   error: AlertCircle,
@@ -928,6 +934,28 @@ export function VibeCodeAgentChat({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, running, navRunning]);
 
+  // F5: o consent gate pediu o termo (passo "consent" novo nesta sessão) → abre o cartão;
+  // assinado, repete o pedido que o gate segurou (uma vez).
+  const consentHandledRef = useRef<Set<string>>(new Set());
+  const consentArmedAt = useRef(Date.now());
+  useEffect(() => {
+    if (running) return;
+    for (const [idx, m] of messages.entries()) {
+      for (const st of m.steps ?? []) {
+        const c = st.consent as { category?: string; version?: string; title?: string } | undefined;
+        if (st.kind !== "consent" || !c?.category || consentHandledRef.current.has(st.id) || m.createdAt < consentArmedAt.current) continue;
+        consentHandledRef.current.add(st.id);
+        const prompt = [...messages.slice(0, idx)].reverse().find((x) => x.role === "user")?.content;
+        void requestConsent({ category: c.category, version: c.version, title: c.title }).then((ok) => {
+          if (ok && prompt) void send(prompt);
+        });
+        return;
+      }
+    }
+    // send muda a cada render; só reage às mensagens e ao fim do agente.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, running]);
+
   const send = async (override?: string) => {
     const prompt = (override ?? input).trim();
     if (!prompt || running) return;
@@ -1099,6 +1127,8 @@ export function VibeCodeAgentChat({
 
   return (
     <Card className="flex h-full flex-col overflow-hidden border-border/40 bg-[#080808]/80 backdrop-blur-xl transition-all">
+      {/* F5: aviso de captcha (tarefa pausada; o usuário resolve na tela ao vivo). */}
+      <ScrapeAlertsBanner alerts={false} />
       <div className="flex items-center justify-between border-b border-border/40 bg-white/[0.02] px-4 py-3">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary shadow-[0_0_10px_rgba(201,148,26,0.2)]">
@@ -1607,6 +1637,7 @@ export function VibeCodeAgentChat({
       </Sheet>
       {/* Vertal Navigator (/navegar): aprovação de pagamento e código 2FA. */}
       <NavigatorApprovalDialog />
+      <ConsentTermsDialog />
       {/* /github: confirmação antes de criar repositório, issue, branch ou PR. */}
       <GithubConfirmDialog />
     </Card>

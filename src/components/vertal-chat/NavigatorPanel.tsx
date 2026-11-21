@@ -11,11 +11,14 @@ import { panelMounted, runNavigatorTask, useNavigator } from '@/lib/navigator/st
 // Fase 4: peças compartilhadas com o cartão do navegador no chat do Vibe Code.
 import { NavigatorControls, NavigatorFilling, NavigatorLiveFrame, NavigatorPendingInput, NavigatorStepList } from '@/components/navigator/NavigatorParts';
 import { hostOf, NAV_STATUS_LABEL, navInput, navPrimary } from '@/components/navigator/navigatorUi';
+import { panelStepEvents } from '@/lib/navigator/panelSteps';
 
 export function NavigatorPanel() {
   const nav = useNavigator();
   const [task, setTask] = useState('');
   const [running, setRunning] = useState(false);
+  // Tarefa nova saindo do painel: a lista de passos começa vazia até a tarefa ter id.
+  const [starting, setStarting] = useState(false);
   const [tab, setTab] = useState<'live' | 'activity' | 'security'>('live');
 
   useEffect(() => {
@@ -30,7 +33,9 @@ export function NavigatorPanel() {
     setRunning(true);
     const text = task.trim();
     setTask('');
-    await runNavigatorTask(text);
+    setStarting(true);
+    await runNavigatorTask(text, undefined, { onStart: () => setStarting(false) });
+    setStarting(false);
     setRunning(false);
   };
 
@@ -83,7 +88,7 @@ export function NavigatorPanel() {
               {running ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Play className="h-4 w-4" aria-hidden />} Executar
             </button>
           </form>
-          <NavigatorStepList events={nav.events} />
+          <NavigatorStepList events={panelStepEvents(nav.events, nav.currentTask, starting)} />
           <p className="text-[11px] leading-snug text-muted-foreground">
             Pagar, comprar ou confirmar pedido sempre pede a sua aprovação. Senhas vêm do Cofre de segredos (vinculadas ao site) e nunca passam pela IA.
           </p>

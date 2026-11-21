@@ -62,7 +62,26 @@ export type Artifact =
     /** Texto que a página mostrou depois do envio. */
     confirmation?: string;
     notes?: string[];
-  });
+  })
+  /** F5: resultado da coleta web com Scrapling (scrape_page, crawl_site, monitor_page). */
+  | (Base & ScrapeArtifactData & { kind: 'scrape' });
+
+/** Cartão da coleta: resumo, tabela dos dados extraídos, fonte/URL e créditos gastos. */
+export interface ScrapeArtifactData {
+  tool: 'scrape_page' | 'crawl_site' | 'monitor_page';
+  summary: string;
+  /** URL de origem (ou do site, no crawl). */
+  source: string;
+  mode: string;
+  credits: number;
+  unitCredits?: number;
+  columns: string[];
+  rows: Array<{ url: string; title?: string; blocked?: string; values: Record<string, string> }>;
+  blocked?: Array<{ url: string; reason: string }>;
+  captchaUrls?: string[];
+  /** Texto da página (quando não houve seletor), já sem dados pessoais. */
+  text?: string;
+}
 
 export type BrowserFormStage = 'inspect' | 'preview' | 'submitted' | 'cancelled' | 'failed';
 
@@ -173,6 +192,7 @@ export const KIND_LABEL: Record<ArtifactKind, string> = {
   download: 'Download',
   api: 'Resposta da API',
   browser_form: 'Formulário',
+  scrape: 'Coleta web',
 };
 
 /** O que o agente enxerga do histórico: o texto e uma nota por artefato, com o id para editar. */

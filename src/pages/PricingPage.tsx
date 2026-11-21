@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/accordion'
 import Navbar from '@/components/landing/Navbar'
 import { ContactDialog } from '@/components/pricing/ContactDialog'
+import { ScraplingCreditsTable } from '@/components/pricing/ScraplingCreditsTable'
 import { cn } from '@/lib/utils'
 
 type Period = 'monthly' | 'annual' | 'lifetime'
@@ -353,6 +354,23 @@ export default function PricingPage() {
           <p className="mt-6 text-center text-sm text-muted-foreground">
             Créditos adicionais podem ser usados a qualquer momento em gerações de IA, deploys e ações premium.
           </p>
+        </motion.section>
+
+        {/* F5: créditos da coleta web (Scrapling) e do monitoramento */}
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="mt-24"
+        >
+          <div className="mb-8 flex items-center gap-3">
+            <Zap className="h-5 w-5 text-primary" />
+            <h2 className="font-display text-2xl font-bold">Coleta web e monitoramento</h2>
+          </div>
+          <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+            No Vertal Chat e no Vibe Code, a IA coleta dados de páginas públicas e monitora preços, concorrentes, disponibilidade, avaliações e mudanças, com o Scrapling. O 1º uso pede um termo de uso assinado.
+          </p>
+          <ScraplingCreditsTable />
         </motion.section>
 
         {/* Comparação */}
