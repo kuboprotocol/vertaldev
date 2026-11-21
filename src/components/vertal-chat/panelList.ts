@@ -1,7 +1,7 @@
 // Todos os painéis do Painel Criativo que o Vertal Chat abre dentro do próprio layout.
 import type { ComponentType } from 'react';
 import {
-  BookOpen, Clapperboard, Clock, Code2, Download, FileText, History, KeyRound, Layout, LayoutTemplate, Music, NotebookPen,
+  BookOpen, Clapperboard, Clock, Code2, Compass, Download, FileText, History, KeyRound, Layout, LayoutTemplate, Music, NotebookPen,
   Palette, Plug, Puzzle, Ruler, Scissors, Sparkles, Table2, User2, Video,
 } from 'lucide-react';
 import type { PanelKey } from '@/lib/chatAgent/contract';
@@ -52,6 +52,7 @@ export const PANEL_LIST: PanelInfo[] = [
   { key: 'music', label: 'Música IA', hint: 'Música original', icon: Music, group: 'midia' },
   { key: 'emo', label: 'EMO', hint: 'Anima uma foto a partir de um vídeo', icon: Sparkles, group: 'midia' },
   { key: 'downloader', label: 'Downloader', hint: 'YouTube, Instagram, TikTok…', icon: Download, group: 'midia' },
+  { key: 'navigator', label: 'Vertal Navigator', hint: 'Navegador na nuvem que entra em sites por você (login salvo)', icon: Compass, group: 'conectar' },
   { key: 'connectors', label: 'Conectores', hint: 'Gmail, Slack, GitHub, Web3…', icon: Plug, group: 'conectar', route: '/connectors' },
   { key: 'secrets', label: 'Cofre de segredos', hint: 'Chaves de API para o chat usar', icon: KeyRound, group: 'conectar', route: '/secrets' },
   { key: 'agents', label: 'Habilidades', hint: 'Agentes e habilidades extras', icon: Puzzle, group: 'conectar', route: '/agents' },

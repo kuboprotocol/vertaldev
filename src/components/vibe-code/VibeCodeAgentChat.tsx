@@ -70,7 +70,8 @@ import { matchPlanSlashHints, parsePlanSlash, type ParsedPlanSlash } from "@/lib
 import { runAllDecision } from "@/lib/vibePlan/runAll";
 import { createWriterLock, WriterBusyError } from "@/lib/vibePlan/writerLock";
 import type { WriterKind } from "@/lib/vibePlan/engine";
-import { askVertalChatFromVibe, delegateCardFromStep, insertDelegateAnswer, type ChatDelegateResult } from "@/lib/chatAgent/vibeBridge";
+import { askVertalChatFromVibe, delegateCardFromStep, delegateToNavigator, insertDelegateAnswer, parseVibeNavigatorCommand, type ChatDelegateResult } from "@/lib/chatAgent/vibeBridge";
+import { NavigatorApprovalDialog } from "@/components/vertal-chat/NavigatorApprovalDialog";
 
 const AGENT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/vibe-code-agent`;
 /** Ponte Vibe → Chat: o mesmo creative-router (agent_chat) do Vertal Chat, com origin 'vibe_code'. */
@@ -819,6 +820,23 @@ export function VibeCodeAgentChat({
     const prompt = input.trim();
     if (!prompt || running) return;
 
+    // "/navegar <tarefa>": delega ao Vertal Navigator (navegador na nuvem); a resposta
+    // vira um cartão "Usar no pedido". Pagamento e 2FA pedem aprovação no cartão do Navigator.
+    const navCommand = parseVibeNavigatorCommand(prompt);
+    if (navCommand) {
+      setInput("");
+      setChatAsking(true);
+      toast.info("Vertal Navigator trabalhando no navegador na nuvem…");
+      try {
+        const result = await delegateToNavigator(navCommand.task, navCommand.url);
+        if (!result.ok) toast.error(result.error ?? "O Vertal Navigator não concluiu a tarefa.");
+        setChatAnswers((prev) => [...prev, { ...result, id: crypto.randomUUID() }].slice(-5));
+      } finally {
+        setChatAsking(false);
+      }
+      return;
+    }
+
     // Comandos de barra do plano/executor (/plano, /proxima, /aplicar …).
     const planSlash = parsePlanSlash(prompt);
     if (planSlash) {
@@ -1407,6 +1425,8 @@ export function VibeCodeAgentChat({
           </div>
         </SheetContent>
       </Sheet>
+      {/* Vertal Navigator (/navegar): aprovação de pagamento e código 2FA. */}
+      <NavigatorApprovalDialog />
     </Card>
   );
 }

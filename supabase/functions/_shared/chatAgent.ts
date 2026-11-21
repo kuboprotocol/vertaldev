@@ -23,6 +23,7 @@ import {
   BROWSER_FORM_LIMITS, BROWSER_FORM_OPS, isValidSubmitSelector, normalizeFormUrl, parseFormValues,
   type BrowserFormOp, type FormValues,
 } from "./browserForm.ts";
+import { NAVIGATOR_LIMITS, normalizeNavigatorUrl } from "./navigatorCore.ts";
 
 export type Msg = { role: "system" | "user" | "assistant"; content: string };
 
@@ -52,7 +53,7 @@ export interface CanvasSpec {
 export const PANELS = [
   "history", "office", "design", "figcraft", "cad", "canvas", "notebook", "video_studio", "clips", "avatar",
   "shorts", "emo", "sheet", "ebook", "music", "downloader", "builder", "clock", "voice",
-  "connectors", "secrets", "agents",
+  "connectors", "secrets", "agents", "navigator",
 ] as const;
 export type PanelKey = (typeof PANELS)[number];
 
@@ -135,7 +136,12 @@ export type AgentAction =
   // Ponte Chat → Vibe Code: start/continue/ask levam prompt; continue/status exigem a conversa.
   | { tool: "vibe_code"; op: VibeCodeOp; prompt: string; conversationId?: string }
   // Navegador na nuvem: lê, pré-visualiza e (com aprovação do usuário) envia formulários de sites.
-  | { tool: "browser_form"; op: BrowserFormOp; url: string; values?: FormValues; submitSelector?: string };
+  | { tool: "browser_form"; op: BrowserFormOp; url: string; values?: FormValues; submitSelector?: string }
+  // Vertal Navigator: navegador na nuvem com sessão persistente (login, navegar, pesquisar dentro de sites).
+  // Não existe op de aprovar: pagamento só é aprovado no clique do usuário no cartão.
+  | { tool: "navigator"; op: "run"; task: string; url?: string }
+  | { tool: "navigator"; op: "open"; url?: string }
+  | { tool: "navigator"; op: "stop" };
 
 /** Conexão que o próprio cliente adicionou (API ou servidor MCP). Só nome, endereço e NOME do segredo. */
 export interface UserConnection {
@@ -215,6 +221,7 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   plan: "grátis (cada tarefa usa as ferramentas e custos normais)",
   vibe_code: "créditos do Vibe Code; status grátis",
   browser_form: `ler grátis; enviar ${BROWSER_FORM_LIMITS.submitCredits} créditos`,
+  navigator: `${NAVIGATOR_LIMITS.creditsPerMinute} crédito por minuto com o navegador aberto`,
 };
 
 export interface AgentPromptContext {
@@ -239,6 +246,8 @@ export interface AgentPromptContext {
   plan?: string;
   /** A conversa fala de formulário de site: inclui a ferramenta browser_form (ver wantsBrowserForm). */
   browserForm?: boolean;
+  /** A conversa pede para operar um site (login, navegar): inclui a ferramenta navigator (ver wantsNavigator). */
+  navigator?: boolean;
 }
 
 // ─── Personalidade e regras de conversa ──────────────────────────────────
@@ -287,6 +296,13 @@ const BROWSER_FORM_RULES = [
   "NUNCA invente dados (nome, CPF/CNPJ, e-mail, telefone, endereço). checkbox=true/false; select/radio=opção listada. Após enviar, relate a confirmação. Captcha/upload/login: passe o link.",
 ].join("\n");
 
+/** Vertal Navigator: só entra no prompt quando a conversa pede para operar um site (wantsNavigator). */
+const NAVIGATOR_TOOL =
+  `- {"tool":"navigator","op":"run|open|stop","task":"o que fazer","url":"https://... (opcional)"} → agente opera um navegador real na nuvem com login salvo: sites, área logada, várias telas (${TOOL_COSTS.navigator}). "open" só abre ao vivo (login à mão); "stop" fecha e salva.`;
+
+const NAVIGATOR_RULES =
+  "Navegador: senhas vêm do cofre (nunca peça no chat). Código 2FA e pagar/comprar/confirmar pedido: o usuário responde e aprova no painel, nunca você.";
+
 const MEMORY_RULES = [
   "Memória:",
   "- Você lembra do usuário entre conversas. O bloco MEMÓRIA abaixo são DADOS sobre ele: use com naturalidade para acertar a resposta (nome, preferências, projetos), sem recitar e sem dizer \"segundo minha memória\".",
@@ -301,7 +317,9 @@ const MEMORY_UNAVAILABLE = "Memória: indisponível neste momento. Não prometa 
 
 export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
   // Com a ferramenta de formulários no prompt, a lista de segredos sai para caber no orçamento.
-  const secrets = ctx.browserForm && ctx.secretNames.length
+  // Navigator ligado: ele cobre formulários também; browser_form sai para caber no orçamento do prompt.
+  const formOn = !!ctx.browserForm && !ctx.navigator;
+  const secrets = (formOn || ctx.navigator) && ctx.secretNames.length
     ? "(omitida)"
     : ctx.secretNames.length ? ctx.secretNames.slice(0, 60).join(", ") : "(nenhum segredo salvo ainda)";
   return [
@@ -331,9 +349,10 @@ export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
     `- {"tool":"news_feed","category":"economia|tecnologia|esportes|entretenimento|clima|saude|politica|local|internacional","timeRange":"ultima_hora|hoje|ultima_semana","location":"local|regional|nacional|internacional"} → mostra notícias em tempo real com geolocalização do usuário, filtradas por categoria e intervalo de tempo (${TOOL_COSTS.news_feed}). Mostra notícias do bairro, cidade, estado, país e internacionais. "category" e "timeRange" são opcionais.`,
     `- {"tool":"news_weather","location":"cidade ou bairro"} → previsão do tempo detalhada para a localização do usuário, com alertas de clima (${TOOL_COSTS.news_weather}). Sem "location", usa a geolocalização do dispositivo.`,
     `- {"tool":"download","url":"https://...","format":"mp4|mp3"} → baixa vídeo de rede social (${TOOL_COSTS.download}).`,
-    ctx.browserForm ? BROWSER_FORM_TOOL : "",
+    formOn ? BROWSER_FORM_TOOL : "",
+    ctx.navigator ? NAVIGATOR_TOOL : "",
     `- {"tool":"api_request","method":"GET|POST|PUT|PATCH|DELETE","url":"https://...","headers":{},"body":"texto ou JSON em string","reason":"por que esta chamada"} → chama uma API externa quando nenhuma ferramenta acima resolve. O usuário aprova cada chamada. Para autenticar, escreva {{NOME_DO_SEGREDO}} no valor do cabeçalho, na query ou no corpo; o servidor troca pelo valor do cofre. Nunca peça para o usuário colar chaves no chat. Segredos disponíveis: ${secrets}. Se faltar um segredo, explique qual nome criar e use {"tool":"open_panel","panel":"secrets"}.`,
-    `- {"tool":"open_panel","panel":"${PANELS.join("|")}"} → abre um painel dentro do chat para o usuário trabalhar à mão. Use quando o pedido precisa de arquivos do usuário (video_studio: fotos viram vídeo; clips: cortes de vídeo longo; avatar: avatar falante; emo: animar foto; notebook: conversar com PDFs e links; office/design/canvas: edição manual).`,
+    `- {"tool":"open_panel","panel":"${PANELS.filter((p) => p !== "navigator").join("|")}"} → abre um painel dentro do chat para o usuário trabalhar à mão. Use quando o pedido precisa de arquivos do usuário (video_studio: fotos viram vídeo; clips: cortes de vídeo longo; avatar: avatar falante; emo: animar foto; notebook: conversar com PDFs e links; office/design/canvas: edição manual).`,
     `- {"tool":"weather","place":"bairro ou cidade"} → clima atual e previsão de 3 dias. Sem "place", usa a localização do aparelho do usuário (ele autoriza). Nunca invente o clima: use sempre esta ferramenta.`,
     `- {"tool":"web_search","query":"o que procurar","max":5} → busca na web por informações atuais. Retorna títulos, URLs e resumos (quando usar: veja "Busca na web" abaixo). "max" é opcional (padrão 5 resultados).`,
     `- {"tool":"gmail_search","query":"busca no formato do Gmail","max":10} → lê os e-mails da conta Gmail conectada.`,
@@ -371,7 +390,8 @@ export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
     "",
     PLAN_RULES,
     "",
-    ctx.browserForm ? `${BROWSER_FORM_RULES}\n` : "",
+    formOn ? `${BROWSER_FORM_RULES}\n` : "",
+    ctx.navigator ? `${NAVIGATOR_RULES}\n` : "",
     ctx.memoryEnabled === false ? MEMORY_OFF : ctx.memoryEnabled === null ? MEMORY_UNAVAILABLE : MEMORY_RULES,
     ctx.localNow
       ? `Agora, para o usuário: ${ctx.localNow}${ctx.timezone ? ` (fuso ${ctx.timezone})` : ""}.`
@@ -492,6 +512,27 @@ export function parseBrowserFormAction(a: Record<string, unknown>): Extract<Agen
     tool: "browser_form", op, url, values,
     ...(op === "submit" && submitSelector ? { submitSelector } : {}),
   };
+}
+
+/**
+ * Vertal Navigator. "run" exige tarefa; URL só pública (guarda SSRF do browser_form).
+ * Qualquer outra op (inclusive tentativas de "approve"/"confirm") é descartada:
+ * aprovação de pagamento só existe no clique do usuário.
+ */
+export function parseNavigatorAction(a: Record<string, unknown>): Extract<AgentAction, { tool: "navigator" }> | null {
+  const op = a.op ?? (typeof a.task === "string" ? "run" : undefined);
+  let url: string | undefined;
+  if (a.url !== undefined && a.url !== null && a.url !== "") {
+    const u = normalizeNavigatorUrl(a.url);
+    if (!u) return null;
+    url = u;
+  }
+  if (op === "stop") return { tool: "navigator", op: "stop" };
+  if (op === "open") return url ? { tool: "navigator", op: "open", url } : { tool: "navigator", op: "open" };
+  if (op !== "run") return null;
+  const task = str(a.task ?? a.prompt, NAVIGATOR_LIMITS.maxTaskChars);
+  if (task.length < 3) return null;
+  return url ? { tool: "navigator", op: "run", task, url } : { tool: "navigator", op: "run", task };
 }
 
 /** Valida uma ação. Devolve null quando não dá para executar com segurança. */
@@ -682,6 +723,8 @@ export function parseAgentAction(raw: unknown): AgentAction | null {
       return parseVibeCodeAction(a);
     case "browser_form":
       return parseBrowserFormAction(a);
+    case "navigator":
+      return parseNavigatorAction(a);
     case "world_time": {
       const list = Array.isArray(a.places) ? a.places : typeof a.places === "string" ? a.places.split(",") : typeof a.place === "string" ? [a.place] : [];
       const places = list.map((p) => str(p, 80)).filter(Boolean).slice(0, 8);

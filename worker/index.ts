@@ -3,15 +3,17 @@
 // página) e Monetization Gateway (agentes pagam via x402 nas rotas pagas).
 // Configuração no painel: docs/CLOUDFLARE_MONETIZATION.md.
 // Também atende a API do conector Spotify em /api/spotify/* (docs/SPOTIFY_CONNECTOR.md)
-// e o navegador na nuvem do Vertal Chat em /api/browser/* (docs/BROWSER_FORM_AGENT.md).
+// e o navegador na nuvem do Vertal Chat em /api/browser/* (docs/BROWSER_FORM_AGENT.md)
+// e o Vertal Navigator em /api/navigator/* (docs/VERTAL_NAVIGATOR.md).
 import { crawlPriceFor, formatCrawlerPrice, isInBandPricing } from './payPerCrawl';
 import { isPaidPath, parsePaidPrefixes, verifyPaymentContext } from './monetizationGateway';
 import { siteVerificationResponse } from './siteVerification';
 import { legacyRedirect } from './legacyRedirects';
 import { handleSpotify, SPOTIFY_API_PREFIX, type SpotifyRoutesEnv } from './spotifyRoutes';
 import { BROWSER_API_PREFIX, handleBrowserForm, type BrowserFormEnv } from './browserFormRoutes';
+import { NAVIGATOR_API_PREFIX, handleNavigator, type NavigatorEnv } from './navigatorRoutes';
 
-export interface Env extends SpotifyRoutesEnv, BrowserFormEnv {
+export interface Env extends SpotifyRoutesEnv, BrowserFormEnv, NavigatorEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
   /** Prefixos protegidos pelo Monetization Gateway, separados por vírgula. */
   MONETIZATION_GATEWAY_PATHS?: string;
@@ -59,6 +61,10 @@ export default {
 
     if (url.pathname === BROWSER_API_PREFIX || url.pathname.startsWith(`${BROWSER_API_PREFIX}/`)) {
       return handleBrowserForm(request, env, url);
+    }
+
+    if (url.pathname === NAVIGATOR_API_PREFIX || url.pathname.startsWith(`${NAVIGATOR_API_PREFIX}/`)) {
+      return handleNavigator(request, env, url);
     }
 
     const paid = isPaidPath(url.pathname, parsePaidPrefixes(env.MONETIZATION_GATEWAY_PATHS));

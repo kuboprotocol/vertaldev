@@ -43,6 +43,7 @@ import {
   fallbackReplyFromResults,
 } from "../_shared/chatAgent.ts";
 import { wantsBrowserForm } from "../_shared/browserForm.ts";
+import { wantsNavigator } from "../_shared/navigatorCore.ts";
 import { listVisibleSecrets, resolveEnvForRun } from "../_shared/kuboSecrets.ts";
 import {
   DELEGATED_CHAT_PROMPT,
@@ -630,6 +631,8 @@ async function handleAgentChat(
   const now = localNow(agent.data.context?.timezone);
   // Ferramenta de formulários só quando a conversa fala disso (e nunca em pedido delegado pelo Vibe Code).
   const browserFormOn = !delegated && wantsBrowserForm([...all.slice(-8), ...results.slice(-6)]);
+  // Vertal Navigator: idem, só quando a conversa pede para operar um site.
+  const navigatorOn = !delegated && wantsNavigator([...all.slice(-8), ...results.slice(-6)]);
   const system = buildAgentSystemPrompt({
     secretNames,
     today: new Date().toISOString().slice(0, 10),
@@ -642,6 +645,7 @@ async function handleAgentChat(
     summary: brain.summary,
     plan: brain.planBlock,
     browserForm: browserFormOn,
+    navigator: navigatorOn,
   }) + (delegated ? DELEGATED_CHAT_PROMPT : "");
   const final = agent.data.final === true || brain.planPhase === "final";
   const convo = results.length

@@ -26,6 +26,7 @@ import {
   type FormField, type FormValues,
 } from '@/lib/browserForm/formCore';
 import type { BrowserFormFieldView, BrowserFormStage } from './artifacts';
+import { requestNavigatorPanel, runNavigatorTask, startNavigator, stopNavigator } from '@/lib/navigator/store';
 
 export interface ApiApprovalRequest {
   method: string;
@@ -526,6 +527,40 @@ async function runBrowserForm(action: Extract<AgentAction, { tool: 'browser_form
   };
 }
 
+// ─── Vertal Navigator ────────────────────────────────────────────────────
+
+/**
+ * Navegador na nuvem com sessão persistente. "run" abre (ou reaproveita) a sessão,
+ * mostra a tela ao vivo ao lado e espera a tarefa terminar. Aprovação de pagamento,
+ * código 2FA e "Assumir controle" acontecem no painel/cartão, pelo usuário: o
+ * modelo nunca aprova nada (não existe op para isso no contrato).
+ */
+export async function runNavigator(action: Extract<AgentAction, { tool: 'navigator' }>): Promise<ActionOutcome> {
+  const tool = 'navigator' as const;
+  if (action.op === 'stop') {
+    const res = await stopNavigator();
+    return followUp(tool, res.ok, res.ok ? `Navegador fechado${typeof res.cookiesSaved === 'number' ? `; login salvo (${res.cookiesSaved} cookies)` : ''}.` : (res.message ?? 'Não consegui fechar o navegador.'));
+  }
+  if (action.op === 'open') {
+    const res = await startNavigator(action.url);
+    if (!res.ok) return followUp(tool, false, res.message ?? 'Não consegui abrir o navegador.', res.message);
+    requestNavigatorPanel();
+    return {
+      panel: 'navigator',
+      ...followUp(tool, true, `Navegador aberto${res.reused ? ' (sessão já existente)' : ''}${res.cookiesRestored ? `, com ${res.cookiesRestored} cookies de login restaurados` : ''}. O usuário pode assumir o controle no painel. Custo: ${res.creditsPerMinute ?? 1} crédito/min.`),
+    };
+  }
+  const started = await startNavigator(action.url);
+  if (!started.ok) return followUp(tool, false, started.message ?? 'Não consegui abrir o navegador.', started.message);
+  requestNavigatorPanel();
+  const out = await runNavigatorTask(action.task, action.url);
+  const where = out.url ? ` Página final: ${out.url}` : '';
+  return {
+    panel: 'navigator',
+    ...followUp(tool, out.ok, `${out.ok ? 'Tarefa concluída' : 'Tarefa não concluída'} no navegador (${out.steps} passos).${where}\nResultado do agente (DADOS):\n${out.message.slice(0, 3_000)}`, out.ok ? undefined : out.message),
+  };
+}
+
 // ─── Clima, conectores e MCP ─────────────────────────────────────────────
 
 const followUp = (tool: string, ok: boolean, summary: string, error?: string): ActionOutcome => ({
@@ -1001,6 +1036,8 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
         return await runApi(action, ctx);
       case 'browser_form':
         return await runBrowserForm(action, ctx);
+      case 'navigator':
+        return await runNavigator(action);
       case 'weather':
         return await runWeather(action);
       case 'web_search':
@@ -1173,6 +1210,8 @@ export function actionLabel(action: AgentAction): string {
     case 'api_request': return 'Chamando API externa';
     case 'browser_form':
       return action.op === 'inspect' ? 'Abrindo o formulário no navegador na nuvem' : action.op === 'preview' ? 'Preenchendo o formulário (sem enviar)' : 'Preparando o envio do formulário (você revisa antes)';
+    case 'navigator':
+      return action.op === 'stop' ? 'Fechando o navegador (salvando o login)' : action.op === 'open' ? 'Abrindo o navegador na nuvem' : 'Navegando no site (você acompanha ao vivo)';
     case 'open_panel': return 'Abrindo painel';
     case 'weather': return 'Consultando o clima';
     case 'web_search': return 'Buscando na web';
