@@ -14,6 +14,7 @@ import PromptAttachMenu from '@/components/landing/PromptAttachMenu'
 import BuilderToolbar, { type DeviceFrame } from '@/components/builder/BuilderToolbar'
 import CloneDialog from '@/components/builder/CloneDialog'
 import AILoadingAnimation, { detectLanguage } from '@/components/builder/AILoadingAnimation'
+import { overlayHideDelay } from '@/components/builder/loadingOverlayTiming'
 import FilePreview from '@/components/builder/FilePreview'
 import KuboFlowSelector, { autoDetectMode, type KuboFlowMode } from '@/components/builder/KuboFlowSelector'
 import { clampBuilderMode } from '@/lib/planAccess'
@@ -155,13 +156,10 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
     }
   }, [user])
 
-  // Minimum loading duration: 8 seconds (reduced from 95s — users were
-  // seeing a "black screen" because the overlay sat on top of the empty
-  // preview long after generation completed). The Ready CTA inside the
-  // animation lets users skip immediately when generation finishes early.
-  // 12 s (antes 8 s): a animação do robô fica alguns segundos a mais na tela.
-  // O botão "Ver agora" continua aparecendo assim que a geração termina.
-  const MIN_LOADING_MS = 12_000
+  // O robô fica em loop enquanto a geração/aplicação estiver em andamento e só
+  // sai quando o trabalho termina de verdade (sem tempo fixo de 12 s). Há só um
+  // mínimo curto (MIN_LOADING_MS, 1,5 s) para evitar piscar. O "Ver agora"
+  // aparece assim que a geração termina.
   const loadingStartRef = useRef<number>(0)
   const [showLoading, setShowLoading] = useState(false)
   const generationDoneRef = useRef(false)
@@ -199,8 +197,7 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
     }
     if (!isLoading && showLoading) {
       generationDoneRef.current = true
-      const elapsed = Date.now() - loadingStartRef.current
-      const remaining = MIN_LOADING_MS - elapsed
+      const remaining = overlayHideDelay(loadingStartRef.current, Date.now(), isLoading) ?? 0
       if (remaining > 0) {
         const timeout = setTimeout(() => {
           flushPreviewHtml()

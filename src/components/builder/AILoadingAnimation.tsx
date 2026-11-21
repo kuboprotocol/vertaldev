@@ -291,6 +291,7 @@ export default function AILoadingAnimation({ isVisible, chatLanguage, isReady, o
               <img
                 src={robotImg}
                 alt="AI Working"
+                data-testid="ai-loading-robot"
                 // 1,5x maior que antes (w-64 h-48 → w-96 h-72), sem estourar no celular.
                 className="relative h-auto w-[min(24rem,82vw)] aspect-[4/3] max-h-[42vh] object-contain rounded-2xl"
               />
