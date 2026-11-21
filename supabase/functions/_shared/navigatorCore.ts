@@ -58,7 +58,10 @@ export type NavigatorStatus =
   | "unauthorized"
   | "bad_request"
   | "sandbox_error"
-  | "error";
+  | "error"
+  // F5: consent gate (termo assinado por categoria) e pedidos proibidos.
+  | "consent_required"
+  | "prohibited";
 
 export const NAVIGATOR_MESSAGES: Record<Exclude<NavigatorStatus, "ok">, string> = {
   blocked_url: "Esse endereço não pode ser aberto (só sites públicos http/https, sem rede interna).",
@@ -74,7 +77,25 @@ export const NAVIGATOR_MESSAGES: Record<Exclude<NavigatorStatus, "ok">, string> 
   bad_request: "Pedido inválido para o navegador.",
   sandbox_error: "O navegador na nuvem não respondeu. Tente abrir de novo.",
   error: "Algo falhou no navegador na nuvem.",
+  consent_required: "Antes de automatizar sites de terceiros, leia e assine o termo de uso.",
+  prohibited: "Esse pedido é proibido (quebrar captcha, burlar paywall/login ou acesso não autorizado) e não é feito, nem com termo assinado.",
 };
+
+/** F5: captcha detectado pelo navd (a tarefa pausa; o usuário resolve na tela ao vivo). */
+export interface NavigatorCaptcha {
+  url: string;
+  host: string;
+  since: number;
+}
+
+export function sanitizeCaptcha(raw: unknown): NavigatorCaptcha | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const url = typeof r.url === "string" ? r.url.slice(0, 300) : "";
+  return { url, host: typeof r.host === "string" ? r.host.slice(0, 200) : "", since: typeof r.since === "number" ? r.since : Date.now() };
+}
+
+export const CAPTCHA_HANDOFF_MESSAGE = "Apareceu um captcha, resolva na tela ao vivo";
 
 // ─── Guarda SSRF (reaproveita browserForm.ts) ────────────────────────────
 /** URL pública http/https normalizada, ou null. Mesma regra do browser_form. */
@@ -606,6 +627,9 @@ export function autoApproveDecision(settings: NavigatorSettings | null | undefin
 export const NAVIGATOR_AUDIT_KINDS = [
   "session_start", "session_end", "task", "secret_used", "totp_used", "code_entered", "approval_granted",
   "approval_denied", "auto_approved", "takeover", "release", "settings_changed", "totp_consent",
+  // F5: coleta web (Scrapling), captcha (pausa + controle ao usuário) e consent gate.
+  "scrape", "crawl", "scrape_blocked", "monitor_created", "monitor_updated", "monitor_deleted", "monitor_check", "monitor_changed",
+  "captcha_detected", "captcha_resumed", "consent_accepted", "consent_required", "consent_blocked",
 ] as const;
 export type NavigatorAuditKind = (typeof NAVIGATOR_AUDIT_KINDS)[number];
 
@@ -617,7 +641,11 @@ export interface NavigatorAuditRow {
   created_at: string;
 }
 
-const AUDIT_DETAIL_KEYS = ["task", "name", "host", "store", "total", "target", "url", "reason", "limit", "items", "end_reason", "minutes"] as const;
+const AUDIT_DETAIL_KEYS = [
+  "task", "name", "host", "store", "total", "target", "url", "reason", "limit", "items", "end_reason", "minutes",
+  // F5
+  "mode", "pages", "credits", "blocked", "monitor", "category", "level", "version", "tool",
+] as const;
 
 /** Detalhe de auditoria sem nada sensível: só chaves conhecidas, textos curtos, nunca valor de segredo. */
 export function auditDetail(raw: Record<string, unknown>): Record<string, unknown> {
@@ -635,6 +663,7 @@ export function auditDetail(raw: Record<string, unknown>): Record<string, unknow
 export function describeAudit(row: Pick<NavigatorAuditRow, "kind" | "detail">): string {
   const d = row.detail ?? {};
   const s = (k: string) => (typeof d[k] === "string" ? String(d[k]) : "");
+  const n = (k: string) => (typeof d[k] === "number" ? Number(d[k]) : null);
   switch (row.kind) {
     case "session_start": return "Navegador aberto";
     case "session_end": return `Navegador fechado${s("end_reason") ? ` (${s("end_reason")})` : ""}`;
@@ -649,6 +678,19 @@ export function describeAudit(row: Pick<NavigatorAuditRow, "kind" | "detail">): 
     case "release": return "Controle devolvido ao agente";
     case "settings_changed": return s("limit") ? `Aprovação automática ligada até ${s("limit")}` : "Aprovação automática desligada (sempre pedir)";
     case "totp_consent": return `Autenticador (TOTP) guardado no cofre: ${s("name")} para ${s("host")}`;
+    case "scrape": return `Coleta (Scrapling ${s("mode")}): ${s("url")}${n("pages") !== null ? ` · ${n("pages")} pág.` : ""}${n("credits") !== null ? ` · ${n("credits")} créditos` : ""}`;
+    case "crawl": return `Crawl (Scrapling ${s("mode")}): ${s("url")}${n("pages") !== null ? ` · ${n("pages")} pág.` : ""}${n("credits") !== null ? ` · ${n("credits")} créditos` : ""}`;
+    case "scrape_blocked": return `Coleta recusada (${s("reason")})${s("url") ? `: ${s("url")}` : ""}`;
+    case "monitor_created": return `Monitor criado: ${s("monitor")}`;
+    case "monitor_updated": return `Monitor ${s("reason") || "alterado"}: ${s("monitor")}`;
+    case "monitor_deleted": return `Monitor excluído: ${s("monitor")}`;
+    case "monitor_check": return `Monitor verificado: ${s("monitor")}${n("credits") !== null ? ` · ${n("credits")} créditos` : ""}`;
+    case "monitor_changed": return `Monitor mudou: ${s("monitor")}`;
+    case "captcha_detected": return `Captcha detectado${s("host") ? ` em ${s("host")}` : ""}: tarefa pausada, controle com você`;
+    case "captcha_resumed": return "Captcha resolvido por você; a tarefa continuou";
+    case "consent_accepted": return `Termo assinado: ${s("category")} (versão ${s("version")})`;
+    case "consent_required": return `Termo pedido: ${s("category")}`;
+    case "consent_blocked": return `Pedido proibido bloqueado (${s("reason")})`;
     default: return row.kind;
   }
 }

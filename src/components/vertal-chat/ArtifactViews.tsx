@@ -16,6 +16,8 @@ import { previewHtml } from '@/lib/chatAgent/previewHtml';
 import { spotifyEmbedUrl } from '@/lib/spotify/spotifyCore';
 import { isYoutubeVideoId, youtubeEmbedUrl, youtubeWatchUrl } from '@/lib/media/youtube';
 import { vibeCodeHref } from '@/lib/chatAgent/vibeBridge';
+// F5: cartão da coleta web (Scrapling).
+import { ScrapeCardBody, ScrapeResultView } from '@/components/scrape/ScrapeResultCard';
 
 /** Player oficial do Spotify embutido (toca sem Premium). O id já vem validado pelo servidor. */
 function SpotifyEmbed({ trackId, title, compact = false }: { trackId: string; title: string; compact?: boolean }) {
@@ -77,6 +79,7 @@ const KIND_ICON: Record<ArtifactKind, typeof FileText> = {
   download: Download,
   api: Globe,
   browser_form: ClipboardCheck,
+  scrape: Globe,
 };
 
 /** Imagem guardada no bucket privado: renova a URL assinada quando a conversa é reaberta. */
@@ -180,6 +183,7 @@ function summary(a: Artifact): string {
     case 'api': return `HTTP ${a.status}`;
     case 'browser_form':
       return `${a.host} · ${{ inspect: 'campos lidos', preview: 'prévia, não enviado', submitted: 'enviado', cancelled: 'cancelado', failed: 'não enviado' }[a.stage]}`;
+    case 'scrape': return `${a.summary} · ${a.credits} créditos`;
     case 'download': return a.format.toUpperCase();
     case 'email': return 'Rascunho';
     case 'design': return `${a.images.length} variação${a.images.length === 1 ? '' : 'ões'}`;
@@ -268,6 +272,7 @@ export function ArtifactCard({ artifact, onOpen, active }: { artifact: Artifact;
           </Link>
         </div>
       )}
+      {artifact.kind === 'scrape' && <ScrapeCardBody data={artifact} />}
       {artifact.kind === 'notebook' && (
         <div className="border-t border-border/50 p-4 text-center">
           <div className="text-4xl">{artifact.emoji || '📓'}</div>
@@ -878,6 +883,9 @@ export function ArtifactViewer({ artifact, actions }: { artifact: Artifact; acti
           {a.screenshot && <StoredImg image={a.screenshot} alt={`Captura de ${a.host}`} className="w-full rounded-xl border border-border/50" />}
         </div>
       );
+      break;
+    case 'scrape':
+      body = <ScrapeResultView data={a} />;
       break;
     case 'api':
       toolbar = <CopyButton text={a.body} label="Copiar resposta" />;

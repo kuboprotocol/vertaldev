@@ -51,6 +51,11 @@ import {
   ASK_CHAT_RULE,
   USE_BROWSER_ACTION_LINE,
   USE_BROWSER_RULE,
+  USE_SCRAPER_ACTION_LINE,
+  USE_SCRAPER_RULE,
+  canUseScraper,
+  formatScrapeForAgent,
+  parseScraperRequest,
   canUseBrowser,
   parseBrowserRequest,
   canAskChat,
@@ -89,6 +94,8 @@ import {
 } from "../_shared/vibePlandexEngine.ts";
 import { type PlanActionName, PlanError, parsePlanRequest, READ_ONLY_PLAN_ACTIONS, runPlanAction } from "./plan.ts";
 import { type ChatDelegateResult, formatChatAnswerForAgent, type RouterCall, runChatDelegation } from "../_shared/chatDelegate.ts";
+// F5: consent gate (termo assinado por categoria; proibido bloqueia sempre).
+import { gatewayClassifier, runChatGate, wasClarified, type ConsentDb } from "../_shared/consentServer.ts";
 
 /**
  * Ponte Vibe Code → Vertal Chat: pergunta ao creative-router (tool agent_chat,
@@ -393,7 +400,8 @@ Você trabalha em voltas. A cada volta responda com UM objeto JSON ESTRITO (sem 
     {"type":"message","reason":"nota ao usuário"},
     {"type":"ask_user","reason":"pergunta objetiva, só se for impossível decidir sozinho"},
     ${ASK_CHAT_ACTION_LINE},
-    ${USE_BROWSER_ACTION_LINE}
+    ${USE_BROWSER_ACTION_LINE},
+    ${USE_SCRAPER_ACTION_LINE}
   ],
   "requirements": [{"slug":"stripe","reason":"cobrança mensal"},{"name":"API de Frete","secrets":["FRETE_API_KEY"],"reason":"calcular frete"}],
   "memories": [{"scope":"user|project","kind":"preference|constraint|architecture|design|integration|decision|note","content":"fato durável"}],
@@ -412,7 +420,8 @@ Como trabalhar:
 8. Você conversa com o usuário: "summary" é a sua resposta direta a ele, em português, em 1 a 3 frases. Se o pedido for só uma pergunta ou conversa, responda em "summary" (e em "message" se precisar de mais) sem editar arquivos.
 9. Para APIs fora do catálogo, inclua em "requirements" "key_url" (página oficial onde se gera a chave) e "site_url" (página oficial de cadastro), só https e só sites oficiais. Nunca invente um link que você não tem certeza que é oficial: deixe sem.
 10. Seja educado, claro e direto, como um engenheiro sênior gentil: diga o que fez, o que falta e o próximo passo.
-11. ${USE_BROWSER_RULE}`;
+11. ${USE_BROWSER_RULE}
+12. ${USE_SCRAPER_RULE}`;
 
 /** Saúde recente dos modelos (todas as execuções da plataforma, últimos 7 dias). */
 async function loadModelHealth(admin: any) {
@@ -1123,6 +1132,7 @@ Deno.serve(async (req) => {
         // Ponte Vibe → Chat: perguntas ao Vertal Chat feitas neste pedido.
         let chatDelegations = 0;
         let browserRequests = 0;
+        let scrapeRequests = 0;
         const store = makeStore(admin, userId, projectId, conversationId);
         const planSummary = await loadPlanSummary(conversationId).catch(() => "");
 
@@ -1150,6 +1160,29 @@ Deno.serve(async (req) => {
           loadConnectedSlugs(admin, userId).catch(() => [] as string[]),
         ]);
         if (history.length) send({ kind: "memory", status: "success", title: `Lembrando ${history.length} mensagem(ns) desta conversa` });
+
+        // F5: consent gate. (a) normal segue; (b) sensível/ambíguo pede esclarecimento ou o termo da
+        // categoria (o cartão de assinatura abre no chat); (c) proibido é bloqueado sempre.
+        {
+          const gate = await runChatGate({
+            db: admin as ConsentDb, userId, text: prompt, surface: "vibe_code",
+            clarifiedBefore: wasClarified(history.map((h) => ({ role: h.role, content: String(h.content ?? "") }))),
+            llm: gatewayClassifier((o) => runGateway({ messages: o.messages, kind: "chat", tier: "flash", json: o.json, temperature: 0, maxTokens: o.maxTokens, noCache: true })),
+          }).catch((e) => {
+            console.warn("[vibe-code-agent] consent gate:", e instanceof Error ? e.message : e);
+            return null;
+          });
+          if (gate?.reply) {
+            send({
+              kind: "consent", status: gate.decision.action === "block" ? "failed" : "success",
+              title: gate.decision.action === "block" ? "Pedido bloqueado" : gate.decision.action === "clarify" ? "Preciso entender melhor" : "Termo de uso necessário",
+              detail: gate.reply, ...(gate.consent ? { consent: gate.consent } : {}),
+            });
+            send({ kind: "reply", status: "success", title: gate.reply });
+            send({ kind: "done", status: "success", title: "Concluído" });
+            return;
+          }
+        }
 
         // Vertal Design Intelligence: regras de UI/UX, tokens e checklist no
         // prompt; a auditoria de design entra na auto-revisão abaixo.
@@ -1384,6 +1417,37 @@ Deno.serve(async (req) => {
                 detail: reqBrowser.task,
                 navigator: { state: "requested", origin: "agent", taskId: crypto.randomUUID(), startedAt: Date.now(), ...reqBrowser },
               });
+              continue;
+            }
+            if (action.type === "use_scraper") {
+              // F5: coleta com o Scrapling pelo Worker (JWT do usuário: termo, robots, limites e créditos dele).
+              const reqScrape = parseScraperRequest(action);
+              if (!reqScrape) continue;
+              const allowedScrape = canUseScraper(scrapeRequests);
+              if (!allowedScrape.ok) {
+                send({ kind: "scrape", status: "skipped", title: "Limite de coletas neste pedido", detail: reqScrape.url });
+                continue;
+              }
+              scrapeRequests++;
+              abortIfRequested();
+              send({ kind: "scrape", status: "running", title: "Coletando a página (Scrapling)", detail: reqScrape.url });
+              let res: Record<string, unknown> = { ok: false, status: "error" };
+              try {
+                const r = await fetch(`${(Deno.env.get("VERTAL_WORKER_URL") ?? "https://vertal.dev").replace(/\/+$/, "")}/api/scrape/page`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                  body: JSON.stringify({ url: reqScrape.url, mode: "fetch", purpose: reqScrape.purpose, includeText: true, ...(reqScrape.css ? { selectors: [{ name: "valor", css: reqScrape.css, all: true }] } : {}) }),
+                  signal: AbortSignal.timeout(130_000),
+                });
+                res = await r.json().catch(() => ({ ok: false, status: "error" }));
+              } catch (e) {
+                res = { ok: false, status: "error", message: e instanceof Error ? e.message.slice(0, 120) : "erro" };
+              }
+              if (res.status === "consent_required") {
+                send({ kind: "consent", status: "success", title: "Termo de uso necessário", detail: String(res.message ?? ""), consent: { category: res.category, version: res.version, title: res.title } });
+              }
+              send({ kind: "scrape", status: res.ok ? "success" : "failed", title: res.ok ? `Página coletada (${res.credits ?? 0} créditos)` : String(res.message ?? "Coleta não feita"), detail: reqScrape.url });
+              chatAnswers.push(formatScrapeForAgent(reqScrape.url, res as Parameters<typeof formatScrapeForAgent>[1]));
               continue;
             }
             if (action.type === "ask_chat") {

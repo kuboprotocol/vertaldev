@@ -1,6 +1,8 @@
 // Constrói o template E2B "vertal-browser" no E2B self-hosted (vertalrun.com).
 // Precisa de E2B_API_KEY e E2B_API_URL (no host: docker exec e2b-ready-1 cat /run/e2b/sdk.env).
 //   node build-template.mjs            (cpu/mem: VERTAL_BROWSER_CPU=1, VERTAL_BROWSER_MEM_MB=1536)
+// F5: o mesmo Dockerfile serve um template irmão só de coleta, se a RAM apertar:
+//   TEMPLATE_NAME=vertal-scraper VERTAL_BROWSER_MEM_MB=2048 node build-template.mjs  (e SCRAPE_TEMPLATE=vertal-scraper no Worker)
 // Roda com a imagem node-e2b do próprio stack (e2b 2.46.1), ver docs/VERTAL_NAVIGATOR.md.
 import { Template, waitForPort } from 'e2b'
 import { readFileSync } from 'node:fs'
@@ -12,6 +14,7 @@ const b64 = (f) => readFileSync(join(here, f)).toString('base64')
 const dockerfile = readFileSync(join(here, 'e2b.Dockerfile'), 'utf8')
   .replace('__NAVD_B64__', b64('navd.py'))
   .replace('__START_B64__', b64('start.sh'))
+  .replace('__SCRAPED_B64__', b64('scraped.py'))
   .replace('__POLICY_B64__', b64('chromium-policy.json'))
 
 const name = process.env.TEMPLATE_NAME || 'vertal-browser'

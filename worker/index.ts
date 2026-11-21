@@ -13,9 +13,12 @@ import { legacyRedirect } from './legacyRedirects';
 import { handleSpotify, SPOTIFY_API_PREFIX, type SpotifyRoutesEnv } from './spotifyRoutes';
 import { BROWSER_API_PREFIX, handleBrowserForm, type BrowserFormEnv } from './browserFormRoutes';
 import { NAVIGATOR_API_PREFIX, handleNavigator, type NavigatorEnv } from './navigatorRoutes';
+// F5: coleta web com Scrapling (/api/scrape/*) e consent gate (/api/consent/*). docs/VERTAL_SCRAPLING.md, docs/CONSENT_GATE.md
+import { SCRAPE_API_PREFIX, handleScrape, type ScrapeEnv } from './scrapeRoutes';
+import { CONSENT_API_PREFIX, handleConsent, type ConsentEnv } from './consentRoutes';
 import { MEDIA_API_PREFIX, handleMedia, type MediaEnv } from './mediaRoutes';
 
-export interface Env extends SpotifyRoutesEnv, BrowserFormEnv, NavigatorEnv, MediaEnv {
+export interface Env extends SpotifyRoutesEnv, BrowserFormEnv, NavigatorEnv, MediaEnv, ScrapeEnv, ConsentEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
   /** Prefixos protegidos pelo Monetization Gateway, separados por vírgula. */
   MONETIZATION_GATEWAY_PATHS?: string;
@@ -67,6 +70,14 @@ export default {
 
     if (url.pathname === NAVIGATOR_API_PREFIX || url.pathname.startsWith(`${NAVIGATOR_API_PREFIX}/`)) {
       return handleNavigator(request, env, url);
+    }
+
+    if (url.pathname === SCRAPE_API_PREFIX || url.pathname.startsWith(`${SCRAPE_API_PREFIX}/`)) {
+      return handleScrape(request, env, url);
+    }
+
+    if (url.pathname === CONSENT_API_PREFIX || url.pathname.startsWith(`${CONSENT_API_PREFIX}/`)) {
+      return handleConsent(request, env, url);
     }
 
     if (url.pathname === MEDIA_API_PREFIX || url.pathname.startsWith(`${MEDIA_API_PREFIX}/`)) {

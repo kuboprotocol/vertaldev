@@ -84,3 +84,49 @@ O grafo de tarefas (`supabase/functions/_shared/vibeTaskGraph.ts`, prompts do pl
 dependências, subtarefas e "próxima tarefa". Não contém código, prompts nem texto do Task Master. Nada
 dele foi copiado porque a licença do Task Master é MIT acrescida da Commons Clause, que proíbe vender o
 software ou um serviço cujo valor venha substancialmente dele.
+
+## Scrapling
+
+- Projeto: Scrapling — https://github.com/D4Vinci/Scrapling
+- Versão: **0.5.1** (`scrapling[fetchers]==0.5.1`, PyPI)
+- Licença: **BSD 3-Clause** (texto abaixo)
+- Como é usado: como **dependência**, instalada no venv `/opt/scrapling` da imagem do sandbox E2B
+  (`infra/vertal-browser/e2b.Dockerfile`). **Nenhum código do Scrapling foi copiado ou vendorizado**
+  neste repositório; `infra/vertal-browser/scraped.py` é código próprio que importa a biblioteca.
+  Os extras `[fetchers]` trazem dependências com licenças próprias (ex.: curl_cffi, playwright,
+  patchright, browserforge, protego), também usadas só como dependências instaladas na imagem.
+- Ver `docs/VERTAL_SCRAPLING.md`.
+
+```
+BSD 3-Clause License
+
+Copyright (c) 2024, Karim shoair
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+> Nota: o texto do termo de uso do consent gate (`docs/CONSENT_GATE.md`) precisa de revisão jurídica
+> antes de produção; isso não afeta a licença do Scrapling.

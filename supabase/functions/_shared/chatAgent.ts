@@ -26,6 +26,8 @@ import {
 import { NAVIGATOR_LIMITS, normalizeNavigatorUrl } from "./navigatorCore.ts";
 import { parseGithubOp, type GithubOp } from "./githubOps.ts";
 import { YOUTUBE_LIMITS, youtubeVideoId } from "./youtubeCore.ts";
+// F5: coleta web com Scrapling (scrape_page, crawl_site, monitor_page).
+import { SCRAPE_LIMITS, parseCrawlBody, parseMonitorBody, parseScrapeBody, scrapePrice, type ScrapeMode, type ScrapeSelector } from "./scrapeCore.ts";
 
 export type Msg = { role: "system" | "user" | "assistant"; content: string };
 
@@ -56,6 +58,8 @@ export const PANELS = [
   "history", "office", "design", "figcraft", "cad", "canvas", "notebook", "video_studio", "clips", "avatar",
   "shorts", "emo", "sheet", "ebook", "music", "downloader", "builder", "clock", "voice",
   "connectors", "secrets", "agents", "navigator",
+  // F5: painel "Monitores" (coleta web com Scrapling)
+  "monitors",
 ] as const;
 export type PanelKey = (typeof PANELS)[number];
 
@@ -147,7 +151,13 @@ export type AgentAction =
   // Vibe Code + GitHub (fase 3): API OAuth já conectada; escrita pede confirmação do usuário no chat.
   | ({ tool: "github" } & GithubOp)
   // Mídia (fase 3): player embutido do YouTube. "play" com url (ou query, se houver busca).
-  | { tool: "youtube"; op: "play" | "search"; query?: string; url?: string };
+  | { tool: "youtube"; op: "play" | "search"; query?: string; url?: string }
+  // F5: coleta web com Scrapling (Worker /api/scrape). Termo assinado, robots.txt, limites e créditos no servidor.
+  | { tool: "scrape_page"; urls: string[]; mode: ScrapeMode; selectors: ScrapeSelector[]; purpose?: string }
+  | { tool: "crawl_site"; url: string; mode: ScrapeMode; maxPages: number; maxDepth: number; selectors: ScrapeSelector[]; pathPrefix?: string; purpose?: string }
+  | { tool: "monitor_page"; op: "create"; url: string; selector: ScrapeSelector; mode: ScrapeMode; frequencyMinutes: number; name: string }
+  | { tool: "monitor_page"; op: "list" }
+  | { tool: "monitor_page"; op: "pause" | "resume" | "delete" | "check"; id: string };
 
 /** Conexão que o próprio cliente adicionou (API ou servidor MCP). Só nome, endereço e NOME do segredo. */
 export interface UserConnection {
@@ -230,6 +240,9 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   navigator: `${NAVIGATOR_LIMITS.creditsPerMinute} crédito por minuto com o navegador aberto`,
   github: "grátis (criar/abrir pede sua confirmação)",
   youtube: "grátis",
+  scrape_page: `${scrapePrice("scrape_fetch")} créditos/página (HTTP), ${scrapePrice("scrape_dynamic")} (dinâmico), ${scrapePrice("scrape_stealth")} (stealth)`,
+  crawl_site: `${scrapePrice("crawl_fetch")} créditos/página visitada (HTTP) ou ${scrapePrice("crawl_dynamic")} (dinâmico), até ${SCRAPE_LIMITS.maxPagesPerTask} páginas`,
+  monitor_page: `${scrapePrice("monitor_fetch")} créditos por verificação (HTTP), ${scrapePrice("monitor_dynamic")} (dinâmico), ${scrapePrice("monitor_stealth")} (stealth); criar/pausar/excluir grátis`,
 };
 
 export interface AgentPromptContext {
@@ -260,6 +273,8 @@ export interface AgentPromptContext {
   github?: boolean;
   /** A conversa fala de vídeo/música/tocar: inclui a ferramenta youtube (ver wantsMedia). */
   media?: boolean;
+  /** F5: a conversa fala de coletar/monitorar páginas: inclui scrape_page/crawl_site/monitor_page (ver wantsScrape). */
+  scrape?: boolean;
 }
 
 // ─── Personalidade e regras de conversa ──────────────────────────────────
@@ -323,6 +338,16 @@ const GITHUB_TOOL =
 const YOUTUBE_TOOL =
   `- {"tool":"youtube","op":"play|search","query":"…","url":"link (opcional)"} → vídeo no player do chat (${TOOL_COSTS.youtube}). Música do Spotify conectado: spotify. Sem busca, ache o link (navigator/web_search) e repita com "url".`;
 
+/** F5: coleta web com Scrapling. Só entra no prompt quando a conversa fala de coletar/monitorar (wantsScrape). */
+const SCRAPE_TOOL = [
+  `- {"tool":"scrape_page","urls":["https://..."],"mode":"fetch|dynamic|stealth","selectors":[{"name":"preco","css":".price"}],"purpose":"para quê"} → lê páginas públicas com o Scrapling e extrai dados (${TOOL_COSTS.scrape_page}). Sem selectors, devolve o texto. "fetch" basta para a maioria; "dynamic" para página que depende de JavaScript.`,
+  `- {"tool":"crawl_site","url":"https://...","maxPages":10,"maxDepth":1,"selectors":[...]} → varre o MESMO site (${TOOL_COSTS.crawl_site}).`,
+  `- {"tool":"monitor_page","op":"create","url":"https://...","selector":{"name":"preco","css":".price"},"frequencyMinutes":60|180|360|720|1440,"name":"..."} | {"op":"list"} | {"op":"pause|resume|delete|check","id":"uuid"} → monitora preço, estoque, avaliação ou mudança na página e avisa no chat (${TOOL_COSTS.monitor_page}).`,
+].join("\n");
+
+const SCRAPE_RULES =
+  "Coleta web: para só LER página pública use scrape_page (mais barato que o navigator; navigator só para login/interação). O 1º uso pede ao usuário o termo assinado (o sistema mostra). robots.txt, limites e créditos são do servidor. Nunca colete contatos/dados pessoais em massa. Captcha, paywall e login de terceiros: não contorne; captcha pausa e o usuário resolve na tela ao vivo.";
+
 /**
  * Orçamento do prompt (1/3 do contexto do gateway). As ferramentas opcionais da
  * fase 3 (github, youtube) só entram se couberem; em conversas muito longas
@@ -343,6 +368,8 @@ const MEMORY_OFF = "Memória: o usuário DESLIGOU a memória. Não use memórias
 const MEMORY_UNAVAILABLE = "Memória: indisponível neste momento. Não prometa lembrar de nada entre conversas e não inclua o campo \"memory\".";
 
 export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
+  // F5: a coleta web cede espaço primeiro se o prompt passar do orçamento.
+  if (ctx.scrape && buildPrompt(ctx).length > AGENT_PROMPT_BUDGET) return buildAgentSystemPrompt({ ...ctx, scrape: false });
   const full = buildPrompt(ctx);
   if (full.length <= AGENT_PROMPT_BUDGET || (!ctx.github && !ctx.media)) return full;
   // Prioridade: github (Vibe Code) > youtube (mídia).
@@ -391,8 +418,9 @@ function buildPrompt(ctx: AgentPromptContext): string {
     ctx.navigator ? NAVIGATOR_TOOL : "",
     ctx.github ? GITHUB_TOOL : "",
     ctx.media ? YOUTUBE_TOOL : "",
+    ctx.scrape ? SCRAPE_TOOL : "",
     `- {"tool":"api_request","method":"GET|POST|PUT|PATCH|DELETE","url":"https://...","headers":{},"body":"texto ou JSON em string","reason":"por que esta chamada"} → chama uma API externa quando nenhuma ferramenta acima resolve. O usuário aprova cada chamada. Para autenticar, escreva {{NOME_DO_SEGREDO}} no valor do cabeçalho, na query ou no corpo; o servidor troca pelo valor do cofre. Nunca peça para o usuário colar chaves no chat. Segredos disponíveis: ${secrets}. Se faltar um segredo, explique qual nome criar e use {"tool":"open_panel","panel":"secrets"}.`,
-    `- {"tool":"open_panel","panel":"${PANELS.filter((p) => p !== "navigator").join("|")}"} → abre um painel dentro do chat para o usuário trabalhar à mão. Use quando o pedido precisa de arquivos do usuário (video_studio: fotos viram vídeo; clips: cortes de vídeo longo; avatar: avatar falante; emo: animar foto; notebook: conversar com PDFs e links; office/design/canvas: edição manual).`,
+    `- {"tool":"open_panel","panel":"${PANELS.filter((p) => p !== "navigator" && p !== "monitors").join("|")}"} → abre um painel dentro do chat para o usuário trabalhar à mão. Use quando o pedido precisa de arquivos do usuário (video_studio: fotos viram vídeo; clips: cortes de vídeo longo; avatar: avatar falante; emo: animar foto; notebook: conversar com PDFs e links; office/design/canvas: edição manual).`,
     `- {"tool":"weather","place":"bairro ou cidade"} → clima atual e previsão de 3 dias. Sem "place", usa a localização do aparelho do usuário (ele autoriza). Nunca invente o clima: use sempre esta ferramenta.`,
     `- {"tool":"web_search","query":"o que procurar","max":5} → busca na web por informações atuais. Retorna títulos, URLs e resumos (quando usar: veja "Busca na web" abaixo). "max" é opcional (padrão 5 resultados).`,
     `- {"tool":"gmail_search","query":"busca no formato do Gmail","max":10} → lê os e-mails da conta Gmail conectada.`,
@@ -432,6 +460,7 @@ function buildPrompt(ctx: AgentPromptContext): string {
     "",
     formOn ? `${BROWSER_FORM_RULES}\n` : "",
     ctx.navigator ? `${NAVIGATOR_RULES}\n` : "",
+    ctx.scrape ? `${SCRAPE_RULES}\n` : "",
     ctx.memoryEnabled === false ? MEMORY_OFF : ctx.memoryEnabled === null ? MEMORY_UNAVAILABLE : MEMORY_RULES,
     ctx.localNow
       ? `Agora, para o usuário: ${ctx.localNow}${ctx.timezone ? ` (fuso ${ctx.timezone})` : ""}.`
@@ -573,6 +602,28 @@ export function parseNavigatorAction(a: Record<string, unknown>): Extract<AgentA
   const task = str(a.task ?? a.prompt, NAVIGATOR_LIMITS.maxTaskChars);
   if (task.length < 3) return null;
   return url ? { tool: "navigator", op: "run", task, url } : { tool: "navigator", op: "run", task };
+}
+
+/** F5: scrape_page / crawl_site / monitor_page, com as mesmas validações das rotas do Worker. */
+export function parseScrapeAction(a: Record<string, unknown>): Extract<AgentAction, { tool: "scrape_page" | "crawl_site" | "monitor_page" }> | null {
+  const purpose = str(a.purpose ?? a.reason, 300);
+  if (a.tool === "scrape_page") {
+    const p = parseScrapeBody(a);
+    return p.ok ? { tool: "scrape_page", urls: p.data.urls, mode: p.data.mode, selectors: p.data.selectors, ...(purpose ? { purpose } : {}) } : null;
+  }
+  if (a.tool === "crawl_site") {
+    const p = parseCrawlBody(a);
+    return p.ok ? { tool: "crawl_site", url: p.data.url, mode: p.data.mode, maxPages: p.data.maxPages, maxDepth: p.data.maxDepth, selectors: p.data.selectors, ...(p.data.pathPrefix ? { pathPrefix: p.data.pathPrefix } : {}), ...(purpose ? { purpose } : {}) } : null;
+  }
+  const op = a.op ?? "create";
+  if (op === "list") return { tool: "monitor_page", op: "list" };
+  if (op === "pause" || op === "resume" || op === "delete" || op === "check") {
+    const id = str(a.id, 40);
+    return /^[0-9a-f-]{36}$/i.test(id) ? { tool: "monitor_page", op, id } : null;
+  }
+  if (op !== "create") return null;
+  const p = parseMonitorBody(a);
+  return p.ok ? { tool: "monitor_page", op: "create", url: p.data.url, selector: p.data.selector, mode: p.data.mode, frequencyMinutes: p.data.frequencyMinutes, name: p.data.name } : null;
 }
 
 /** Valida uma ação. Devolve null quando não dá para executar com segurança. */
@@ -765,6 +816,10 @@ export function parseAgentAction(raw: unknown): AgentAction | null {
       return parseBrowserFormAction(a);
     case "navigator":
       return parseNavigatorAction(a);
+    case "scrape_page":
+    case "crawl_site":
+    case "monitor_page":
+      return parseScrapeAction(a);
     case "github": {
       const op = parseGithubOp(a);
       return op ? ({ tool: "github", ...op } as AgentAction) : null;

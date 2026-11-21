@@ -38,6 +38,10 @@ export type VibeStepKind =
   | "handoff"
   /** Fase 4: cartão do Vertal Navigator no chat (/navegar ou ação use_browser do agente). */
   | "navigator"
+  /** F5: consent gate (bloqueio, esclarecimento ou termo a assinar). */
+  | "consent"
+  /** F5: coleta web com Scrapling (ação use_scraper do agente). */
+  | "scrape"
   /** Resposta em texto do agente ao usuário (o balão do chat). */
   | "reply"
   | "error"
@@ -78,6 +82,8 @@ export interface VibeStep {
   delegate?: unknown;
   /** Cartão do Vertal Navigator (kind "navigator"; ver src/lib/navigator/vibeCard.ts). */
   navigator?: unknown;
+  /** F5: termo pedido pelo consent gate ({category, version, title}). */
+  consent?: unknown;
   /** Botão de ação do passo (só rota interna, ex.: /connectors/github). */
   link?: { href: string; label: string };
   /** O cliente deve seguir sozinho para a próxima tarefa (autonomia semi/full). */

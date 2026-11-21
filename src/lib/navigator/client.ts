@@ -1,7 +1,7 @@
 // Cliente do Vertal Navigator servido pelo Worker do vertal.dev (/api/navigator/*).
 // Envia o JWT da sessão do Supabase, como o cliente do navegador de formulários.
 import { supabase } from '@/integrations/supabase/client';
-import { NAVIGATOR_MESSAGES, type NavigatorEvent, type NavigatorPending, type NavigatorSettings, type NavigatorStatus } from './navigatorCore';
+import { NAVIGATOR_MESSAGES, type NavigatorCaptcha, type NavigatorEvent, type NavigatorPending, type NavigatorSettings, type NavigatorStatus } from './navigatorCore';
 
 export type NavigatorRoute = 'start' | 'task' | 'status' | 'input' | 'takeover' | 'release' | 'stop' | 'forget' | 'settings' | 'activity';
 
@@ -52,6 +52,13 @@ export interface NavigatorResponse {
   /** /activity (fase 2). */
   sessions?: NavigatorSessionSummary[];
   audit?: NavigatorAuditEntry[];
+  /** F5: captcha detectado (tarefa pausada; o usuário resolve na tela ao vivo). */
+  captcha?: NavigatorCaptcha | null;
+  /** F5: consent_required (termo da categoria) / prohibited. */
+  category?: string;
+  version?: string;
+  title?: string;
+  reason?: string;
 }
 
 const PRODUCTION_ORIGIN = 'https://vertal.dev';

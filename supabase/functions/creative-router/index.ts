@@ -46,6 +46,10 @@ import {
 } from "../_shared/chatAgent.ts";
 import { wantsBrowserForm } from "../_shared/browserForm.ts";
 import { wantsNavigator } from "../_shared/navigatorCore.ts";
+// F5: coleta web (Scrapling) e consent gate (termo assinado por categoria; proibido bloqueia sempre).
+import { wantsScrape } from "../_shared/scrapeCore.ts";
+import { gatewayClassifier, runChatGate, wasClarified, type ConsentDb } from "../_shared/consentServer.ts";
+import { chargeKeyFor, gateThenCharge, once, parseTurnId, type ChargeResult } from "../_shared/turnBilling.ts";
 import { wantsGithub } from "../_shared/githubOps.ts";
 import { wantsMedia } from "../_shared/youtubeCore.ts";
 import { listVisibleSecrets, resolveEnvForRun } from "../_shared/kuboSecrets.ts";
@@ -125,6 +129,19 @@ Deno.serve(withRefundOnFailure(async (req) => {
 
     const { tool, messages, prompt, model, temperature, max_tokens, metadata, office, notebook, agent, api } = parsed.data;
     
+    // F5: 1ª rodada do agent_chat é cobrada DEPOIS do consent gate, com chave de idempotência do
+    // turno (turnBilling.ts): turno segurado pelo gate não cobra; repetir após assinar cobra uma vez só.
+    const agentTurnId = tool === "agent_chat" ? parseTurnId((agent as Record<string, unknown> | undefined)?.turn_id) : null;
+    const agentToolResults = (agent as Record<string, unknown> | undefined)?.tool_results;
+    if (tool === "agent_chat" && !(Array.isArray(agentToolResults) && agentToolResults.length > 0)) {
+      const deferredCharge = once(async (): Promise<ChargeResult> => {
+        const c = await chatJsonCost(user.id);
+        const d = await deductCredits(user.id, c, `creative_${tool}`, { ...(metadata ?? {}), ...(agentTurnId ? { turn_id: agentTurnId } : {}) }, user.email, chargeKeyFor(user.id, agentTurnId, idempotencyKey));
+        return d.ok ? { ok: true, cost: c } : { ok: false, cost: c, status: (d as { status?: number }).status ?? 402, error: d.error };
+      });
+      return await handleAgentChat(user, messages ?? [], agent ?? {}, 0, deferredCharge);
+    }
+
     // Determine cost
     let cost = COSTS[tool] ?? 1;
     if (tool === "chat" && model?.includes("sonnet")) {
@@ -560,6 +577,8 @@ const AgentInput = z.object({
   // Quem chamou: ausente/"vertal_chat" = o próprio chat; "vibe_code" = pergunta delegada
   // pelo Vibe Code (só leitura/pesquisa/imagem, sem vibe_code: profundidade 1).
   origin: z.string().max(20).optional(),
+  // F5: id do turno (gerado pelo cliente por mensagem do usuário) — chave de idempotência da cobrança.
+  turn_id: z.string().max(64).optional(),
 });
 
 /** Data e hora no fuso do usuário, por extenso. Fuso inválido cai para UTC. */
@@ -583,9 +602,13 @@ async function handleAgentChat(
   user: { id: string; email?: string | null },
   messages: Array<{ role: string; content: string }>,
   rawAgent: unknown,
-  cost: number,
+  costIn: number,
+  /** F5: 1ª rodada do turno — cobra só depois do consent gate (turnBilling.ts). */
+  deferredCharge?: () => Promise<ChargeResult>,
 ): Promise<Response> {
-  const freeSlot = cost === 0;
+  let cost = costIn;
+  // Com cobrança adiada, a vaga grátis do dia só é reservada quando o gate libera.
+  let freeSlot = deferredCharge ? false : cost === 0;
   const fail = async (status: number, error: string) => {
     if (freeSlot) await releaseChatSlot(user.id);
     return jsonResponse(status, { error });
@@ -611,6 +634,49 @@ async function handleAgentChat(
   const results = agent.data.tool_results ?? [];
   if (all.length === 0 || (results.length === 0 && all[all.length - 1].role !== "user")) {
     return fail(400, "invalid_messages");
+  }
+
+  // F5: consent gate na 1ª rodada do turno. (a) normal segue; (b) sensível/ambíguo pede
+  // esclarecimento ou o termo da categoria; (c) proibido é bloqueado sempre (termo não libera).
+  if (results.length === 0) {
+    const gateText = all[all.length - 1].content;
+    let held: Response | null = null;
+    const outcome = await gateThenCharge({
+      gate: async () => {
+        try {
+          const gate = await runChatGate({
+            db: supaAdmin() as unknown as ConsentDb, userId: user.id, text: gateText, surface: delegated ? "vibe_code" : "vertal_chat",
+            clarifiedBefore: wasClarified(all),
+            llm: gatewayClassifier((o) => runGateway({ messages: o.messages, kind: "chat", tier: "flash", json: o.json, temperature: 0, maxTokens: o.maxTokens, contextChars: 8_000, noCache: true })),
+          });
+          if (gate.reply) {
+            // Turno segurado pelo gate: nada é cobrado (com cobrança adiada) — a repetição depois de assinar paga uma vez só.
+            held = jsonResponse(200, {
+              reply: gate.reply, actions: [], creditsCharged: deferredCharge ? 0 : cost,
+              consentGate: { level: gate.cls.level, action: gate.decision.action, category: gate.cls.category },
+              ...(gate.consent ? { consent: gate.consent } : {}),
+            });
+            return { held: true };
+          }
+        } catch (e) {
+          // Falha do gate não derruba a conversa, mas pedido com indício proibido já foi barrado pelas regras (síncronas).
+          console.error("[creative-router] consent gate falhou:", sanitizeError(e));
+        }
+        return { held: false };
+      },
+      charge: deferredCharge ?? (async () => ({ ok: true, cost })),
+    });
+    const heldRes = held as Response | null;
+    if (outcome.held && heldRes) return heldRes;
+    if (!outcome.held && deferredCharge) {
+      const ch = outcome.charge;
+      if (!ch.ok) {
+        // Mesmo comportamento da cobrança antecipada (402 sem saldo, 409 rodada repetida, 429 limite).
+        return jsonResponse(ch.status, { error: ch.error });
+      }
+      cost = ch.cost;
+      freeSlot = cost === 0;
+    }
   }
 
   // Só os NOMES dos segredos vão para o modelo; os valores ficam no cofre.
@@ -640,6 +706,8 @@ async function handleAgentChat(
   // Fase 3: GitHub (Vibe Code) e YouTube só entram no prompt quando a conversa pede.
   const githubOn = !delegated && wantsGithub([...all.slice(-8), ...results.slice(-6)]);
   const mediaOn = wantsMedia([...all.slice(-6), ...results.slice(-4)]);
+  // F5: ferramentas de coleta web (Scrapling) só quando a conversa fala disso.
+  const scrapeOn = !delegated && wantsScrape([...all.slice(-8), ...results.slice(-6)]);
   const system = buildAgentSystemPrompt({
     secretNames,
     today: new Date().toISOString().slice(0, 10),
@@ -655,6 +723,7 @@ async function handleAgentChat(
     navigator: navigatorOn,
     github: githubOn,
     media: mediaOn,
+    scrape: scrapeOn,
   }) + (delegated ? DELEGATED_CHAT_PROMPT : "");
   const final = agent.data.final === true || brain.planPhase === "final";
   const convo = results.length

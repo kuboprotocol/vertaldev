@@ -24,6 +24,9 @@ import { ConnectionsDialog } from './ConnectionsDialog';
 import { MemoryDialog } from './MemoryDialog';
 import { FormApprovalDialog } from './FormApprovalDialog';
 import { NavigatorApprovalDialog } from './NavigatorApprovalDialog';
+// F5: termo assinado (consent gate) e alertas dos monitores / captcha.
+import { ConsentTermsDialog } from '@/components/consent/ConsentTermsDialog';
+import { ScrapeAlertsBanner } from '@/components/scrape/ScrapeAlertsBanner';
 import { previewHtml } from '@/lib/chatAgent/previewHtml';
 import { toast } from 'sonner';
 import { DICTATION_ERROR_TEXT, useDictation } from '@/lib/voice/useDictation';
@@ -388,6 +391,8 @@ export function VertalChat() {
           </button>
         </header>
 
+        <ScrapeAlertsBanner onOpenMonitors={() => openPanel('monitors')} onOpenNavigator={() => openPanel('navigator')} />
+
         {empty ? (
           <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-10">
             <div className="w-full max-w-2xl">
@@ -534,6 +539,7 @@ export function VertalChat() {
       <ApiApprovalDialog approval={chat.approval} />
       <FormApprovalDialog approval={chat.formApproval} />
       <NavigatorApprovalDialog />
+      <ConsentTermsDialog />
       <ConnectionsDialog open={connectionsOpen} onOpenChange={setConnectionsOpen} onOpenVault={() => navigate('/secrets')} />
       <MemoryDialog open={memoryOpen} onOpenChange={setMemoryOpen} />
     </div>
