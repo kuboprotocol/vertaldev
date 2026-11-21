@@ -12,6 +12,7 @@
 // (infra/vertal-browser/navd.py). O teste navigatorCore.test.ts garante que as
 // duas cópias são iguais.
 import { isBlockedHost, normalizeFormUrl } from "./browserForm.ts";
+import { isTotpSecretName } from "./totp.ts";
 
 export const NAVIGATOR_OPS = ["start", "task", "status", "input", "takeover", "release", "stop"] as const;
 export type NavigatorOp = (typeof NAVIGATOR_OPS)[number];
@@ -35,6 +36,12 @@ export const NAVIGATOR_LIMITS = {
   /** Cookies cifrados por usuário (JSON). */
   maxProfileBytes: 1_000_000,
   maxCookies: 3_000,
+  /** Teto do "aprovar automático até R$X" (fase 2): nem o usuário passa disso. Em centavos. */
+  autoApproveMaxCentsCap: 100_000,
+  /** Screenshot do cartão de aprovação (data URL JPEG). */
+  maxApprovalScreenshotChars: 600_000,
+  /** Texto da página enviado pelo navd para ler loja/itens/total (fica no servidor). */
+  maxPageTextChars: 20_000,
 } as const;
 
 export type NavigatorStatus =
@@ -184,9 +191,23 @@ export interface VaultSecretMeta {
 export function pickSecretForHost(secrets: VaultSecretMeta[], name: unknown, host: unknown): VaultSecretMeta | null {
   const key = String(name ?? "").trim().toUpperCase();
   if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(key)) return null;
+  // Semente TOTP nunca é digitada num campo: só gera código (pickTotpForHost).
+  if (isTotpSecretName(key)) return null;
   const matches = secrets.filter((s) => s.env_key === key && secretMatchesHost(s.bound_to, host));
   return matches.find((s) => s.role === "owner") ?? matches[0] ?? null;
 }
+
+/**
+ * Semente TOTP (env_key terminando em _TOTP) vinculada ao site da página, para o
+ * código 2FA ser gerado no servidor. Com `name`, só aquele segredo. Dono vence convidado.
+ */
+export function pickTotpForHost(secrets: VaultSecretMeta[], host: unknown, name?: unknown): VaultSecretMeta | null {
+  const wanted = typeof name === "string" && name.trim() ? name.trim().toUpperCase() : null;
+  const matches = secrets.filter((s) => isTotpSecretName(s.env_key) && (!wanted || s.env_key === wanted) && secretMatchesHost(s.bound_to, host));
+  return matches.find((s) => s.role === "owner") ?? matches[0] ?? null;
+}
+
+export { isTotpSecretName };
 
 // ─── Validação das rotas ─────────────────────────────────────────────────
 export type ParsedNavigator<T> = { ok: true; data: T } | { ok: false; status: Exclude<NavigatorStatus, "ok">; detail?: string };
@@ -268,7 +289,7 @@ export interface NavigatorEvent {
 
 export interface NavigatorPending {
   id: string;
-  kind: "approval" | "code" | "text" | "secret";
+  kind: "approval" | "code" | "text" | "secret" | "totp";
   question?: string;
   action?: string;
   target?: string;
@@ -276,6 +297,15 @@ export interface NavigatorPending {
   reason?: string;
   name?: string;
   host?: string;
+  /** Aprovação de pagamento (fase 2): lidos da página pelo servidor. */
+  store?: string;
+  pageTitle?: string;
+  total?: string;
+  totalCents?: number;
+  currency?: string;
+  items?: string[];
+  /** data:image/jpeg;base64,… capturado no momento do pedido. */
+  screenshot?: string;
 }
 
 const FORBIDDEN_EVENT_KEYS = new Set(["value", "password", "secret", "token", "apiKey", "api_key", "code"]);
@@ -299,13 +329,19 @@ export function sanitizeEvents(events: unknown): NavigatorEvent[] {
 /** Pedidos que o usuário vê (segredos são resolvidos pelo Worker e só aparecem como aviso). */
 export function sanitizePending(pending: unknown): NavigatorPending[] {
   if (!Array.isArray(pending)) return [];
-  const kinds = new Set(["approval", "code", "text", "secret"]);
+  const kinds = new Set(["approval", "code", "text", "secret", "totp"]);
   return pending
     .filter((p): p is Record<string, unknown> => !!p && typeof p === "object" && kinds.has(String((p as NavigatorPending).kind)) && REQUEST_ID_RE.test(String((p as NavigatorPending).id)))
     .map((p) => {
       const out: NavigatorPending = { id: String(p.id), kind: p.kind as NavigatorPending["kind"] };
-      for (const k of ["question", "action", "target", "url", "reason", "name", "host"] as const) {
+      for (const k of ["question", "action", "target", "url", "reason", "name", "host", "store", "pageTitle", "total", "currency"] as const) {
         if (typeof p[k] === "string") out[k] = String(p[k]).slice(0, 400);
+      }
+      if (typeof p.totalCents === "number" && Number.isFinite(p.totalCents) && p.totalCents >= 0) out.totalCents = Math.round(p.totalCents);
+      if (Array.isArray(p.items)) out.items = p.items.filter((i): i is string => typeof i === "string").slice(0, 10).map((i) => i.slice(0, 160));
+      // Screenshot só no cartão de aprovação, só JPEG em data URL e com tamanho limitado.
+      if (out.kind === "approval" && typeof p.screenshot === "string" && p.screenshot.startsWith("data:image/jpeg;base64,") && p.screenshot.length <= NAVIGATOR_LIMITS.maxApprovalScreenshotChars) {
+        out.screenshot = p.screenshot;
       }
       return out;
     });
@@ -355,4 +391,210 @@ export function wantsNavigator(recent: Array<string | { content?: unknown; summa
     }
     return false;
   });
+}
+
+// ─── Fase 2: resumo do checkout (cartão de aprovação) ────────────────────
+export interface MoneyValue {
+  /** Como apareceu na página ("R$ 1.234,56"). */
+  text: string;
+  cents: number;
+  currency: "BRL" | "USD" | "EUR" | "GBP";
+}
+
+const MONEY_RE = /(R\$|US\$|\$|€|£)\s?(\d{1,3}(?:[.,\s]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)/g;
+
+/** "1.234,56" (BR) ou "1,234.56" (US) → centavos. */
+export function parseMoneyAmount(raw: string): number | null {
+  const s = raw.replace(/\s/g, "");
+  if (!/^\d[\d.,]*$/.test(s)) return null;
+  const lastSep = Math.max(s.lastIndexOf(","), s.lastIndexOf("."));
+  let intPart = s;
+  let frac = "";
+  if (lastSep >= 0 && s.length - lastSep - 1 <= 2) {
+    intPart = s.slice(0, lastSep);
+    frac = s.slice(lastSep + 1);
+  }
+  intPart = intPart.replace(/[.,]/g, "");
+  if (!/^\d+$/.test(intPart) || intPart.length > 9) return null;
+  return Number(intPart) * 100 + Number((frac + "00").slice(0, 2));
+}
+
+const CURRENCY_OF: Record<string, MoneyValue["currency"]> = { "R$": "BRL", "US$": "USD", "$": "USD", "€": "EUR", "£": "GBP" };
+
+/** Valores monetários de um trecho de texto, na ordem em que aparecem. */
+export function findMoney(text: string): MoneyValue[] {
+  const out: MoneyValue[] = [];
+  for (const m of text.matchAll(MONEY_RE)) {
+    const cents = parseMoneyAmount(m[2]);
+    if (cents === null) continue;
+    out.push({ text: `${m[1]} ${m[2].trim()}`, cents, currency: CURRENCY_OF[m[1]] ?? "BRL" });
+  }
+  return out;
+}
+
+export function formatCents(cents: number, currency: MoneyValue["currency"] = "BRL"): string {
+  const v = (cents / 100).toFixed(2);
+  if (currency === "BRL") {
+    const [i, f] = v.split(".");
+    return `R$ ${i.replace(/\B(?=(\d{3})+(?!\d))/g, ".")},${f}`;
+  }
+  const sym = currency === "USD" ? "US$" : currency === "EUR" ? "€" : "£";
+  return `${sym} ${v}`;
+}
+
+export interface CheckoutSummary {
+  store: string;
+  pageTitle: string;
+  total: MoneyValue | null;
+  /** "high": achou um rótulo de total ("Total do pedido", "Valor total"…); "low": palpite. */
+  confidence: "high" | "low" | "none";
+  items: string[];
+}
+
+/** Rótulos de total em ordem de preferência (minúsculas, sem acento). */
+const TOTAL_LABELS = [
+  "total do pedido", "total da compra", "valor total", "total a pagar", "total geral", "order total", "grand total",
+  "total due", "amount due", "you pay", "voce paga", "total",
+];
+const NOT_ITEM = /\b(sub ?total|total|frete|entrega|shipping|delivery|desconto|discount|cupom|coupon|imposto|tax(es)?|taxa|juros|parcela|parcelas|em ate|x de|economize|saldo|cashback)\b/;
+
+function storeFromUrl(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Lê loja, itens e valor total do texto visível da página de checkout (heurística).
+ * O valor só serve para o cartão e para o "aprovar automático" — que exige
+ * confidence "high" e moeda BRL. Na dúvida, o usuário sempre decide.
+ */
+export function extractCheckoutSummary(pageText: unknown, title: unknown = "", url: unknown = ""): CheckoutSummary {
+  const text = String(pageText ?? "").slice(0, NAVIGATOR_LIMITS.maxPageTextChars);
+  const lines = text.split(/\r?\n/).map((l) => l.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const out: CheckoutSummary = { store: storeFromUrl(String(url ?? "")), pageTitle: String(title ?? "").slice(0, 200), total: null, confidence: "none", items: [] };
+
+  // Total: o rótulo mais específico vence; entre linhas com o mesmo rótulo, a última (o total final costuma vir embaixo).
+  let best: { rank: number; idx: number; money: MoneyValue } | null = null;
+  lines.forEach((line, idx) => {
+    const norm = normalizeText(line);
+    if (/\bsub ?total\b/.test(norm) && !/\btotal (do|da|a|geral)\b/.test(norm)) return;
+    const rank = TOTAL_LABELS.findIndex((l) => wordRe(l).test(norm));
+    if (rank < 0) return;
+    const money = findMoney(line).slice(-1)[0] ?? (lines[idx + 1] && findMoney(lines[idx + 1]).length === 1 && lines[idx + 1].length < 30 ? findMoney(lines[idx + 1])[0] : undefined);
+    if (!money) return;
+    if (!best || rank < best.rank || (rank === best.rank && idx > best.idx)) best = { rank, idx, money };
+  });
+  const found = best as { rank: number; idx: number; money: MoneyValue } | null;
+  if (found) {
+    out.total = found.money;
+    out.confidence = "high";
+  } else {
+    const all = lines.flatMap((l) => findMoney(l));
+    if (all.length) {
+      out.total = all.reduce((a, b) => (b.cents > a.cents ? b : a));
+      out.confidence = "low";
+    }
+  }
+
+  // Itens: linhas com um valor e texto descritivo, sem rótulos de total/frete/desconto.
+  for (const line of lines) {
+    if (out.items.length >= 8) break;
+    const money = findMoney(line);
+    if (money.length !== 1) continue;
+    const label = line.replace(MONEY_RE, "").replace(/[\s:–—-]+$/g, "").trim();
+    if (label.length < 3 || label.length > 140 || NOT_ITEM.test(normalizeText(label))) continue;
+    const item = `${label} — ${money[0].text}`;
+    if (!out.items.includes(item)) out.items.push(item);
+  }
+  return out;
+}
+
+// ─── Fase 2: preferências (aprovar automático até R$X) ───────────────────
+export interface NavigatorSettings {
+  autoApproveEnabled: boolean;
+  /** Em centavos de real. 0 = sempre pedir. */
+  autoApproveMaxCents: number;
+}
+
+export const DEFAULT_NAVIGATOR_SETTINGS: NavigatorSettings = { autoApproveEnabled: false, autoApproveMaxCents: 0 };
+
+export function parseSettingsBody(body: Record<string, unknown>): ParsedNavigator<NavigatorSettings> {
+  const enabled = body.autoApproveEnabled;
+  if (typeof enabled !== "boolean") return { ok: false, status: "bad_request", detail: "auto_approve_enabled" };
+  const raw = Number(body.autoApproveMaxCents ?? 0);
+  if (!Number.isFinite(raw) || raw < 0) return { ok: false, status: "bad_request", detail: "auto_approve_max" };
+  const cents = Math.round(raw);
+  if (cents > NAVIGATOR_LIMITS.autoApproveMaxCentsCap) return { ok: false, status: "bad_request", detail: "auto_approve_cap" };
+  if (enabled && cents <= 0) return { ok: false, status: "bad_request", detail: "auto_approve_max" };
+  // Ligar o automático exige o clique explícito do usuário na tela (como a aprovação).
+  if (enabled && body.confirmed !== true) return { ok: false, status: "bad_request", detail: "confirmation_required" };
+  return { ok: true, data: { autoApproveEnabled: enabled, autoApproveMaxCents: enabled ? cents : 0 } };
+}
+
+/**
+ * O pedido de pagamento pode ser aprovado sem perguntar? Só se o usuário ligou o
+ * automático, o total foi lido com confiança (rótulo de total na página), em reais,
+ * e está dentro do limite. Qualquer dúvida = pedir ao usuário.
+ */
+export function autoApproveDecision(settings: NavigatorSettings | null | undefined, summary: Pick<CheckoutSummary, "total" | "confidence">): { auto: boolean; reason: string } {
+  if (!settings?.autoApproveEnabled || settings.autoApproveMaxCents <= 0) return { auto: false, reason: "disabled" };
+  if (!summary.total || summary.confidence !== "high") return { auto: false, reason: "total_unknown" };
+  if (summary.total.currency !== "BRL") return { auto: false, reason: "currency" };
+  const cap = Math.min(settings.autoApproveMaxCents, NAVIGATOR_LIMITS.autoApproveMaxCentsCap);
+  if (summary.total.cents <= 0 || summary.total.cents > cap) return { auto: false, reason: "over_limit" };
+  return { auto: true, reason: "within_limit" };
+}
+
+// ─── Fase 2: auditoria e aba "Atividade" ─────────────────────────────────
+export const NAVIGATOR_AUDIT_KINDS = [
+  "session_start", "session_end", "task", "secret_used", "totp_used", "code_entered", "approval_granted",
+  "approval_denied", "auto_approved", "takeover", "release", "settings_changed", "totp_consent",
+] as const;
+export type NavigatorAuditKind = (typeof NAVIGATOR_AUDIT_KINDS)[number];
+
+export interface NavigatorAuditRow {
+  id?: string;
+  session_id: string | null;
+  kind: NavigatorAuditKind;
+  detail: Record<string, unknown>;
+  created_at: string;
+}
+
+const AUDIT_DETAIL_KEYS = ["task", "name", "host", "store", "total", "target", "url", "reason", "limit", "items", "end_reason", "minutes"] as const;
+
+/** Detalhe de auditoria sem nada sensível: só chaves conhecidas, textos curtos, nunca valor de segredo. */
+export function auditDetail(raw: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const k of AUDIT_DETAIL_KEYS) {
+    const v = raw[k];
+    if (typeof v === "string") out[k] = v.slice(0, k === "task" ? 300 : 200);
+    else if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
+    else if (k === "items" && Array.isArray(v)) out[k] = v.filter((i) => typeof i === "string").slice(0, 8).map((i) => String(i).slice(0, 160));
+  }
+  return out;
+}
+
+/** Linha legível para a aba Atividade. */
+export function describeAudit(row: Pick<NavigatorAuditRow, "kind" | "detail">): string {
+  const d = row.detail ?? {};
+  const s = (k: string) => (typeof d[k] === "string" ? String(d[k]) : "");
+  switch (row.kind) {
+    case "session_start": return "Navegador aberto";
+    case "session_end": return `Navegador fechado${s("end_reason") ? ` (${s("end_reason")})` : ""}`;
+    case "task": return `Tarefa: ${s("task")}`;
+    case "secret_used": return `Segredo usado: ${s("name")}${s("host") ? ` em ${s("host")}` : ""}`;
+    case "totp_used": return `Código 2FA gerado do cofre (${s("name")})${s("host") ? ` em ${s("host")}` : ""}`;
+    case "code_entered": return `Você digitou um código de verificação${s("host") ? ` em ${s("host")}` : ""}`;
+    case "approval_granted": return `Pagamento aprovado por você${s("store") ? ` em ${s("store")}` : ""}${s("total") ? ` · ${s("total")}` : ""}`;
+    case "approval_denied": return `Pagamento recusado${s("store") ? ` em ${s("store")}` : ""}${s("total") ? ` · ${s("total")}` : ""}`;
+    case "auto_approved": return `Pagamento aprovado automaticamente (até ${s("limit")})${s("store") ? ` em ${s("store")}` : ""}${s("total") ? ` · ${s("total")}` : ""}`;
+    case "takeover": return "Você assumiu o controle";
+    case "release": return "Controle devolvido ao agente";
+    case "settings_changed": return s("limit") ? `Aprovação automática ligada até ${s("limit")}` : "Aprovação automática desligada (sempre pedir)";
+    case "totp_consent": return `Autenticador (TOTP) guardado no cofre: ${s("name")} para ${s("host")}`;
+    default: return row.kind;
+  }
 }

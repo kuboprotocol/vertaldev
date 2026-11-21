@@ -1,9 +1,26 @@
 // Cliente do Vertal Navigator servido pelo Worker do vertal.dev (/api/navigator/*).
 // Envia o JWT da sessão do Supabase, como o cliente do navegador de formulários.
 import { supabase } from '@/integrations/supabase/client';
-import { NAVIGATOR_MESSAGES, type NavigatorEvent, type NavigatorPending, type NavigatorStatus } from './navigatorCore';
+import { NAVIGATOR_MESSAGES, type NavigatorEvent, type NavigatorPending, type NavigatorSettings, type NavigatorStatus } from './navigatorCore';
 
-export type NavigatorRoute = 'start' | 'task' | 'status' | 'input' | 'takeover' | 'release' | 'stop' | 'forget';
+export type NavigatorRoute = 'start' | 'task' | 'status' | 'input' | 'takeover' | 'release' | 'stop' | 'forget' | 'settings' | 'activity';
+
+export interface NavigatorSessionSummary {
+  id: string;
+  status: string;
+  started_at: string;
+  ended_at: string | null;
+  end_reason: string | null;
+  billed_minutes: number;
+}
+
+export interface NavigatorAuditEntry {
+  id: string;
+  session_id: string | null;
+  kind: string;
+  detail: Record<string, unknown>;
+  created_at: string;
+}
 
 export interface NavigatorResponse {
   ok: boolean;
@@ -26,9 +43,15 @@ export interface NavigatorResponse {
   events?: NavigatorEvent[];
   lastSeq?: number;
   pending?: NavigatorPending[];
-  filling?: Array<{ name?: string; host?: string }>;
+  filling?: Array<{ name?: string; host?: string; kind?: string }>;
   /** data:image/jpeg;base64,… */
   screenshot?: string;
+  /** /settings (fase 2). */
+  settings?: NavigatorSettings;
+  capCents?: number;
+  /** /activity (fase 2). */
+  sessions?: NavigatorSessionSummary[];
+  audit?: NavigatorAuditEntry[];
 }
 
 const PRODUCTION_ORIGIN = 'https://vertal.dev';

@@ -14,6 +14,7 @@ import { CANVAS_HEX, CANVAS_LINE_HEIGHT, describeCanvas, wrapCanvasText } from '
 import { resolveStoredImage } from '@/lib/chatAgent/runAction';
 import { previewHtml } from '@/lib/chatAgent/previewHtml';
 import { spotifyEmbedUrl } from '@/lib/spotify/spotifyCore';
+import { isYoutubeVideoId, youtubeEmbedUrl, youtubeWatchUrl } from '@/lib/media/youtube';
 import { vibeCodeHref } from '@/lib/chatAgent/vibeBridge';
 
 /** Player oficial do Spotify embutido (toca sem Premium). O id já vem validado pelo servidor. */
@@ -31,6 +32,23 @@ function SpotifyEmbed({ trackId, title, compact = false }: { trackId: string; ti
   );
 }
 
+/** Player do YouTube embutido (IFrame Player, youtube-nocookie). O id já vem validado. */
+function YoutubeEmbed({ videoId, title, autoplay = false }: { videoId: string; title: string; autoplay?: boolean }) {
+  if (!isYoutubeVideoId(videoId)) return null;
+  const origin = typeof window !== 'undefined' ? window.location.origin : undefined;
+  return (
+    <iframe
+      title={`YouTube: ${title}`}
+      src={youtubeEmbedUrl(videoId, { autoplay, origin })}
+      className="aspect-video w-full rounded-xl border-0"
+      loading="lazy"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+      allowFullScreen
+      referrerPolicy="strict-origin-when-cross-origin"
+    />
+  );
+}
+
 const KIND_ICON: Record<ArtifactKind, typeof FileText> = {
   image: ImageIcon,
   design: Palette,
@@ -43,6 +61,7 @@ const KIND_ICON: Record<ArtifactKind, typeof FileText> = {
   vibe: Code2,
   music: Music,
   spotify: Radio,
+  youtube: Film,
   ebook: BookOpen,
   notebook: BookMarked,
   notebook_feed: FileText,
@@ -145,6 +164,7 @@ function summary(a: Artifact): string {
     case 'vibe': return a.files.length ? `${a.files.length} arquivo${a.files.length === 1 ? '' : 's'} na prévia` : 'Projeto no Vibe Code';
     case 'music': return `${a.tracks.length} faixa${a.tracks.length === 1 ? '' : 's'}`;
     case 'spotify': return `${a.tracks.length} faixa${a.tracks.length === 1 ? '' : 's'} · ouça aqui`;
+    case 'youtube': return `${a.videos.length} vídeo${a.videos.length === 1 ? '' : 's'} · assista aqui`;
     case 'ebook': return `${Math.max(1, Math.round(a.content.split(/\s+/).length / 250))} páginas aprox.`;
     case 'notebook': return 'Notas, PDFs e links';
     case 'notebook_feed': return `${a.documentCount || 0} documentos carregados`;
@@ -219,6 +239,11 @@ export function ArtifactCard({ artifact, onOpen, active }: { artifact: Artifact;
         <button type="button" onClick={onOpen} tabIndex={-1} aria-hidden className="block w-full border-t border-border/50 bg-muted/30 p-3">
           <CanvasPreview spec={artifact.spec} className="mx-auto max-h-64 w-auto max-w-full rounded-lg shadow-lg" />
         </button>
+      )}
+      {artifact.kind === 'youtube' && artifact.videos[0] && (
+        <div className="border-t border-border/50 px-4 py-3">
+          <YoutubeEmbed videoId={artifact.videos[0].id} title={artifact.videos[0].title} autoplay />
+        </div>
       )}
       {artifact.kind === 'spotify' && (
         <div className="border-t border-border/50 px-4 py-3">
@@ -609,6 +634,21 @@ export function ArtifactViewer({ artifact, actions }: { artifact: Artifact; acti
             </div>
           )}
         </div>
+      );
+      break;
+    case 'youtube':
+      body = (
+        <ul className="mx-auto max-w-3xl space-y-4">
+          {a.videos.map((v) => (
+            <li key={v.id} className="space-y-2 rounded-xl border border-border/60 bg-card p-4">
+              <p className="truncate text-sm font-semibold">{v.title}{v.channel ? <span className="font-normal text-muted-foreground"> — {v.channel}</span> : null}</p>
+              <YoutubeEmbed videoId={v.id} title={v.title} />
+              <a href={youtubeWatchUrl(v.id)} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                <ExternalLink className="h-3 w-3" aria-hidden /> Abrir no YouTube
+              </a>
+            </li>
+          ))}
+        </ul>
       );
       break;
     case 'spotify':

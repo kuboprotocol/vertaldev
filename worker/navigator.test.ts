@@ -45,3 +45,17 @@ describe('rede do sandbox', () => {
     for (const cidr of ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '169.254.0.0/16', '127.0.0.0/8']) expect(DENY_OUT_CIDRS).toContain(cidr);
   });
 });
+
+describe('fase 2: cartão de aprovação montado no Worker', async () => {
+  const { __test } = await import('./navigatorRoutes');
+  it('troca o texto da página por loja/total/itens (o texto bruto não sai do servidor)', () => {
+    const out = __test.withSummary({
+      id: 'abcdef1234567890', kind: 'approval', url: 'https://loja.com.br/checkout', pageTitle: 'Checkout',
+      pageText: 'Camiseta R$ 50,00\nTotal do pedido: R$ 50,00',
+    });
+    expect(out.pageText).toBeUndefined();
+    expect(out).toMatchObject({ store: 'loja.com.br', total: 'R$ 50,00', totalCents: 5000, currency: 'BRL', items: ['Camiseta — R$ 50,00'] });
+    expect(__test.withSummary({ id: 'abcdef1234567890', kind: 'code', pageText: 'x' }).pageText).toBe('x');
+    expect(__test.summaryAudit(undefined)).toEqual({});
+  });
+});

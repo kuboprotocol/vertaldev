@@ -1,4 +1,4 @@
-# Vertal Navigator (fase 1) — navegador na nuvem com sessão persistente
+# Vertal Navigator (fases 1–3) — navegador na nuvem com sessão persistente
 
 O usuário pede no Vertal Chat, por exemplo: **"entre no meu GitHub e me diga quantas notificações eu tenho"**.
 Um agente (browser-use) opera um Chromium real num sandbox E2B self-hosted (vertalrun.com). O usuário
@@ -46,6 +46,8 @@ Todas `POST`, `Authorization: Bearer <JWT do Supabase>`, resposta `{ok, status, 
 | `/api/navigator/release` | `{sessionId}` | Troca a senha de controle de novo (a URL antiga deixa de controlar), retoma o agente e salva os cookies. |
 | `/api/navigator/stop` | `{sessionId}` | Salva os cookies, para o agente, encerra o sandbox, cobra o restante. |
 | `/api/navigator/forget` | `{}` | Apaga os cookies salvos do usuário. |
+| `/api/navigator/settings` | `{}` lê · `{autoApproveEnabled, autoApproveMaxCents, confirmed}` grava · `{consent:"totp", name, boundTo, confirmed}` | **Fase 2.** "Aprovar automático até R$X" (padrão: sempre pedir) e registro do consentimento TOTP. |
+| `/api/navigator/activity` | `{}` | **Fase 2.** Últimas 20 sessões + 150 linhas de auditoria do usuário (aba Atividade). |
 
 `status` pode ser `ok`, `blocked_url`, `busy`, `capacity`, `no_session`, `session_ended`, `not_pending`,
 `rate_limited`, `insufficient_credits`, `not_configured`, `unauthorized`, `bad_request`, `sandbox_error`, `error`.
@@ -175,3 +177,142 @@ Medido em 21/11/2026 com uma sessão (login + checkout de teste): ~730 MB usados
   controle só tem acesso ao Chromium, com `file://` e `localhost` bloqueados.
 - Poller por HTTP (1,5 s com tarefa ativa). Sem WebSocket/SSE na fase 1.
 - Limitador de taxa por isolate do Worker (como o browser_form); o teto global de sessões é pelo banco.
+
+
+---
+
+# Fase 2 — confiança (2FA por TOTP, gate de pagamento melhorado, Atividade)
+
+## 2FA por TOTP (opcional)
+
+- **Convenção do cofre:** segredo do `kubo-secrets` com `env_key` terminando em **`_TOTP`** (ex.:
+  `GITHUB_COM_TOTP`) e **`bound_to`** obrigatório (slug do site, ex. `github-com`). O valor é a *semente*
+  do app autenticador: o texto base32 que o site mostra em "não consigo ler o QR code" ou a URI
+  `otpauth://totp/...` inteira (aceita `digits` 6–8, `period` 15–120 s, `SHA1/SHA256/SHA512`; HOTP não).
+- **Consentimento explícito na UI:** Navigator → aba **Segurança** → "Autenticador (TOTP)": site + chave +
+  caixa "Autorizo a Vertal a guardar esta chave… somente para este site". Salva pelo `kubo-secrets`
+  (`action: "create"`, grupo `navigator`, descrição com a data do consentimento) e grava `totp_consent`
+  na auditoria (`/api/navigator/settings {consent:"totp"}`).
+- **Fluxo:** o agente chama `request_user_code(índice, pergunta)` como antes. O navd procura um segredo
+  `*_TOTP` vinculado ao host da página; se houver, emite `needs_totp` (sem valor). O Worker
+  (`fulfillTotp`) escolhe o segredo (`pickTotpForHost`: dono vence convidado, host precisa casar) e pede
+  o código à edge function **`kubo-secrets` pelo canal interno `x-navigator-token`, op `"totp"`** —
+  a função confere dono/convite, `*_TOTP` e `bound_to`↔host, decifra a semente, gera o código
+  (`supabase/functions/_shared/totp.ts`, RFC 6238) e devolve **só** `{code, expiresIn}` (se faltam < 5 s,
+  já entrega o do próximo período). O Worker repassa ao navd, que digita direto no campo. A semente nunca
+  sai da função; o código não passa pelo modelo. Sem semente (ou falha), o navd volta ao fluxo antigo:
+  pede o código ao usuário.
+- **Defesas:** `fill_secret` recusa nomes `*_TOTP` (navd e `pickSecretForHost`); o caminho antigo do canal
+  interno (sem `op`) recusa entregar semente TOTP (403). Se o Worker tiver `CONNECTOR_ENC_KEY`, gera o
+  código localmente com o mesmo módulo (fallback). Cada geração grava `inject` em `kubo_secret_audit`
+  (`meta.kind = "totp"`) e `totp_used` em `navigator_audit`.
+
+## Gate de pagamento melhorado
+
+- O navd, ao parar num clique de pagamento, captura **screenshot** e o **texto visível** da página
+  (CDP `Runtime.evaluate` feito pelo navd, não pelo agente). Os dois ficam só no pedido pendente (nunca
+  em evento). O Worker roda `extractCheckoutSummary` (heurística em `navigatorCore.ts`: rótulos "Total do
+  pedido", "Valor total", "Order total"…, formatos BR/US, itens = linhas com um valor que não são
+  subtotal/frete/desconto/parcela) e manda ao cartão só **loja, título, itens, total**. O texto bruto
+  não sai do servidor.
+- **Cartão** (`NavigatorApprovalDialog`): loja, valor total lido da página, itens, botão, URL e a captura
+  do momento do pedido. Se o total não foi lido, o cartão diz isso.
+- **Limite por usuário:** tabela `navigator_settings`. Padrão **desligado — sempre pedir**. Na aba
+  Segurança o usuário liga "aprovar automático até R$X" (teto duro **R$ 1.000,00**, também na
+  constraint do banco). Ligar exige `confirmed: true` (só o clique na tela envia). O Worker só aprova
+  sozinho quando: automático ligado, total lido **com rótulo de total** (`confidence: "high"`), moeda
+  **BRL**, `0 < total ≤ limite` (`autoApproveDecision`). Qualquer dúvida → cartão.
+- **Auditoria:** toda aprovação (`approval_granted`), recusa (`approval_denied`) e aprovação automática
+  (`auto_approved`, com o limite) vai para `navigator_audit` com loja/total/itens/botão/URL.
+
+## Aba "Atividade"
+
+`NavigatorPanel` agora tem abas **Ao vivo · Atividade · Segurança** (a tela ao vivo continua montada ao
+trocar de aba). Atividade lista as sessões (início, minutos, fim/motivo) e, dentro de cada uma: tarefas,
+segredos usados (**só nomes** + host), códigos 2FA (gerado do cofre ou digitado por você), aprovações,
+recusas, assumir/devolver controle. Fora de sessão: mudanças de preferência e consentimentos TOTP.
+`auditDetail` só aceita chaves conhecidas (nunca valor, código ou cookie).
+
+---
+
+# Fase 3 — Vibe Code + GitHub, hospedagem e mídia
+
+## Vibe Code: GitHub pela API (navegador só como plano B)
+
+- Usa a conexão OAuth que já existia (`github_connections`, escopo `repo`, token cifrado). A edge function
+  existente **`github-repos`** ganhou `POST {op, …}` — sem `op` continua listando como antes (nada
+  removido; o Supabase está no limite de funções, por isso não há função nova).
+- Ops (`supabase/functions/_shared/githubOps.ts`): `list_repos`, `create_repo` (privado por padrão,
+  `auto_init`), `create_issue`, `create_branch` (a partir de `from` ou da branch padrão), `create_pr`
+  (rascunho por padrão). Validação de `dono/repo`, nome de branch (subconjunto seguro do
+  `check-ref-format`), tamanhos.
+- **Confirmação:** escrita exige `confirmed: true` na função; o front só envia depois do clique.
+  - **Vertal Chat:** ferramenta `{"tool":"github",...}` → cartão de aprovação (`approveApi`, o mesmo do
+    Gmail/Slack). Falhou na API → o resultado sugere `navigator run` como plano B.
+  - **Vibe Code:** comando `/github` com cartão `GithubConfirmDialog`:
+    `/github repos` · `/github repo <nome> [publico]` · `/github issue <dono/repo> <título> [| corpo]` ·
+    `/github branch <dono/repo> <branch> [de <base>]` · `/github pr <dono/repo> <head> [-> <base>] <título> [| corpo]`.
+    A resposta vira cartão "Usar no pedido", como o `/navegar`.
+- A ferramenta só entra no prompt quando a conversa fala de GitHub (`wantsGithub`).
+
+## Implantar/rodar apps (hospedagem, ex. Hostinger)
+
+Fluxo "abrir site de hospedagem → logar → contratar VPS/plano → configurar" usa o **Navigator** com as
+regras de sempre — não há atalho:
+
+1. No chat: *"publique meu app na Hostinger: contrate a VPS KVM 1 e me passe o IP"* (ou `/navegar …` no
+   Vibe Code). O prompt do navegador inclui a regra de hospedagem (`NAVIGATOR_RULES`).
+2. **Login:** `fill_secret` com segredos do cofre vinculados ao site (ex.: `HOSTINGER_EMAIL` e
+   `HOSTINGER_PASSWORD` com `bound_to = hostinger`), ou o usuário assume o controle e loga à mão
+   (cookies ficam salvos para a próxima vez).
+3. **2FA:** TOTP do cofre (`HOSTINGER_COM_TOTP`) se o usuário guardou; senão, o código é pedido no painel.
+4. **Contratar:** "Contratar", "Pagar", "Finalizar compra" e "Continuar" no checkout param no **gate de
+   pagamento**: cartão com loja, plano/itens, total e captura. Só segue com "Aprovar e clicar" (ou dentro do
+   limite automático, se o usuário ligou e o total foi lido com confiança).
+5. **Configurar/implantar:** o agente segue no painel da hospedagem (criar VPS, escolher SO, ver IP).
+   Para código: repositório pelo `github` (criar repo/branch/PR) e deploy pelo painel do provedor ou pelo
+   Vibe Code. Passos com SSH/terminal ficam fora do Navigator (sem `evaluate`, sem upload).
+6. Tudo fica na aba **Atividade** (tarefa, segredos usados por nome, aprovação com o valor).
+
+## Mídia: YouTube + Spotify
+
+- Ferramenta `{"tool":"youtube","op":"play|search","query":"…","url":"…"}` → artefato `youtube` com
+  **player embutido** (IFrame Player do YouTube, `youtube-nocookie.com`, `enablejsapi=1`).
+  - Com link: toca direto (id validado; outros domínios são recusados).
+  - Com busca: Worker **`POST /api/media/youtube`** (JWT, 30 buscas/10 min por usuário) chama a
+    **YouTube Data API v3** com o segredo **`YOUTUBE_API_KEY`** (só vídeos incorporáveis).
+  - **Sem chave:** a ferramenta devolve ao agente a instrução de achar o link pelo **Navigator**
+    (ou `web_search site:youtube.com`) e repetir com `url`.
+- **Spotify:** o conector existente continua igual; o prompt diz "música do Spotify conectado → spotify;
+  vídeo/clipe/YouTube → youtube". As duas ferramentas aparecem juntas quando a conversa fala de
+  música/vídeo (`wantsMedia`).
+- Orçamento do prompt: `AGENT_PROMPT_BUDGET` (25.950 caracteres). Em conversas muito longas a
+  ferramenta de menor prioridade sai (youtube, depois github); o resto não muda.
+
+---
+
+## Deploy das fases 2 e 3
+
+1. **Migration:** `supabase/migrations/20261121180000_vertal_navigator_f2.sql` (idempotente) —
+   `navigator_settings` e `navigator_audit`.
+2. **Edge functions (já existentes):** `supabase functions deploy kubo-secrets` (op `totp`),
+   `supabase functions deploy github-repos` (ops do GitHub), `supabase functions deploy creative-router`
+   (ferramentas `github`/`youtube` no prompt).
+3. **Template E2B:** reconstruir `vertal-browser` (o `navd.py` mudou: TOTP, `/pending`, texto/captura no
+   pedido de aprovação) — mesmo comando do passo 2 da fase 1 (só a última camada, ≈ 35 s).
+4. **Worker:** merge na `main` → Workers Builds. Rotas novas: `/api/navigator/settings`,
+   `/api/navigator/activity`, `/api/media/youtube`.
+5. **Segredos:** nenhum obrigatório novo. Opcional: **`YOUTUBE_API_KEY`** no Worker (Google Cloud →
+   YouTube Data API v3; restrinja a chave à API). O TOTP usa o `NAVIGATOR_INTERNAL_TOKEN` já existente.
+
+## Limitações e riscos conhecidos (fases 2 e 3)
+
+- **Leitura do total é heurística.** Páginas com vários "Total" (ex.: total por item) ou valores em imagem
+  podem confundir; por isso o automático exige rótulo de total, BRL e teto, e vem desligado.
+- **Semente TOTP no cofre** transforma o cofre em "algo que você tem": quem comprometer a conta Vertal e o
+  cofre gera códigos. Mitigações: opt-in por site com consentimento, `bound_to` obrigatório, semente nunca
+  sai do servidor, auditoria por uso.
+- **GitHub:** o token OAuth tem escopo `repo` (todos os repositórios do usuário); organizações com
+  restrição a apps OAuth recusam (o resultado diz isso e sugere o navegador).
+- **YouTube:** a cota diária da Data API é limitada (search = 100 unidades); sem chave, depende do
+  Navigator (créditos por minuto) ou da busca na web.

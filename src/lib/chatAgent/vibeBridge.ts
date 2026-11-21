@@ -206,3 +206,31 @@ export async function delegateToNavigator(task: string, url?: string): Promise<C
     ...(out.ok ? {} : { error: out.message }),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Ponte Vibe Code → GitHub (comando "/github …", fase 3 do Navigator)
+// ---------------------------------------------------------------------------
+
+export { parseGithubCommand as parseVibeGithubCommand } from '../../../supabase/functions/_shared/githubOps';
+
+/**
+ * Executa uma operação do GitHub pela conexão OAuth. Escrita só depois de
+ * `confirm` devolver true (cartão de confirmação). Falhou na API? A resposta
+ * sugere "/navegar" como plano B.
+ */
+export async function delegateToGithub(
+  op: import('../../../supabase/functions/_shared/githubOps').GithubOp,
+  confirm: (text: string) => Promise<boolean>,
+): Promise<ChatDelegateResult> {
+  const { callGithubOp, describeGithubOp, isGithubWrite } = await import('@/lib/github/client');
+  const question = describeGithubOp(op);
+  const base = { question, tools: [{ tool: 'github', ok: false }], images: [], refused: [] as string[] };
+  if (isGithubWrite(op) && !(await confirm(question))) {
+    return { ...base, ok: false, answer: 'Cancelado: nada foi criado no GitHub.', error: 'Cancelado pelo usuário.' };
+  }
+  const res = await callGithubOp(op, { confirmed: isGithubWrite(op) });
+  if (!res.ok) {
+    return { ...base, ok: false, answer: `${res.message} Plano B: use "/navegar" para fazer pelo navegador.`, error: res.message };
+  }
+  return { ...base, ok: true, answer: res.message, tools: [{ tool: 'github', ok: true }] };
+}

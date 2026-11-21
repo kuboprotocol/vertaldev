@@ -17,7 +17,7 @@ export interface NavigatorState {
   events: NavigatorEvent[];
   lastSeq: number;
   pending: NavigatorPending[];
-  filling: Array<{ name?: string; host?: string }>;
+  filling: Array<{ name?: string; host?: string; kind?: string }>;
   screenshot: string | null;
   url: string | null;
   billedMinutes: number;
@@ -217,6 +217,31 @@ export async function stopNavigator(): Promise<NavigatorResponse> {
   ended('');
   set({ error: null });
   return res;
+}
+
+// ─── Fase 2: preferências, atividade e consentimento TOTP ────────────────
+
+/** Lê "aprovar automático até R$X" (padrão: desligado, sempre pedir). */
+export async function loadNavigatorSettings(): Promise<NavigatorResponse> {
+  return callNavigator('settings', {});
+}
+
+/**
+ * Grava a preferência. Ligar o automático exige `confirmed: true`, que só o clique
+ * do usuário no painel envia (o modelo não tem ferramenta para isso).
+ */
+export async function saveNavigatorSettings(enabled: boolean, maxCents: number): Promise<NavigatorResponse> {
+  return callNavigator('settings', { autoApproveEnabled: enabled, autoApproveMaxCents: enabled ? maxCents : 0, ...(enabled ? { confirmed: true } : {}) });
+}
+
+/** Histórico para a aba Atividade: sessões e auditoria (segredos só por nome). */
+export async function loadNavigatorActivity(): Promise<NavigatorResponse> {
+  return callNavigator('activity', {});
+}
+
+/** Registra na auditoria o consentimento explícito para guardar a semente TOTP. */
+export async function recordTotpConsent(name: string, boundTo: string): Promise<NavigatorResponse> {
+  return callNavigator('settings', { consent: 'totp', name, boundTo, confirmed: true });
 }
 
 /** Só para testes. */

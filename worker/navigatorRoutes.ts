@@ -8,6 +8,9 @@
 //   POST /api/navigator/release   {sessionId}                    → devolve ao agente (troca a senha de controle, salva cookies)
 //   POST /api/navigator/stop      {sessionId}                    → salva cookies, encerra o sandbox
 //   POST /api/navigator/forget    {}                             → apaga os cookies salvos do usuário
+//   POST /api/navigator/settings  {} | {autoApproveEnabled, autoApproveMaxCents, confirmed?}
+//                                                                → lê/grava "aprovar automático até R$X" (padrão: sempre pedir)
+//   POST /api/navigator/activity  {}                             → histórico: sessões e auditoria (segredos só por nome)
 //
 // Roda no Worker do vertal.dev (o Supabase está no limite de edge functions).
 // O navegador fica num sandbox E2B self-hosted (template vertal-browser, ver
@@ -15,10 +18,12 @@
 // Segredos do cofre e cookies usam a CONNECTOR_ENC_KEY (mesmo AES-GCM das edge functions).
 import { createRateLimiter } from '../supabase/functions/_shared/browserForm';
 import {
-  NAVIGATOR_LIMITS, NAVIGATOR_MESSAGES, liveViewUrl, minutesDue, normalizeNavigatorUrl, parseInputBody, parseSessionBody,
-  parseStartBody, parseTaskBody, pickSecretForHost, sanitizeEvents, sanitizePending, isBlockedHost,
-  type NavigatorStatus, type VaultSecretMeta,
+  DEFAULT_NAVIGATOR_SETTINGS, NAVIGATOR_LIMITS, NAVIGATOR_MESSAGES, auditDetail, autoApproveDecision, extractCheckoutSummary, formatCents,
+  liveViewUrl, minutesDue, normalizeNavigatorUrl, parseInputBody, parseSessionBody, parseSettingsBody, parseStartBody, parseTaskBody,
+  pickSecretForHost, pickTotpForHost, isTotpSecretName, sanitizeEvents, sanitizePending, isBlockedHost,
+  type CheckoutSummary, type NavigatorAuditKind, type NavigatorPending, type NavigatorSettings, type NavigatorStatus, type VaultSecretMeta,
 } from '../supabase/functions/_shared/navigatorCore.ts';
+import { parseTotpSeed, totpNow } from '../supabase/functions/_shared/totp.ts';
 import { createSandbox, e2bDomain, E2BError, killSandbox, navd, setSandboxTimeout, waitNavd, type E2BEnv, type NavdTarget } from './e2bClient';
 import { decryptWithConnectorKey, encryptWithConnectorKey, EncKeyMissingError, randomPassword, randomToken } from './navigatorCrypto';
 import { isAllowedOrigin } from './spotifyRoutes';
@@ -133,8 +138,52 @@ async function sealSecrets(env: NavigatorEnv, s: SessionSecrets) {
 }
 
 async function endSession(env: NavigatorEnv, row: SessionRow, reason: string): Promise<void> {
-  await sessions(env).update({ id: `eq.${row.id}`, status: 'neq.ended' }, { status: 'ended', ended_at: new Date().toISOString(), end_reason: reason }).catch(() => undefined);
+  const closed = await sessions(env).update({ id: `eq.${row.id}`, status: 'neq.ended' }, { status: 'ended', ended_at: new Date().toISOString(), end_reason: reason }).catch(() => []);
   if (row.sandbox_id) await killSandbox(env, row.sandbox_id);
+  if (Array.isArray(closed) && closed.length) await recordAudit(env, row.user_id, row.id, 'session_end', { end_reason: reason, minutes: row.billed_minutes });
+}
+
+// ─── Auditoria (fase 2) ──────────────────────────────────────────────────
+/** Grava uma linha em navigator_audit. Nunca derruba a rota; detalhe passa por auditDetail (sem valores sensíveis). */
+async function recordAudit(env: NavigatorEnv, userId: string, sessionId: string | null, kind: NavigatorAuditKind, detail: Record<string, unknown> = {}): Promise<void> {
+  await table(env, 'navigator_audit').insert({ user_id: userId, session_id: sessionId, kind, detail: auditDetail(detail) }).catch((e) => {
+    console.error('navigator: audit falhou', kind, e instanceof Error ? e.message.slice(0, 160) : e);
+  });
+}
+
+async function loadSettings(env: NavigatorEnv, userId: string): Promise<NavigatorSettings> {
+  const rows = await table(env, 'navigator_settings')
+    .select<{ auto_approve_enabled: boolean; auto_approve_max_cents: number }>({ user_id: `eq.${userId}`, select: 'auto_approve_enabled,auto_approve_max_cents', limit: '1' })
+    .catch(() => []);
+  const r = rows[0];
+  return r ? { autoApproveEnabled: !!r.auto_approve_enabled, autoApproveMaxCents: Number(r.auto_approve_max_cents) || 0 } : { ...DEFAULT_NAVIGATOR_SETTINGS };
+}
+
+type RawPending = Record<string, unknown>;
+
+/** Lê loja/itens/total do texto da página que o navd mandou no pedido de aprovação. */
+function summaryOf(p: RawPending): CheckoutSummary {
+  return extractCheckoutSummary(p.pageText, p.pageTitle, p.url);
+}
+
+/** Campos do resumo que vão para o cartão (o texto bruto da página nunca sai do servidor). */
+function withSummary(p: RawPending): RawPending {
+  if (p.kind !== 'approval') return p;
+  const sum = summaryOf(p);
+  const { pageText: _drop, ...rest } = p;
+  return {
+    ...rest,
+    store: sum.store || undefined,
+    pageTitle: sum.pageTitle || undefined,
+    ...(sum.total ? { total: sum.total.text, totalCents: sum.total.cents, currency: sum.total.currency } : {}),
+    items: sum.items,
+  };
+}
+
+function summaryAudit(p: RawPending | undefined): Record<string, unknown> {
+  if (!p) return {};
+  const sum = summaryOf(p);
+  return { store: sum.store, total: sum.total?.text, items: sum.items, target: p.target, url: p.url, reason: p.reason };
 }
 
 /** Cobra os minutos devidos (pré-pago). Trava otimista em billed_minutes: duas chamadas simultâneas não cobram duas vezes. */
@@ -261,6 +310,43 @@ async function fulfillSecret(env: NavigatorEnv, userId: string, row: SessionRow,
   }
   const now = new Date().toISOString();
   await table(env, 'kubo_secrets').update({ id: `eq.${secret.id}` }, { last_used_at: now }).catch(() => undefined);
+  await recordAudit(env, userId, row.id, 'secret_used', { name: secret.env_key, host });
+  return true;
+}
+
+/** Código TOTP de agora: pela edge function kubo-secrets (op "totp"), ou localmente se o Worker tiver a CONNECTOR_ENC_KEY. A semente nunca sai do servidor. */
+async function resolveTotpCode(env: NavigatorEnv, userId: string, secretId: string, host: string, sessionId: string): Promise<string | null> {
+  if (env.NAVIGATOR_INTERNAL_TOKEN && env.SUPABASE_URL) {
+    const res = await fetch(`${env.SUPABASE_URL.replace(/\/+$/, '')}/functions/v1/kubo-secrets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-navigator-token': env.NAVIGATOR_INTERNAL_TOKEN, apikey: env.SUPABASE_SECRET_KEY ?? '', Authorization: `Bearer ${env.SUPABASE_SECRET_KEY ?? ''}` },
+      body: JSON.stringify({ op: 'totp', id: secretId, user_id: userId, host, session_id: sessionId }),
+    }).catch(() => null);
+    if (res?.ok) {
+      const data = (await res.json().catch(() => ({}))) as { code?: unknown };
+      if (typeof data.code === 'string' && /^\d{6,8}$/.test(data.code)) return data.code;
+    }
+    if (!env.CONNECTOR_ENC_KEY) return null;
+  }
+  if (!env.CONNECTOR_ENC_KEY) return null;
+  const rows = await table(env, 'kubo_secrets').select<{ ciphertext: string; iv: string; tag: string }>({ id: `eq.${secretId}`, select: 'ciphertext,iv,tag', limit: '1' });
+  if (!rows[0]) return null;
+  const params = parseTotpSeed(await decryptWithConnectorKey(env.CONNECTOR_ENC_KEY, rows[0]));
+  if (!params) return null;
+  const { code } = await totpNow(params);
+  await table(env, 'kubo_secret_audit').insert({ secret_id: secretId, actor_id: userId, action: 'inject', meta: { target: 'navigator', kind: 'totp', host, session_id: sessionId } }).catch(() => undefined);
+  return code;
+}
+
+/** Resolve um pedido needs_totp do agente: gera o código no servidor e entrega ao navd, que digita. Sem semente: null (o navd pede ao usuário). */
+async function fulfillTotp(env: NavigatorEnv, userId: string, row: SessionRow, target: NavdTarget, pending: { id: string; name?: string; host?: string }): Promise<boolean> {
+  const host = String(pending.host ?? '');
+  const secret = pickTotpForHost(await visibleSecrets(env, userId), host, pending.name);
+  const code = secret ? await resolveTotpCode(env, userId, secret.id, host, row.id).catch(() => null) : null;
+  await navd(env, target, 'POST', '/input', { id: pending.id, kind: 'totp', value: code }).catch(() => undefined);
+  if (!code || !secret) return false;
+  await table(env, 'kubo_secrets').update({ id: `eq.${secret.id}` }, { last_used_at: new Date().toISOString() }).catch(() => undefined);
+  await recordAudit(env, userId, row.id, 'totp_used', { name: secret.env_key, host });
   return true;
 }
 
@@ -286,7 +372,7 @@ export async function handleNavigator(request: Request, env: NavigatorEnv, url: 
   const route = url.pathname.slice(NAVIGATOR_API_PREFIX.length).replace(/^\/+|\/+$/g, '');
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders(request) });
   if (request.method !== 'POST') return fail(request, 'bad_request', {}, 405);
-  if (!['start', 'task', 'status', 'input', 'takeover', 'release', 'stop', 'forget'].includes(route)) return fail(request, 'bad_request', {}, 404);
+  if (!['start', 'task', 'status', 'input', 'takeover', 'release', 'stop', 'forget', 'settings', 'activity'].includes(route)) return fail(request, 'bad_request', {}, 404);
 
   let userId: string | null;
   try {
@@ -307,6 +393,10 @@ export async function handleNavigator(request: Request, env: NavigatorEnv, url: 
       case 'forget':
         await table(env, 'navigator_profiles').delete({ user_id: `eq.${userId}` });
         return json(request, { ok: true, status: 'ok' });
+      case 'settings':
+        return await settingsRoute(request, env, userId, body);
+      case 'activity':
+        return await activityRoute(request, env, userId);
       default:
         return await withSession(request, env, userId, route, body);
     }
@@ -392,6 +482,7 @@ async function start(request: Request, env: NavigatorEnv, userId: string, body: 
     }
     await sessions(env).update({ id: `eq.${id}` }, { status: 'active', last_activity_at: new Date().toISOString() });
     row.status = 'active';
+    await recordAudit(env, userId, id, 'session_start', parsed.data.url ? { url: parsed.data.url } : {});
     return json(request, { ok: true, status: 'ok', reused: false, cookiesRestored: init.data.cookiesImported ?? 0, ...sessionView(env, row, secrets) });
   } catch (e) {
     await endSession(env, row, 'start_failed');
@@ -449,6 +540,7 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
       });
       if (res.status === 409) return fail(request, 'busy', {}, 409);
       if (!res.data.ok) return fail(request, 'bad_request', { detail: res.data.error }, 400);
+      await recordAudit(env, userId, row.id, 'task', { task: parsed.data.task, url: parsed.data.url });
       return json(request, { ok: true, status: 'ok', runId: res.data.runId, ...sessionView(env, row, s) });
     }
     case 'status': {
@@ -456,10 +548,30 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
         env, target, 'GET', `/events?after=${base.data.after}`,
       );
       if (!res.data.ok) return fail(request, 'sandbox_error', {}, 502);
-      const pending = sanitizePending(res.data.pending);
-      // Segredos pedidos pelo agente: resolvidos aqui, no servidor.
+      const rawPending = (Array.isArray(res.data.pending) ? res.data.pending : []) as RawPending[];
+      const autoAnswered = new Set<string>();
+      // Aprovação automática (fase 2): só se o usuário ligou, o total foi lido com confiança e cabe no limite.
+      if (rawPending.some((p) => p?.kind === 'approval')) {
+        const settings = await loadSettings(env, userId);
+        if (settings.autoApproveEnabled) {
+          for (const p of rawPending.filter((x) => x?.kind === 'approval' && typeof x.id === 'string')) {
+            const sum = summaryOf(p);
+            if (!autoApproveDecision(settings, sum).auto) continue;
+            const ans = await navd<{ ok?: boolean }>(env, target, 'POST', '/input', { id: p.id, kind: 'approval', approve: true }).catch(() => null);
+            if (ans?.data.ok) {
+              autoAnswered.add(String(p.id));
+              await recordAudit(env, userId, row.id, 'auto_approved', { ...summaryAudit(p), limit: formatCents(settings.autoApproveMaxCents) });
+            }
+          }
+        }
+      }
+      const pending = sanitizePending(rawPending.filter((p) => !autoAnswered.has(String(p?.id))).map(withSummary));
+      // Segredos e códigos TOTP pedidos pelo agente: resolvidos aqui, no servidor.
       for (const p of pending.filter((x) => x.kind === 'secret')) {
         await fulfillSecret(env, userId, row, target, p);
+      }
+      for (const p of pending.filter((x) => x.kind === 'totp')) {
+        await fulfillTotp(env, userId, row, target, p);
       }
       const events = sanitizeEvents(res.data.events);
       let cookiesSaved: number | null = null;
@@ -468,8 +580,8 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
       return json(request, {
         ok: true, status: 'ok', agentStatus: res.data.status, runId: res.data.runId, takeover: !!res.data.takeover,
         url: pageUrl, events, lastSeq: res.data.lastSeq ?? base.data.after,
-        pending: pending.filter((p) => p.kind !== 'secret'),
-        filling: pending.filter((p) => p.kind === 'secret').map((p) => ({ name: p.name, host: p.host })),
+        pending: pending.filter((p) => p.kind !== 'secret' && p.kind !== 'totp'),
+        filling: pending.filter((p) => p.kind === 'secret' || p.kind === 'totp').map((p) => ({ name: p.name, host: p.host, kind: p.kind })),
         screenshot: typeof res.data.screenshot === 'string' && res.data.screenshot.startsWith('data:image/jpeg;base64,') ? res.data.screenshot : undefined,
         ...(cookiesSaved !== null ? { cookiesSaved } : {}),
         ...sessionView(env, row, s),
@@ -479,9 +591,14 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
       const parsed = parseInputBody(body);
       if (!parsed.ok) return fail(request, parsed.status, { detail: parsed.detail }, 400);
       const d = parsed.data;
+      // Detalhes do pedido (loja/total/botão) para a auditoria, antes de responder.
+      const before = await navd<{ ok?: boolean; pending?: RawPending[] }>(env, target, 'GET', '/pending').catch(() => null);
+      const asked = (before?.data.pending ?? []).find((p) => p?.id === d.requestId);
       const res = await navd<{ ok?: boolean; error?: string }>(env, target, 'POST', '/input',
         d.kind === 'approval' ? { id: d.requestId, kind: 'approval', approve: d.approve } : { id: d.requestId, kind: d.kind, value: d.value });
       if (!res.data.ok) return fail(request, 'not_pending', { detail: res.data.error }, 409);
+      if (d.kind === 'approval') await recordAudit(env, userId, row.id, d.approve ? 'approval_granted' : 'approval_denied', summaryAudit(asked));
+      else if (d.kind === 'code') await recordAudit(env, userId, row.id, 'code_entered', { host: typeof asked?.host === 'string' ? asked.host : undefined });
       return json(request, { ok: true, status: 'ok' });
     }
     case 'takeover': {
@@ -491,6 +608,7 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
       const res = await navd<{ ok?: boolean }>(env, target, 'POST', '/takeover', { controlPassword: next.controlPassword });
       if (!res.data.ok) return fail(request, 'sandbox_error', {}, 502);
       await sessions(env).update({ id: `eq.${row.id}` }, await sealSecrets(env, next));
+      await recordAudit(env, userId, row.id, 'takeover');
       return json(request, { ok: true, status: 'ok', controlUrl: liveViewUrl(row.sandbox_id, e2bDomain(env), next.controlPassword, true), ...sessionView(env, row, next) });
     }
     case 'release': {
@@ -501,9 +619,50 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
       await sessions(env).update({ id: `eq.${row.id}` }, await sealSecrets(env, next));
       // O usuário pode ter feito login à mão: guarda os cookies agora.
       const cookiesSaved = await saveProfile(env, userId, target);
+      await recordAudit(env, userId, row.id, 'release');
       return json(request, { ok: true, status: 'ok', cookiesSaved, ...sessionView(env, row, next) });
     }
     default:
       return fail(request, 'bad_request', {}, 404);
   }
 }
+
+// ─── Preferências e Atividade (fase 2) ───────────────────────────────────
+async function settingsRoute(request: Request, env: NavigatorEnv, userId: string, body: Record<string, unknown>): Promise<Response> {
+  // Consentimento explícito para guardar a semente TOTP no cofre (o segredo em si vai pelo kubo-secrets).
+  if (body.consent === 'totp') {
+    const name = typeof body.name === 'string' ? body.name.trim().toUpperCase() : '';
+    const bound = typeof body.boundTo === 'string' ? body.boundTo.trim().toLowerCase() : '';
+    if (!isTotpSecretName(name) || !/^[a-z0-9_-]{1,64}$/.test(bound) || body.confirmed !== true) return fail(request, 'bad_request', { detail: 'consent' }, 400);
+    await recordAudit(env, userId, null, 'totp_consent', { name, host: bound });
+    return json(request, { ok: true, status: 'ok' });
+  }
+  if (body.autoApproveEnabled === undefined) {
+    return json(request, { ok: true, status: 'ok', settings: await loadSettings(env, userId), capCents: NAVIGATOR_LIMITS.autoApproveMaxCentsCap });
+  }
+  const parsed = parseSettingsBody(body);
+  if (!parsed.ok) return fail(request, parsed.status, { detail: parsed.detail }, 400);
+  const s = parsed.data;
+  await table(env, 'navigator_settings').upsert(
+    { user_id: userId, auto_approve_enabled: s.autoApproveEnabled, auto_approve_max_cents: s.autoApproveMaxCents, updated_at: new Date().toISOString() },
+    'user_id',
+  );
+  await recordAudit(env, userId, null, 'settings_changed', s.autoApproveEnabled ? { limit: formatCents(s.autoApproveMaxCents) } : {});
+  return json(request, { ok: true, status: 'ok', settings: s, capCents: NAVIGATOR_LIMITS.autoApproveMaxCentsCap });
+}
+
+async function activityRoute(request: Request, env: NavigatorEnv, userId: string): Promise<Response> {
+  const [recentSessions, audit] = await Promise.all([
+    sessions(env).select<{ id: string; status: string; started_at: string; ended_at: string | null; end_reason: string | null; billed_minutes: number }>({
+      user_id: `eq.${userId}`, select: 'id,status,started_at,ended_at,end_reason,billed_minutes', order: 'started_at.desc', limit: '20',
+    }),
+    table(env, 'navigator_audit').select<{ id: string; session_id: string | null; kind: string; detail: Record<string, unknown>; created_at: string }>({
+      user_id: `eq.${userId}`, select: 'id,session_id,kind,detail,created_at', order: 'created_at.desc', limit: '150',
+    }).catch(() => []),
+  ]);
+  return json(request, { ok: true, status: 'ok', sessions: recentSessions, audit });
+}
+
+/** Só para testes: o resumo que o cartão recebe a partir do pedido cru do navd. */
+export const __test = { withSummary, summaryAudit };
+export type { NavigatorPending };
