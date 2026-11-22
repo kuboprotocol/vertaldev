@@ -30,6 +30,10 @@ import { requestNavigatorPanel, runNavigatorTask, startNavigator, stopNavigator 
 import { callGithubOp, describeGithubOp, isGithubWrite } from '@/lib/github/client';
 import type { GithubOp } from '../../../supabase/functions/_shared/githubOps';
 import { searchYoutube, youtubeVideoId } from '@/lib/media/youtube';
+import { callAutomatischOp } from '@/lib/automatisch/client';
+import {
+  AUTOMATISCH_SECRETS, describeAutomatischOp, isAutomatischWrite, type AutomatischOp,
+} from '../../../supabase/functions/_shared/automatischCore';
 
 export interface ApiApprovalRequest {
   method: string;
@@ -590,6 +594,35 @@ export async function runGithub(action: Extract<AgentAction, { tool: 'github' }>
   return followUp('github', true, `${res.message}\n(DADOS do GitHub)`);
 }
 
+// ─── Automatisch do cliente ──────────────────────────────────────────────
+
+/**
+ * Fluxos no Automatisch do cliente (creative-router, tool "automatisch").
+ * TODA chamada passa pelo cartão de permissão (leitura também): os nomes dos
+ * segredos vão no cartão, então nem um domínio já aprovado libera sozinho.
+ * Login, senha e token ficam no servidor; aqui só volta o dado do fluxo.
+ */
+export async function runAutomatisch(action: Extract<AgentAction, { tool: 'automatisch' }>, ctx: ActionContext): Promise<ActionOutcome> {
+  const { tool: _tool, ...rest } = action;
+  const op = rest as AutomatischOp;
+  const what = describeAutomatischOp(op);
+  const ok = await ctx.approveApi({
+    method: 'AUTOMATISCH', url: what, host: 'Automatisch (sua instância)',
+    reason: isAutomatischWrite(op) ? `${what}. Isto altera ou executa algo no seu Automatisch.` : what,
+    secrets: [...AUTOMATISCH_SECRETS], hasBody: isAutomatischWrite(op),
+  });
+  if (!ok) return followUp('automatisch', false, 'O usuário não autorizou esta chamada ao Automatisch.', 'Chamada ao Automatisch não autorizada.');
+  const res = await callAutomatischOp(op);
+  if (res.code === 'missing_secrets') {
+    return { ...followUp('automatisch', false, `${res.message} O painel do Cofre foi aberto para o cliente salvar.`, res.message), panel: 'secrets' };
+  }
+  if (res.code === 'auth_failed' || res.code === 'bad_url') {
+    return { ...followUp('automatisch', false, res.message, res.message), panel: 'secrets' };
+  }
+  if (!res.ok) return followUp('automatisch', false, res.message, res.message);
+  return followUp('automatisch', true, `${res.message}\n(DADOS do Automatisch)`);
+}
+
 // ─── Mídia: YouTube (fase 3) ─────────────────────────────────────────────
 
 /**
@@ -1139,6 +1172,8 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
         return await runGithub(action, ctx);
       case 'youtube':
         return await runYoutube(action, ctx);
+      case 'automatisch':
+        return await runAutomatisch(action, ctx);
       case 'weather':
         return await runWeather(action);
       case 'web_search':
@@ -1317,6 +1352,7 @@ export function actionLabel(action: AgentAction): string {
       return action.op === 'stop' ? 'Fechando o navegador (salvando o login)' : action.op === 'open' ? 'Abrindo o navegador na nuvem' : 'Navegando no site (você acompanha ao vivo)';
     case 'github': return action.op === 'list_repos' ? 'Lendo seus repositórios no GitHub' : 'Preparando ação no GitHub (você confirma antes)';
     case 'youtube': return action.url ? 'Abrindo o vídeo no player' : 'Buscando no YouTube';
+    case 'automatisch': return 'Falando com o seu Automatisch (você aprova cada chamada)';
     case 'open_panel': return 'Abrindo painel';
     case 'weather': return 'Consultando o clima';
     case 'web_search': return 'Buscando na web';

@@ -49,6 +49,14 @@ import { wantsNavigator } from "../_shared/navigatorCore.ts";
 import { emailRoute, rerouteEmailActions } from "../_shared/emailRouting.ts";
 import { wantsGithub } from "../_shared/githubOps.ts";
 import { wantsMedia } from "../_shared/youtubeCore.ts";
+import {
+  AUTOMATISCH_LIMITS,
+  AUTOMATISCH_SECRETS,
+  normalizeAutomatischUrl,
+  parseAutomatischOp,
+  runAutomatischOp,
+  wantsAutomatisch,
+} from "../_shared/automatischCore.ts";
 import { listVisibleSecrets, resolveEnvForRun } from "../_shared/kuboSecrets.ts";
 import {
   DELEGATED_CHAT_PROMPT,
@@ -65,7 +73,7 @@ const InputSchema = z.object({
     content: z.string().min(1),
   })).optional(),
   prompt: z.string().optional(),
-  tool: z.enum(["chat", "image", "video", "music", "pdf", "docs", "slide", "edit_image", "edit_video", "office_ai", "office_email", "chat_json", "notebook_ai", "agent_chat", "api_request"]),
+  tool: z.enum(["chat", "image", "video", "music", "pdf", "docs", "slide", "edit_image", "edit_video", "office_ai", "office_email", "chat_json", "notebook_ai", "agent_chat", "api_request", "automatisch"]),
   model: z.string().optional(),
   temperature: z.number().optional(),
   max_tokens: z.number().optional(),
@@ -78,6 +86,8 @@ const InputSchema = z.object({
   agent: z.record(z.any()).optional(),
   // Vertal Chat: chamada de API externa aprovada pelo usuário (validada em handleApiRequest).
   api: z.record(z.any()).optional(),
+  // Vertal Chat: operação no Automatisch do cliente aprovada na tela (validada em handleAutomatisch).
+  automatisch: z.record(z.any()).optional(),
 });
 
 // Credit costs based on prompt instructions
@@ -98,6 +108,7 @@ const COSTS: Record<string, number> = {
   notebook_ai: 1,  // Vertal Notebook: custo real vem de notebookAiCost(pedido)
   agent_chat: 0,   // Vertal Chat: custo real vem de chatJsonCost (mesma cota do modo de conversa)
   api_request: 0,  // Vertal Chat: chamada de API externa não é cobrada (tem limite de requisições)
+  automatisch: 0,  // Vertal Chat: Automatisch do cliente, não é cobrado (tem limite de requisições)
 };
 
 Deno.serve(withRefundOnFailure(async (req) => {
@@ -124,7 +135,7 @@ Deno.serve(withRefundOnFailure(async (req) => {
       });
     }
 
-    const { tool, messages, prompt, model, temperature, max_tokens, metadata, office, notebook, agent, api } = parsed.data;
+    const { tool, messages, prompt, model, temperature, max_tokens, metadata, office, notebook, agent, api, automatisch } = parsed.data;
     
     // Determine cost
     let cost = COSTS[tool] ?? 1;
@@ -169,6 +180,8 @@ Deno.serve(withRefundOnFailure(async (req) => {
       return await handleAgentChat(user, messages ?? [], agent ?? {}, cost);
     } else if (tool === "api_request") {
       return await handleApiRequest(user, api ?? {});
+    } else if (tool === "automatisch") {
+      return await handleAutomatisch(user, automatisch ?? {});
     }
 
     return new Response(JSON.stringify({ error: "tool_not_implemented_in_router" }), {
@@ -644,6 +657,7 @@ async function handleAgentChat(
   // Fase 3: GitHub (Vibe Code) e YouTube só entram no prompt quando a conversa pede.
   const githubOn = !delegated && wantsGithub([...all.slice(-8), ...results.slice(-6)]);
   const mediaOn = wantsMedia([...all.slice(-6), ...results.slice(-4)]);
+  const automatischOn = !delegated && wantsAutomatisch([...all.slice(-8), ...results.slice(-6)]);
   const system = buildAgentSystemPrompt({
     secretNames,
     today: new Date().toISOString().slice(0, 10),
@@ -660,6 +674,7 @@ async function handleAgentChat(
     email: mailRoute,
     github: githubOn,
     media: mediaOn,
+    automatisch: automatischOn,
   }) + (delegated ? DELEGATED_CHAT_PROMPT : "");
   const final = agent.data.final === true || brain.planPhase === "final";
   const convo = results.length
@@ -927,4 +942,60 @@ async function handleApiRequest(user: { id: string; email?: string | null }, raw
     body: text,
     truncated,
   });
+}
+
+// ─── Vertal Chat: Automatisch do cliente ─────────────────────────────────
+
+/**
+ * Executa uma operação no Automatisch (edição comunitária) do cliente.
+ * URL, e-mail e senha vêm do Cofre de segredos e só existem aqui; o login
+ * (token) é feito, usado e revogado nesta requisição. A resposta leva só os
+ * dados do fluxo/execução, nunca credenciais nem token.
+ */
+async function handleAutomatisch(user: { id: string; email?: string | null }, raw: unknown): Promise<Response> {
+  const limit = await enforceRateLimit(user.id, "automatisch", { max: 20, windowSeconds: 60, userEmail: user.email ?? null });
+  if (!limit.ok) return jsonResponse(429, { error: limit.error });
+
+  // Sem a aprovação explícita do usuário na tela a chamada não sai.
+  if ((raw as { confirmed?: unknown } | null)?.confirmed !== true) return jsonResponse(400, { error: "confirmation_required" });
+  const op = parseAutomatischOp(raw);
+  if (!op) return jsonResponse(400, { error: "invalid_input" });
+
+  const resolved = await resolveEnvForRun(supaAdmin(), user.id, [...AUTOMATISCH_SECRETS], { target: "automatisch" });
+  if (resolved.missing.length > 0) return jsonResponse(400, { error: "missing_secrets", missing: resolved.missing });
+  const env = resolved.env;
+
+  const base = normalizeAutomatischUrl(env.AUTOMATISCH_URL);
+  if (!base) return jsonResponse(400, { error: "bad_url" });
+  let host: string;
+  try {
+    host = validatePublicUrl(base).host;
+  } catch {
+    return jsonResponse(400, { error: "url_not_allowed" });
+  }
+  const ownHost = new URL(Deno.env.get("SUPABASE_URL")!).host;
+  if (host === ownHost) return jsonResponse(400, { error: "url_not_allowed" });
+
+  const result = await runAutomatischOp(
+    op,
+    { url: base, email: env.AUTOMATISCH_EMAIL, password: env.AUTOMATISCH_PASSWORD },
+    {
+      fetch: async (url, init) => {
+        // Cada chamada fica no mesmo host da base (um redirecionamento não é seguido).
+        if (new URL(url).host !== host) throw new TypeError("host_changed");
+        return await fetch(url, { ...init, redirect: "manual", signal: AbortSignal.timeout(AUTOMATISCH_LIMITS.timeoutMs) });
+      },
+    },
+  );
+
+  await supaAdmin().from("connector_activity_logs").insert({
+    user_id: user.id,
+    connector_slug: "automatisch",
+    event_type: `automatisch_${op.op}`,
+    message: `${op.op} ${host}`.slice(0, 300),
+    status: result.ok ? "success" : "error",
+    metadata: { host, op: op.op, ...(result.ok ? {} : { code: result.code, http_status: result.status ?? null }) },
+  }).then(({ error }) => { if (error) console.error("[creative-router] automatisch log failed:", error.message); });
+
+  return jsonResponse(200, result);
 }

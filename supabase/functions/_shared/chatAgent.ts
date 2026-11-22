@@ -29,6 +29,7 @@ import { EMAIL_RULES, type EmailRoute } from "./emailRouting.ts";
 const GMAIL_THREAD_RE = /^[A-Za-z0-9_-]{6,64}$/;
 import { parseGithubOp, type GithubOp } from "./githubOps.ts";
 import { YOUTUBE_LIMITS, youtubeVideoId } from "./youtubeCore.ts";
+import { AUTOMATISCH_SECRETS, parseAutomatischOp, type AutomatischOp } from "./automatischCore.ts";
 
 export type Msg = { role: "system" | "user" | "assistant"; content: string };
 
@@ -151,7 +152,9 @@ export type AgentAction =
   // Vibe Code + GitHub (fase 3): API OAuth já conectada; escrita pede confirmação do usuário no chat.
   | ({ tool: "github" } & GithubOp)
   // Mídia (fase 3): player embutido do YouTube. "play" com url (ou query, se houver busca).
-  | { tool: "youtube"; op: "play" | "search"; query?: string; url?: string };
+  | { tool: "youtube"; op: "play" | "search"; query?: string; url?: string }
+  // Automatisch do cliente (fluxos de automação): login pelo Cofre, só no servidor; o usuário aprova cada chamada.
+  | ({ tool: "automatisch" } & AutomatischOp);
 
 /** Conexão que o próprio cliente adicionou (API ou servidor MCP). Só nome, endereço e NOME do segredo. */
 export interface UserConnection {
@@ -235,6 +238,7 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   navigator: `${NAVIGATOR_LIMITS.creditsPerMinute} crédito por minuto com o navegador aberto`,
   github: "grátis (criar/abrir pede sua confirmação)",
   youtube: "grátis",
+  automatisch: "grátis (você aprova cada chamada)",
 };
 
 export interface AgentPromptContext {
@@ -265,6 +269,8 @@ export interface AgentPromptContext {
   github?: boolean;
   /** A conversa fala de vídeo/música/tocar: inclui a ferramenta youtube (ver wantsMedia). */
   media?: boolean;
+  /** A conversa fala de Automatisch/automação/fluxos: inclui a ferramenta automatisch (ver wantsAutomatisch). */
+  automatisch?: boolean;
   /** Pedido sobre o e-mail do usuário (ver emailRoute): "gmail" inclui as regras do conector. */
   email?: EmailRoute | null;
 }
@@ -330,6 +336,13 @@ const GITHUB_TOOL =
 const YOUTUBE_TOOL =
   `- {"tool":"youtube","op":"play|search","query":"…","url":"link (opcional)"} → vídeo no player do chat (${TOOL_COSTS.youtube}). Música do Spotify conectado: spotify. Sem busca, ache o link (navigator/web_search) e repita com "url".`;
 
+/** Automatisch do cliente: só entra no prompt quando a conversa fala de automação/fluxos (wantsAutomatisch). */
+const AUTOMATISCH_TOOL =
+  `- {"tool":"automatisch","op":"list_flows|get_flow|create_flow|add_step|update_step|test_step|set_flow_status|list_executions|get_execution|list_apps|app_steps|app_fields|list_connections"} + flow_id/step_id/execution_id/previous_step_id/name/active/app_key/kind("triggers|actions")/key/connection_id/parameters{}/page/status → fluxos no Automatisch do cliente (${TOOL_COSTS.automatisch}). Login só no servidor com ${AUTOMATISCH_SECRETS.join(", ")} do Cofre: nunca peça e-mail, senha ou token no chat.`;
+
+const AUTOMATISCH_RULES =
+  "Automatisch: criar e rodar = create_flow (vem com gatilho e ação vazios) → app_steps/app_fields para achar chaves e campos → update_step em cada passo (app_key, key, parameters; connection_id de list_connections se o app pedir) → test_step em ordem (roda de verdade) → set_flow_status active:true. Resultado: list_executions/get_execution. Use os ids que a ferramenta devolveu; nunca invente.";
+
 /**
  * Orçamento do prompt (1/3 do contexto do gateway). As ferramentas opcionais da
  * fase 3 (github, youtube) só entram se couberem; em conversas muito longas
@@ -351,13 +364,17 @@ const MEMORY_UNAVAILABLE = "Memória: indisponível neste momento. Não prometa 
 
 export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
   const full = buildPrompt(ctx);
-  if (full.length <= AGENT_PROMPT_BUDGET || (!ctx.github && !ctx.media)) return full;
-  // Prioridade: github (Vibe Code) > youtube (mídia).
-  if (ctx.github && ctx.media) {
+  if (full.length <= AGENT_PROMPT_BUDGET || (!ctx.github && !ctx.media && !ctx.automatisch)) return full;
+  // Prioridade ao cortar: automatisch (pedido explícito) > github (Vibe Code) > youtube (mídia).
+  if (ctx.media) {
     const noMedia = buildPrompt({ ...ctx, media: false });
     if (noMedia.length <= AGENT_PROMPT_BUDGET) return noMedia;
   }
-  return buildPrompt({ ...ctx, github: false, media: false });
+  if (ctx.automatisch) {
+    const onlyAutomatisch = buildPrompt({ ...ctx, github: false, media: false });
+    if (onlyAutomatisch.length <= AGENT_PROMPT_BUDGET) return onlyAutomatisch;
+  }
+  return buildPrompt({ ...ctx, github: false, media: false, automatisch: false });
 }
 
 function buildPrompt(ctx: AgentPromptContext): string {
@@ -399,6 +416,7 @@ function buildPrompt(ctx: AgentPromptContext): string {
     ctx.navigator ? NAVIGATOR_TOOL : "",
     ctx.github ? GITHUB_TOOL : "",
     ctx.media ? YOUTUBE_TOOL : "",
+    ctx.automatisch ? AUTOMATISCH_TOOL : "",
     `- {"tool":"api_request","method":"GET|POST|PUT|PATCH|DELETE","url":"https://...","headers":{},"body":"texto ou JSON em string","reason":"por que esta chamada"} → chama uma API externa quando nenhuma ferramenta acima resolve. O usuário aprova cada chamada. Para autenticar, escreva {{NOME_DO_SEGREDO}} no valor do cabeçalho, na query ou no corpo; o servidor troca pelo valor do cofre. Nunca peça para o usuário colar chaves no chat. Segredos disponíveis: ${secrets}. Se faltar um segredo, explique qual nome criar e use {"tool":"open_panel","panel":"secrets"}.`,
     `- {"tool":"open_panel","panel":"${PANELS.filter((p) => p !== "navigator").join("|")}"} → abre um painel dentro do chat para o usuário trabalhar à mão. Use quando o pedido precisa de arquivos do usuário (video_studio: fotos viram vídeo; clips: cortes de vídeo longo; avatar: avatar falante; emo: animar foto; notebook: conversar com PDFs e links; office/design/canvas: edição manual).`,
     `- {"tool":"weather","place":"bairro ou cidade"} → clima atual e previsão de 3 dias. Sem "place", usa a localização do aparelho do usuário (ele autoriza). Nunca invente o clima: use sempre esta ferramenta.`,
@@ -443,6 +461,7 @@ function buildPrompt(ctx: AgentPromptContext): string {
     formOn ? `${BROWSER_FORM_RULES}\n` : "",
     ctx.navigator ? `${NAVIGATOR_RULES}\n` : "",
     ctx.email === "gmail" ? `${EMAIL_RULES}\n` : "",
+    ctx.automatisch ? `${AUTOMATISCH_RULES}\n` : "",
     ctx.memoryEnabled === false ? MEMORY_OFF : ctx.memoryEnabled === null ? MEMORY_UNAVAILABLE : MEMORY_RULES,
     ctx.localNow
       ? `Agora, para o usuário: ${ctx.localNow}${ctx.timezone ? ` (fuso ${ctx.timezone})` : ""}.`
@@ -803,6 +822,10 @@ export function parseAgentAction(raw: unknown): AgentAction | null {
         ...(id ? { url: `https://www.youtube.com/watch?v=${id}` } : {}),
         ...(query.length >= 2 ? { query } : {}),
       };
+    }
+    case "automatisch": {
+      const op = parseAutomatischOp(a);
+      return op ? ({ tool: "automatisch", ...op } as AgentAction) : null;
     }
     case "world_time": {
       const list = Array.isArray(a.places) ? a.places : typeof a.places === "string" ? a.places.split(",") : typeof a.place === "string" ? [a.place] : [];
