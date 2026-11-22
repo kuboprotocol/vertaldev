@@ -15,7 +15,7 @@ describe('HuginnAgentsCard', () => {
   it('não chama o Huginn sozinho', () => {
     renderCard();
     expect(call).not.toHaveBeenCalled();
-    expect(screen.getByText(/só fala com o seu Huginn quando você clica/)).toBeTruthy();
+    expect(screen.getByText(/só fala com o seu Vertal Agentes quando você clica/)).toBeTruthy();
   });
 
   it('ao clicar mostra status, agentes e o link da instância', async () => {
@@ -29,6 +29,9 @@ describe('HuginnAgentsCard', () => {
     expect(screen.getByText('conectado')).toBeTruthy();
     expect(screen.getByText('XKCD Source').closest('a')?.getAttribute('href')).toBe('https://h.up.railway.app/agents/3');
     expect(screen.getByText(/2 pendente/)).toBeTruthy();
+    // Marca branca: botão com rótulo genérico, sem o endereço da instância nem nomes de fornecedores.
+    expect(screen.getByRole('button', { name: /Abrir Vertal Agentes/ })).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/railway|Huginn|Automatisch/i);
   });
 
   it('sem segredos leva ao Cofre', async () => {

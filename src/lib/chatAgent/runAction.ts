@@ -609,11 +609,11 @@ export async function runAutomatisch(action: Extract<AgentAction, { tool: 'autom
   const op = rest as AutomatischOp;
   const what = describeAutomatischOp(op);
   const ok = await ctx.approveApi({
-    method: 'AUTOMATISCH', url: what, host: 'Automatisch (sua instância)',
-    reason: isAutomatischWrite(op) ? `${what}. Isto altera ou executa algo no seu Automatisch.` : what,
+    method: 'VERTAL FLUXOS', url: what, host: 'Vertal Fluxos',
+    reason: isAutomatischWrite(op) ? `${what}. Isto altera ou executa algo no seu Vertal Fluxos.` : what,
     secrets: [...AUTOMATISCH_SECRETS], hasBody: isAutomatischWrite(op),
   });
-  if (!ok) return followUp('automatisch', false, 'O usuário não autorizou esta chamada ao Automatisch.', 'Chamada ao Automatisch não autorizada.');
+  if (!ok) return followUp('automatisch', false, 'O usuário não autorizou esta chamada ao Vertal Fluxos.', 'Chamada ao Vertal Fluxos não autorizada.');
   const res = await callAutomatischOp(op);
   if (res.code === 'missing_secrets') {
     return { ...followUp('automatisch', false, `${res.message} O painel do Cofre foi aberto para o cliente salvar.`, res.message), panel: 'secrets' };
@@ -622,7 +622,7 @@ export async function runAutomatisch(action: Extract<AgentAction, { tool: 'autom
     return { ...followUp('automatisch', false, res.message, res.message), panel: 'secrets' };
   }
   if (!res.ok) return followUp('automatisch', false, res.message, res.message);
-  return followUp('automatisch', true, `${res.message}\n(DADOS do Automatisch)`);
+  return followUp('automatisch', true, `${res.message}\n(DADOS do Vertal Fluxos)`);
 }
 
 // ─── Huginn do cliente ───────────────────────────────────────────────────
@@ -639,11 +639,11 @@ export async function runHuginn(action: Extract<AgentAction, { tool: 'huginn' }>
   const what = describeHuginnOp(op);
   const bridge = op.op === 'connect_to_automatisch' || op.op === 'connect_from_automatisch';
   const ok = await ctx.approveApi({
-    method: 'HUGINN', url: what, host: bridge ? 'Huginn + Automatisch (suas instâncias)' : 'Huginn (sua instância)',
-    reason: isHuginnWrite(op) ? `${what}. Isto altera ou executa algo no seu ${bridge ? 'Huginn e no seu Automatisch' : 'Huginn'}.` : what,
+    method: 'VERTAL AGENTES', url: what, host: bridge ? 'Vertal Agentes + Vertal Fluxos' : 'Vertal Agentes',
+    reason: isHuginnWrite(op) ? `${what}. Isto altera ou executa algo no seu ${bridge ? 'Vertal Agentes e no seu Vertal Fluxos' : 'Vertal Agentes'}.` : what,
     secrets: huginnSecretsFor(op), hasBody: isHuginnWrite(op),
   });
-  if (!ok) return followUp('huginn', false, 'O usuário não autorizou esta chamada ao Huginn.', 'Chamada ao Huginn não autorizada.');
+  if (!ok) return followUp('huginn', false, 'O usuário não autorizou esta chamada ao Vertal Agentes.', 'Chamada ao Vertal Agentes não autorizada.');
   const res = await callHuginnOp(op);
   if (res.code === 'missing_secrets') {
     return { ...followUp('huginn', false, `${res.message} O painel do Cofre foi aberto para o cliente salvar.`, res.message), panel: 'secrets' };
@@ -652,7 +652,7 @@ export async function runHuginn(action: Extract<AgentAction, { tool: 'huginn' }>
     return { ...followUp('huginn', false, res.message, res.message), panel: 'secrets' };
   }
   if (!res.ok) return followUp('huginn', false, res.message, res.message);
-  return followUp('huginn', true, `${res.message}\n(DADOS do Huginn)`);
+  return followUp('huginn', true, `${res.message}\n(DADOS do Vertal Agentes)`);
 }
 
 // ─── Mídia: YouTube (fase 3) ─────────────────────────────────────────────
@@ -1386,8 +1386,8 @@ export function actionLabel(action: AgentAction): string {
       return action.op === 'stop' ? 'Fechando o navegador (salvando o login)' : action.op === 'open' ? 'Abrindo o navegador na nuvem' : 'Navegando no site (você acompanha ao vivo)';
     case 'github': return action.op === 'list_repos' ? 'Lendo seus repositórios no GitHub' : 'Preparando ação no GitHub (você confirma antes)';
     case 'youtube': return action.url ? 'Abrindo o vídeo no player' : 'Buscando no YouTube';
-    case 'automatisch': return 'Falando com o seu Automatisch (você aprova cada chamada)';
-    case 'huginn': return action.op.startsWith('connect_') ? 'Ligando o Huginn ao Automatisch (você aprova antes)' : 'Falando com o seu Huginn (você aprova cada chamada)';
+    case 'automatisch': return 'Falando com o seu Vertal Fluxos (você aprova cada chamada)';
+    case 'huginn': return action.op.startsWith('connect_') ? 'Ligando o Vertal Agentes ao Vertal Fluxos (você aprova antes)' : 'Falando com o seu Vertal Agentes (você aprova cada chamada)';
     case 'open_panel': return 'Abrindo painel';
     case 'weather': return 'Consultando o clima';
     case 'web_search': return 'Buscando na web';

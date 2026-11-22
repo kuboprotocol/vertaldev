@@ -286,44 +286,44 @@ const shortType = (t: string) => t.replace(/^Agents::/, "");
 /** Texto do cartão de permissão (o que vai acontecer no Huginn). */
 export function describeHuginnOp(op: HuginnOp): string {
   switch (op.op) {
-    case "status": return "Ver se o seu Huginn está no ar (fila de tarefas e eventos)";
-    case "list_agents": return `Listar seus agentes do Huginn${op.scenario_id ? ` do cenário ${op.scenario_id}` : ""}${op.page ? ` (página ${op.page})` : ""}`;
-    case "get_agent": return `Ler o agente ${op.agent_id} do Huginn e os eventos recentes dele`;
-    case "list_events": return `Listar eventos${op.agent_id ? ` do agente ${op.agent_id}` : ""} do Huginn${op.page ? ` (página ${op.page})` : ""}`;
-    case "list_scenarios": return "Listar seus cenários do Huginn";
-    case "create_agent": return `Criar o agente "${op.name}" (${shortType(op.type)}) no Huginn${op.schedule && op.schedule !== "never" ? `, rodando ${op.schedule}` : ""}`;
-    case "import_scenario": return `Importar o cenário "${String(op.scenario.name ?? "")}" (${Array.isArray(op.scenario.agents) ? op.scenario.agents.length : 0} agente(s)) no Huginn`;
-    case "run_agent": return `RODAR agora o agente ${op.agent_id} do Huginn (executa de verdade)`;
-    case "set_agent_enabled": return op.enabled ? `Ativar o agente ${op.agent_id} do Huginn` : `Desativar o agente ${op.agent_id} do Huginn`;
-    case "send_webhook_event": return `Enviar um evento para o WebhookAgent ${op.agent_id} do Huginn`;
-    case "connect_to_automatisch": return `LIGAR: quando o agente ${op.source_agent_id} do Huginn emitir um evento, chamar o fluxo ${op.flow_id.slice(0, 8)}… do Automatisch (cria um PostAgent no Huginn)`;
-    case "connect_from_automatisch": return `LIGAR: o passo ${op.step_id.slice(0, 8)}… do Automatisch passa a mandar um evento para ${op.webhook_agent_id ? `o WebhookAgent ${op.webhook_agent_id}` : "um novo WebhookAgent"} do Huginn`;
+    case "status": return "Ver se o seu Vertal Agentes está no ar (fila de tarefas e eventos)";
+    case "list_agents": return `Listar seus agentes do Vertal Agentes${op.scenario_id ? ` do cenário ${op.scenario_id}` : ""}${op.page ? ` (página ${op.page})` : ""}`;
+    case "get_agent": return `Ler o agente ${op.agent_id} do Vertal Agentes e os eventos recentes dele`;
+    case "list_events": return `Listar eventos${op.agent_id ? ` do agente ${op.agent_id}` : ""} do Vertal Agentes${op.page ? ` (página ${op.page})` : ""}`;
+    case "list_scenarios": return "Listar seus cenários do Vertal Agentes";
+    case "create_agent": return `Criar o agente "${op.name}" (${shortType(op.type)}) no Vertal Agentes${op.schedule && op.schedule !== "never" ? `, rodando ${op.schedule}` : ""}`;
+    case "import_scenario": return `Importar o cenário "${String(op.scenario.name ?? "")}" (${Array.isArray(op.scenario.agents) ? op.scenario.agents.length : 0} agente(s)) no Vertal Agentes`;
+    case "run_agent": return `RODAR agora o agente ${op.agent_id} do Vertal Agentes (executa de verdade)`;
+    case "set_agent_enabled": return op.enabled ? `Ativar o agente ${op.agent_id} do Vertal Agentes` : `Desativar o agente ${op.agent_id} do Vertal Agentes`;
+    case "send_webhook_event": return `Enviar um evento para o WebhookAgent ${op.agent_id} do Vertal Agentes`;
+    case "connect_to_automatisch": return `LIGAR: quando o agente ${op.source_agent_id} do Vertal Agentes emitir um evento, chamar o fluxo ${op.flow_id.slice(0, 8)}… do Vertal Fluxos (cria um PostAgent no Vertal Agentes)`;
+    case "connect_from_automatisch": return `LIGAR: o passo ${op.step_id.slice(0, 8)}… do Vertal Fluxos passa a mandar um evento para ${op.webhook_agent_id ? `o WebhookAgent ${op.webhook_agent_id}` : "um novo WebhookAgent"} do Vertal Agentes`;
   }
 }
 
 /** Mensagens das respostas (pt-BR), por código. */
 export const HUGINN_ERROR_MESSAGES: Record<string, string> = {
-  missing_secrets: "Faltam segredos do Huginn no Cofre (HUGINN_URL, HUGINN_USERNAME, HUGINN_PASSWORD).",
-  bad_url: "HUGINN_URL no Cofre não é um endereço https válido (ex.: https://seu-huginn.up.railway.app).",
-  url_not_allowed: "Esse endereço do Huginn não pode ser chamado (só endereços públicos em https).",
-  auth_failed: "O Huginn recusou o login. Confira HUGINN_USERNAME e HUGINN_PASSWORD no Cofre.",
-  csrf_missing: "O Huginn não devolveu o token de segurança (CSRF) da página. Confira se HUGINN_URL aponta para o Huginn.",
-  forbidden: "O Huginn recusou a ação (permissão ou token de segurança).",
-  not_found: "Não encontrado no Huginn (agente, evento ou cenário).",
-  invalid: "O Huginn recusou os dados enviados.",
-  not_webhook_agent: "Esse agente não é um WebhookAgent do Huginn (só ele recebe eventos por URL).",
+  missing_secrets: "Faltam segredos do Vertal Agentes no Cofre (HUGINN_URL, HUGINN_USERNAME, HUGINN_PASSWORD).",
+  bad_url: "HUGINN_URL no Cofre não é um endereço https válido (ex.: https://agentes.suaempresa.com.br).",
+  url_not_allowed: "Esse endereço do Vertal Agentes não pode ser chamado (só endereços públicos em https).",
+  auth_failed: "O Vertal Agentes recusou o login. Confira HUGINN_USERNAME e HUGINN_PASSWORD no Cofre.",
+  csrf_missing: "O Vertal Agentes não devolveu o token de segurança (CSRF) da página. Confira se HUGINN_URL aponta para o Vertal Agentes.",
+  forbidden: "O Vertal Agentes recusou a ação (permissão ou token de segurança).",
+  not_found: "Não encontrado no Vertal Agentes (agente, evento ou cenário).",
+  invalid: "O Vertal Agentes recusou os dados enviados.",
+  not_webhook_agent: "Esse agente não é um WebhookAgent do Vertal Agentes (só ele recebe eventos por URL).",
   webhook_rejected: "O WebhookAgent recusou o evento (confira o verbo e o segredo do agente).",
-  import_failed: "O Huginn não aceitou o cenário (precisa de name, guid e agents válidos).",
-  flow_without_webhook: "O fluxo do Automatisch ainda não tem gatilho Webhook. Configure o gatilho com o app webhook → catchRawWebhook e teste o passo antes de ligar ao Huginn.",
-  step_not_action: "O passo do Automatisch não é uma ação (use o id de um passo de ação, não do gatilho).",
-  automatisch_failed: "O Automatisch não respondeu como esperado.",
-  rate_limited: "Muitos pedidos ao Huginn em pouco tempo. Aguarde um minuto.",
-  redirect_blocked: "O Huginn respondeu com um redirecionamento inesperado (não é seguido por segurança). Confira HUGINN_URL.",
-  timeout: "O Huginn não respondeu a tempo.",
-  network_error: "Não foi possível falar com o Huginn (rede).",
-  bad_response: "O Huginn respondeu num formato inesperado.",
-  huginn_error: "O Huginn não respondeu como esperado.",
-  invalid_input: "Pedido inválido para o Huginn.",
+  import_failed: "O Vertal Agentes não aceitou o cenário (precisa de name, guid e agents válidos).",
+  flow_without_webhook: "O fluxo do Vertal Fluxos ainda não tem gatilho Webhook. Configure o gatilho com o app webhook → catchRawWebhook e teste o passo antes de ligar ao Vertal Agentes.",
+  step_not_action: "O passo do Vertal Fluxos não é uma ação (use o id de um passo de ação, não do gatilho).",
+  automatisch_failed: "O Vertal Fluxos não respondeu como esperado.",
+  rate_limited: "Muitos pedidos ao Vertal Agentes em pouco tempo. Aguarde um minuto.",
+  redirect_blocked: "O Vertal Agentes respondeu com um redirecionamento inesperado (não é seguido por segurança). Confira HUGINN_URL.",
+  timeout: "O Vertal Agentes não respondeu a tempo.",
+  network_error: "Não foi possível falar com o Vertal Agentes (rede).",
+  bad_response: "O Vertal Agentes respondeu num formato inesperado.",
+  huginn_error: "O Vertal Agentes não respondeu como esperado.",
+  invalid_input: "Pedido inválido para o Vertal Agentes.",
   confirmation_required: "Esta chamada precisa da sua permissão.",
 };
 
@@ -636,20 +636,21 @@ export function summarizeHuginnResult(op: HuginnOp, data: unknown): string {
   const d = rec(data);
   let head: string;
   switch (op.op) {
-    case "status": head = `Huginn no ar (${String(d.instance_url ?? "")}). Fila: ${String(d.pending ?? 0)} pendente(s), ${String(d.recent_failures ?? 0)} falha(s) recente(s).`; break;
-    case "list_agents": head = arr(d.agents).length ? `${arr(d.agents).length} agente(s) do Huginn (página ${String(d.page ?? 1)}):` : "Nenhum agente nessa página do Huginn."; break;
+    case "status": head = `Vertal Agentes no ar. Fila: ${String(d.pending ?? 0)} pendente(s), ${String(d.recent_failures ?? 0)} falha(s) recente(s).`; break;
+    case "list_agents": head = arr(d.agents).length ? `${arr(d.agents).length} agente(s) do Vertal Agentes (página ${String(d.page ?? 1)}):` : "Nenhum agente nessa página do Vertal Agentes."; break;
     case "get_agent": head = `Agente "${String(rec(d.agent).name ?? "")}" (${rec(d.agent).type ? `${String(rec(d.agent).type)}, ` : ""}${rec(d.agent).enabled === false ? "desativado" : "ativo"}):`; break;
     case "list_events": head = arr(d.events).length ? `${arr(d.events).length} evento(s):` : "Nenhum evento encontrado."; break;
-    case "list_scenarios": head = arr(d.scenarios).length ? `${arr(d.scenarios).length} cenário(s):` : "Nenhum cenário no Huginn."; break;
-    case "create_agent": head = `Agente criado no Huginn: "${String(rec(d.agent).name ?? "")}" (id ${String(rec(d.agent).id ?? "?")}).`; break;
-    case "import_scenario": head = `Cenário importado no Huginn${d.scenario_id ? ` (id ${String(d.scenario_id)})` : ""}.`; break;
-    case "run_agent": head = `Execução do agente ${op.agent_id} enfileirada no Huginn (roda em segundos; veja os eventos com get_agent).`; break;
+    case "list_scenarios": head = arr(d.scenarios).length ? `${arr(d.scenarios).length} cenário(s):` : "Nenhum cenário no Vertal Agentes."; break;
+    case "create_agent": head = `Agente criado no Vertal Agentes: "${String(rec(d.agent).name ?? "")}" (id ${String(rec(d.agent).id ?? "?")}).`; break;
+    case "import_scenario": head = `Cenário importado no Vertal Agentes${d.scenario_id ? ` (id ${String(d.scenario_id)})` : ""}.`; break;
+    case "run_agent": head = `Execução do agente ${op.agent_id} enfileirada no Vertal Agentes (roda em segundos; veja os eventos com get_agent).`; break;
     case "set_agent_enabled": head = op.enabled ? `Agente ${op.agent_id} ativado.` : `Agente ${op.agent_id} desativado.`; break;
     case "send_webhook_event": head = `Evento entregue ao WebhookAgent ${op.agent_id} (HTTP ${String(d.http_status ?? "?")}).`; break;
-    case "connect_to_automatisch": head = `Ligado: eventos do agente ${op.source_agent_id} do Huginn vão para o fluxo do Automatisch.`; break;
-    case "connect_from_automatisch": head = "Ligado: o passo do Automatisch vai mandar um evento para o Huginn.";
+    case "connect_to_automatisch": head = `Ligado: eventos do agente ${op.source_agent_id} do Vertal Agentes vão para o fluxo do Vertal Fluxos.`; break;
+    case "connect_from_automatisch": head = "Ligado: o passo do Vertal Fluxos vai mandar um evento para o Vertal Agentes.";
   }
-  return `${head}\n${JSON.stringify(data)}`.slice(0, HUGINN_LIMITS.maxSummaryChars);
+  // O endereço da instância fica fora do texto que vai ao modelo (marca branca).
+  return `${head}\n${JSON.stringify(data, (k, v) => (k === "instance_url" ? undefined : v))}`.slice(0, HUGINN_LIMITS.maxSummaryChars);
 }
 
 /** Faz a(s) chamada(s) de uma operação comum (não ponte), já logado. */
@@ -795,7 +796,7 @@ export async function runHuginnOp(op: HuginnOp, creds: HuginnCreds, deps: { fetc
 
 // ─── Quando ligar a ferramenta no prompt ─────────────────────────────────
 
-const HUGINN_HINTS = /\b(huginn|webhook\s*agent|post\s*agent|website\s*agent)\b/i;
+const HUGINN_HINTS = /\b(huginn|vertal\s+agentes|webhook\s*agent|post\s*agent|website\s*agent)\b/i;
 
 /** A conversa recente fala de Huginn? (liga a ferramenta huginn no prompt) */
 export function wantsHuginn(recent: Array<string | { content?: unknown; summary?: unknown; tool?: unknown }>, lookback = 8): boolean {

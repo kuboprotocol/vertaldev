@@ -88,7 +88,7 @@ async function toAutomatisch(op: Extract<BridgeOp, { op: "connect_to_automatisch
   const trigger = steps.find((st) => st.type === "trigger");
   const url = trigger?.webhookUrl;
   if (!trigger || trigger.appKey !== "webhook" || !isFlowWebhookUrl(url, op.flow_id)) throw new HuginnHttpError("flow_without_webhook");
-  const name = op.name ?? `Vertal → Automatisch: ${String(flow.name ?? op.flow_id.slice(0, 8))}`.slice(0, 120);
+  const name = op.name ?? `Vertal Agentes → Vertal Fluxos: ${String(flow.name ?? op.flow_id.slice(0, 8))}`.slice(0, 120);
   const created = await createAgent(s, {
     op: "create_agent", type: "Agents::PostAgent", name, options: postAgentOptions(url),
     schedule: "never", source_ids: [op.source_agent_id], propagate_immediately: true,
@@ -101,7 +101,7 @@ async function toAutomatisch(op: Extract<BridgeOp, { op: "connect_to_automatisch
     wired: `Cada evento novo do agente ${String(source.name ?? op.source_agent_id)} vira um POST JSON no gatilho Webhook do fluxo.`,
     next: flow.active === true
       ? "O fluxo está publicado: a próxima vez que o agente emitir um evento, o fluxo roda."
-      : "O fluxo ainda é rascunho: o Automatisch só registra o pedido como teste. Teste o gatilho (test_step) e publique (set_flow_status active:true) para rodar de verdade.",
+      : "O fluxo ainda é rascunho: o Vertal Fluxos só registra o pedido como teste. Teste o gatilho (test_step) e publique (set_flow_status active:true) para rodar de verdade.",
   };
 }
 
@@ -116,7 +116,7 @@ async function fromAutomatisch(op: Extract<BridgeOp, { op: "connect_from_automat
     if (!verbs.includes("post")) throw new HuginnHttpError("webhook_rejected");
   } else {
     agent = await createAgent(s, {
-      op: "create_agent", type: "Agents::WebhookAgent", name: op.name ?? "Vertal ← Automatisch",
+      op: "create_agent", type: "Agents::WebhookAgent", name: op.name ?? "Vertal Agentes ← Vertal Fluxos",
       options: { secret: randomHex(24), expected_receive_period_in_days: 2, payload_path: "$", verbs: "post" },
     });
   }
@@ -133,8 +133,8 @@ async function fromAutomatisch(op: Extract<BridgeOp, { op: "connect_from_automat
     webhook_agent: { ...agentView(agent), created: !op.webhook_agent_id },
     webhook_url: maskedWebhookUrl(s.base, agent.user_id, agent.id),
     automatisch_step: { id: step.id, appKey: step.appKey, key: step.key, status: step.status },
-    wired: "O passo do Automatisch faz POST JSON no WebhookAgent; cada chamada vira um evento no Huginn, que pode alimentar outros agentes.",
-    next: "Teste o passo no Automatisch (test_step, executa de verdade) e publique o fluxo (set_flow_status active:true).",
+    wired: "O passo do Vertal Fluxos faz POST JSON no WebhookAgent; cada chamada vira um evento no Vertal Agentes, que pode alimentar outros agentes.",
+    next: "Teste o passo no Vertal Fluxos (test_step, executa de verdade) e publique o fluxo (set_flow_status active:true).",
   };
 }
 

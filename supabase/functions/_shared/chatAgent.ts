@@ -344,17 +344,21 @@ const YOUTUBE_TOOL =
 
 /** Automatisch do cliente: só entra no prompt quando a conversa fala de automação/fluxos (wantsAutomatisch). */
 const AUTOMATISCH_TOOL =
-  `- {"tool":"automatisch","op":"list_flows|get_flow|create_flow|add_step|update_step|test_step|set_flow_status|list_executions|get_execution|list_apps|app_steps|app_fields|list_connections"} + flow_id/step_id/execution_id/previous_step_id/name/active/app_key/kind("triggers|actions")/key/connection_id/parameters{}/page/status → fluxos no Automatisch do cliente (${TOOL_COSTS.automatisch}). Login só no servidor com ${AUTOMATISCH_SECRETS.join(", ")} do Cofre: nunca peça e-mail, senha ou token no chat.`;
+  `- {"tool":"automatisch","op":"list_flows|get_flow|create_flow|add_step|update_step|test_step|set_flow_status|list_executions|get_execution|list_apps|app_steps|app_fields|list_connections"} + flow_id/step_id/execution_id/previous_step_id/name/active/app_key/kind("triggers|actions")/key/connection_id/parameters{}/page/status → fluxos no Vertal Fluxos do cliente (${TOOL_COSTS.automatisch}). Login só no servidor com ${AUTOMATISCH_SECRETS.join(", ")} do Cofre: nunca peça e-mail, senha ou token no chat.`;
 
 /** Huginn do cliente: só entra no prompt quando a conversa fala de Huginn (wantsHuginn). */
 const HUGINN_TOOL =
-  `- {"tool":"huginn","op":"status|list_agents|get_agent|list_events|list_scenarios|create_agent|import_scenario|run_agent|set_agent_enabled|send_webhook_event|connect_to_automatisch|connect_from_automatisch"} + agent_id/page/scenario_id/type("WebsiteAgent"…)/name/options{}/schedule/source_ids[]/receiver_ids[]/scenario{}/enabled/payload{}/source_agent_id/flow_id/step_id/webhook_agent_id/data → agentes no Huginn do cliente (${TOOL_COSTS.huginn}). Login só no servidor com ${HUGINN_SECRETS.join(", ")} do Cofre: nunca peça usuário ou senha no chat.`;
+  `- {"tool":"huginn","op":"status|list_agents|get_agent|list_events|list_scenarios|create_agent|import_scenario|run_agent|set_agent_enabled|send_webhook_event|connect_to_automatisch|connect_from_automatisch"} + agent_id/page/scenario_id/type("WebsiteAgent"…)/name/options{}/schedule/source_ids[]/receiver_ids[]/scenario{}/enabled/payload{}/source_agent_id/flow_id/step_id/webhook_agent_id/data → agentes no Vertal Agentes do cliente (${TOOL_COSTS.huginn}). Login só no servidor com ${HUGINN_SECRETS.join(", ")} do Cofre: nunca peça usuário ou senha no chat.`;
 
 const HUGINN_RULES =
-  "Huginn: ids são números que a ferramenta devolveu; nunca invente. create_agent leva todas as options do tipo (o Huginn não completa). \"Quando o Huginn detectar X, rode o fluxo Y\" = connect_to_automatisch (source_agent_id, flow_id; o fluxo precisa de gatilho webhook/catchRawWebhook). \"Quando o fluxo Y rodar, avise o Huginn\" = connect_from_automatisch (step_id de um passo de ação do Automatisch). Depois, diga o que ficou ligado e o que falta (testar e publicar o fluxo).";
+  "Vertal Agentes: ids são números que a ferramenta devolveu; nunca invente. create_agent leva todas as options do tipo (o Vertal Agentes não completa). \"Quando o Vertal Agentes detectar X, rode o fluxo Y\" = connect_to_automatisch (source_agent_id, flow_id; o fluxo precisa de gatilho webhook/catchRawWebhook). \"Quando o fluxo Y rodar, avise o Vertal Agentes\" = connect_from_automatisch (step_id de um passo de ação do Vertal Fluxos). Depois, diga o que ficou ligado e o que falta (testar e publicar o fluxo).";
+
+/** Marca branca: Vertal Agentes e Vertal Fluxos são produtos do ecossistema Vertal para o usuário. */
+export const BRAND_RULES =
+  "Marca: para o usuário, as ferramentas huginn e automatisch são o Vertal Agentes e o Vertal Fluxos, produtos do ecossistema Vertal. Nunca cite os ids dessas ferramentas, o nome dos motores por trás delas nem de provedores de hospedagem, e nunca mostre o endereço (URL) da instância: diga Vertal Agentes ou Vertal Fluxos.";
 
 const AUTOMATISCH_RULES =
-  "Automatisch: criar e rodar = create_flow (vem com gatilho e ação vazios) → app_steps/app_fields para achar chaves e campos → update_step em cada passo (app_key, key, parameters; connection_id de list_connections se o app pedir) → test_step em ordem (roda de verdade) → set_flow_status active:true. Resultado: list_executions/get_execution. Use os ids que a ferramenta devolveu; nunca invente.";
+  "Vertal Fluxos: criar e rodar = create_flow (vem com gatilho e ação vazios) → app_steps/app_fields para achar chaves e campos → update_step em cada passo (app_key, key, parameters; connection_id de list_connections se o app pedir) → test_step em ordem (roda de verdade) → set_flow_status active:true. Resultado: list_executions/get_execution. Use os ids que a ferramenta devolveu; nunca invente.";
 
 /**
  * Orçamento do prompt (1/3 do contexto do gateway). As ferramentas opcionais da
@@ -482,6 +486,7 @@ function buildPrompt(ctx: AgentPromptContext): string {
     ctx.email === "gmail" ? `${EMAIL_RULES}\n` : "",
     ctx.automatisch ? `${AUTOMATISCH_RULES}\n` : "",
     ctx.huginn ? `${HUGINN_RULES}\n` : "",
+    ctx.automatisch || ctx.huginn ? `${BRAND_RULES}\n` : "",
     ctx.memoryEnabled === false ? MEMORY_OFF : ctx.memoryEnabled === null ? MEMORY_UNAVAILABLE : MEMORY_RULES,
     ctx.localNow
       ? `Agora, para o usuário: ${ctx.localNow}${ctx.timezone ? ` (fuso ${ctx.timezone})` : ""}.`
