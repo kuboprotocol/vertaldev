@@ -34,6 +34,8 @@ import { callAutomatischOp } from '@/lib/automatisch/client';
 import {
   AUTOMATISCH_SECRETS, describeAutomatischOp, isAutomatischWrite, type AutomatischOp,
 } from '../../../supabase/functions/_shared/automatischCore';
+import { callHuginnOp, huginnSecretsFor } from '@/lib/huginn/client';
+import { describeHuginnOp, isHuginnWrite, type HuginnOp } from '../../../supabase/functions/_shared/huginnCore';
 
 export interface ApiApprovalRequest {
   method: string;
@@ -623,6 +625,36 @@ export async function runAutomatisch(action: Extract<AgentAction, { tool: 'autom
   return followUp('automatisch', true, `${res.message}\n(DADOS do Automatisch)`);
 }
 
+// ─── Huginn do cliente ───────────────────────────────────────────────────
+
+/**
+ * Agentes no Huginn do cliente (creative-router, tool "huginn"), incluindo a
+ * ponte com o Automatisch. TODA chamada passa pelo cartão de permissão
+ * (leitura também), com os nomes dos segredos no cartão. Login e sessão ficam
+ * no servidor; aqui só volta o dado dos agentes.
+ */
+export async function runHuginn(action: Extract<AgentAction, { tool: 'huginn' }>, ctx: ActionContext): Promise<ActionOutcome> {
+  const { tool: _tool, ...rest } = action;
+  const op = rest as HuginnOp;
+  const what = describeHuginnOp(op);
+  const bridge = op.op === 'connect_to_automatisch' || op.op === 'connect_from_automatisch';
+  const ok = await ctx.approveApi({
+    method: 'HUGINN', url: what, host: bridge ? 'Huginn + Automatisch (suas instâncias)' : 'Huginn (sua instância)',
+    reason: isHuginnWrite(op) ? `${what}. Isto altera ou executa algo no seu ${bridge ? 'Huginn e no seu Automatisch' : 'Huginn'}.` : what,
+    secrets: huginnSecretsFor(op), hasBody: isHuginnWrite(op),
+  });
+  if (!ok) return followUp('huginn', false, 'O usuário não autorizou esta chamada ao Huginn.', 'Chamada ao Huginn não autorizada.');
+  const res = await callHuginnOp(op);
+  if (res.code === 'missing_secrets') {
+    return { ...followUp('huginn', false, `${res.message} O painel do Cofre foi aberto para o cliente salvar.`, res.message), panel: 'secrets' };
+  }
+  if (res.code === 'auth_failed' || res.code === 'bad_url') {
+    return { ...followUp('huginn', false, res.message, res.message), panel: 'secrets' };
+  }
+  if (!res.ok) return followUp('huginn', false, res.message, res.message);
+  return followUp('huginn', true, `${res.message}\n(DADOS do Huginn)`);
+}
+
 // ─── Mídia: YouTube (fase 3) ─────────────────────────────────────────────
 
 /**
@@ -1174,6 +1206,8 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
         return await runYoutube(action, ctx);
       case 'automatisch':
         return await runAutomatisch(action, ctx);
+      case 'huginn':
+        return await runHuginn(action, ctx);
       case 'weather':
         return await runWeather(action);
       case 'web_search':
@@ -1353,6 +1387,7 @@ export function actionLabel(action: AgentAction): string {
     case 'github': return action.op === 'list_repos' ? 'Lendo seus repositórios no GitHub' : 'Preparando ação no GitHub (você confirma antes)';
     case 'youtube': return action.url ? 'Abrindo o vídeo no player' : 'Buscando no YouTube';
     case 'automatisch': return 'Falando com o seu Automatisch (você aprova cada chamada)';
+    case 'huginn': return action.op.startsWith('connect_') ? 'Ligando o Huginn ao Automatisch (você aprova antes)' : 'Falando com o seu Huginn (você aprova cada chamada)';
     case 'open_panel': return 'Abrindo painel';
     case 'weather': return 'Consultando o clima';
     case 'web_search': return 'Buscando na web';

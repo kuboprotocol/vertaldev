@@ -1,4 +1,4 @@
-import { Github, CreditCard, Globe, Figma, Server, Smartphone, Cloud, Database, Mail, MessageSquare, Shield, Container, Wallet, Zap, Leaf, Rocket, Terminal, TrendingUp, Instagram, MessageCircle, Music, Workflow } from 'lucide-react'
+import { Github, CreditCard, Globe, Figma, Server, Smartphone, Cloud, Database, Mail, MessageSquare, Shield, Container, Wallet, Zap, Leaf, Rocket, Terminal, TrendingUp, Instagram, MessageCircle, Music, Workflow, Radar } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 export interface ConnectorSetupStep {
@@ -150,6 +150,29 @@ export const connectors: ConnectorConfig[] = [
       { title: 'Endereço da instância', description: 'No Cofre de segredos, crie AUTOMATISCH_URL com o endereço https do seu Automatisch (ex.: https://sua-instancia.up.railway.app).' },
       { title: 'Usuário do Automatisch', description: 'Crie AUTOMATISCH_EMAIL e AUTOMATISCH_PASSWORD com o login de um usuário da instância.' },
       { title: 'Peça no chat', description: 'Diga, por exemplo, “liste meus fluxos do Automatisch”. O chat pede sua permissão antes de cada chamada.' },
+    ],
+  },
+  {
+    name: 'Huginn',
+    slug: 'huginn',
+    icon: Radar,
+    color: '#6F42C1',
+    authType: 'api_key',
+    category: 'development',
+    description: 'Agentes do Huginn que vigiam sites, feeds e APIs e reagem a eventos, direto do Vertal Chat e ligados ao Automatisch.',
+    longDescription: 'Ligue a sua instância do Huginn (código aberto, self-hosted) ao Vertal Chat. O chat lista seus agentes e eventos, cria agentes a partir de uma especificação JSON, importa cenários, roda, ativa ou desativa agentes e envia eventos para um WebhookAgent. Também liga o Huginn ao Automatisch nos dois sentidos: quando um agente do Huginn emitir um evento, um fluxo do Automatisch roda; e um passo do Automatisch pode avisar o Huginn. Você aprova cada chamada, e o endereço, o usuário e a senha ficam no Cofre de segredos: o login é feito só no servidor e nunca passa pela conversa.',
+    features: ['Listar agentes, eventos e cenários', 'Criar agentes e importar cenários pelo chat', 'Rodar, ativar e desativar agentes', 'Ponte Huginn ↔ Automatisch (webhooks)', 'Permissão a cada chamada; credenciais só no Cofre'],
+    docsUrl: 'https://github.com/huginn/huginn/wiki',
+    status: 'available',
+    // As credenciais vão para o Cofre de segredos (o chat lê de lá no servidor), não para o formulário genérico de conector.
+    internalRoute: '/secrets?env_key=HUGINN_URL&name=Huginn',
+    apiKeyLabel: 'Segredos no Cofre: HUGINN_URL, HUGINN_USERNAME e HUGINN_PASSWORD',
+    apiKeyPlaceholder: 'https://seu-huginn.up.railway.app',
+    apiKeyHelp: 'Use um usuário do próprio Huginn (usuário ou e-mail). O chat usa só os nomes dos segredos; os valores ficam cifrados no Cofre.',
+    setupSteps: [
+      { title: 'Endereço da instância', description: 'No Cofre de segredos, crie HUGINN_URL com o endereço https do seu Huginn (ex.: https://seu-huginn.up.railway.app).' },
+      { title: 'Usuário do Huginn', description: 'Crie HUGINN_USERNAME (usuário ou e-mail) e HUGINN_PASSWORD com o login de um usuário da instância.' },
+      { title: 'Peça no chat', description: 'Diga, por exemplo, “liste meus agentes do Huginn” ou “quando o Huginn detectar X, rode o fluxo Y do Automatisch”. O chat pede sua permissão antes de cada chamada.' },
     ],
   },
   {
