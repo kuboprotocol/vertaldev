@@ -603,3 +603,63 @@ Um resultado de falha mostrou no chat o valor bruto de um segredo (32 caracteres
 6. **Teste:** "entre no meu GitHub e diga quantas notificações eu tenho" sem segredo salvo → cartão de login na conversa →
    enviar com "Guardar no Cofre" → Cofre mostra `GITHUB_COM_LOGIN`/`GITHUB_COM_PASSWORD` (`bound_to github-com`) → repetir a
    tarefa numa sessão nova: preenche sozinho. "Leia meus e-mails pelo navegador" → cartão do conector Gmail.
+
+# Pagamentos inline: paywall, assinatura, checkout, carteira e "automatizar tudo" (22/11)
+
+Mesmo desenho dos cartões seguros: tudo acontece num cartão dentro da conversa.
+
+## Regras duras
+- **Nada é pago sem o toque do usuário** no cartão de aprovação (o modelo não tem op de aprovar; o Worker só aceita
+  `approve + confirmed` vindo do clique). Fechar/expirar = recusar.
+- **Uma aprovação = um pagamento, naquele total exato.** O cartão manda `totalCents + currency` que o usuário viu; se a
+  página já mostra outro total, o Worker responde `total_changed` (409) e o cartão é atualizado. Depois do toque, logo
+  antes do clique, o navd relê a página (`payment_check`, resolvido no Worker com o mesmo extrator do cartão —
+  `paymentRecheck`): total, moeda ou loja diferente → o navd pergunta de novo ("O valor mudou…"); no máximo 2 vezes.
+- **Padrão: sempre perguntar.** Automático só com pré-aprovação explícita (ver abaixo). Envio/escrita nunca entra no
+  automático por valor.
+
+## O cartão de aprovação mostra
+Loja, **total exato e moeda** (lidos da página), itens, **assinatura recorrente ou pagamento único**, período e os
+**termos de renovação como a página diz** (`detectSubscription`), forma de pagamento (cartão •••• final da carteira) e,
+com o Vertal Pay ligado, "Você tem R$ X no Vertal Pay. Pagar R$ Y?". Captura do momento.
+
+## Cartão (carteira no Cofre)
+- `fill_payment_card(number_index, exp_index | exp_month_index+exp_year_index, cvv_index, holder_index, zip_index, refused?)`
+  no navd → pedido `needs_card` → Worker usa o cartão da carteira (`kubo_secrets`, `env_key` `WALLET_CARD_<final>`,
+  `bound_to = vertal-wallet`, grupo `wallet`, valor JSON cifrado). `vertal-wallet` **nunca** casa com host no
+  `fill_secret` (TS e Python), então só o fluxo de pagamento usa.
+- Sem cartão válido (ou o site recusou: `refused=true`) → cartão **"Precisa de um cartão válido"** com número, validade,
+  CVV, titular e CEP de cobrança (Luhn, validade futura, CVV 3/4). "Guardar no Cofre (carteira)" ligado; **CVV só é
+  guardado se o usuário marcar** — senão, nas próximas vezes o cartão pede só o CVV ("CVV do Visa •••• 4242").
+- `input` com número de cartão digitado pelo modelo é recusado (Luhn). O número nunca vai ao modelo, a log, à resposta
+  do Worker nem à auditoria. Preencher o cartão não paga nada: o clique em pagar continua no gate.
+- Cartões salvos no Vibe Pay pelo Stripe (SetupIntent) **não** servem para preencher checkout de terceiros: o número
+  nunca passa pelo nosso servidor (PCI SAQ A). Por isso a carteira do Navigator é o Cofre.
+
+## Vertal Vibe Pay (adaptador atrás de flag)
+`VertalPayAdapter` no Worker: `VERTAL_PAY_NAVIGATOR=on` liga a leitura do saldo BRL pela função `wallet`
+(`bank-overview`, JWT do usuário). `canPay = false` até existir API para pagar checkout de terceiros com o saldo
+(o Pay está "em desenvolvimento", #192). Sem flag ou sem saldo real: nada aparece. Nunca inventa saldo.
+
+## "Automatizar tudo"
+- **No chat:** o modelo manda `{"tool":"navigator","op":"run",…,"automate":true,"auto_pay_max_brl":50}` só quando o
+  usuário pediu; o chat mostra um cartão de confirmação com o teto exato e **só o toque** envia `automation {confirmed:true,
+  paymentMaxCents}` (`parseAutomation`). Vale para a tarefa (guardado em `navigator_sessions.automation`).
+- **Nas configurações** (Navigator → Segurança): teto por pagamento (até R$ 1.000), teto por loja a cada 30 dias,
+  lojas permitidas e "incluir assinaturas recorrentes" (desligado por padrão).
+- Com automação: logins do Cofre sem perguntar (como sempre) e envios/confirmações aprovados sozinhos (`auto_action`).
+  Pagamento sozinho **só** com total lido com rótulo, em BRL, dentro do teto por pagamento e do período, loja permitida,
+  sem mudança de total e (salvo opt-in) sem assinatura recorrente (`autoPayDecision`). Acima do teto ou em dúvida → cartão.
+  Código 2FA, SMS, cartão ausente ou dado novo → o site pede, o agente para e pergunta.
+- Cada ação automática grava `auto_approved`/`payment`/`auto_action` na auditoria cifrada e aparece como **recibo** no
+  cartão ao vivo e no recibo final da conversa.
+- Toda decisão de pagamento (aprovado, recusado, automático, total mudou) grava `payment` com loja, total, centavos,
+  moeda, status e fonte (cifrado).
+
+## Deploy (empilhado no PR dos cartões seguros; nada aplicado)
+1. Migrations `20261122180000_navigator_secure_forms.sql` e `20261122190000_navigator_payments.sql` (tipos de auditoria,
+   colunas de teto em `navigator_settings`, `navigator_sessions.automation`). Antes do Worker.
+2. Worker: merge → Workers Builds. Opcional: `VERTAL_PAY_NAVIGATOR=on` (só quando o Pay sair do modo admin).
+3. `supabase functions deploy creative-router` (campos `automate`/`auto_pay_max_brl` no prompt e no parser).
+4. Rebuild do template E2B `vertal-browser` (`fill_payment_card`, recheck do total, guarda de número de cartão).
+5. Front: build normal.
