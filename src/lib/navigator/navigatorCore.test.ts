@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  CHECKOUT_CONFIRM_WORDS, CHECKOUT_URL_HINTS, GATED_ACTIONS, NAVIGATOR_LIMITS, PAYMENT_KEYWORDS, isSessionId, liveViewUrl,
+  CHECKOUT_CONFIRM_WORDS, CHECKOUT_URL_HINTS, GATED_ACTIONS, INVITE_HINTS, NAVIGATOR_LIMITS, PAYMENT_KEYWORDS, RSVP_WORDS, WRITE_KEYWORDS, isSessionId, liveViewUrl,
   looksLikeCheckout, minutesDue, needsPaymentApproval, normalizeNavigatorUrl, parseInputBody, parseSessionBody, parseStartBody,
   parseTaskBody, paymentKeyword, pickSecretForHost, sanitizeEvents, sanitizePending, secretMatchesHost, secretNeedsPasswordField,
   wantsNavigator, type VaultSecretMeta,
@@ -48,6 +48,12 @@ describe('gate de pagamento', () => {
       return m ? [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]) : null;
     };
     expect(list('PAYMENT_KEYWORDS')).toEqual([...PAYMENT_KEYWORDS]);
+    // Ações de escrita (fix navigator-scope): mesmas listas no TS e no navd.py.
+    expect(list('WRITE_KEYWORDS')).toEqual([...WRITE_KEYWORDS]);
+    expect(list('RSVP_WORDS')).toEqual([...RSVP_WORDS]);
+    expect(list('INVITE_HINTS')).toEqual([...INVITE_HINTS]);
+    expect(py).toContain(`MAX_STEPS_CAP = ${NAVIGATOR_LIMITS.maxStepsCap}`);
+    expect(py).toContain(`DEFAULT_MAX_STEPS = ${NAVIGATOR_LIMITS.defaultMaxSteps}`);
     expect(list('CHECKOUT_URL_HINTS')).toEqual([...CHECKOUT_URL_HINTS]);
     expect(list('CHECKOUT_CONFIRM_WORDS')).toEqual([...CHECKOUT_CONFIRM_WORDS]);
     const gated = /GATED_ACTIONS = \{([^}]*)\}/.exec(py)?.[1].match(/"([^"]+)"/g)?.map((s) => s.replace(/"/g, ''));

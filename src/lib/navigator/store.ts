@@ -3,7 +3,7 @@
 // e pelo executor do chat (que espera a tarefa terminar).
 import { useSyncExternalStore } from 'react';
 import { callNavigator, type NavigatorResponse } from './client';
-import { NAVIGATOR_MESSAGES, eventsForTask, isDoneForTask, type NavigatorEvent, type NavigatorPending } from './navigatorCore';
+import { NAVIGATOR_MESSAGES, eventsForTask, isDoneForTask, looksLikeCredentials, type NavigatorEvent, type NavigatorPending } from './navigatorCore';
 
 export type AgentStatus = NonNullable<NavigatorResponse['agentStatus']>;
 
@@ -214,6 +214,11 @@ export async function runNavigatorTask(
   // terminou (expirou, sandbox sumiu, sem créditos), o poll zera o sessionId: aí abrimos
   // outra (ou mostramos o motivo real), em vez de mandar a tarefa com sessionId vazio
   // e cair no "Pedido inválido para o navegador".
+  // Senha no texto da tarefa nunca sai do aparelho (iria para o modelo, o buscador e a auditoria).
+  if (looksLikeCredentials(task)) {
+    set({ error: NAVIGATOR_MESSAGES.credentials_in_task });
+    return { ok: false, message: NAVIGATOR_MESSAGES.credentials_in_task, steps: 0 };
+  }
   if (state.sessionId) await poll();
   if (!state.sessionId) {
     const started = await startNavigator();

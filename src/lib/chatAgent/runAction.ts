@@ -789,21 +789,56 @@ async function runGmailSearch(action: Extract<AgentAction, { tool: 'gmail_search
     body: { accountId: account.id, q: action.query || undefined, maxResults: action.max },
   });
   if (error) return followUp('gmail_search', false, 'Não foi possível ler o Gmail agora.');
-  const messages = ((data?.messages ?? []) as Array<{ from?: string; subject?: string; date?: string; snippet?: string }>);
-  const lines = messages.map((m, i) => `${i + 1}. De: ${m.from ?? '?'} | Assunto: ${m.subject ?? '(sem assunto)'} | ${m.date ?? ''}\n   ${m.snippet ?? ''}`);
+  const messages = ((data?.messages ?? []) as Array<{ from?: string; subject?: string; date?: string; snippet?: string; threadId?: string; labelIds?: string[] }>);
+  // thread: para gmail_read / responder na mesma conversa. Marca importantes e não lidos.
+  const lines = messages.map((m, i) => {
+    const flags = [m.labelIds?.includes('UNREAD') ? 'não lido' : '', m.labelIds?.includes('IMPORTANT') ? 'importante' : ''].filter(Boolean).join(', ');
+    return `${i + 1}. De: ${m.from ?? '?'} | Assunto: ${m.subject ?? '(sem assunto)'} | ${m.date ?? ''}${flags ? ` | ${flags}` : ''}${m.threadId ? ` | thread: ${m.threadId}` : ''}\n   ${m.snippet ?? ''}`;
+  });
   return followUp('gmail_search', true, `Conta ${account.email}. ${messages.length} e-mail(s):\n${lines.join('\n') || '(nenhum)'}`);
+}
+
+/** Texto de uma conversa do Gmail (gmail_read): remetente, data, Message-ID, corpo e se é convite. */
+export function formatGmailThread(thread: { threadId?: string; messages?: Array<Record<string, unknown>> }, maxChars = 6_000): string {
+  const msgs = (thread.messages ?? []).slice(-5);
+  const out = msgs.map((m) => {
+    const s = (k: string) => (typeof m[k] === 'string' ? String(m[k]) : '');
+    const body = (s('bodyText') || s('bodyHtml').replace(/<[^>]+>/g, ' ') || s('snippet')).replace(/\s+\n/g, '\n').replace(/[ \t]{2,}/g, ' ').trim();
+    const invite = /text\/calendar|invite\.ics|\b(convite|invitation)\b/i.test(`${s('subject')} ${body.slice(0, 800)}`);
+    return [
+      `De: ${s('from')} | Para: ${s('to')} | ${s('date')}`,
+      `Assunto: ${s('subject')}${invite ? ' | CONVITE (pergunte Sim/Não/Talvez antes de responder)' : ''}`,
+      s('messageIdHeader') ? `Message-ID (in_reply_to): ${s('messageIdHeader')}` : '',
+      body.slice(0, 2_000),
+    ].filter(Boolean).join('\n');
+  });
+  const text = `thread: ${thread.threadId ?? '?'}\n${out.join('\n---\n')}`;
+  return text.length > maxChars ? `${text.slice(0, maxChars)}…` : text;
+}
+
+async function runGmailRead(action: Extract<AgentAction, { tool: 'gmail_read' }>): Promise<ActionOutcome> {
+  const account = await gmailAccount();
+  if (!account) return { ...followUp('gmail_read', false, NOT_CONNECTED('O Gmail')), panel: 'connectors' };
+  const { data, error } = await supabase.functions.invoke('gmail-get-thread', { body: { accountId: account.id, threadId: action.thread } });
+  if (error || !data) return followUp('gmail_read', false, 'Não foi possível abrir essa conversa do Gmail agora.');
+  return followUp('gmail_read', true, `Conta ${account.email}. ${formatGmailThread(data as { threadId?: string; messages?: Array<Record<string, unknown>> })}`);
 }
 
 async function runGmailSend(action: Extract<AgentAction, { tool: 'gmail_send' }>, ctx: ActionContext): Promise<ActionOutcome> {
   const account = await gmailAccount();
   if (!account) return { ...followUp('gmail_send', false, NOT_CONNECTED('O Gmail')), panel: 'connectors' };
+  // O cartão mostra o texto EXATO que vai sair (até 4 mil caracteres) antes do "Aprovar".
   const ok = await ctx.approveApi({
-    method: 'ENVIAR E-MAIL', url: `Para ${action.to} — "${action.subject}"`, host: `Gmail (${account.email})`,
-    reason: action.body.length > 400 ? `${action.body.slice(0, 400)}…` : action.body, secrets: [], hasBody: true,
+    method: action.thread ? 'RESPONDER E-MAIL' : 'ENVIAR E-MAIL', url: `Para ${action.to} — "${action.subject}"`, host: `Gmail (${account.email})`,
+    reason: action.body.length > 4_000 ? `${action.body.slice(0, 4_000)}…` : action.body, secrets: [], hasBody: true,
   });
   if (!ok) return followUp('gmail_send', false, 'O usuário não autorizou o envio.', 'E-mail não enviado.');
   const { error } = await supabase.functions.invoke('gmail-send-message', {
-    body: { accountId: account.id, to: action.to, subject: action.subject, body: action.body },
+    body: {
+      accountId: account.id, to: action.to, subject: action.subject, body: action.body,
+      ...(action.thread ? { threadId: action.thread } : {}),
+      ...(action.in_reply_to ? { inReplyTo: action.in_reply_to, references: action.in_reply_to } : {}),
+    },
   });
   if (error) return followUp('gmail_send', false, 'O Gmail recusou o envio.', 'Não foi possível enviar o e-mail.');
   return followUp('gmail_send', true, `E-mail enviado para ${action.to} pela conta ${account.email}.`);
@@ -1114,6 +1149,8 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
         return await runGmailSearch(action);
       case 'gmail_send':
         return await runGmailSend(action, ctx);
+      case 'gmail_read':
+        return await runGmailRead(action);
       case 'slack_send':
         return await runSlackSend(action, ctx);
       case 'channel_send':
@@ -1285,6 +1322,7 @@ export function actionLabel(action: AgentAction): string {
     case 'web_search': return 'Buscando na web';
     case 'gmail_search': return 'Lendo o Gmail';
     case 'gmail_send': return 'Enviando e-mail pelo Gmail';
+    case 'gmail_read': return 'Lendo a conversa no Gmail';
     case 'slack_send': return 'Enviando mensagem no Slack';
     case 'channel_send': return `Enviando mensagem pelo ${CHANNEL_NAME[action.channel]}`;
     case 'channel_inbox': return 'Lendo as mensagens dos canais';

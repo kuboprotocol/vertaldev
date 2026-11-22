@@ -29,8 +29,9 @@ export const NAVIGATOR_LIMITS = {
   /** Sem chamadas por este tempo, o sandbox morre sozinho (timeout do E2B). */
   idleTimeoutSeconds: 600,
   maxTaskChars: 4_000,
-  defaultMaxSteps: 25,
-  maxStepsCap: 60,
+  /** Passos do agente por tarefa. Teto duro também no navd.py (MAX_STEPS_CAP): tarefa curta e no escopo. */
+  defaultMaxSteps: 20,
+  maxStepsCap: 40,
   maxInputChars: 512,
   maxBodyBytes: 16 * 1024,
   /** Cookies cifrados por usuário (JSON). */
@@ -58,6 +59,7 @@ export type NavigatorStatus =
   | "unauthorized"
   | "bad_request"
   | "sandbox_error"
+  | "credentials_in_task"
   | "error";
 
 export const NAVIGATOR_MESSAGES: Record<Exclude<NavigatorStatus, "ok">, string> = {
@@ -73,6 +75,7 @@ export const NAVIGATOR_MESSAGES: Record<Exclude<NavigatorStatus, "ok">, string> 
   unauthorized: "Sua sessão expirou. Entre novamente.",
   bad_request: "Pedido inválido para o navegador.",
   sandbox_error: "O navegador na nuvem não respondeu. Tente abrir de novo.",
+  credentials_in_task: "Não mande senha na tarefa: ela iria para o modelo e para o histórico. Salve a senha no Cofre (Segredos) — o navegador preenche sozinho sem ver o valor — ou clique em \"Assumir controle\" e digite você mesmo.",
   error: "Algo falhou no navegador na nuvem.",
 };
 
@@ -150,6 +153,65 @@ export function needsPaymentApproval(action: string, targetText: unknown, url: u
     if (w) return `checkout:${w}`;
   }
   return null;
+}
+
+// ─── Ações de escrita (fix navigator-scope): enviar, responder, convites, publicar, excluir ───
+/**
+ * Rótulos de botões que ESCREVEM algo em nome do usuário. Clique (ou Ctrl+Enter) num
+ * alvo com uma destas palavras pausa o agente e abre o cartão de aprovação com o
+ * conteúdo exato (campos preenchidos + captura). Espelho em navd.py (WRITE_KEYWORDS).
+ */
+export const WRITE_KEYWORDS = [
+  "enviar", "envie", "enviar agora", "send", "send now", "responder", "responder a todos", "reply", "reply all",
+  "encaminhar", "forward", "publicar", "publique", "postar", "post", "tweet", "compartilhar", "share",
+  "excluir", "exclua", "delete", "apagar", "apague", "remover", "remove", "lixeira", "trash", "move to trash",
+  "aceitar", "accept", "recusar", "decline", "rejeitar", "reject", "confirmar presenca", "rsvp",
+  "submit", "submeter", "cadastrar", "inscrever", "inscrever-se", "sign up", "register", "unsubscribe",
+  "cancelar inscricao", "transferir", "transfer", "agendar envio", "schedule send",
+] as const;
+
+/** Respostas de convite (Sim/Não/Talvez). Só valem em página de e-mail/agenda ou de convite. */
+export const RSVP_WORDS = ["sim", "nao", "talvez", "yes", "no", "maybe", "vou", "nao vou", "going", "not going"] as const;
+export const INVITE_HINTS = ["mail.google.com", "calendar.google.com", "outlook.live.com", "outlook.office.com", "convite", "invitation", "rsvp", "evento", "event"] as const;
+
+export function writeKeyword(text: unknown): string | null {
+  const norm = normalizeText(text);
+  if (!norm) return null;
+  return WRITE_KEYWORDS.find((kw) => wordRe(kw).test(norm)) ?? null;
+}
+
+export function looksLikeInvitePage(url: unknown, title: unknown = ""): boolean {
+  const hay = normalizeText(`${url ?? ""} ${title ?? ""}`);
+  return INVITE_HINTS.some((h) => hay.includes(h));
+}
+
+/**
+ * Motivo para pedir aprovação de uma ação de escrita, ou null.
+ * click/select_dropdown: alvo com palavra de escrita; em página de e-mail/agenda/convite,
+ * também Sim/Não/Talvez. send_keys: Ctrl/Cmd+Enter (envia e-mail). input: nunca (digitar não envia).
+ */
+export function needsWriteApproval(action: string, targetText: unknown, url: unknown = "", title: unknown = "", keys: unknown = ""): string | null {
+  if (!(GATED_ACTIONS as readonly string[]).includes(action)) return null;
+  if (action === "send_keys") return /(control|ctrl|meta|cmd|command)\s*\+\s*(enter|return)/i.test(String(keys ?? "")) ? "keyboard_send" : null;
+  if (action === "input") return null;
+  const kw = writeKeyword(targetText);
+  if (kw) return `write:${kw}`;
+  if (looksLikeInvitePage(url, title)) {
+    const norm = normalizeText(targetText);
+    const w = RSVP_WORDS.find((word) => norm === word || new RegExp(`^${escapeRe(word)}(?![a-z0-9])`).test(norm));
+    if (w) return `rsvp:${w}`;
+  }
+  return null;
+}
+
+export type ApprovalCategory = "payment" | "write";
+
+/** Pagamento primeiro (cartão de pagamento, com total); depois escrita (cartão de envio). */
+export function needsActionApproval(action: string, targetText: unknown, url: unknown = "", title: unknown = "", keys: unknown = ""): { category: ApprovalCategory; reason: string } | null {
+  const pay = needsPaymentApproval(action, targetText, url, title, keys);
+  if (pay) return { category: "payment", reason: pay };
+  const write = needsWriteApproval(action, targetText, url, title, keys);
+  return write ? { category: "write", reason: write } : null;
 }
 
 // ─── Segredos (fill_secret) ──────────────────────────────────────────────
@@ -237,6 +299,8 @@ export function parseTaskBody(body: Record<string, unknown>): ParsedNavigator<Ta
   const task = typeof body.task === "string" ? body.task.trim() : "";
   if (task.length < 3) return { ok: false, status: "bad_request", detail: "task" };
   if (task.length > NAVIGATOR_LIMITS.maxTaskChars) return { ok: false, status: "bad_request", detail: "task_too_long" };
+  // Senha digitada no texto da tarefa iria para o LLM, para o buscador e para a auditoria: recusa.
+  if (looksLikeCredentials(task)) return { ok: false, status: "credentials_in_task" };
   let url: string | undefined;
   if (body.url !== undefined && body.url !== null && body.url !== "") {
     const u = normalizeNavigatorUrl(body.url);
@@ -270,19 +334,136 @@ export function pickNavigatorModel(requested: unknown, opts: { defaultModel?: st
 }
 
 /**
+ * Regras de escopo (fix navigator-scope): o agente faz SÓ o que foi pedido. Vão junto
+ * de toda tarefa (aqui) e no system prompt do navd.py (extend_system_message).
+ */
+export const NAVIGATOR_SCOPE_RULES =
+  "Escopo (regra dura): faça SOMENTE o que a tarefa pede, nada além. Não invente etapas, objetivos ou tarefas novas; " +
+  "não clique em ofertas, anúncios, links ou botões que a tarefa não pediu. Assim que o pedido estiver feito, chame done e pare. " +
+  "Se faltar informação, a tarefa for ambígua ou o próximo passo não estiver claro, use ask_user (ou termine com done explicando o que falta) em vez de adivinhar. " +
+  "Nunca envie/responda e-mail, aceite/recuse convite, publique, exclua, envie formulário ou confirme nada que a tarefa não peça com todas as letras — e mesmo quando pedir, o sistema mostra o conteúdo exato ao usuário e espera a aprovação.";
+
+/** Pesquisa na web: sempre DuckDuckGo, nunca google.com/search. */
+export const NAVIGATOR_SEARCH_RULE =
+  "Para pesquisar na web use SEMPRE o DuckDuckGo (https://duckduckgo.com/?q=termos, ou a ação search com engine=duckduckgo); nunca google.com/search nem bing.";
+
+/**
  * Instruções que vão junto da tarefa (fase 4, "mais inteligente"): planejar antes
  * de agir, ler a página com read_page_text e responder citando o que foi lido.
  * Curto de propósito (o prompt do browser-use já é grande).
+ *
+ * Escopo: com uma página já aberta na sessão (`currentUrl`), a tarefa continua dali
+ * (bug 22/11: cada tarefa nova voltava ao buscador e pesquisava o próprio texto da
+ * tarefa, abandonando o Gmail aberto). Site conhecido citado na tarefa (ex.: Gmail)
+ * abre direto na página de login certa, sem passar por busca.
  */
-export function framedNavigatorTask(task: string, url?: string): string {
-  // Sem URL, o navegador começa em branco: o agente precisa ABRIR um buscador e pesquisar.
+export function framedNavigatorTask(task: string, url?: string, opts: { currentUrl?: string | null } = {}): string {
+  const current = typeof opts.currentUrl === "string" && normalizeNavigatorUrl(opts.currentUrl) ? opts.currentUrl : null;
+  const site = url ? null : knownSiteUrlForTask(task);
+  let head: string;
+  if (url) head = `Comece abrindo ${url}. `;
+  else if (site && !(current && sameSite(current, site))) head = `Comece abrindo ${site}. `;
+  // Sem repetir a URL aqui: o browser-use abriria (recarregaria) a página e perderia o que está nela.
+  else if (current) head = "Continue a partir da página que já está aberta no navegador (não recarregue nem volte ao buscador); só pesquise se a tarefa exigir. ";
+  // Sem URL e sem página aberta, o navegador começa em branco: o agente precisa ABRIR um buscador e pesquisar.
   // Sem essa instrução explícita, ele podia responder sem navegar (bug: "não faz a busca").
-  const head = url ? `Comece abrindo ${url}. ` : "Comece abrindo um buscador público (https://duckduckgo.com) e pesquise os termos da tarefa; abra os resultados antes de responder. ";
+  else head = "Comece abrindo um buscador público (https://duckduckgo.com) e pesquise os termos da tarefa; abra os resultados antes de responder. ";
   return [
     `${head}${task}`,
     "",
-    "Como trabalhar: 1) no 1º passo, escreva em next_goal um plano curto (2–4 etapas); 2) para ler respostas, use read_page_text (se não existir, a ação de extrair conteúdo) em vez de adivinhar pela imagem; 3) pode abrir outra aba se precisar comparar páginas e voltar depois; 4) não responda de memória: a resposta precisa vir do que você abriu e leu na página; 5) na resposta final (done), responda em português e cite entre aspas o trecho exato lido na página que comprova a resposta, com a URL.",
+    "Como trabalhar: 1) no 1º passo, escreva em next_goal um plano curto (2–4 etapas) só com o que a tarefa pede; 2) para ler respostas, use read_page_text (se não existir, a ação de extrair conteúdo) em vez de adivinhar pela imagem; 3) abra outra aba só se a tarefa pedir para comparar páginas; 4) não responda de memória: a resposta precisa vir do que você abriu e leu na página; 5) na resposta final (done), responda em português e cite entre aspas o trecho exato lido na página que comprova a resposta, com a URL.",
+    NAVIGATOR_SCOPE_RULES,
+    NAVIGATOR_SEARCH_RULE,
   ].join("\n");
+}
+
+// ─── Busca: DuckDuckGo como buscador padrão ──────────────────────────────
+export const DUCKDUCKGO_HOME = "https://duckduckgo.com/";
+
+export function duckduckgoSearchUrl(query: string): string {
+  return `https://duckduckgo.com/?q=${encodeURIComponent(String(query ?? "").trim())}`;
+}
+
+/**
+ * URL de busca do Google/Bing vira a mesma busca no DuckDuckGo (espelho em navd.py,
+ * rewrite_search_url). Outras URLs voltam iguais.
+ */
+export function rewriteSearchUrl(raw: string): string {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return raw;
+  }
+  const host = u.hostname.toLowerCase().replace(/^www\./, "");
+  const isGoogle = /^google\.[a-z.]{2,8}$/.test(host);
+  const isBing = host === "bing.com";
+  if ((isGoogle || isBing) && u.pathname === "/search") {
+    const q = u.searchParams.get("q");
+    if (q) return duckduckgoSearchUrl(q);
+  }
+  return raw;
+}
+
+// ─── Sites conhecidos: abrir direto a página certa ───────────────────────
+/** Login do Gmail (com cookies salvos, o Google já redireciona para a caixa de entrada). */
+export const GMAIL_LOGIN_URL = "https://accounts.google.com/ServiceLogin?service=mail&continue=https%3A%2F%2Fmail.google.com%2Fmail%2F";
+
+/**
+ * URL de início ajustada: mail.google.com sem login cai na página de marketing
+ * (workspace.google.com/.../gmail/) — bug 22/11. Gmail vai direto ao login do Google.
+ */
+export function navigatorStartUrl(url: string): string {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return url;
+  }
+  const host = u.hostname.toLowerCase().replace(/^www\./, "");
+  if (host === "gmail.com") return GMAIL_LOGIN_URL;
+  if (host === "mail.google.com" && (u.pathname === "/" || u.pathname === "")) return GMAIL_LOGIN_URL;
+  if (host === "workspace.google.com" && /\/gmail\/?$/i.test(u.pathname)) return GMAIL_LOGIN_URL;
+  return rewriteSearchUrl(url);
+}
+
+/** Site conhecido citado na tarefa sem URL (só o Gmail por enquanto). */
+export function knownSiteUrlForTask(task: string): string | null {
+  return /\bg-?mail\b/i.test(String(task ?? "")) ? GMAIL_LOGIN_URL : null;
+}
+
+function sameSite(a: string, b: string): boolean {
+  try {
+    const ha = new URL(a).hostname.toLowerCase();
+    const hb = new URL(b).hostname.toLowerCase();
+    const google = (h: string) => h === "mail.google.com" || h === "accounts.google.com";
+    return ha === hb || (google(ha) && google(hb));
+  } catch {
+    return false;
+  }
+}
+
+// ─── Senha digitada no texto da tarefa ───────────────────────────────────
+const CREDENTIAL_RE = /\b(senh[a-z]*|seng[a-z]*|password|passwd|pwd|pass)\b\s*(?:é|e|eh|:|=|-)?\s*["'“]?([^\s"'”]{6,})/giu;
+
+/** O texto traz uma senha em claro? (palavra senha/password seguida de um valor com dígito ou símbolo). */
+export function looksLikeCredentials(text: unknown): boolean {
+  const s = String(text ?? "");
+  for (const m of s.matchAll(CREDENTIAL_RE)) {
+    const value = m[2];
+    if (/^[A-Z][A-Z0-9_]{1,63}$/.test(value)) continue; // nome de segredo do cofre (ex.: GMAIL_PASSWORD)
+    if (/[0-9]/.test(value) || /[^\p{L}\p{N}]/u.test(value)) return true;
+  }
+  return false;
+}
+
+/** Troca valores de senha no texto por [senha removida] (auditoria e logs). */
+export function redactCredentials(text: string): string {
+  return String(text ?? "").replace(CREDENTIAL_RE, (all, word: string, value: string) => {
+    if (/^[A-Z][A-Z0-9_]{1,63}$/.test(value)) return all;
+    if (!(/[0-9]/.test(value) || /[^\p{L}\p{N}]/u.test(value))) return all;
+    return `${word} [senha removida]`;
+  });
 }
 
 /**
@@ -362,6 +543,10 @@ export interface NavigatorPending {
   items?: string[];
   /** data:image/jpeg;base64,… capturado no momento do pedido. */
   screenshot?: string;
+  /** "payment" (padrão, navd antigo) ou "write" (enviar/responder/convite/publicar/excluir). */
+  category?: ApprovalCategory;
+  /** Ação de escrita: o conteúdo exato que vai sair (campos preenchidos na página: para, assunto, corpo…). */
+  fields?: Array<{ label: string; value: string }>;
 }
 
 const FORBIDDEN_EVENT_KEYS = new Set(["value", "password", "secret", "token", "apiKey", "api_key", "code"]);
@@ -395,6 +580,15 @@ export function sanitizePending(pending: unknown): NavigatorPending[] {
       }
       if (typeof p.totalCents === "number" && Number.isFinite(p.totalCents) && p.totalCents >= 0) out.totalCents = Math.round(p.totalCents);
       if (Array.isArray(p.items)) out.items = p.items.filter((i): i is string => typeof i === "string").slice(0, 10).map((i) => i.slice(0, 160));
+      // Sem categoria (navd antigo) = pagamento, como antes.
+      if (out.kind === "approval" && (p.category === "write" || p.category === "payment")) out.category = p.category;
+      if (out.kind === "approval" && Array.isArray(p.fields)) {
+        out.fields = p.fields
+          .filter((f): f is { label: unknown; value: unknown } => !!f && typeof f === "object")
+          .map((f) => ({ label: String(f.label ?? "").slice(0, 80), value: String(f.value ?? "").slice(0, 4_000) }))
+          .filter((f) => f.value.trim().length > 0)
+          .slice(0, 8);
+      }
       // Screenshot só no cartão de aprovação, só JPEG em data URL e com tamanho limitado.
       if (out.kind === "approval" && typeof p.screenshot === "string" && p.screenshot.startsWith("data:image/jpeg;base64,") && p.screenshot.length <= NAVIGATOR_LIMITS.maxApprovalScreenshotChars) {
         out.screenshot = p.screenshot;
@@ -626,12 +820,21 @@ export function auditDetail(raw: Record<string, unknown>): Record<string, unknow
   const out: Record<string, unknown> = {};
   for (const k of AUDIT_DETAIL_KEYS) {
     const v = raw[k];
-    if (typeof v === "string") out[k] = v.slice(0, k === "task" ? 300 : 200);
+    if (typeof v === "string") out[k] = (k === "task" ? redactCredentials(v) : v).slice(0, k === "task" ? 300 : 200);
     else if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
     else if (k === "items" && Array.isArray(v)) out[k] = v.filter((i) => typeof i === "string").slice(0, 8).map((i) => String(i).slice(0, 160));
   }
   return out;
 }
+
+const isWriteReason = (r: string) => /^(write:|rsvp:|keyboard_send)/.test(r);
+const hostLabel = (u: string) => {
+  try {
+    return new URL(u).hostname;
+  } catch {
+    return u.slice(0, 80);
+  }
+};
 
 /** Linha legível para a aba Atividade. */
 export function describeAudit(row: Pick<NavigatorAuditRow, "kind" | "detail">): string {
@@ -644,8 +847,12 @@ export function describeAudit(row: Pick<NavigatorAuditRow, "kind" | "detail">): 
     case "secret_used": return `Segredo usado: ${s("name")}${s("host") ? ` em ${s("host")}` : ""}`;
     case "totp_used": return `Código 2FA gerado do cofre (${s("name")})${s("host") ? ` em ${s("host")}` : ""}`;
     case "code_entered": return `Você digitou um código de verificação${s("host") ? ` em ${s("host")}` : ""}`;
-    case "approval_granted": return `Pagamento aprovado por você${s("store") ? ` em ${s("store")}` : ""}${s("total") ? ` · ${s("total")}` : ""}`;
-    case "approval_denied": return `Pagamento recusado${s("store") ? ` em ${s("store")}` : ""}${s("total") ? ` · ${s("total")}` : ""}`;
+    case "approval_granted":
+      if (isWriteReason(s("reason"))) return `Envio/confirmação aprovado por você${s("target") ? `: ${s("target")}` : ""}${s("url") ? ` em ${hostLabel(s("url"))}` : ""}`;
+      return `Pagamento aprovado por você${s("store") ? ` em ${s("store")}` : ""}${s("total") ? ` · ${s("total")}` : ""}`;
+    case "approval_denied":
+      if (isWriteReason(s("reason"))) return `Envio/confirmação recusado${s("target") ? `: ${s("target")}` : ""}${s("url") ? ` em ${hostLabel(s("url"))}` : ""}`;
+      return `Pagamento recusado${s("store") ? ` em ${s("store")}` : ""}${s("total") ? ` · ${s("total")}` : ""}`;
     case "auto_approved": return `Pagamento aprovado automaticamente (até ${s("limit")})${s("store") ? ` em ${s("store")}` : ""}${s("total") ? ` · ${s("total")}` : ""}`;
     case "takeover": return "Você assumiu o controle";
     case "release": return "Controle devolvido ao agente";

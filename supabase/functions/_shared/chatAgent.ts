@@ -24,6 +24,9 @@ import {
   type BrowserFormOp, type FormValues,
 } from "./browserForm.ts";
 import { NAVIGATOR_LIMITS, normalizeNavigatorUrl } from "./navigatorCore.ts";
+import { EMAIL_RULES, type EmailRoute } from "./emailRouting.ts";
+
+const GMAIL_THREAD_RE = /^[A-Za-z0-9_-]{6,64}$/;
 import { parseGithubOp, type GithubOp } from "./githubOps.ts";
 import { YOUTUBE_LIMITS, youtubeVideoId } from "./youtubeCore.ts";
 
@@ -121,7 +124,8 @@ export type AgentAction =
   | { tool: "news_feed"; category?: string; timeRange?: "ultima_hora" | "hoje" | "ultima_semana"; location?: "local" | "regional" | "nacional" | "internacional" }
   | { tool: "news_weather"; location?: string }
   | { tool: "gmail_search"; query: string; max: number }
-  | { tool: "gmail_send"; to: string; subject: string; body: string }
+  | { tool: "gmail_send"; to: string; subject: string; body: string; thread?: string; in_reply_to?: string }
+  | { tool: "gmail_read"; thread: string }
   | { tool: "spotify"; op: SpotifyChatOp; query?: string; max?: number }
   | { tool: "slack_send"; channel: string; text: string }
   | { tool: "channel_send"; channel: "instagram" | "whatsapp"; to: string; text: string }
@@ -211,6 +215,7 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   news_weather: "grátis",
   gmail_search: "grátis",
   gmail_send: "grátis",
+  gmail_read: "grátis",
   spotify: "grátis",
   slack_send: "grátis",
   channel_send: "grátis (você confirma cada envio)",
@@ -260,6 +265,8 @@ export interface AgentPromptContext {
   github?: boolean;
   /** A conversa fala de vídeo/música/tocar: inclui a ferramenta youtube (ver wantsMedia). */
   media?: boolean;
+  /** Pedido sobre o e-mail do usuário (ver emailRoute): "gmail" inclui as regras do conector. */
+  email?: EmailRoute | null;
 }
 
 // ─── Personalidade e regras de conversa ──────────────────────────────────
@@ -357,6 +364,7 @@ function buildPrompt(ctx: AgentPromptContext): string {
   // Com a ferramenta de formulários no prompt, a lista de segredos sai para caber no orçamento.
   // Navigator ligado: ele cobre formulários também; browser_form sai para caber no orçamento do prompt.
   const formOn = !!ctx.browserForm && !ctx.navigator;
+  const mailOn = ctx.email === "gmail";
   const secrets = (formOn || ctx.navigator) && ctx.secretNames.length
     ? "(omitida)"
     : ctx.secretNames.length ? ctx.secretNames.slice(0, 60).join(", ") : "(nenhum segredo salvo ainda)";
@@ -395,9 +403,10 @@ function buildPrompt(ctx: AgentPromptContext): string {
     `- {"tool":"open_panel","panel":"${PANELS.filter((p) => p !== "navigator").join("|")}"} → abre um painel dentro do chat para o usuário trabalhar à mão. Use quando o pedido precisa de arquivos do usuário (video_studio: fotos viram vídeo; clips: cortes de vídeo longo; avatar: avatar falante; emo: animar foto; notebook: conversar com PDFs e links; office/design/canvas: edição manual).`,
     `- {"tool":"weather","place":"bairro ou cidade"} → clima atual e previsão de 3 dias. Sem "place", usa a localização do aparelho do usuário (ele autoriza). Nunca invente o clima: use sempre esta ferramenta.`,
     `- {"tool":"web_search","query":"o que procurar","max":5} → busca na web por informações atuais. Retorna títulos, URLs e resumos (quando usar: veja "Busca na web" abaixo). "max" é opcional (padrão 5 resultados).`,
-    `- {"tool":"gmail_search","query":"busca no formato do Gmail","max":10} → lê os e-mails da conta Gmail conectada.`,
+    mailOn ? "" : `- {"tool":"gmail_search","query":"busca no formato do Gmail","max":10} → lê os e-mails da conta Gmail conectada.`,
     `- {"tool":"spotify","op":"search|play|queue|pause|next|previous|now_playing|devices","query":"música, artista ou álbum","max":5} → Spotify do usuário. "search" lista faixas com player embutido: o usuário ouve dentro do chat, sem Premium. "play" toca a melhor faixa da busca no aparelho Spotify ativo (exige Premium e o Spotify aberto em algum aparelho). "queue" põe na fila. "pause", "next", "previous", "now_playing" e "devices" controlam a reprodução. Use quando pedirem uma música ou controle do Spotify; nunca invente faixas: use o resultado da ferramenta.`,
-    `- {"tool":"gmail_send","to":"email","subject":"...","body":"..."} → envia e-mail pelo Gmail conectado (o usuário confirma antes).`,
+    // Pedido de e-mail (rota do conector): as linhas do Gmail vêm completas em EMAIL_RULES.
+    mailOn ? "" : `- {"tool":"gmail_send","to":"email","subject":"...","body":"..."} → envia e-mail pelo Gmail conectado (o usuário confirma antes).`,
     `- {"tool":"slack_send","channel":"#canal ou id","text":"..."} → envia mensagem no Slack conectado (o usuário confirma antes).`,
     `- {"tool":"channel_inbox","channel":"instagram|whatsapp","contact":"id do contato (opcional)","limit":20} → lê as últimas mensagens recebidas no Instagram (DM) e no WhatsApp. Use para "o que chegou?", "tem mensagem nova?", "o que o cliente perguntou?". "channel", "contact" e "limit" são opcionais.`,
     `- {"tool":"channel_send","channel":"instagram|whatsapp","to":"id do contato","text":"..."} → responde no Instagram ou no WhatsApp (o usuário confirma antes). Só funciona para quem escreveu nas últimas 24 h; "to" é o id que aparece em channel_inbox. Nunca invente o id.`,
@@ -406,7 +415,8 @@ function buildPrompt(ctx: AgentPromptContext): string {
     `- {"tool":"figcraft","op":"new","title":"nome do design","template":"${FIGCRAFT_TEMPLATE_IDS.join("|")}"} → cria um design no figCraft (editor de telas, componentes, auto layout e protótipos), salvo na conta do usuário, e abre ao lado. "template" é opcional: sem ele, o editor abre na tela inicial (${TOOL_COSTS.figcraft}).`,
     `- {"tool":"figcraft","op":"open","design_id":"uuid"} → abre um design salvo no figCraft.`,
     `- {"tool":"figcraft","op":"list"} → lista os designs do usuário. Você recebe a lista na rodada seguinte e responde com ela.`,
-    `- {"tool":"figcraft","op":"run","design_id":"uuid (opcional: o design aberto)","commands":[{"command":"nome.do.comando","params":{}}]} → executa comandos do engine do figCraft no design, em ordem, até ${FIGCRAFT_MAX_COMMANDS} por pedido. Comandos: ${FIGCRAFT_COMMAND_HINT}. Se o design não estiver aberto, o figCraft abre ao lado e aplica os comandos.`,
+    // Conversa de e-mail: o comando avançado do figCraft sai para caber no orçamento (new/open/list continuam).
+    mailOn ? "" : `- {"tool":"figcraft","op":"run","design_id":"uuid (opcional: o design aberto)","commands":[{"command":"nome.do.comando","params":{}}]} → executa comandos do engine do figCraft no design, em ordem, até ${FIGCRAFT_MAX_COMMANDS} por pedido. Comandos: ${FIGCRAFT_COMMAND_HINT}. Se o design não estiver aberto, o figCraft abre ao lado e aplica os comandos.`,
     `- {"tool":"vibe_code","op":"start|continue|ask|status","prompt":"...","conversationId":"uuid"} → cria/continua projeto de app/site no Vertal Vibe Code; continue/status usam o conversationId (${TOOL_COSTS.vibe_code}).`,
     `- {"tool":"cad","op":"new","prompt":"o que o arquiteto quer: cômodos, medidas, área, orientação"} → desenha uma planta baixa profissional no Auto Cadê (CAD, com carimbo e escala) e abre ao lado. Use quando pedirem planta, desenho técnico, layout de casa/apartamento/escritório (${TOOL_COSTS.cad}). Com "op":"edit", ajusta o desenho que está aberto no Auto Cadê. {"tool":"cad","op":"open"} abre o editor vazio para desenhar à mão.`,
     `- {"tool":"world_time","places":["Tóquio","Lisboa"]} → hora local agora em outras cidades (${TOOL_COSTS.world_time}).`,
@@ -432,6 +442,7 @@ function buildPrompt(ctx: AgentPromptContext): string {
     "",
     formOn ? `${BROWSER_FORM_RULES}\n` : "",
     ctx.navigator ? `${NAVIGATOR_RULES}\n` : "",
+    ctx.email === "gmail" ? `${EMAIL_RULES}\n` : "",
     ctx.memoryEnabled === false ? MEMORY_OFF : ctx.memoryEnabled === null ? MEMORY_UNAVAILABLE : MEMORY_RULES,
     ctx.localNow
       ? `Agora, para o usuário: ${ctx.localNow}${ctx.timezone ? ` (fuso ${ctx.timezone})` : ""}.`
@@ -670,7 +681,19 @@ export function parseAgentAction(raw: unknown): AgentAction | null {
       const to = str(a.to, 254);
       const subject = str(a.subject, 200).replace(/[\r\n]+/g, " ");
       const body = str(a.body, 20_000);
-      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to) && subject && body ? { tool: "gmail_send", to, subject, body } : null;
+      if (!(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to) && subject && body)) return null;
+      // Resposta na mesma conversa: id do thread do Gmail e Message-ID (<...@...>) sem quebra de linha.
+      const thread = str(a.thread, 64);
+      const inReplyTo = str(a.in_reply_to, 300).replace(/[\r\n]+/g, "");
+      return {
+        tool: "gmail_send", to, subject, body,
+        ...(GMAIL_THREAD_RE.test(thread) ? { thread } : {}),
+        ...(/^<[^<>\s]+@[^<>\s]+>$/.test(inReplyTo) ? { in_reply_to: inReplyTo } : {}),
+      };
+    }
+    case "gmail_read": {
+      const thread = str(a.thread, 64);
+      return GMAIL_THREAD_RE.test(thread) ? { tool: "gmail_read", thread } : null;
     }
     case "slack_send": {
       const channel = str(a.channel, 64);

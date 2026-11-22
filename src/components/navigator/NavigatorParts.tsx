@@ -2,12 +2,12 @@
 // usados também no cartão do navegador dentro do chat do Vibe Code. O painel do
 // Vertal Chat continua com a mesma aparência e o mesmo comportamento.
 import { useState } from 'react';
-import { CreditCard, Hand, KeyRound, Loader2, MousePointerClick, Play, Power, ShieldAlert, ShieldCheck, X } from 'lucide-react';
+import { CreditCard, Hand, Send, KeyRound, Loader2, MousePointerClick, Play, Power, ShieldAlert, ShieldCheck, X } from 'lucide-react';
 import type { NavigatorEvent, NavigatorPending } from '@/lib/navigator/navigatorCore';
 import {
   answerNavigator, releaseNavigator, startNavigator, stopNavigator, takeoverNavigator, type NavigatorState,
 } from '@/lib/navigator/store';
-import { hostOf, navBtn, navBtnSm, navInput, navigatorStepLines, navPrimary, navPrimarySm } from './navigatorUi';
+import { approvalCopy, hostOf, navBtn, navBtnSm, navInput, navigatorStepLines, navPrimary, navPrimarySm } from './navigatorUi';
 
 /** Tela ao vivo (noVNC em iframe) ou a última captura. */
 export function NavigatorLiveFrame({ nav, className = 'aspect-[16/10] w-full', compact = false }: { nav: NavigatorState; className?: string; compact?: boolean }) {
@@ -125,7 +125,43 @@ export function NavigatorControls({ nav, compact = false, allowOpen = true }: { 
 }
 
 /** Corpo do cartão de aprovação de pagamento: loja, total, itens, botão, URL e captura. */
+/** Ação de escrita: mostra o conteúdo exato que vai sair (campos preenchidos), o botão, a página e a captura. */
+export function NavigatorWriteDetails({ approval, screenshot }: { approval: NavigatorPending; screenshot?: string | null }) {
+  const shot = approval.screenshot || screenshot || '';
+  const fields = approval.fields ?? [];
+  return (
+    <div className="space-y-2 text-sm" data-testid="navigator-write-details">
+      <div className="rounded-lg border border-primary/40 bg-primary/5 px-3 py-2">
+        <p className="mb-1 text-xs text-muted-foreground">Conteúdo que será enviado (lido dos campos da página)</p>
+        {fields.length ? (
+          <dl className="space-y-1.5">
+            {fields.map((f, i) => (
+              <div key={`${f.label}-${i}`}>
+                <dt className="text-[11px] font-medium text-muted-foreground">{f.label || 'Campo'}</dt>
+                <dd className="whitespace-pre-wrap break-words text-xs">{f.value}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <p className="text-xs">Não consegui ler os campos desta página: confira o conteúdo na captura.</p>
+        )}
+      </div>
+      <div className="rounded-lg border border-border/40 px-3 py-2">
+        <p className="text-xs text-muted-foreground">Botão</p>
+        <p className="break-words font-medium">{approval.target || approval.action || '—'}</p>
+      </div>
+      {approval.url && <p className="break-all text-xs text-muted-foreground">{approval.url}</p>}
+      {shot && <img src={shot} alt="Página no momento do pedido de aprovação" className="max-h-72 w-full rounded-lg border border-border/50 object-contain" />}
+      <p className="flex items-start gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
+        <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+        Só aprove se o destinatário e o texto estiverem certos. Se tiver dúvida, recuse e assuma o controle.
+      </p>
+    </div>
+  );
+}
+
 export function NavigatorApprovalDetails({ approval, screenshot }: { approval: NavigatorPending; screenshot?: string | null }) {
+  if (approval.category === 'write') return <NavigatorWriteDetails approval={approval} screenshot={screenshot} />;
   const shot = approval.screenshot || screenshot || '';
   return (
     <div className="space-y-2 text-sm">
@@ -170,27 +206,32 @@ export function NavigatorApprovalDetails({ approval, screenshot }: { approval: N
  */
 export function NavigatorApprovalInline({ approval, screenshot }: { approval: NavigatorPending; screenshot?: string | null }) {
   const [sending, setSending] = useState(false);
+  const copy = approvalCopy(approval);
   const decide = async (approve: boolean) => {
     setSending(true);
     await answerNavigator(approval, { approve });
     setSending(false);
   };
   return (
-    <section className="space-y-2 rounded-xl border border-primary/50 bg-primary/5 p-3" aria-label="Aprovar ação de pagamento" data-testid="navigator-approval-inline">
+    <section className="space-y-2 rounded-xl border border-primary/50 bg-primary/5 p-3" aria-label={copy.title.replace('?', '')} data-testid="navigator-approval-inline">
       <p className="flex items-center gap-2 text-sm font-semibold">
-        <CreditCard className="h-4 w-4 text-primary" aria-hidden /> Aprovar ação de pagamento?
+        {copy.isWrite ? <Send className="h-4 w-4 text-primary" aria-hidden /> : <CreditCard className="h-4 w-4 text-primary" aria-hidden />} {copy.title}
       </p>
-      <p className="text-xs text-muted-foreground">
-        O navegador parou antes de clicar num botão que pode <strong>pagar, comprar ou confirmar um pedido</strong>
-        {hostOf(approval.url) ? <> em <strong>{hostOf(approval.url)}</strong></> : null}. Nada foi clicado ainda.
-      </p>
+      {copy.isWrite ? (
+        <p className="text-xs text-muted-foreground">{copy.description}{hostOf(approval.url) ? <> Página: <strong>{hostOf(approval.url)}</strong>.</> : null}</p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          O navegador parou antes de clicar num botão que pode <strong>pagar, comprar ou confirmar um pedido</strong>
+          {hostOf(approval.url) ? <> em <strong>{hostOf(approval.url)}</strong></> : null}. Nada foi clicado ainda.
+        </p>
+      )}
       <NavigatorApprovalDetails approval={approval} screenshot={screenshot} />
       <div className="flex flex-wrap justify-end gap-2">
         <button type="button" disabled={sending} onClick={() => void decide(false)} className={navBtn}>
           <X className="h-4 w-4" aria-hidden /> Recusar
         </button>
         <button type="button" disabled={sending} onClick={() => void decide(true)} className={navPrimary}>
-          <CreditCard className="h-4 w-4" aria-hidden /> Aprovar e clicar
+          {copy.isWrite ? <Send className="h-4 w-4" aria-hidden /> : <CreditCard className="h-4 w-4" aria-hidden />} {copy.approveLabel}
         </button>
       </div>
     </section>

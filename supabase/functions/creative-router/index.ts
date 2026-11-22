@@ -46,6 +46,7 @@ import {
 } from "../_shared/chatAgent.ts";
 import { wantsBrowserForm } from "../_shared/browserForm.ts";
 import { wantsNavigator } from "../_shared/navigatorCore.ts";
+import { emailRoute, rerouteEmailActions } from "../_shared/emailRouting.ts";
 import { wantsGithub } from "../_shared/githubOps.ts";
 import { wantsMedia } from "../_shared/youtubeCore.ts";
 import { listVisibleSecrets, resolveEnvForRun } from "../_shared/kuboSecrets.ts";
@@ -635,8 +636,11 @@ async function handleAgentChat(
   const now = localNow(agent.data.context?.timezone);
   // Ferramenta de formulários só quando a conversa fala disso (e nunca em pedido delegado pelo Vibe Code).
   const browserFormOn = !delegated && wantsBrowserForm([...all.slice(-8), ...results.slice(-6)]);
-  // Vertal Navigator: idem, só quando a conversa pede para operar um site.
-  const navigatorOn = !delegated && wantsNavigator([...all.slice(-8), ...results.slice(-6)]);
+  // E-mail do próprio usuário: conector do Gmail (ler, resumir, perguntar, enviar só com aprovação).
+  // O navegador só entra se o usuário insistir nele (fix 22/11: abria a página de marketing do Gmail).
+  const mailRoute = delegated ? null : emailRoute(all.filter((m) => m.role === "user").map((m) => m.content));
+  // Vertal Navigator: idem, só quando a conversa pede para operar um site (e não é pedido de e-mail pelo conector).
+  const navigatorOn = !delegated && mailRoute !== "gmail" && wantsNavigator([...all.slice(-8), ...results.slice(-6)]);
   // Fase 3: GitHub (Vibe Code) e YouTube só entram no prompt quando a conversa pede.
   const githubOn = !delegated && wantsGithub([...all.slice(-8), ...results.slice(-6)]);
   const mediaOn = wantsMedia([...all.slice(-6), ...results.slice(-4)]);
@@ -653,6 +657,7 @@ async function handleAgentChat(
     plan: brain.planBlock,
     browserForm: browserFormOn,
     navigator: navigatorOn,
+    email: mailRoute,
     github: githubOn,
     media: mediaOn,
   }) + (delegated ? DELEGATED_CHAT_PROMPT : "");
@@ -758,6 +763,14 @@ async function handleAgentChat(
       if (reroute.rerouted) {
         console.warn(`[creative-router] agent_chat ${reroute.rerouted} ação(ões) de formulário trocada(s) por browser_form`);
         actions = reroute.actions;
+      }
+    }
+    // Pedido de e-mail pela rota do conector: navigator sobre a caixa de e-mail vira leitura pelo Gmail.
+    if (mailRoute === "gmail" && actions.length) {
+      const mail = rerouteEmailActions(actions, mailRoute);
+      if (mail.rerouted) {
+        console.warn(`[creative-router] agent_chat ${mail.rerouted} ação(ões) de navigator sobre e-mail trocada(s) por gmail_search`);
+        actions = mail.actions as typeof actions;
       }
     }
     if (brain.planPhase) actions = actions.filter((a) => a.tool !== "plan");
