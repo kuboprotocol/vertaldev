@@ -259,6 +259,8 @@ def secret_matches_host(bound_to: str | None, host: str) -> bool:
     if not bound_to:
         return False
     slug = bound_to.lower()
+    if slug == "vertal-wallet":  # carteira: só fill_payment_card
+        return False
     host = (host or "").lower().rstrip(".")
     labels = host.split(".")
     if slug.replace("-", ".") == host or any(slug.replace("-", ".") == ".".join(labels[i:]) for i in range(len(labels) - 1)):

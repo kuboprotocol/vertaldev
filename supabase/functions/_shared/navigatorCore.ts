@@ -226,6 +226,8 @@ export function needsActionApproval(action: string, targetText: unknown, url: un
 export function secretMatchesHost(boundTo: unknown, host: unknown): boolean {
   if (typeof boundTo !== "string" || !boundTo) return false;
   const slug = boundTo.toLowerCase();
+  // Carteira (cartões): nunca casa com host nenhum; só o fluxo de pagamento (fill_payment_card) usa.
+  if (slug === "vertal-wallet") return false;
   const h = String(host ?? "").toLowerCase().replace(/\.$/, "");
   if (!h || isBlockedHost(h)) return false;
   const labels = h.split(".");

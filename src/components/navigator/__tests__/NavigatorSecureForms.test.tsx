@@ -7,6 +7,7 @@ vi.mock("@/integrations/supabase/client", () => ({ supabase: { functions: { invo
 
 import { NavigatorRequestCard } from "@/components/navigator/NavigatorSecureForms";
 import { VertalNavigatorInline } from "@/components/vertal-chat/VertalNavigatorCard";
+import { NavigatorApprovalInline } from "@/components/navigator/NavigatorParts";
 import * as store from "@/lib/navigator/store";
 import type { NavigatorPending } from "@/lib/navigator/navigatorCore";
 
@@ -97,5 +98,43 @@ describe("cartões seguros do Navigator (inline no chat)", () => {
     expect(container).toBeEmptyDOMElement();
     const r2 = render(<VertalNavigatorInline pending={false} />);
     expect(r2.container).toBeEmptyDOMElement();
+  });
+
+  it("sem cartão válido: formulário inline 'Precisa de um cartão válido' (guarda na carteira, CVV só se marcar)", async () => {
+    const card: NavigatorPending = { id: "abcdef1234567893", kind: "card", host: "assinatura.folha.uol.com.br", domain: "uol.com.br", cardFields: ["number", "exp", "cvv"], cardRequired: true };
+    store.__patchNavigatorStoreForTest({ sessionId: SID, pending: [card] });
+    render(<NavigatorRequestCard pending={card} />);
+    expect(screen.getByText("Precisa de um cartão válido")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Número do cartão"), { target: { value: "4242424242424242" } });
+    expect((screen.getByLabelText("Número do cartão") as HTMLInputElement).value).toBe("4242 4242 4242 4242");
+    fireEvent.change(screen.getByLabelText("Validade"), { target: { value: "1230" } });
+    fireEvent.change(screen.getByLabelText("CVV"), { target: { value: "123" } });
+    fireEvent.change(screen.getByLabelText("Titular"), { target: { value: "LAERCIO BORGES" } });
+    fireEvent.change(screen.getByLabelText("CEP de cobrança"), { target: { value: "04849-065" } });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Usar este cartão/ })); });
+    expect(callNavigator).toHaveBeenCalledWith("input", { sessionId: SID, requestId: card.id, kind: "card", number: "4242424242424242", exp: "12/30", cvv: "123", holder: "LAERCIO BORGES", zip: "04849-065", save: true, saveCvv: false });
+    await waitFor(() => expect((screen.getByLabelText("Número do cartão") as HTMLInputElement).value).toBe(""));
+  });
+
+  it("aprovação de pagamento: mostra assinatura e termos, manda o total que o usuário viu; total mudou → cartão fica", async () => {
+    const approval: NavigatorPending = {
+      id: "abcdef1234567894", kind: "approval", category: "payment", target: "Assinar", url: "https://assinatura.folha.uol.com.br/checkout",
+      store: "assinatura.folha.uol.com.br", total: "R$ 1,90", totalCents: 190, currency: "BRL", recurring: true, period: "mensal",
+      renewalTerms: "Renovação automática. Cancele quando quiser.", paySource: { kind: "card", last4: "4242" },
+    };
+    store.__patchNavigatorStoreForTest({ sessionId: SID, pending: [approval] });
+    const fresh = { ...approval, total: "R$ 2,50", totalCents: 250, totalChanged: true };
+    callNavigator.mockImplementation(async (...args: unknown[]) => (args[0] === "input"
+      ? { ok: false, status: "total_changed", message: "O valor mudou" }
+      : { ok: true, status: "ok", pending: [fresh] }) as never);
+    render(<NavigatorApprovalInline approval={approval} />);
+    expect(screen.getByText("Assinatura recorrente (mensal)")).toBeInTheDocument();
+    expect(screen.getByText(/Renovação automática/)).toBeInTheDocument();
+    expect(screen.getByText(/Cartão •••• 4242/)).toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Aprovar e clicar/ })); });
+    expect(callNavigator).toHaveBeenCalledWith("input", { sessionId: SID, requestId: approval.id, kind: "approval", approve: true, confirmed: true, totalCents: 190, currency: "BRL" });
+    // O cartão continua: o poll traz o total novo e o usuário aprova de novo.
+    await waitFor(() => expect(store.getNavigatorState().pending[0]?.totalCents).toBe(250));
+    callNavigator.mockImplementation(async () => ({ ok: true, status: "ok", saved: ["GOOGLE_COM_PASSWORD"] }) as never);
   });
 });
