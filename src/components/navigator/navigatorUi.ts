@@ -22,4 +22,22 @@ export function hostOf(url?: string | null): string {
   }
 }
 
+/** Textos do cartão de aprovação: pagamento (padrão) ou ação de escrita (enviar, responder, convite, publicar, excluir). */
+export function approvalCopy(approval: { category?: string; url?: string }): { isWrite: boolean; title: string; description: string; approveLabel: string } {
+  if (approval.category === 'write') {
+    return {
+      isWrite: true,
+      title: 'Aprovar envio/confirmação?',
+      description: 'O navegador parou antes de enviar ou confirmar algo em seu nome (e-mail, resposta a convite, publicação, exclusão ou formulário). Confira abaixo o conteúdo exato. Nada foi enviado ainda.',
+      approveLabel: 'Aprovar e enviar',
+    };
+  }
+  return {
+    isWrite: false,
+    title: 'Aprovar ação de pagamento?',
+    description: 'O navegador parou antes de clicar num botão que pode pagar, comprar ou confirmar um pedido. Nada foi clicado ainda.',
+    approveLabel: 'Aprovar e clicar',
+  };
+}
+
 export { describeNavigatorEvent, navigatorPlanOf, navigatorStepLines } from '@/lib/navigator/describe';

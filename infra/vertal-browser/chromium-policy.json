@@ -18,5 +18,18 @@
   "DefaultNotificationsSetting": 2,
   "DefaultGeolocationSetting": 2,
   "PromotionalTabsEnabled": false,
-  "MetricsReportingEnabled": false
+  "MetricsReportingEnabled": false,
+  "DefaultSearchProviderEnabled": true,
+  "DefaultSearchProviderName": "DuckDuckGo",
+  "DefaultSearchProviderKeyword": "duckduckgo.com",
+  "DefaultSearchProviderSearchURL": "https://duckduckgo.com/?q={searchTerms}",
+  "DefaultSearchProviderSuggestURL": "https://duckduckgo.com/ac/?q={searchTerms}&type=list",
+  "DefaultSearchProviderIconURL": "https://duckduckgo.com/favicon.ico",
+  "DefaultSearchProviderEncodings": [
+    "UTF-8"
+  ],
+  "HomepageLocation": "https://duckduckgo.com/",
+  "HomepageIsNewTabPage": false,
+  "NewTabPageLocation": "https://duckduckgo.com/",
+  "ShowHomeButton": true
 }

@@ -5,11 +5,11 @@
 // Fase 2: o cartão mostra loja, itens e total lidos da página (no servidor) e a
 // captura do momento do pedido; cada aprovação/recusa vai para a auditoria.
 import { useState } from 'react';
-import { CreditCard, KeyRound, X } from 'lucide-react';
+import { CreditCard, KeyRound, Send, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { answerNavigator, getNavigatorState, useNavigator } from '@/lib/navigator/store';
 import { NavigatorApprovalDetails } from '@/components/navigator/NavigatorParts';
-import { hostOf, navInput as inputCls } from '@/components/navigator/navigatorUi';
+import { approvalCopy, hostOf, navInput as inputCls } from '@/components/navigator/navigatorUi';
 
 export function NavigatorApprovalDialog() {
   const nav = useNavigator();
@@ -38,7 +38,7 @@ export function NavigatorApprovalDialog() {
     <Dialog
       open={!!current}
       onOpenChange={(open) => {
-        // Fechar o cartão de pagamento = recusar (nunca aprova por omissão).
+        // Fechar o cartão (pagamento ou envio) = recusar (nunca aprova por omissão).
         if (!open && approval && getNavigatorState().pending.some((p) => p.id === approval.id)) void decide(false);
       }}
     >
@@ -47,12 +47,20 @@ export function NavigatorApprovalDialog() {
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-primary" aria-hidden /> Aprovar ação de pagamento?
+                {approvalCopy(approval).isWrite
+                  ? <><Send className="h-5 w-5 text-primary" aria-hidden /> {approvalCopy(approval).title}</>
+                  : <><CreditCard className="h-5 w-5 text-primary" aria-hidden /> Aprovar ação de pagamento?</>}
               </DialogTitle>
-              <DialogDescription>
-                O navegador na nuvem parou antes de clicar num botão que pode <strong>pagar, comprar ou confirmar um pedido</strong>
-                {hostOf(approval.url) ? <> em <strong>{hostOf(approval.url)}</strong></> : null}. Nada foi clicado ainda.
-              </DialogDescription>
+              {approvalCopy(approval).isWrite ? (
+                <DialogDescription>
+                  {approvalCopy(approval).description}{hostOf(approval.url) ? <> Página: <strong>{hostOf(approval.url)}</strong>.</> : null}
+                </DialogDescription>
+              ) : (
+                <DialogDescription>
+                  O navegador na nuvem parou antes de clicar num botão que pode <strong>pagar, comprar ou confirmar um pedido</strong>
+                  {hostOf(approval.url) ? <> em <strong>{hostOf(approval.url)}</strong></> : null}. Nada foi clicado ainda.
+                </DialogDescription>
+              )}
             </DialogHeader>
             <NavigatorApprovalDetails approval={approval} screenshot={nav.screenshot} />
             <DialogFooter className="gap-2 sm:gap-2">
@@ -60,7 +68,7 @@ export function NavigatorApprovalDialog() {
                 <X className="h-4 w-4" aria-hidden /> Recusar
               </button>
               <button type="button" disabled={sending} onClick={() => void decide(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-                <CreditCard className="h-4 w-4" aria-hidden /> Aprovar e clicar
+                {approvalCopy(approval).isWrite ? <Send className="h-4 w-4" aria-hidden /> : <CreditCard className="h-4 w-4" aria-hidden />} {approvalCopy(approval).approveLabel}
               </button>
             </DialogFooter>
           </>

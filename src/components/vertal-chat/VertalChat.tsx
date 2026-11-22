@@ -945,8 +945,8 @@ function ApiApprovalDialog({ approval }: { approval: ReturnType<typeof useVertal
               <dd className="break-all rounded-lg bg-muted/50 px-2.5 py-2 font-mono text-xs">{approval.method} {approval.url}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Motivo</dt>
-              <dd>{approval.reason}</dd>
+              <dt className="text-xs text-muted-foreground">{approval.method.includes('E-MAIL') ? 'Texto exato que será enviado' : 'Motivo'}</dt>
+              <dd className="max-h-64 overflow-y-auto whitespace-pre-wrap break-words">{approval.reason}</dd>
             </div>
             {approval.secrets.length > 0 && (
               <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">

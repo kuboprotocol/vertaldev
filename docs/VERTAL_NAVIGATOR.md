@@ -389,3 +389,55 @@ regras de sempre — não há atalho:
    `read_page_text`, regras de plano/abas/citação) — mesmo comando da fase 1 (só a última camada).
    Sem rebuild tudo funciona (o cliente filtra por `baseSeq`), só sem `read_page_text`/`runId`.
 4. **Worker:** merge → Workers Builds. Opcional: `NAVIGATOR_ALLOWED_MODELS`.
+
+## Escopo, DuckDuckGo e e-mail pelo conector (fix 22/11)
+
+Relato (22/11, ~09:15–09:30): o agente "fazia várias tarefas que não foram pedidas", não usava o
+DuckDuckGo e, no pedido "entre no meu e-mail, leia, me pergunte o que responder e preencha os convites",
+abriu `workspace.google.com/intl/en-US/gmail/` (página de marketing, sem login).
+
+O que mudou:
+
+- **Só o que foi pedido.** `NAVIGATOR_SCOPE_RULES` vai em toda tarefa (`framedNavigatorTask`) e no system
+  prompt do `navd.py`: nada de etapas/objetivos inventados, `done` assim que o pedido estiver feito,
+  `ask_user` em vez de adivinhar. Abas novas só quando a tarefa pede comparação.
+- **Continua da página aberta.** Tarefa sem URL numa sessão que já tem página aberta continua dali
+  (o Worker lê a URL atual do navd). Antes, toda tarefa sem URL voltava ao buscador e pesquisava o
+  próprio texto da tarefa — era isso que abandonava o Gmail e "navegava por subpáginas".
+- **Teto duro de passos:** padrão 20, máximo 40 por tarefa (TS `NAVIGATOR_LIMITS` e `navd.py`).
+- **DuckDuckGo como buscador.** Política gerenciada do Chromium (`chromium-policy.json`:
+  `DefaultSearchProvider*`, página inicial e nova aba = duckduckgo.com); no `navd.py`, a ação `search`
+  é forçada para `engine=duckduckgo` e `navigate` para `google.com/search`/`bing.com/search` vira a mesma
+  busca no DuckDuckGo (`rewriteSearchUrl`/`rewrite_search_url`).
+- **Gmail direto no login.** `navigatorStartUrl`: `mail.google.com/`, `gmail.com` e a página de marketing
+  viram `accounts.google.com/ServiceLogin?service=mail&continue=…` (com cookies salvos, cai na caixa de entrada).
+- **Senha fora da tarefa.** Texto com "senha/password + valor" é recusado no aparelho e no Worker
+  (`credentials_in_task`): iria para o modelo, para o buscador e para `navigator_audit`. A auditoria também
+  passa por `redactCredentials`. Senha: Cofre (`fill_secret`) ou "Assumir controle".
+- **Toda ação de escrita passa pela aprovação.** Além do gate de pagamento, cliques em enviar, responder,
+  encaminhar, publicar, excluir, aceitar/recusar, enviar formulário, Sim/Não/Talvez de convite (em página
+  de e-mail/agenda) e Ctrl+Enter pausam o agente (`needs_write_approval`). O cartão
+  (`NavigatorApprovalDialog`/inline) mostra **o conteúdo exato** (campos preenchidos: para, assunto, corpo…),
+  o botão, a URL e a captura. Escrita **nunca** entra na aprovação automática por valor.
+- **E-mail pelo conector do Gmail, não pelo navegador.** `emailRouting.ts` (`emailRoute`): pedido sobre o
+  e-mail do usuário vai para `gmail_search` → resumo → pergunta quais responder → rascunho no chat →
+  `gmail_send` (agora com `thread`/`in_reply_to` para responder na mesma conversa) só depois do "sim" e do
+  cartão de aprovação. Nova ferramenta `gmail_read` (conversa inteira via `gmail-get-thread`, com
+  Message-ID e marcação de convite). Convites: Sim/Não/Talvez perguntados no chat; sem conector de agenda,
+  a resposta vai por e-mail ao organizador, com aprovação. Sem Gmail conectado, abre Conectores.
+  O navegador só entra se o usuário insistir ("pelo navegador"); o `creative-router` troca `navigator`
+  sobre webmail por `gmail_search` na rota do conector.
+
+### Deploy deste fix
+
+1. **Sem migration.**
+2. **Edge function:** `supabase functions deploy creative-router` (rota de e-mail, `gmail_read`, regras).
+   As funções `gmail-get-thread` e `gmail-send-message` já existem e não mudaram.
+3. **Worker** (`worker/navigatorRoutes.ts`): merge → Workers Builds (continua da página aberta, Gmail no
+   login, recusa de senha, escrita fora da aprovação automática).
+4. **Frontend:** build normal (cartão de aprovação de escrita, recusa de senha no painel).
+5. **Template E2B `vertal-browser`: precisa de rebuild** para a política do DuckDuckGo e o novo `navd.py`
+   (gate de escrita, regras de escopo, teto de 40 passos, busca forçada no DuckDuckGo) — mesmo comando da
+   fase 1 (`node build-template.mjs` na imagem node-e2b). Sem o rebuild, o Worker já manda as regras de
+   escopo e DuckDuckGo no texto da tarefa e recusa senha, mas o gate de escrita e a política do Chromium
+   só valem depois do rebuild. Conferir depois: `chrome://policy` no sandbox mostra `DefaultSearchProviderName = DuckDuckGo`.

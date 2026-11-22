@@ -20,7 +20,7 @@ import { createRateLimiter } from '../supabase/functions/_shared/browserForm';
 import {
   DEFAULT_NAVIGATOR_SETTINGS, NAVIGATOR_LIMITS, NAVIGATOR_MESSAGES, auditDetail, autoApproveDecision, extractCheckoutSummary, formatCents,
   liveViewUrl, minutesDue, normalizeNavigatorUrl, parseInputBody, parseSessionBody, parseSettingsBody, parseStartBody, parseTaskBody,
-  pickSecretForHost, pickTotpForHost, isTotpSecretName, sanitizeEvents, sanitizePending, isBlockedHost, framedNavigatorTask, pickNavigatorModel,
+  pickSecretForHost, pickTotpForHost, isTotpSecretName, sanitizeEvents, sanitizePending, isBlockedHost, framedNavigatorTask, navigatorStartUrl, pickNavigatorModel,
   type CheckoutSummary, type NavigatorAuditKind, type NavigatorPending, type NavigatorSettings, type NavigatorStatus, type VaultSecretMeta,
 } from '../supabase/functions/_shared/navigatorCore.ts';
 import { parseTotpSeed, totpNow } from '../supabase/functions/_shared/totp.ts';
@@ -481,7 +481,8 @@ async function start(request: Request, env: NavigatorEnv, userId: string, body: 
       if (!(await waitNavd(env, sandbox.sandboxId))) throw new E2BError('navd_not_ready');
       const init = await navd<{ ok?: boolean; cookiesImported?: number }>(env, { sandboxId: sandbox.sandboxId }, 'POST', '/init', {
         token: secrets.token, viewPassword: secrets.viewPassword, controlPassword: secrets.controlPassword,
-        cookies, ...(parsed.data.url ? { startUrl: parsed.data.url } : {}),
+        // Gmail sem login abre a página de marketing: vai direto ao login do Google (navigatorStartUrl).
+        cookies, ...(parsed.data.url ? { startUrl: navigatorStartUrl(parsed.data.url) } : {}),
       }, 60_000);
       if (!init.data.ok) throw new E2BError('navd_init_failed');
       if ((await bill(env, row, now)) === 'insufficient_credits') {
@@ -549,8 +550,13 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
       const llmKey = provider === 'deepseek' ? env.DEEPSEEK_API_KEY : (env.OPENROUTER_API_KEY || (await internalLlmKey(env)));
       if (!llmKey) return fail(request, 'not_configured', { detail: provider }, 503);
       const usable = (await visibleSecrets(env, userId)).map((x) => ({ name: x.env_key, boundTo: x.bound_to }));
+      // Página já aberta na sessão: a tarefa continua dali (não volta ao buscador a cada tarefa).
+      const opened = parsed.data.url ? null : await navd<{ ok?: boolean; url?: string }>(env, target, 'GET', `/events?after=${Number.MAX_SAFE_INTEGER}`).catch(() => null);
+      const currentUrl = typeof opened?.data.url === 'string' && /^https?:/i.test(opened.data.url) ? opened.data.url : null;
       // Fase 4: plano curto, leitura do texto da página e resposta citando o que foi lido.
-      const task = framedNavigatorTask(parsed.data.task, parsed.data.url);
+      // Escopo: só o que foi pedido; busca sempre no DuckDuckGo; Gmail direto no login.
+      const startUrl = parsed.data.url ? navigatorStartUrl(parsed.data.url) : undefined;
+      const task = framedNavigatorTask(parsed.data.task, startUrl, { currentUrl });
       const model = pickNavigatorModel(parsed.data.model, { defaultModel: env.NAVIGATOR_MODEL, allowed: env.NAVIGATOR_ALLOWED_MODELS, provider });
       const res = await navd<{ ok?: boolean; runId?: string; error?: string }>(env, target, 'POST', '/task', {
         task, provider, apiKey: llmKey,
@@ -573,7 +579,8 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
       if (rawPending.some((p) => p?.kind === 'approval')) {
         const settings = await loadSettings(env, userId);
         if (settings.autoApproveEnabled) {
-          for (const p of rawPending.filter((x) => x?.kind === 'approval' && typeof x.id === 'string')) {
+          // Só pagamento: ação de escrita (enviar e-mail, convite, publicar, excluir) NUNCA é aprovada sozinha.
+          for (const p of rawPending.filter((x) => x?.kind === 'approval' && x?.category !== 'write' && typeof x.id === 'string')) {
             const sum = summaryOf(p);
             if (!autoApproveDecision(settings, sum).auto) continue;
             const ans = await navd<{ ok?: boolean }>(env, target, 'POST', '/input', { id: p.id, kind: 'approval', approve: true }).catch(() => null);
