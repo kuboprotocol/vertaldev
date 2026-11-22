@@ -1,4 +1,4 @@
-import { Github, CreditCard, Globe, Figma, Server, Smartphone, Cloud, Database, Mail, MessageSquare, Shield, Container, Wallet, Zap, Leaf, Rocket, Terminal, TrendingUp, Instagram, MessageCircle, Music } from 'lucide-react'
+import { Github, CreditCard, Globe, Figma, Server, Smartphone, Cloud, Database, Mail, MessageSquare, Shield, Container, Wallet, Zap, Leaf, Rocket, Terminal, TrendingUp, Instagram, MessageCircle, Music, Workflow } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 export interface ConnectorSetupStep {
@@ -127,6 +127,29 @@ export const connectors: ConnectorConfig[] = [
       { title: 'Acesse seu GitHub', description: 'Abra Settings → Developer settings → Personal access tokens (classic).' },
       { title: 'Gere um novo token', description: 'Selecione os escopos: repo, workflow, read:user.' },
       { title: 'Cole o token aqui', description: 'O token será criptografado e armazenado de forma segura na Vertal.' },
+    ],
+  },
+  {
+    name: 'Automatisch',
+    slug: 'automatisch',
+    icon: Workflow,
+    color: '#0059F7',
+    authType: 'api_key',
+    category: 'development',
+    description: 'Crie, liste e rode fluxos de automação do seu Automatisch direto do Vertal Chat.',
+    longDescription: 'Ligue a sua instância do Automatisch (edição comunitária, self-hosted) ao Vertal Chat. O chat cria fluxos, configura gatilhos e ações, testa cada passo, publica e mostra o resultado das execuções. Você aprova cada chamada, e o endereço, o e-mail e a senha ficam no Cofre de segredos: o login é feito só no servidor e nunca passa pela conversa.',
+    features: ['Criar e configurar fluxos pelo chat', 'Testar passos e publicar fluxos', 'Ver execuções e o resultado de cada passo', 'Permissão a cada chamada; credenciais só no Cofre'],
+    docsUrl: 'https://automatisch.io/docs',
+    status: 'available',
+    // As credenciais vão para o Cofre de segredos (o chat lê de lá no servidor), não para o formulário genérico de conector.
+    internalRoute: '/secrets?env_key=AUTOMATISCH_URL&name=Automatisch',
+    apiKeyLabel: 'Segredos no Cofre: AUTOMATISCH_URL, AUTOMATISCH_EMAIL e AUTOMATISCH_PASSWORD',
+    apiKeyPlaceholder: 'https://sua-instancia.up.railway.app',
+    apiKeyHelp: 'Use um usuário do próprio Automatisch. O chat usa só os nomes dos segredos; os valores ficam cifrados no Cofre.',
+    setupSteps: [
+      { title: 'Endereço da instância', description: 'No Cofre de segredos, crie AUTOMATISCH_URL com o endereço https do seu Automatisch (ex.: https://sua-instancia.up.railway.app).' },
+      { title: 'Usuário do Automatisch', description: 'Crie AUTOMATISCH_EMAIL e AUTOMATISCH_PASSWORD com o login de um usuário da instância.' },
+      { title: 'Peça no chat', description: 'Diga, por exemplo, “liste meus fluxos do Automatisch”. O chat pede sua permissão antes de cada chamada.' },
     ],
   },
   {
