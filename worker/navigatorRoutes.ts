@@ -21,12 +21,17 @@
 // Logs (console.*) passam por safeErrorMessage: nunca texto de tarefa, URL com token, cookie ou cabeçalho.
 import { createRateLimiter } from '../supabase/functions/_shared/browserForm';
 import {
-  DEFAULT_NAVIGATOR_SETTINGS, NAVIGATOR_LIMITS, NAVIGATOR_MESSAGES, autoApproveDecision, extractCheckoutSummary, formatCents,
+  DEFAULT_NAVIGATOR_SETTINGS, NAVIGATOR_LIMITS, NAVIGATOR_MESSAGES, extractCheckoutSummary, formatCents,
   liveViewUrl, minutesDue, normalizeNavigatorUrl, parseInputBody, parseSessionBody, parseSettingsBody, parseStartBody, parseTaskBody,
   pickSecretForHost, pickTotpForHost, isTotpSecretName, sanitizeEvents, sanitizePending, isBlockedHost, framedNavigatorTask, navigatorStartUrl, pickNavigatorModel,
   type CheckoutSummary, type NavigatorAuditKind, type NavigatorPending, type NavigatorSettings, type NavigatorStatus, type VaultSecretMeta,
 } from '../supabase/functions/_shared/navigatorCore.ts';
 import { parseTotpSeed, totpNow } from '../supabase/functions/_shared/totp.ts';
+import {
+  ALWAYS_ASK, approvalMatchesPending, autoPayDecision, cardFillValues, cardLabel, cardVaultValue, detectSubscription, effectivePolicy,
+  isWalletSecret, parseAutomation, parseCardInput, parseCardVaultValue, paymentRecheck, vertalPayBalanceFrom, vertalPayLine, walletCardName,
+  WALLET_BOUND, WALLET_CARD_RE, DISABLED_VERTAL_PAY, type Automation, type PaymentPolicy, type VertalPayAdapter,
+} from '../supabase/functions/_shared/navigatorPayments.ts';
 import {
   authPendingView, parseAuthInput, pickLoginForHost, pickPhoneForHost, siteSecretNames, siteSlugForHost,
 } from '../supabase/functions/_shared/navigatorAuthForms.ts';
@@ -64,6 +69,8 @@ export interface NavigatorEnv extends SupabaseEnv, E2BEnv {
   NAVIGATOR_LLM_DATA_COLLECTION?: string;
   /** OpenRouter: "true" restringe a endpoints ZDR (retenção zero). Desligado por padrão (pode faltar provedor para o modelo). */
   NAVIGATOR_LLM_ZDR?: string;
+  /** "on" liga o Vertal Vibe Pay como fonte no cartão de pagamento (só leitura de saldo até o Pay ter API de pagar). */
+  VERTAL_PAY_NAVIGATOR?: string;
 }
 
 const startLimiter = createRateLimiter(6, 10 * 60_000);
@@ -82,6 +89,7 @@ interface SessionRow {
   expires_at: string;
   billed_minutes: number;
   ended_at: string | null;
+  automation?: Automation | null;
 }
 
 interface SessionSecrets {
@@ -174,12 +182,22 @@ async function recordAudit(env: NavigatorEnv, userId: string, sessionId: string 
   }
 }
 
-async function loadSettings(env: NavigatorEnv, userId: string): Promise<NavigatorSettings> {
-  const rows = await table(env, 'navigator_settings')
-    .select<{ auto_approve_enabled: boolean; auto_approve_max_cents: number }>({ user_id: `eq.${userId}`, select: 'auto_approve_enabled,auto_approve_max_cents', limit: '1' })
-    .catch(() => []);
+type PaymentSettings = NavigatorSettings & { periodMaxCents?: number; periodDays?: number; merchants?: string[]; allowRecurring?: boolean };
+
+async function loadSettings(env: NavigatorEnv, userId: string): Promise<PaymentSettings> {
+  type Row = { auto_approve_enabled: boolean; auto_approve_max_cents: number; auto_approve_period_cents?: number; auto_approve_period_days?: number; auto_approve_merchants?: string[]; auto_approve_recurring?: boolean };
+  let rows: Row[] = await table(env, 'navigator_settings')
+    .select<Row>({ user_id: `eq.${userId}`, select: 'auto_approve_enabled,auto_approve_max_cents,auto_approve_period_cents,auto_approve_period_days,auto_approve_merchants,auto_approve_recurring', limit: '1' })
+    .catch(() => null as unknown as Row[]);
+  // Migration de pagamentos ainda não aplicada: lê só as colunas antigas.
+  if (!rows) rows = await table(env, 'navigator_settings').select<Row>({ user_id: `eq.${userId}`, select: 'auto_approve_enabled,auto_approve_max_cents', limit: '1' }).catch(() => []);
   const r = rows[0];
-  return r ? { autoApproveEnabled: !!r.auto_approve_enabled, autoApproveMaxCents: Number(r.auto_approve_max_cents) || 0 } : { ...DEFAULT_NAVIGATOR_SETTINGS };
+  if (!r) return { ...DEFAULT_NAVIGATOR_SETTINGS };
+  return {
+    autoApproveEnabled: !!r.auto_approve_enabled, autoApproveMaxCents: Number(r.auto_approve_max_cents) || 0,
+    periodMaxCents: Number(r.auto_approve_period_cents) || 0, periodDays: Number(r.auto_approve_period_days) || 30,
+    merchants: Array.isArray(r.auto_approve_merchants) ? r.auto_approve_merchants : [], allowRecurring: !!r.auto_approve_recurring,
+  };
 }
 
 type RawPending = Record<string, unknown>;
@@ -200,13 +218,20 @@ function withSummary(p: RawPending): RawPending {
     pageTitle: sum.pageTitle || undefined,
     ...(sum.total ? { total: sum.total.text, totalCents: sum.total.cents, currency: sum.total.currency } : {}),
     items: sum.items,
+    // Paywall/assinatura: recorrente, período e termos de renovação como a página diz.
+    ...(p.category !== 'write' ? subscriptionFields(p.pageText) : {}),
   };
+}
+
+function subscriptionFields(pageText: unknown): Record<string, unknown> {
+  const sub = detectSubscription(pageText);
+  return sub.recurring || sub.renewalTerms ? { recurring: sub.recurring || undefined, period: sub.period, renewalTerms: sub.renewalTerms } : {};
 }
 
 function summaryAudit(p: RawPending | undefined): Record<string, unknown> {
   if (!p) return {};
   const sum = summaryOf(p);
-  return { store: sum.store, total: sum.total?.text, items: sum.items, target: p.target, url: p.url, reason: p.reason };
+  return { store: sum.store, total: sum.total?.text, cents: sum.total?.cents, currency: sum.total?.currency, items: sum.items, target: p.target, url: p.url, reason: p.reason };
 }
 
 /** Cobra os minutos devidos (pré-pago). Trava otimista em billed_minutes: duas chamadas simultâneas não cobram duas vezes. */
@@ -415,13 +440,13 @@ function hintFor(value: string, identifier: boolean): string {
  */
 export async function saveVaultSecret(
   env: NavigatorEnv, userId: string,
-  s: { envKey: string; value: string; boundTo: string; label: string; identifier: boolean; host: string },
+  s: { envKey: string; value: string; boundTo: string; label: string; identifier: boolean; host: string; group?: string; hint?: string },
 ): Promise<{ ok: true; envKey: string; created: boolean } | { ok: false; reason: string }> {
   if (!env.CONNECTOR_ENC_KEY) return { ok: false, reason: 'no_key' };
   if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(s.envKey) || !/^[a-z0-9_-]{1,64}$/.test(s.boundTo)) return { ok: false, reason: 'bad_name' };
   const enc = await encryptWithConnectorKey(env.CONNECTOR_ENC_KEY, s.value);
   const now = new Date().toISOString();
-  const hint = hintFor(s.value, s.identifier);
+  const hint = s.hint ?? hintFor(s.value, s.identifier);
   const existing = await table(env, 'kubo_secrets').select<{ id: string }>({ owner_id: `eq.${userId}`, env_key: `eq.${s.envKey}`, select: 'id', limit: '1' });
   let id: string;
   let created = false;
@@ -432,7 +457,7 @@ export async function saveVaultSecret(
     });
   } else {
     const rows = await table(env, 'kubo_secrets').insertReturning<{ id: string }>({
-      owner_id: userId, name: s.label.slice(0, 80), env_key: s.envKey, group_name: 'navigator', bound_to: s.boundTo,
+      owner_id: userId, name: s.label.slice(0, 80), env_key: s.envKey, group_name: s.group ?? 'navigator', bound_to: s.boundTo,
       description: `Salvo pelo Vertal Navigator (cartão seguro) em ${now.slice(0, 10)} para ${s.host}`.slice(0, 300),
       ciphertext: enc.ciphertext, iv: enc.iv, tag: enc.tag, masked_hint: hint,
     });
@@ -500,6 +525,7 @@ async function authInput(
   request: Request, env: NavigatorEnv, userId: string, row: SessionRow, target: NavdTarget,
   requestId: string, body: Record<string, unknown>, asked: RawPending | undefined,
 ): Promise<Response> {
+  if (asked?.kind === 'card' && (body.kind === 'card' || body.cancel === true)) return cardInput(request, env, userId, row, target, requestId, body, asked);
   if (!asked || (asked.kind !== 'login' && asked.kind !== 'code' && asked.kind !== 'phone')) return fail(request, 'not_pending', {}, 409);
   const host = String(asked.host ?? '').toLowerCase();
   const slug = siteSlugForHost(host);
@@ -565,6 +591,151 @@ async function authInput(
     if (res.data.ok) await recordAudit(env, userId, row.id, 'phone_entered', { host });
   }
   if (!res.data.ok) return fail(request, 'not_pending', { detail: res.data.error }, 409);
+  return json(request, { ok: true, status: 'ok', saved, ...(saveError ? { saveError } : {}) });
+}
+
+// ─── Pagamentos: aprovação automática, carteira, Vertal Pay ──────────────
+function paySourceLabel(p: RawPending | undefined): string | undefined {
+  const ps = p?.paySource as { kind?: unknown; last4?: unknown } | undefined;
+  return ps?.kind === 'card' && typeof ps.last4 === 'string' ? `cartão •••• ${ps.last4}` : undefined;
+}
+
+async function loadAutomation(env: NavigatorEnv, sessionId: string): Promise<Automation | null> {
+  const rows = await sessions(env).select<{ automation: Automation | null }>({ id: `eq.${sessionId}`, select: 'automation', limit: '1' }).catch(() => []);
+  return rows[0]?.automation ?? null;
+}
+
+/** Soma dos pagamentos automáticos já feitos nesta loja no período (auditoria cifrada, decifrada aqui). */
+async function spentInPeriod(env: NavigatorEnv, userId: string, store: string, days: number): Promise<number> {
+  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+  const rows = await table(env, 'navigator_audit').select<AuditDbRow>({
+    user_id: `eq.${userId}`, kind: 'eq.payment', created_at: `gte.${since}`, order: 'created_at.desc', limit: '200',
+    select: 'id,session_id,kind,detail,detail_ciphertext,detail_iv,detail_tag,key_version,created_at',
+  }).catch(() => []);
+  let total = 0;
+  for (const r of rows) {
+    const d = await openAuditDetail(env, { ...r, user_id: userId }).catch(() => null) as Record<string, unknown> | null;
+    if (d && (d.status === 'auto_approved' || d.status === 'approved') && d.store === store && typeof d.cents === 'number') total += d.cents;
+  }
+  return total;
+}
+
+/**
+ * Decide sozinho um pedido de aprovação quando há pré-aprovação explícita. Pagamento: só dentro do teto
+ * (autoPayDecision). Envio/confirmação (escrita): só no modo "automatizar tudo" desta tarefa. Devolve o recibo, ou null (pergunta).
+ */
+async function autoDecide(env: NavigatorEnv, userId: string, row: SessionRow, target: NavdTarget, p: RawPending, policy: PaymentPolicy, automation: Automation | null): Promise<Record<string, unknown> | null> {
+  const at = new Date().toISOString();
+  if (p.category === 'write') {
+    if (automation?.mode !== 'all') return null;
+    const ans = await navd<{ ok?: boolean }>(env, target, 'POST', '/input', { id: p.id, kind: 'approval', approve: true }).catch(() => null);
+    if (!ans?.data.ok) return null;
+    await recordAudit(env, userId, row.id, 'auto_action', { target: p.target, url: p.url, reason: p.reason });
+    return { kind: 'write', target: String(p.target ?? '').slice(0, 160), url: typeof p.url === 'string' ? p.url.slice(0, 300) : undefined, at };
+  }
+  if (policy === ALWAYS_ASK || policy.mode !== 'preapproved') return null;
+  const sum = summaryOf(p);
+  const sub = detectSubscription(p.pageText);
+  const spent = policy.periodMaxCents && sum.store ? await spentInPeriod(env, userId, sum.store, policy.periodDays ?? 30) : 0;
+  const decision = autoPayDecision(policy, sum, { spentInPeriodCents: spent, subscription: sub, totalChanged: p.totalChanged === true });
+  if (!decision.auto || !sum.total) return null;
+  const ans = await navd<{ ok?: boolean }>(env, target, 'POST', '/input', {
+    id: p.id, kind: 'approval', approve: true, totalCents: sum.total.cents, currency: sum.total.currency, store: sum.store,
+  }).catch(() => null);
+  if (!ans?.data.ok) return null;
+  await recordAudit(env, userId, row.id, 'auto_approved', { ...summaryAudit(p), limit: formatCents(policy.perPaymentMaxCents) });
+  await recordAudit(env, userId, row.id, 'payment', { ...summaryAudit(p), status: 'auto_approved', source: paySourceLabel(p) });
+  return { kind: 'payment', store: sum.store, total: sum.total.text, totalCents: sum.total.cents, currency: sum.total.currency, recurring: sub.recurring || undefined, source: paySourceLabel(p), limit: formatCents(policy.perPaymentMaxCents), at };
+}
+
+/** Vertal Vibe Pay: só com a flag ligada; saldo lido da função `wallet` (bank-overview) com o JWT do usuário. Nunca inventa saldo. */
+export function vertalPay(env: NavigatorEnv, authorization: string | null): VertalPayAdapter {
+  if (env.VERTAL_PAY_NAVIGATOR !== 'on' || !env.SUPABASE_URL || !authorization) return DISABLED_VERTAL_PAY;
+  return {
+    enabled: true,
+    canPay: false, // sem API de pagar checkout de terceiros com o saldo (o Pay ainda está em desenvolvimento, #192)
+    balance: async () => {
+      const res = await fetch(`${env.SUPABASE_URL!.replace(/\/+$/, '')}/functions/v1/wallet`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: authorization, apikey: env.SUPABASE_PUBLISHABLE_KEY ?? '' },
+        body: JSON.stringify({ action: 'bank-overview' }),
+      }).catch(() => null);
+      if (!res?.ok) return null;
+      return vertalPayBalanceFrom(await res.json().catch(() => null));
+    },
+  };
+}
+
+/** Pedido de cartão: usa o cartão da carteira (Cofre); sem cartão válido (ou recusado) o chat mostra o formulário. */
+async function fulfillCardFromWallet(env: NavigatorEnv, userId: string, row: SessionRow, target: NavdTarget, p: NavigatorPending, raw: RawPending): Promise<{ filled: true } | { filled: false; view: Partial<NavigatorPending> }> {
+  const fields = (Array.isArray(raw.fields) ? raw.fields : ['number']).filter((f): f is string => typeof f === 'string');
+  const host = String(raw.host ?? p.host ?? '');
+  const domain = siteSlugForHost(host).replace(/-/g, '.') || host;
+  const base = { cardFields: fields, domain, host };
+  if (raw.retry === true) return { filled: false, view: { ...base, cardRequired: true, retry: true } };
+  const cards = (await table(env, 'kubo_secrets').select<{ id: string; env_key: string; bound_to: string | null; last_used_at: string | null }>({
+    owner_id: `eq.${userId}`, bound_to: `eq.${WALLET_BOUND}`, select: 'id,env_key,bound_to,last_used_at', order: 'last_used_at.desc.nullslast', limit: '5',
+  }).catch(() => [])).filter((c) => WALLET_CARD_RE.test(c.env_key));
+  if (!cards.length) return { filled: false, view: { ...base, cardRequired: true } };
+  const v = await resolveVaultValue(env, userId, cards[0].id, host, row.id).catch(() => null);
+  const card = v ? parseCardVaultValue(v) : null;
+  if (!card) return { filled: false, view: { ...base, cardRequired: true } };
+  if (fields.includes('cvv') && !card.cvv) return { filled: false, view: { ...base, cvvOnlyFor: cardLabel(card) } };
+  const value = cardFillValues(card, fields);
+  const res = await navd<{ ok?: boolean }>(env, target, 'POST', '/input', { id: p.id, kind: 'card', value }).catch(() => null);
+  for (const k of Object.keys(value)) value[k] = '';
+  if (!res?.data.ok) return { filled: false, view: { ...base, cardRequired: true } };
+  await table(env, 'kubo_secrets').update({ id: `eq.${cards[0].id}` }, { last_used_at: new Date().toISOString() }).catch(() => undefined);
+  await recordAudit(env, userId, row.id, 'secret_used', { name: cards[0].env_key, host });
+  return { filled: true };
+}
+
+/** Cartão seguro de cartão: valida, guarda na carteira (Cofre) se marcado e entrega ao navd. Nada volta ao cliente. */
+async function cardInput(request: Request, env: NavigatorEnv, userId: string, row: SessionRow, target: NavdTarget, requestId: string, body: Record<string, unknown>, asked: RawPending): Promise<Response> {
+  const host = String(asked.host ?? '').toLowerCase();
+  const fields = (Array.isArray(asked.fields) ? asked.fields : ['number']).filter((f): f is string => typeof f === 'string');
+  if (body.cancel === true) {
+    const r = await navd<{ ok?: boolean }>(env, target, 'POST', '/input', { id: requestId, kind: 'card', value: null });
+    return r.data.ok ? json(request, { ok: true, status: 'ok', saved: [] }) : fail(request, 'not_pending', {}, 409);
+  }
+  // Só o CVV, para o cartão salvo (o resto vem do Cofre).
+  if (body.useSaved === true) {
+    const cvv = String(body.cvv ?? '').trim();
+    if (!/^\d{3,4}$/.test(cvv)) return fail(request, 'bad_request', { detail: 'cvv' }, 400);
+    const cards = (await table(env, 'kubo_secrets').select<{ id: string; env_key: string }>({ owner_id: `eq.${userId}`, bound_to: `eq.${WALLET_BOUND}`, select: 'id,env_key', order: 'last_used_at.desc.nullslast', limit: '1' }).catch(() => []));
+    const v = cards[0] ? await resolveVaultValue(env, userId, cards[0].id, host, row.id).catch(() => null) : null;
+    const card = v ? parseCardVaultValue(v) : null;
+    if (!card) return fail(request, 'bad_request', { detail: 'no_card' }, 400);
+    const value = cardFillValues({ ...card, cvv }, fields);
+    const r = await navd<{ ok?: boolean }>(env, target, 'POST', '/input', { id: requestId, kind: 'card', value });
+    for (const k of Object.keys(value)) value[k] = '';
+    if (!r.data.ok) return fail(request, 'not_pending', {}, 409);
+    await recordAudit(env, userId, row.id, 'secret_used', { name: cards[0].env_key, host });
+    return json(request, { ok: true, status: 'ok', saved: [] });
+  }
+  const parsed = parseCardInput(body);
+  if (!parsed.ok) return fail(request, 'bad_request', { detail: parsed.detail }, 400);
+  if (fields.includes('cvv') && !parsed.data.cvv) return fail(request, 'bad_request', { detail: 'cvv' }, 400);
+  const value = cardFillValues(parsed.data, fields);
+  const r = await navd<{ ok?: boolean; error?: string }>(env, target, 'POST', '/input', { id: requestId, kind: 'card', value });
+  for (const k of Object.keys(value)) value[k] = '';
+  if (!r.data.ok) return fail(request, 'not_pending', { detail: r.data.error }, 409);
+  const saved: string[] = [];
+  let saveError: string | undefined;
+  if (parsed.save) {
+    try {
+      const s = await saveVaultSecret(env, userId, {
+        envKey: walletCardName(parsed.data.number), value: cardVaultValue(parsed.data, parsed.saveCvv), boundTo: WALLET_BOUND,
+        label: cardLabel(parsed.data), identifier: false, host, group: 'wallet', hint: cardLabel(parsed.data),
+      });
+      if (s.ok) {
+        saved.push(s.envKey);
+        await recordAudit(env, userId, row.id, 'secret_saved', { name: s.envKey, host });
+      } else saveError = 'Não consegui guardar o cartão no Cofre; ele foi usado só neste pagamento.';
+    } catch (e) {
+      console.error('navigator: salvar cartão falhou', safeErrorMessage(e, 120));
+      saveError = 'Não consegui guardar o cartão no Cofre; ele foi usado só neste pagamento.';
+    }
+  }
   return json(request, { ok: true, status: 'ok', saved, ...(saveError ? { saveError } : {}) });
 }
 
@@ -748,7 +919,14 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
       const provider = env.NAVIGATOR_LLM_PROVIDER === 'deepseek' ? 'deepseek' : 'openrouter';
       const llmKey = provider === 'deepseek' ? env.DEEPSEEK_API_KEY : (env.OPENROUTER_API_KEY || (await internalLlmKey(env)));
       if (!llmKey) return fail(request, 'not_configured', { detail: provider }, 503);
-      const usable = (await visibleSecrets(env, userId)).map((x) => ({ name: x.env_key, boundTo: x.bound_to }));
+      // Cartões da carteira nunca vão como segredo do fill_secret (só o fluxo de pagamento os usa).
+      const usable = (await visibleSecrets(env, userId)).filter((x) => !isWalletSecret(x)).map((x) => ({ name: x.env_key, boundTo: x.bound_to }));
+      // "Automatizar tudo" desta tarefa: só com o toque do usuário (confirmed), nunca pelo texto do modelo.
+      const automation = parseAutomation(body.automation);
+      if (!automation.ok) return fail(request, 'bad_request', { detail: automation.detail }, 400);
+      await sessions(env).update({ id: `eq.${row.id}` }, { automation: automation.data }).catch(() => undefined);
+      row.automation = automation.data;
+      if (automation.data) await recordAudit(env, userId, row.id, 'settings_changed', automation.data.paymentMaxCents ? { limit: formatCents(automation.data.paymentMaxCents) } : {});
       // Página já aberta na sessão: a tarefa continua dali (não volta ao buscador a cada tarefa).
       const opened = parsed.data.url ? null : await navd<{ ok?: boolean; url?: string }>(env, target, 'GET', `/events?after=${Number.MAX_SAFE_INTEGER}`).catch(() => null);
       const currentUrl = typeof opened?.data.url === 'string' && /^https?:/i.test(opened.data.url) ? opened.data.url : null;
@@ -776,23 +954,38 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
       if (!res.data.ok) return fail(request, 'sandbox_error', {}, 502);
       const rawPending = (Array.isArray(res.data.pending) ? res.data.pending : []) as RawPending[];
       const autoAnswered = new Set<string>();
-      // Aprovação automática (fase 2): só se o usuário ligou, o total foi lido com confiança e cabe no limite.
+      // Recheck do total logo antes do clique (uma aprovação = um pagamento no total exato).
+      for (const p of rawPending.filter((x) => x?.kind === 'payment_check' && typeof x.id === 'string')) {
+        const fresh = summaryOf(p);
+        const r = paymentRecheck({ cents: Number(p.approvedTotalCents), currency: String(p.currency ?? 'BRL') as 'BRL', store: typeof p.store === 'string' && p.store ? p.store : undefined }, fresh);
+        await navd(env, target, 'POST', '/input', { id: p.id, kind: 'payment_check', value: r.ok }).catch(() => undefined);
+        autoAnswered.add(String(p.id));
+        if (!r.ok) await recordAudit(env, userId, row.id, 'payment', { ...summaryAudit(p), status: r.reason });
+      }
+      // Aprovação automática: só com pré-aprovação explícita (configurações ou "automatizar tudo" desta tarefa).
+      const receipts: Array<Record<string, unknown>> = [];
       if (rawPending.some((p) => p?.kind === 'approval')) {
+        const automation = row.automation ?? (await loadAutomation(env, row.id));
         const settings = await loadSettings(env, userId);
-        if (settings.autoApproveEnabled) {
-          // Só pagamento: ação de escrita (enviar e-mail, convite, publicar, excluir) NUNCA é aprovada sozinha.
-          for (const p of rawPending.filter((x) => x?.kind === 'approval' && x?.category !== 'write' && typeof x.id === 'string')) {
-            const sum = summaryOf(p);
-            if (!autoApproveDecision(settings, sum).auto) continue;
-            const ans = await navd<{ ok?: boolean }>(env, target, 'POST', '/input', { id: p.id, kind: 'approval', approve: true }).catch(() => null);
-            if (ans?.data.ok) {
-              autoAnswered.add(String(p.id));
-              await recordAudit(env, userId, row.id, 'auto_approved', { ...summaryAudit(p), limit: formatCents(settings.autoApproveMaxCents) });
-            }
+        const policy = effectivePolicy(settings, automation);
+        for (const p of rawPending.filter((x) => x?.kind === 'approval' && typeof x.id === 'string')) {
+          const r = await autoDecide(env, userId, row, target, p, policy, automation);
+          if (r) {
+            autoAnswered.add(String(p.id));
+            receipts.push(r);
           }
         }
       }
-      const pending = sanitizePending(rawPending.filter((p) => !autoAnswered.has(String(p?.id))).map(withSummary));
+      const vpay = rawPending.some((p) => p?.kind === 'approval' && p?.category !== 'write') ? vertalPay(env, request.headers.get('Authorization')) : DISABLED_VERTAL_PAY;
+      const balance = vpay.enabled ? await vpay.balance().catch(() => null) : null;
+      const pending = sanitizePending(rawPending.filter((p) => p?.kind !== 'payment_check' && !autoAnswered.has(String(p?.id))).map((p) => {
+        const v = withSummary(p);
+        if (v.kind === 'approval' && v.category !== 'write' && balance) {
+          const line = vertalPayLine(balance, typeof v.totalCents === 'number' ? { cents: v.totalCents, currency: v.currency as 'BRL', text: String(v.total ?? '') } : null, (c) => formatCents(c));
+          if (line) v.vertalPayLine = line;
+        }
+        return v;
+      }));
       // Segredos e códigos TOTP pedidos pelo agente: resolvidos aqui, no servidor.
       for (const p of pending.filter((x) => x.kind === 'secret')) {
         await fulfillSecret(env, userId, row, target, p);
@@ -814,6 +1007,12 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
           autoFilled.add(p.id);
         }
       }
+      for (const p of pending.filter((x) => x.kind === 'card')) {
+        const raw = raws.get(p.id) ?? {};
+        const r = await fulfillCardFromWallet(env, userId, row, target, p, raw);
+        if (r.filled) autoFilled.add(p.id);
+        else Object.assign(p, r.view);
+      }
       const events = sanitizeEvents(res.data.events);
       let cookiesSaved: number | null = null;
       if (events.some((e) => e.type === 'done')) cookiesSaved = await saveProfile(env, userId, target);
@@ -824,8 +1023,9 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
         pending: pending.filter((p) => p.kind !== 'secret' && p.kind !== 'totp' && !autoFilled.has(p.id)),
         filling: [
           ...pending.filter((p) => p.kind === 'secret' || p.kind === 'totp').map((p) => ({ name: p.name, host: p.host, kind: p.kind })),
-          ...pending.filter((p) => autoFilled.has(p.id)).map((p) => ({ name: p.kind === 'phone' ? 'telefone' : 'login salvo', host: p.host, kind: p.kind })),
+          ...pending.filter((p) => autoFilled.has(p.id)).map((p) => ({ name: p.kind === 'phone' ? 'telefone' : p.kind === 'card' ? 'cartão da carteira' : 'login salvo', host: p.host, kind: p.kind })),
         ],
+        ...(receipts.length ? { receipts } : {}),
         screenshot: typeof res.data.screenshot === 'string' && res.data.screenshot.startsWith('data:image/jpeg;base64,') ? res.data.screenshot : undefined,
         ...(cookiesSaved !== null ? { cookiesSaved } : {}),
         ...sessionView(env, row, s),
@@ -839,6 +1039,18 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
       const before = await navd<{ ok?: boolean; pending?: RawPending[] }>(env, target, 'GET', '/pending').catch(() => null);
       const asked = (before?.data.pending ?? []).find((p) => p?.id === d.requestId);
       if (d.kind === 'auth') return await authInput(request, env, userId, row, target, d.requestId, d.body, asked);
+      if (d.kind === 'approval' && asked && asked.kind === 'approval' && asked.category !== 'write') {
+        const sum = summaryOf(asked);
+        // Uma aprovação = um total: o cartão manda o total que o usuário viu; se a página já mostra outro, pergunta de novo.
+        if (d.approve && !approvalMatchesPending({ totalCents: d.totalCents, currency: d.currency }, sum)) return fail(request, 'total_changed', {}, 409);
+        const res = await navd<{ ok?: boolean; error?: string }>(env, target, 'POST', '/input', {
+          id: d.requestId, kind: 'approval', approve: d.approve, ...(d.approve && sum.total ? { totalCents: sum.total.cents, currency: sum.total.currency, store: sum.store } : {}),
+        });
+        if (!res.data.ok) return fail(request, 'not_pending', { detail: res.data.error }, 409);
+        await recordAudit(env, userId, row.id, d.approve ? 'approval_granted' : 'approval_denied', summaryAudit(asked));
+        await recordAudit(env, userId, row.id, 'payment', { ...summaryAudit(asked), status: d.approve ? 'approved' : 'denied', source: paySourceLabel(asked) });
+        return json(request, { ok: true, status: 'ok' });
+      }
       const res = await navd<{ ok?: boolean; error?: string }>(env, target, 'POST', '/input',
         d.kind === 'approval' ? { id: d.requestId, kind: 'approval', approve: d.approve } : { id: d.requestId, kind: d.kind, value: d.value });
       if (!res.data.ok) return fail(request, 'not_pending', { detail: res.data.error }, 409);
@@ -940,5 +1152,5 @@ async function activityRoute(request: Request, env: NavigatorEnv, userId: string
 }
 
 /** Só para testes: o resumo que o cartão recebe a partir do pedido cru do navd. */
-export const __test = { withSummary, summaryAudit, llmPrivacy, authInput, fulfillLoginFromVault, fulfillPhoneFromVault, sanitizeAuthView };
+export const __test = { withSummary, summaryAudit, llmPrivacy, authInput, fulfillLoginFromVault, fulfillPhoneFromVault, sanitizeAuthView, autoDecide, fulfillCardFromWallet, cardInput, spentInPeriod };
 export type { NavigatorPending };
