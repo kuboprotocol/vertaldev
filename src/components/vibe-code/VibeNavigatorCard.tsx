@@ -8,8 +8,9 @@ import { useEffect, useState } from 'react';
 import { CheckCircle2, ChevronDown, Globe, Loader2, Maximize2, MessageSquarePlus, Play, Quote, XCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
-  NavigatorApprovalInline, NavigatorControls, NavigatorFilling, NavigatorLiveFrame, NavigatorPendingInput, NavigatorStepList,
+  NavigatorApprovalInline, NavigatorControls, NavigatorFilling, NavigatorLiveFrame, NavigatorStepList,
 } from '@/components/navigator/NavigatorParts';
+import { NavigatorRequestCard, isRequestCardKind } from '@/components/navigator/NavigatorSecureForms';
 import { hostOf, NAV_STATUS_LABEL, navBtnSm, navPrimarySm } from '@/components/navigator/navigatorUi';
 import { currentTaskEvents, inlineApprovalMounted, panelMounted, useNavigator } from '@/lib/navigator/store';
 import type { NavigatorCardData } from '@/lib/navigator/vibeCard';
@@ -39,7 +40,7 @@ function LiveBody({ card, onExpand }: { card: NavigatorCardData; onExpand: () =>
   const mine = nav.currentTask && nav.currentTask.id === card.taskId ? nav.currentTask : null;
   const events = mine ? currentTaskEvents(nav, mine) : [];
   const approval = nav.pending.find((p) => p.kind === 'approval') ?? null;
-  const inputs = nav.pending.filter((p) => p.kind === 'code' || p.kind === 'text');
+  const inputs = nav.pending.filter((p) => isRequestCardKind(p.kind));
   const opening = !nav.sessionId || !mine;
 
   return (
@@ -58,7 +59,7 @@ function LiveBody({ card, onExpand }: { card: NavigatorCardData; onExpand: () =>
       <NavigatorLiveFrame nav={nav} compact className="aspect-[16/10] w-full" />
       {nav.error && <p className="rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-[11px]">{nav.error}</p>}
       {approval && <NavigatorApprovalInline approval={approval} screenshot={nav.screenshot} />}
-      {inputs.map((p) => <NavigatorPendingInput key={p.id} pending={p} compact />)}
+      {inputs.map((p) => <NavigatorRequestCard key={p.id} pending={p} compact />)}
       <NavigatorFilling nav={nav} />
       <NavigatorControls nav={nav} compact allowOpen={false} />
       <div>

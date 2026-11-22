@@ -136,6 +136,38 @@ export function normalizePhone(raw: unknown): string | null {
   return `+${full}`;
 }
 
+/** País do cartão de telefone (padrão +55 Brasil). DDD/código de área é separado do número. */
+export const PHONE_COUNTRIES = [
+  { code: "55", label: "Brasil (+55)", areaDigits: 2 },
+  { code: "1", label: "EUA/Canadá (+1)", areaDigits: 3 },
+  { code: "351", label: "Portugal (+351)", areaDigits: 0 },
+  { code: "54", label: "Argentina (+54)", areaDigits: 0 },
+  { code: "52", label: "México (+52)", areaDigits: 0 },
+  { code: "56", label: "Chile (+56)", areaDigits: 0 },
+  { code: "57", label: "Colômbia (+57)", areaDigits: 0 },
+  { code: "595", label: "Paraguai (+595)", areaDigits: 0 },
+  { code: "598", label: "Uruguai (+598)", areaDigits: 0 },
+  { code: "44", label: "Reino Unido (+44)", areaDigits: 0 },
+  { code: "34", label: "Espanha (+34)", areaDigits: 0 },
+  { code: "49", label: "Alemanha (+49)", areaDigits: 0 },
+  { code: "33", label: "França (+33)", areaDigits: 0 },
+  { code: "39", label: "Itália (+39)", areaDigits: 0 },
+  { code: "81", label: "Japão (+81)", areaDigits: 0 },
+] as const;
+
+/** País + DDD + número → E.164 (+5511999998888). Null se não fecha 8–15 dígitos ou DDD inválido. */
+export function composePhone(countryCode: string, area: string, number: string): string | null {
+  const cc = String(countryCode ?? "").replace(/\D/g, "");
+  const ddd = String(area ?? "").replace(/\D/g, "").replace(/^0+/, "");
+  const num = String(number ?? "").replace(/\D/g, "");
+  if (!/^[1-9]\d{0,2}$/.test(cc) || !num) return null;
+  if (cc === "55" && !/^[1-9][1-9]$/.test(ddd)) return null;
+  const full = `${cc}${ddd}${num}`;
+  if (full.length < 8 || full.length > 15) return null;
+  if (cc === "55" && !(num.length === 8 || (num.length === 9 && num.startsWith("9")))) return null;
+  return `+${full}`;
+}
+
 export type AuthInput =
   | { kind: "login"; username?: string; password?: string; save: boolean }
   | { kind: "code"; value?: string; totpSeed?: string }

@@ -940,5 +940,5 @@ async function activityRoute(request: Request, env: NavigatorEnv, userId: string
 }
 
 /** Só para testes: o resumo que o cartão recebe a partir do pedido cru do navd. */
-export const __test = { withSummary, summaryAudit, llmPrivacy };
+export const __test = { withSummary, summaryAudit, llmPrivacy, authInput, fulfillLoginFromVault, fulfillPhoneFromVault, sanitizeAuthView };
 export type { NavigatorPending };

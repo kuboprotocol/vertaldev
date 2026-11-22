@@ -16,6 +16,7 @@ import { previewHtml } from '@/lib/chatAgent/previewHtml';
 import { spotifyEmbedUrl } from '@/lib/spotify/spotifyCore';
 import { isYoutubeVideoId, youtubeEmbedUrl, youtubeWatchUrl } from '@/lib/media/youtube';
 import { vibeCodeHref } from '@/lib/chatAgent/vibeBridge';
+import { NavigatorResultCard } from './VertalNavigatorCard';
 
 /** Player oficial do Spotify embutido (toca sem Premium). O id já vem validado pelo servidor. */
 function SpotifyEmbed({ trackId, title, compact = false }: { trackId: string; title: string; compact?: boolean }) {
@@ -77,6 +78,7 @@ const KIND_ICON: Record<ArtifactKind, typeof FileText> = {
   download: Download,
   api: Globe,
   browser_form: ClipboardCheck,
+  navigator: Globe,
 };
 
 /** Imagem guardada no bucket privado: renova a URL assinada quando a conversa é reaberta. */
@@ -178,6 +180,7 @@ function summary(a: Artifact): string {
     case 'emo': return 'Animar foto com movimento';
     case 'podcast_studio': return `${a.duration}min · ${a.style}`;
     case 'api': return `HTTP ${a.status}`;
+    case 'navigator': return a.ok ? 'Tarefa concluída' : 'Tarefa não concluída';
     case 'browser_form':
       return `${a.host} · ${{ inspect: 'campos lidos', preview: 'prévia, não enviado', submitted: 'enviado', cancelled: 'cancelado', failed: 'não enviado' }[a.stage]}`;
     case 'download': return a.format.toUpperCase();
@@ -190,6 +193,8 @@ function summary(a: Artifact): string {
 /** Cartão do artefato dentro da mensagem. Clicar abre a visualização completa ao lado. */
 export function ArtifactCard({ artifact, onOpen, active }: { artifact: Artifact; onOpen: () => void; active?: boolean }) {
   const Icon = KIND_ICON[artifact.kind];
+  // Tarefa do navegador feita inline: o recibo fica na conversa, sem abrir outra tela.
+  if (artifact.kind === 'navigator') return <NavigatorResultCard artifact={artifact} />;
   const visual =
     artifact.kind === 'image' ? [artifact.image] : artifact.kind === 'design' ? artifact.images : null;
 

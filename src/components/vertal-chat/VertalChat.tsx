@@ -24,6 +24,7 @@ import { ConnectionsDialog } from './ConnectionsDialog';
 import { MemoryDialog } from './MemoryDialog';
 import { FormApprovalDialog } from './FormApprovalDialog';
 import { NavigatorApprovalDialog } from './NavigatorApprovalDialog';
+import { VertalNavigatorInline } from './VertalNavigatorCard';
 import { previewHtml } from '@/lib/chatAgent/previewHtml';
 import { toast } from 'sonner';
 import { DICTATION_ERROR_TEXT, useDictation } from '@/lib/voice/useDictation';
@@ -157,14 +158,9 @@ export function VertalChat() {
     }
   }, [chat.livePreview]);
 
-  // Vertal Navigator: o executor do chat pede para abrir a tela ao vivo ao lado.
-  useEffect(() => {
-    const open = () => {
-      if (!chatOnlyRef.current) openPanel('navigator');
-    };
-    window.addEventListener('vertal-navigator:open', open);
-    return () => window.removeEventListener('vertal-navigator:open', open);
-  }, [openPanel]);
+  // Vertal Navigator: a tela ao vivo é um cartão INLINE na conversa (VertalNavigatorInline);
+  // o chat não abre painel lateral nem outra página. Sem cartão montado (ex.: tarefa do Vibe Code
+  // em outra aba), o pedido aparece no NavigatorApprovalDialog.
 
   // Link direto: /creative/chat?tool=office abre o painel já dentro do chat.
   // /creative/chat?tool=figcraft&design=<id> abre aquele design do figCraft.
@@ -758,6 +754,7 @@ function MessageRow({
         </p>
       )}
       {message.text && <ChatMarkdown text={message.text} />}
+      <VertalNavigatorInline pending={message.pending} />
       {message.steps && message.steps.length > 0 && (
         <ul className="space-y-1.5" role="status" aria-live="polite">
           {message.steps.map((s, i) => (

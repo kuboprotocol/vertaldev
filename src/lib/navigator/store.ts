@@ -147,7 +147,9 @@ export async function poll(): Promise<void> {
         screenshot: res.screenshot ?? state.screenshot, url: res.url ?? state.url, takeover: !!res.takeover,
         agentStatus: res.agentStatus ?? state.agentStatus, runId: res.runId ?? state.runId, error: null,
       });
-      if ((res.pending ?? []).some((p) => p.kind === 'code' || p.kind === 'text')) requestNavigatorPanel();
+      // Pedido do agente (código, login, telefone, pergunta): o cartão inline do chat mostra. Só abre o
+      // painel lateral se não houver nenhum cartão/painel montado para responder.
+      if (state.inlineApprovalHosts === 0 && state.panelsMounted === 0 && (res.pending ?? []).some((p) => ['code', 'text', 'login', 'phone'].includes(p.kind))) requestNavigatorPanel();
       // Só o "done" DESTA tarefa resolve quem espera (fase 4: nada de resposta de outra conversa).
       for (const ev of fresh) {
         if (ev.type !== 'done') continue;
@@ -264,6 +266,26 @@ export async function answerNavigator(p: NavigatorPending, answer: { approve: bo
   set({ pending: state.pending.filter((x) => x.id !== p.id) });
   void poll();
   return res;
+}
+
+/** Corpo de um cartão seguro (login, senha, código + semente TOTP, telefone, conector, cancelar). */
+export type NavigatorAuthAnswer =
+  | { kind: 'login'; username?: string; password?: string; save: boolean }
+  | { kind: 'code'; value?: string; totpSeed?: string; confirmed?: boolean }
+  | { kind: 'phone'; value: string; save: boolean }
+  | { kind: 'connector'; connector: 'gmail' }
+  | { kind: 'login' | 'code' | 'phone'; cancel: true };
+
+/**
+ * Responde um cartão seguro. Os valores vão direto ao Worker (HTTPS) e saem do estado do
+ * cliente aqui: nada vai para o modelo, para a conversa ou para o store.
+ */
+export async function answerNavigatorAuth(p: NavigatorPending, answer: NavigatorAuthAnswer): Promise<NavigatorResponse & { saved?: string[]; saveError?: string }> {
+  if (!state.sessionId) return { ok: false, status: 'no_session', message: NAVIGATOR_MESSAGES.no_session };
+  const res = await callNavigator('input', { sessionId: state.sessionId, requestId: p.id, ...answer });
+  if (res.ok) set({ pending: state.pending.filter((x) => x.id !== p.id) });
+  void poll();
+  return res as NavigatorResponse & { saved?: string[]; saveError?: string };
 }
 
 export async function takeoverNavigator(): Promise<NavigatorResponse> {

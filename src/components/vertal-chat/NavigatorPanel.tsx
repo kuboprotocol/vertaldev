@@ -9,7 +9,8 @@ import { NavigatorActivity } from './NavigatorActivity';
 import { NavigatorSecurity } from './NavigatorSecurity';
 import { panelMounted, runNavigatorTask, useNavigator } from '@/lib/navigator/store';
 // Fase 4: peças compartilhadas com o cartão do navegador no chat do Vibe Code.
-import { NavigatorControls, NavigatorFilling, NavigatorLiveFrame, NavigatorPendingInput, NavigatorStepList } from '@/components/navigator/NavigatorParts';
+import { NavigatorControls, NavigatorFilling, NavigatorLiveFrame, NavigatorStepList } from '@/components/navigator/NavigatorParts';
+import { NavigatorRequestCard, isRequestCardKind } from '@/components/navigator/NavigatorSecureForms';
 import { hostOf, NAV_STATUS_LABEL, navInput, navPrimary } from '@/components/navigator/navigatorUi';
 
 export function NavigatorPanel() {
@@ -23,7 +24,7 @@ export function NavigatorPanel() {
     return () => panelMounted(-1);
   }, []);
 
-  const inputs = nav.pending.filter((p) => p.kind === 'code' || p.kind === 'text');
+  const inputs = nav.pending.filter((p) => isRequestCardKind(p.kind));
 
   const run = async () => {
     if (!task.trim()) return;
@@ -71,7 +72,7 @@ export function NavigatorPanel() {
         <NavigatorLiveFrame nav={nav} />
 
         <aside className="flex min-h-0 flex-col gap-3">
-          {inputs.map((p) => <NavigatorPendingInput key={p.id} pending={p} />)}
+          {inputs.map((p) => <NavigatorRequestCard key={p.id} pending={p} />)}
           <NavigatorFilling nav={nav} />
           <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); void run(); }}>
             <textarea
