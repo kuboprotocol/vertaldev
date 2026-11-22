@@ -2,7 +2,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { getUser, deductCredits, recordAsset, sanitizeError, withRefundOnFailure, enforceRateLimit, supaAdmin } from "../_shared/creative.ts";
 import { z } from "npm:zod@3";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { runGateway, GatewayError } from "../_shared/aiGateway.ts";
+import { runGateway, GatewayError, emptyOutputFallbackProvider } from "../_shared/aiGateway.ts";
 import {
   OfficeAiOutputError,
   buildOfficeMessages,
@@ -692,9 +692,31 @@ async function handleAgentChat(
       isRecoverable: (err) => err instanceof GatewayError,
     });
     if (attempt.fellBack) console.warn("[creative-router] agent_chat pro falhou, voltando ao flash");
-    const gw = attempt.result;
-    const parsed = attempt.parsed;
+    let gw = attempt.result;
+    let parsed = attempt.parsed;
     const retried = attempt.retried;
+    // Resgate: DeepSeek vazio/inválido nos dois tiers -> uma tentativa em outro modelo (OpenRouter).
+    if (agentOutputNeedsRetry(parsed.status)) {
+      const rescue = emptyOutputFallbackProvider();
+      if (rescue) {
+        try {
+          const r = await runGateway({
+            messages: [{ role: "system", content: system }, ...convo],
+            kind: "chat", tier: "flash", json: true, temperature: 0.4,
+            maxTokens: ORCHESTRATOR_LIMITS.maxTokens.flash, contextChars: 78_000, noCache: true,
+            providers: [rescue],
+          });
+          const p2 = parseAgentOutput(r.content);
+          if (!agentOutputNeedsRetry(p2.status) || (parsed.status === "empty" && p2.status !== "empty")) {
+            console.warn(`[creative-router] agent_chat resgatado por ${r.provider}/${r.model} (antes: ${parsed.status})`);
+            gw = r;
+            parsed = p2;
+          }
+        } catch (err) {
+          console.warn("[creative-router] resgate OpenRouter falhou", err instanceof Error ? err.message : err);
+        }
+      }
+    }
     if (retried) {
       console.warn(`[creative-router] agent_chat saída ${parsed.status} após nova tentativa (${gw.provider}/${gw.model})`);
     }

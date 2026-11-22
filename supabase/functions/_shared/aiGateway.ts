@@ -247,6 +247,19 @@ export function providerChain(tier: Tier, env: Env = (k) => Deno.env.get(k)): Pr
   return chain;
 }
 
+/**
+ * Provedor de resgate para quando a cadeia principal (DeepSeek) devolve saída
+ * vazia ou inválida: outro modelo via OpenRouter, para o chat não desistir.
+ * Modelo configurável por CHAT_EMPTY_FALLBACK_MODEL; "off" desliga.
+ */
+export function emptyOutputFallbackProvider(env: Env = (k) => Deno.env.get(k)): Provider | null {
+  const model = env("CHAT_EMPTY_FALLBACK_MODEL") ?? "google/gemini-2.5-flash";
+  if (model === "off") return null;
+  const key = env("OPENROUTER_API_KEY") ?? env("NAVIGATOR_OPENROUTER_KEY");
+  if (!key) return null;
+  return { name: "openrouter_rescue", url: "https://openrouter.ai/api/v1/chat/completions", key, model };
+}
+
 // ─── Cache ───────────────────────────────────────────────────────────────
 
 export async function cacheKey(kind: TaskKind, model: string, messages: Msg[], json: boolean): Promise<string> {
