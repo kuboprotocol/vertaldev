@@ -72,6 +72,8 @@ export interface NavigatorArtifactData {
   answer: string;
   finalUrl?: string;
   steps: string[];
+  /** Recibos de ações automáticas desta tarefa (pagamento dentro do teto, envio no modo automático). */
+  receipts?: Array<{ kind: 'payment' | 'write'; store?: string; total?: string; source?: string; limit?: string; target?: string; at: string; recurring?: boolean }>;
   /** Captura final (data URL só durante a sessão; não é guardada no histórico). */
   screenshot?: StoredImage;
 }

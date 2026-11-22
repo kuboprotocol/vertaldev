@@ -52,6 +52,11 @@ export interface NavigatorResponse {
   /** /activity (fase 2). */
   sessions?: NavigatorSessionSummary[];
   audit?: NavigatorAuditEntry[];
+  /** Recibos de ações automáticas (status). */
+  receipts?: Array<Record<string, unknown>>;
+  /** Cartão seguro: nomes guardados no Cofre. */
+  saved?: string[];
+  saveError?: string;
 }
 
 const PRODUCTION_ORIGIN = 'https://vertal.dev';

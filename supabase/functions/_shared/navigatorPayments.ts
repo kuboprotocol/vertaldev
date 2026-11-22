@@ -334,3 +334,16 @@ export function vertalPayLine(balance: VertalPayBalance | null, total: MoneyValu
   if (!balance || !total || total.currency !== "BRL") return null;
   return `Você tem ${fmt(balance.cents)} no Vertal Pay. Pagar ${fmt(total.cents)}?`;
 }
+
+/** Extras das configurações (teto por loja no período, lojas permitidas, assinatura). Ligar exige `confirmed` (já exigido pelo parseSettingsBody). */
+export function parseSettingsExtras(body: Record<string, unknown>): { ok: true; data: { periodMaxCents: number; periodDays: number; merchants: string[]; allowRecurring: boolean } | null } | { ok: false; detail: string } {
+  const has = ["periodMaxCents", "periodDays", "merchants", "allowRecurring"].some((k) => body[k] !== undefined);
+  if (!has) return { ok: true, data: null };
+  const periodMaxCents = body.periodMaxCents === undefined ? 0 : Number(body.periodMaxCents);
+  const periodDays = body.periodDays === undefined ? 30 : Number(body.periodDays);
+  if (!Number.isInteger(periodMaxCents) || periodMaxCents < 0 || periodMaxCents > AUTO_PAY_PERIOD_CAP_CENTS) return { ok: false, detail: "period_cap" };
+  if (!Number.isInteger(periodDays) || periodDays < 1 || periodDays > 366) return { ok: false, detail: "period_days" };
+  const raw = Array.isArray(body.merchants) ? body.merchants : [];
+  const merchants = raw.filter((m): m is string => typeof m === "string" && /^[a-z0-9.-]{3,120}$/i.test(m.trim())).map((m) => merchantKey(m)).slice(0, 10);
+  return { ok: true, data: { periodMaxCents, periodDays, merchants, allowRecurring: body.allowRecurring === true } };
+}

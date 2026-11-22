@@ -29,7 +29,7 @@ import {
 import { parseTotpSeed, totpNow } from '../supabase/functions/_shared/totp.ts';
 import {
   ALWAYS_ASK, approvalMatchesPending, autoPayDecision, cardFillValues, cardLabel, cardVaultValue, detectSubscription, effectivePolicy,
-  isWalletSecret, parseAutomation, parseCardInput, parseCardVaultValue, paymentRecheck, vertalPayBalanceFrom, vertalPayLine, walletCardName,
+  isWalletSecret, parseAutomation, parseSettingsExtras, parseCardInput, parseCardVaultValue, paymentRecheck, vertalPayBalanceFrom, vertalPayLine, walletCardName,
   WALLET_BOUND, WALLET_CARD_RE, DISABLED_VERTAL_PAY, type Automation, type PaymentPolicy, type VertalPayAdapter,
 } from '../supabase/functions/_shared/navigatorPayments.ts';
 import {
@@ -1100,8 +1100,18 @@ async function settingsRoute(request: Request, env: NavigatorEnv, userId: string
   const parsed = parseSettingsBody(body);
   if (!parsed.ok) return fail(request, parsed.status, { detail: parsed.detail }, 400);
   const s = parsed.data;
+  const extras = parseSettingsExtras(body);
+  if (!extras.ok) return fail(request, 'bad_request', { detail: extras.detail }, 400);
+  const x = extras.data;
   await table(env, 'navigator_settings').upsert(
-    { user_id: userId, auto_approve_enabled: s.autoApproveEnabled, auto_approve_max_cents: s.autoApproveMaxCents, updated_at: new Date().toISOString() },
+    {
+      user_id: userId, auto_approve_enabled: s.autoApproveEnabled, auto_approve_max_cents: s.autoApproveMaxCents, updated_at: new Date().toISOString(),
+      // Desligar zera tudo; teto por loja/período só junto com o automático ligado.
+      ...(x || !s.autoApproveEnabled ? {
+        auto_approve_period_cents: s.autoApproveEnabled ? x?.periodMaxCents ?? 0 : 0, auto_approve_period_days: x?.periodDays ?? 30,
+        auto_approve_merchants: s.autoApproveEnabled ? x?.merchants ?? [] : [], auto_approve_recurring: s.autoApproveEnabled ? !!x?.allowRecurring : false,
+      } : {}),
+    },
     'user_id',
   );
   await recordAudit(env, userId, null, 'settings_changed', s.autoApproveEnabled ? { limit: formatCents(s.autoApproveMaxCents) } : {});

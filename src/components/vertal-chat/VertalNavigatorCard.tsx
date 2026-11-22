@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { CheckCircle2, ChevronDown, Globe, Quote, XCircle } from 'lucide-react';
 import type { Artifact } from '@/lib/chatAgent/artifacts';
 import { currentTaskEvents, inlineApprovalMounted, panelMounted, useNavigator } from '@/lib/navigator/store';
-import { NavigatorApprovalInline, NavigatorControls, NavigatorFilling, NavigatorLiveFrame, NavigatorStepList } from '@/components/navigator/NavigatorParts';
+import { NavigatorApprovalInline, NavigatorControls, NavigatorFilling, NavigatorLiveFrame, NavigatorReceipts, NavigatorStepList } from '@/components/navigator/NavigatorParts';
 import { NavigatorRequestCard } from '@/components/navigator/NavigatorSecureForms';
 import { hasLiveChatNavigatorTask, hostOf, isRequestCardKind, NAV_STATUS_LABEL } from '@/components/navigator/navigatorUi';
 
@@ -44,6 +44,7 @@ export function VertalNavigatorLiveCard() {
       {requests.map((p) => <NavigatorRequestCard key={p.id} pending={p} compact />)}
       {approval && <NavigatorApprovalInline approval={approval} screenshot={nav.screenshot} />}
       <NavigatorFilling nav={nav} />
+      <NavigatorReceipts receipts={nav.receipts} compact />
       <NavigatorControls nav={nav} compact allowOpen={false} />
       <details className="text-[11px]">
         <summary className="cursor-pointer text-muted-foreground">Passos do agente</summary>
@@ -72,6 +73,7 @@ export function NavigatorResultCard({ artifact }: { artifact: Extract<Artifact, 
           <span className="whitespace-pre-wrap break-words">{artifact.answer}</span>
         </blockquote>
       )}
+      {artifact.receipts && artifact.receipts.length > 0 && <NavigatorReceipts receipts={artifact.receipts} compact />}
       {artifact.finalUrl && <p className="break-all text-[10px] text-muted-foreground">Página final: {artifact.finalUrl}</p>}
       {artifact.steps.length > 0 && (
         <button type="button" className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground" onClick={() => setOpen((v) => !v)} aria-expanded={open}>

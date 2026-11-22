@@ -147,7 +147,8 @@ export type AgentAction =
   | { tool: "browser_form"; op: BrowserFormOp; url: string; values?: FormValues; submitSelector?: string }
   // Vertal Navigator: navegador na nuvem com sessão persistente (login, navegar, pesquisar dentro de sites).
   // Não existe op de aprovar: pagamento só é aprovado no clique do usuário no cartão.
-  | { tool: "navigator"; op: "run"; task: string; url?: string }
+  /** automate: o usuário pediu "automatizar tudo"; auto_pay_max_brl: teto por pagamento que ELE disse. Só vale depois do toque no cartão de confirmação. */
+  | { tool: "navigator"; op: "run"; task: string; url?: string; automate?: boolean; auto_pay_max_brl?: number }
   | { tool: "navigator"; op: "open"; url?: string }
   | { tool: "navigator"; op: "stop" }
   // Vibe Code + GitHub (fase 3): API OAuth já conectada; escrita pede confirmação do usuário no chat.
@@ -329,7 +330,7 @@ const BROWSER_FORM_RULES = [
 
 /** Vertal Navigator: só entra no prompt quando a conversa pede para operar um site (wantsNavigator). */
 const NAVIGATOR_TOOL =
-  `- {"tool":"navigator","op":"run|open|stop","task":"o que fazer","url":"https://... (opcional)"} → agente opera um navegador real na nuvem com login salvo: sites, área logada, várias telas (${TOOL_COSTS.navigator}). "open" só abre ao vivo (login à mão); "stop" fecha e salva.`;
+  `- {"tool":"navigator","op":"run|open|stop","task":"o que fazer","url":"https://... (opcional)"} → agente opera um navegador real na nuvem com login salvo: sites, área logada, várias telas (${TOOL_COSTS.navigator}). "open" só abre ao vivo (login à mão); "stop" fecha e salva. Pediu automatizar tudo: "automate":true (+"auto_pay_max_brl" só se ele disse o teto).`;
 
 const NAVIGATOR_RULES =
   "Navegador: cartão ao vivo na conversa; login, senha, 2FA, telefone e pagamento o usuário preenche/aprova num cartão seguro ali (nunca peça no chat, nunca aprove por ele). Publicar app em hospedagem (Hostinger etc.: logar, contratar VPS): navigator run; a contratação passa pela aprovação.";
@@ -622,7 +623,11 @@ export function parseNavigatorAction(a: Record<string, unknown>): Extract<AgentA
   if (op !== "run") return null;
   const task = str(a.task ?? a.prompt, NAVIGATOR_LIMITS.maxTaskChars);
   if (task.length < 3) return null;
-  return url ? { tool: "navigator", op: "run", task, url } : { tool: "navigator", op: "run", task };
+  const out: Extract<AgentAction, { tool: "navigator"; op: "run" }> = url ? { tool: "navigator", op: "run", task, url } : { tool: "navigator", op: "run", task };
+  if (a.automate === true) out.automate = true;
+  const cap = Number(a.auto_pay_max_brl);
+  if (out.automate && Number.isFinite(cap) && cap > 0 && cap <= 1000) out.auto_pay_max_brl = Math.round(cap * 100) / 100;
+  return out;
 }
 
 /** Valida uma ação. Devolve null quando não dá para executar com segurança. */

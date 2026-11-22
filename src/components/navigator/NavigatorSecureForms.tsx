@@ -3,7 +3,7 @@
 // Os valores vão do cartão direto ao Worker (answerNavigatorAuth) e o estado local é
 // limpo no envio: nada passa pelo modelo, pelo histórico do chat ou pela auditoria.
 import { useState } from 'react';
-import { KeyRound, Loader2, Lock, Mail, Phone, ShieldCheck, Smartphone } from 'lucide-react';
+import { CreditCard, KeyRound, Loader2, Lock, Mail, Phone, ShieldCheck, Smartphone } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import type { NavigatorPending } from '@/lib/navigator/navigatorCore';
 import { answerNavigatorAuth, type NavigatorAuthAnswer } from '@/lib/navigator/store';
@@ -18,6 +18,13 @@ const OTP_TITLE: Record<string, string> = {
   unknown: 'Código de verificação',
 };
 
+const DETAIL_MESSAGE: Record<string, string> = {
+  number: 'Número do cartão inválido.', exp: 'Validade inválida (use MM/AA).', expired: 'Cartão vencido.', cvv: 'CVV inválido.',
+  holder: 'Confira o nome do titular.', zip: 'Confira o CEP de cobrança.', no_card: 'Nenhum cartão salvo: preencha o cartão.',
+  phone: 'Confira o telefone.', totp_seed: 'A chave do autenticador não é válida.', code_format: 'Código inválido.',
+  username: 'Preencha o usuário.', password: 'Preencha a senha.',
+};
+
 function useSubmit() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +35,7 @@ function useSubmit() {
     const res = await answerNavigatorAuth(p, answer);
     setSending(false);
     after?.();
-    if (!res.ok) setError(res.message ?? 'Não consegui enviar. Tente de novo.');
+    if (!res.ok) setError((res.detail && DETAIL_MESSAGE[res.detail]) || res.message || 'Não consegui enviar. Tente de novo.');
     else if (res.saveError) setNotice(res.saveError);
     else if (res.saved?.length) setNotice(`Guardado no Cofre: ${res.saved.join(', ')}`);
   };
@@ -218,11 +225,73 @@ export function NavigatorPhoneForm({ pending, compact = false }: { pending: Navi
   );
 }
 
+/** Formatação enquanto digita: 4111 1111 1111 1111 / MM/AA. */
+const groupCard = (v: string) => v.replace(/\D/g, '').slice(0, 19).replace(/(\d{4})(?=\d)/g, '$1 ');
+const formatExp = (v: string) => {
+  const d = v.replace(/\D/g, '').slice(0, 4);
+  return d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d;
+};
+
+export function NavigatorCardForm({ pending, compact = false }: { pending: NavigatorPending; compact?: boolean }) {
+  const fields = pending.cardFields ?? ['number'];
+  const [number, setNumber] = useState('');
+  const [exp, setExp] = useState('');
+  const [cvv, setCvv] = useState('');
+  const [holder, setHolder] = useState('');
+  const [zip, setZip] = useState('');
+  const [save, setSave] = useState(true);
+  const [saveCvv, setSaveCvv] = useState(false);
+  const { sending, error, notice, submit } = useSubmit();
+  const domain = pending.domain || pending.host || 'este site';
+  const clear = () => { setNumber(''); setCvv(''); setExp(''); };
+  if (pending.cvvOnlyFor) {
+    return (
+      <Shell icon={<CreditCard className="h-4 w-4" aria-hidden />} title={`CVV do ${pending.cvvOnlyFor}`} subtitle={`Pagamento em ${domain}`} compact={compact}>
+        <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); if (/^\d{3,4}$/.test(cvv)) void submit(pending, { kind: 'card', useSaved: true, cvv }, () => setCvv('')); }}>
+          <input className={navInput} type="password" inputMode="numeric" autoComplete="cc-csc" value={cvv} onChange={(e) => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="CVV" aria-label="CVV" autoFocus />
+          <button type="submit" className={compact ? navPrimarySm : navPrimary} disabled={sending || !/^\d{3,4}$/.test(cvv)}>Usar cartão</button>
+        </form>
+        {error && <p className="text-[11px] text-destructive">{error}</p>}
+      </Shell>
+    );
+  }
+  const digits = number.replace(/\D/g, '');
+  const ready = digits.length >= 12 && /^\d{2}\/\d{2}$/.test(exp) && holder.trim().length >= 2 && zip.trim().length >= 3 && (!fields.includes('cvv') || /^\d{3,4}$/.test(cvv));
+  const title = pending.retry ? 'Precisa de um cartão válido — o site recusou o cartão' : 'Precisa de um cartão válido';
+  return (
+    <Shell icon={<CreditCard className="h-4 w-4" aria-hidden />} title={title} subtitle={`Pagamento em ${domain}. Preencher o cartão não paga nada: o pagamento ainda pede a sua aprovação.`} compact={compact}>
+      <form className="space-y-2" autoComplete="on" onSubmit={(e) => {
+        e.preventDefault();
+        if (ready) void submit(pending, { kind: 'card', number: digits, exp, ...(cvv ? { cvv } : {}), holder: holder.trim(), zip: zip.trim(), save, saveCvv }, clear);
+      }}>
+        <input className={navInput} value={number} onChange={(e) => setNumber(groupCard(e.target.value))} inputMode="numeric" autoComplete="cc-number" placeholder="Número do cartão" aria-label="Número do cartão" autoFocus />
+        <div className="flex gap-2">
+          <input className={navInput} value={exp} onChange={(e) => setExp(formatExp(e.target.value))} inputMode="numeric" autoComplete="cc-exp" placeholder="MM/AA" aria-label="Validade" />
+          <input className={navInput} type="password" value={cvv} onChange={(e) => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))} inputMode="numeric" autoComplete="cc-csc" placeholder="CVV" aria-label="CVV" />
+        </div>
+        <input className={navInput} value={holder} onChange={(e) => setHolder(e.target.value.slice(0, 80))} autoComplete="cc-name" placeholder="Nome impresso no cartão" aria-label="Titular" />
+        <input className={navInput} value={zip} onChange={(e) => setZip(e.target.value.slice(0, 10))} autoComplete="postal-code" placeholder="CEP de cobrança" aria-label="CEP de cobrança" />
+        <SaveToggle checked={save} onChange={setSave} label="Guardar no Cofre (carteira) para os próximos pagamentos" />
+        {save && <SaveToggle checked={saveCvv} onChange={setSaveCvv} label="Guardar também o CVV (senão peço só o CVV a cada pagamento)" />}
+        <div className="flex flex-wrap gap-2">
+          <button type="submit" className={compact ? navPrimarySm : navPrimary} disabled={sending || !ready}>
+            {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null} Usar este cartão
+          </button>
+          <button type="button" className={compact ? navBtnSm : navBtn} disabled={sending} onClick={() => void submit(pending, { kind: 'card', cancel: true })}>Cancelar</button>
+        </div>
+      </form>
+      {error && <p className="text-[11px] text-destructive">{error}</p>}
+      {notice && <p className="text-[11px] text-emerald-500">{notice}</p>}
+    </Shell>
+  );
+}
+
 /** Escolhe o cartão certo para o pedido do agente (login, senha, código, telefone, pergunta). */
 export function NavigatorRequestCard({ pending, compact = false }: { pending: NavigatorPending; compact?: boolean }) {
   if (pending.kind === 'login') return <NavigatorLoginForm pending={pending} compact={compact} />;
   if (pending.kind === 'code') return <NavigatorCodeForm pending={pending} compact={compact} />;
   if (pending.kind === 'phone') return <NavigatorPhoneForm pending={pending} compact={compact} />;
+  if (pending.kind === 'card') return <NavigatorCardForm pending={pending} compact={compact} />;
   if (pending.kind === 'text') return <NavigatorPendingInput pending={pending} compact={compact} />;
   return null;
 }

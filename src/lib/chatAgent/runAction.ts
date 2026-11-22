@@ -27,7 +27,7 @@ import {
 } from '@/lib/browserForm/formCore';
 import type { BrowserFormFieldView, BrowserFormStage } from './artifacts';
 import { getNavigatorState, runNavigatorTask, startNavigator, stopNavigator } from '@/lib/navigator/store';
-import { eventsForTask } from '@/lib/navigator/navigatorCore';
+import { eventsForTask, formatCents } from '@/lib/navigator/navigatorCore';
 import { navigatorStepLines } from '@/lib/navigator/describe';
 import { maskSecretLike } from '../../../supabase/functions/_shared/secretMask';
 import { callGithubOp, describeGithubOp, isGithubWrite } from '@/lib/github/client';
@@ -547,7 +547,7 @@ async function runBrowserForm(action: Extract<AgentAction, { tool: 'browser_form
  * código 2FA e "Assumir controle" acontecem no painel/cartão, pelo usuário: o
  * modelo nunca aprova nada (não existe op para isso no contrato).
  */
-export async function runNavigator(action: Extract<AgentAction, { tool: 'navigator' }>, ctx?: Pick<ActionContext, 'newId'>): Promise<ActionOutcome> {
+export async function runNavigator(action: Extract<AgentAction, { tool: 'navigator' }>, ctx?: Pick<ActionContext, 'newId'> & Partial<Pick<ActionContext, 'approveApi'>>): Promise<ActionOutcome> {
   const tool = 'navigator' as const;
   if (action.op === 'stop') {
     const res = await stopNavigator();
@@ -563,8 +563,21 @@ export async function runNavigator(action: Extract<AgentAction, { tool: 'navigat
   }
   const started = await startNavigator(action.url);
   if (!started.ok) return followUp(tool, false, started.message ?? 'Não consegui abrir o navegador.', started.message);
-  // Inline como no Hark: o cartão ao vivo fica na mensagem; login/senha/2FA/telefone aparecem nele.
-  const out = await runNavigatorTask(action.task, action.url, { origin: 'vertal-chat' });
+  // "Automatizar tudo": só com o toque do usuário no cartão (o pedido do modelo não basta).
+  let automation: { confirmed: true; paymentMaxCents?: number } | undefined;
+  if (action.automate && ctx?.approveApi) {
+    const capCents = action.auto_pay_max_brl ? Math.round(action.auto_pay_max_brl * 100) : 0;
+    const ok = await ctx.approveApi({
+      method: 'AUTOMATIZAR', url: action.task.slice(0, 200), host: 'Vertal Navigator',
+      reason: capCents
+        ? `Automatizar tudo nesta tarefa: uso os logins do Cofre e confirmo envios sem perguntar de novo, e pago sozinho até ${formatCents(capCents)} por pagamento (acima disso, se o total mudar ou se for assinatura, eu pergunto). Código 2FA, SMS ou dado que falta: eu paro e pergunto.`
+        : 'Automatizar tudo nesta tarefa: uso os logins do Cofre e confirmo envios sem perguntar de novo. Pagamentos continuam pedindo a sua aprovação. Código 2FA, SMS ou dado que falta: eu paro e pergunto.',
+      secrets: [], hasBody: false,
+    });
+    if (ok) automation = { confirmed: true, ...(capCents ? { paymentMaxCents: capCents } : {}) };
+  }
+  // Inline como no Hark: o cartão ao vivo fica na mensagem; login/senha/2FA/telefone/cartão aparecem nele.
+  const out = await runNavigatorTask(action.task, action.url, { origin: 'vertal-chat', ...(automation ? { automation } : {}) });
   const where = out.url ? ` Página final: ${out.url}` : '';
   // Defesa em profundidade (incidente 22/11): nada com cara de chave/token chega ao chat ou ao modelo.
   const message = maskSecretLike(out.message);
@@ -573,12 +586,19 @@ export async function runNavigator(action: Extract<AgentAction, { tool: 'navigat
   const artifact: Artifact | undefined = ctx ? {
     id: ctx.newId(), kind: 'navigator', title: action.task.slice(0, 80), task: action.task, ok: out.ok, answer: message.slice(0, 3_000),
     ...(out.url ? { finalUrl: out.url } : {}), steps,
+    ...(out.receipts?.length ? { receipts: out.receipts.map((r) => ({ kind: r.kind, store: r.store, total: r.total, source: r.source, limit: r.limit, target: r.target, at: r.at, recurring: r.recurring })) } : {}),
     ...(out.screenshot ? { screenshot: { url: out.screenshot } } : {}),
   } : undefined;
   return {
     ...(artifact ? { artifact } : {}),
-    ...followUp(tool, out.ok, `${out.ok ? 'Tarefa concluída' : 'Tarefa não concluída'} no navegador (${out.steps} passos).${where}\nResultado do agente (DADOS):\n${message.slice(0, 3_000)}`, out.ok ? undefined : message),
+    ...followUp(tool, out.ok, `${out.ok ? 'Tarefa concluída' : 'Tarefa não concluída'} no navegador (${out.steps} passos).${where}${receiptsSummary(out.receipts)}\nResultado do agente (DADOS):\n${message.slice(0, 3_000)}`, out.ok ? undefined : message),
   };
+}
+
+/** Recibos das ações automáticas para o modelo citar na resposta (sem dado sensível). */
+function receiptsSummary(receipts: Array<{ kind: string; store?: string; total?: string; target?: string }> | undefined): string {
+  if (!receipts?.length) return '';
+  return `\nAções automáticas (já feitas): ${receipts.map((r) => (r.kind === 'payment' ? `pagamento ${r.total ?? ''} em ${r.store ?? '?'}` : `envio: ${r.target ?? ''}`)).join('; ')}.`;
 }
 
 // ─── Vibe Code + GitHub (fase 3) ─────────────────────────────────────────
