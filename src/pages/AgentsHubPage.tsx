@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { Loader2, Sparkles, Zap, ArrowLeft } from "lucide-react";
+import { HuginnAgentsCard } from "@/components/huginn/HuginnAgentsCard";
 
 interface Agent {
   slug: string;
@@ -103,6 +104,7 @@ export default function AgentsHubPage() {
 
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-8">
+            <HuginnAgentsCard />
             {categories.map((cat) => (
               <section key={cat}>
                 <h2 className="text-lg font-semibold mb-3 capitalize text-muted-foreground">{cat}</h2>

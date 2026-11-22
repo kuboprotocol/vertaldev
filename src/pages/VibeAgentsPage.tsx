@@ -16,6 +16,7 @@ import {
   VIBE_TOOL_IDS,
   type VibeToolId,
 } from '@/config/vibeAgents'
+import { HuginnAgentsCard } from '@/components/huginn/HuginnAgentsCard'
 
 interface AgentDraft { name: string; instructions: string; tools: VibeToolId[] }
 interface SavedAgent extends AgentDraft { id: string; created_at: string }
@@ -212,6 +213,8 @@ export default function VibeAgentsPage() {
             </div>
           )}
         </section>
+
+        <HuginnAgentsCard />
 
         <section className="space-y-3">
           <h2 className="font-semibold">Meus agentes</h2>

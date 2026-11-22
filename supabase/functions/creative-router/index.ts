@@ -57,6 +57,16 @@ import {
   runAutomatischOp,
   wantsAutomatisch,
 } from "../_shared/automatischCore.ts";
+import {
+  HUGINN_LIMITS,
+  HUGINN_SECRETS,
+  isHuginnBridge,
+  normalizeHuginnUrl,
+  parseHuginnOp,
+  runHuginnOp,
+  wantsHuginn,
+} from "../_shared/huginnCore.ts";
+import { type BridgeOp, runHuginnBridge } from "../_shared/huginnBridge.ts";
 import { listVisibleSecrets, resolveEnvForRun } from "../_shared/kuboSecrets.ts";
 import {
   DELEGATED_CHAT_PROMPT,
@@ -73,7 +83,7 @@ const InputSchema = z.object({
     content: z.string().min(1),
   })).optional(),
   prompt: z.string().optional(),
-  tool: z.enum(["chat", "image", "video", "music", "pdf", "docs", "slide", "edit_image", "edit_video", "office_ai", "office_email", "chat_json", "notebook_ai", "agent_chat", "api_request", "automatisch"]),
+  tool: z.enum(["chat", "image", "video", "music", "pdf", "docs", "slide", "edit_image", "edit_video", "office_ai", "office_email", "chat_json", "notebook_ai", "agent_chat", "api_request", "automatisch", "huginn"]),
   model: z.string().optional(),
   temperature: z.number().optional(),
   max_tokens: z.number().optional(),
@@ -88,6 +98,8 @@ const InputSchema = z.object({
   api: z.record(z.any()).optional(),
   // Vertal Chat: operação no Automatisch do cliente aprovada na tela (validada em handleAutomatisch).
   automatisch: z.record(z.any()).optional(),
+  // Vertal Chat: operação no Huginn do cliente aprovada na tela (validada em handleHuginn).
+  huginn: z.record(z.any()).optional(),
 });
 
 // Credit costs based on prompt instructions
@@ -109,6 +121,7 @@ const COSTS: Record<string, number> = {
   agent_chat: 0,   // Vertal Chat: custo real vem de chatJsonCost (mesma cota do modo de conversa)
   api_request: 0,  // Vertal Chat: chamada de API externa não é cobrada (tem limite de requisições)
   automatisch: 0,  // Vertal Chat: Automatisch do cliente, não é cobrado (tem limite de requisições)
+  huginn: 0,       // Vertal Chat: Huginn do cliente, não é cobrado (tem limite de requisições)
 };
 
 Deno.serve(withRefundOnFailure(async (req) => {
@@ -135,7 +148,7 @@ Deno.serve(withRefundOnFailure(async (req) => {
       });
     }
 
-    const { tool, messages, prompt, model, temperature, max_tokens, metadata, office, notebook, agent, api, automatisch } = parsed.data;
+    const { tool, messages, prompt, model, temperature, max_tokens, metadata, office, notebook, agent, api, automatisch, huginn } = parsed.data;
     
     // Determine cost
     let cost = COSTS[tool] ?? 1;
@@ -182,6 +195,8 @@ Deno.serve(withRefundOnFailure(async (req) => {
       return await handleApiRequest(user, api ?? {});
     } else if (tool === "automatisch") {
       return await handleAutomatisch(user, automatisch ?? {});
+    } else if (tool === "huginn") {
+      return await handleHuginn(user, huginn ?? {});
     }
 
     return new Response(JSON.stringify({ error: "tool_not_implemented_in_router" }), {
@@ -658,6 +673,7 @@ async function handleAgentChat(
   const githubOn = !delegated && wantsGithub([...all.slice(-8), ...results.slice(-6)]);
   const mediaOn = wantsMedia([...all.slice(-6), ...results.slice(-4)]);
   const automatischOn = !delegated && wantsAutomatisch([...all.slice(-8), ...results.slice(-6)]);
+  const huginnOn = !delegated && wantsHuginn([...all.slice(-8), ...results.slice(-6)]);
   const system = buildAgentSystemPrompt({
     secretNames,
     today: new Date().toISOString().slice(0, 10),
@@ -675,6 +691,7 @@ async function handleAgentChat(
     github: githubOn,
     media: mediaOn,
     automatisch: automatischOn,
+    huginn: huginnOn,
   }) + (delegated ? DELEGATED_CHAT_PROMPT : "");
   const final = agent.data.final === true || brain.planPhase === "final";
   const convo = results.length
@@ -996,6 +1013,80 @@ async function handleAutomatisch(user: { id: string; email?: string | null }, ra
     status: result.ok ? "success" : "error",
     metadata: { host, op: op.op, ...(result.ok ? {} : { code: result.code, http_status: result.status ?? null }) },
   }).then(({ error }) => { if (error) console.error("[creative-router] automatisch log failed:", error.message); });
+
+  return jsonResponse(200, result);
+}
+
+// ─── Vertal Chat: Huginn do cliente ──────────────────────────────────────
+
+/** Host público em https permitido (não é o próprio Supabase). null = recusado. */
+function allowedHost(base: string): string | null {
+  try {
+    const host = validatePublicUrl(base).host;
+    return host === new URL(Deno.env.get("SUPABASE_URL")!).host ? null : host;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Executa uma operação no Huginn do cliente (e, nas ops connect_*, também no
+ * Automatisch dele). URL, usuário e senha vêm do Cofre e só existem aqui; a
+ * sessão (cookie) vive só nesta requisição. A resposta leva só dados de
+ * agentes/eventos, nunca credenciais, cookie, token CSRF ou segredo de webhook.
+ */
+async function handleHuginn(user: { id: string; email?: string | null }, raw: unknown): Promise<Response> {
+  const limit = await enforceRateLimit(user.id, "huginn", { max: 20, windowSeconds: 60, userEmail: user.email ?? null });
+  if (!limit.ok) return jsonResponse(429, { error: limit.error });
+
+  // Sem a aprovação explícita do usuário na tela a chamada não sai.
+  if ((raw as { confirmed?: unknown } | null)?.confirmed !== true) return jsonResponse(400, { error: "confirmation_required" });
+  const op = parseHuginnOp(raw);
+  if (!op) return jsonResponse(400, { error: "invalid_input" });
+  const bridge = isHuginnBridge(op);
+
+  const keys: string[] = [...HUGINN_SECRETS, ...(bridge ? AUTOMATISCH_SECRETS : [])];
+  const resolved = await resolveEnvForRun(supaAdmin(), user.id, keys, { target: "huginn" });
+  if (resolved.missing.length > 0) return jsonResponse(400, { error: "missing_secrets", missing: resolved.missing });
+  const env = resolved.env;
+
+  const base = normalizeHuginnUrl(env.HUGINN_URL);
+  if (!base) return jsonResponse(400, { error: "bad_url" });
+  const host = allowedHost(base);
+  if (!host) return jsonResponse(400, { error: "url_not_allowed" });
+
+  // Cada chamada fica no host indicado (um redirecionamento não é seguido).
+  const pinned = (allowed: string, timeoutMs: number) => async (url: string, init: { method: string; headers: Record<string, string>; body?: string }) => {
+    if (new URL(url).host !== allowed) throw new TypeError("host_changed");
+    return await fetch(url, { ...init, redirect: "manual", signal: AbortSignal.timeout(timeoutMs) });
+  };
+  const huginnFetch = pinned(host, HUGINN_LIMITS.timeoutMs);
+  const huginnCreds = { url: base, username: env.HUGINN_USERNAME, password: env.HUGINN_PASSWORD };
+
+  let result;
+  let automatischHost: string | null = null;
+  if (bridge) {
+    const aBase = normalizeAutomatischUrl(env.AUTOMATISCH_URL);
+    if (!aBase) return jsonResponse(400, { error: "bad_url" });
+    automatischHost = allowedHost(aBase);
+    if (!automatischHost) return jsonResponse(400, { error: "url_not_allowed" });
+    result = await runHuginnBridge(
+      op as BridgeOp,
+      { huginn: huginnCreds, automatisch: { url: aBase, email: env.AUTOMATISCH_EMAIL, password: env.AUTOMATISCH_PASSWORD } },
+      { huginnFetch, automatischFetch: pinned(automatischHost, AUTOMATISCH_LIMITS.timeoutMs) },
+    );
+  } else {
+    result = await runHuginnOp(op, huginnCreds, { fetch: huginnFetch });
+  }
+
+  await supaAdmin().from("connector_activity_logs").insert({
+    user_id: user.id,
+    connector_slug: "huginn",
+    event_type: `huginn_${op.op}`,
+    message: `${op.op} ${host}${automatischHost ? ` ↔ ${automatischHost}` : ""}`.slice(0, 300),
+    status: result.ok ? "success" : "error",
+    metadata: { host, op: op.op, ...(automatischHost ? { automatisch_host: automatischHost } : {}), ...(result.ok ? {} : { code: result.code, http_status: result.status ?? null }) },
+  }).then(({ error }) => { if (error) console.error("[creative-router] huginn log failed:", error.message); });
 
   return jsonResponse(200, result);
 }

@@ -55,7 +55,7 @@ export const PANEL_LIST: PanelInfo[] = [
   { key: 'navigator', label: 'Vertal Navigator', hint: 'Navegador na nuvem que entra em sites por você (login salvo)', icon: Compass, group: 'conectar' },
   { key: 'connectors', label: 'Conectores', hint: 'Gmail, Slack, GitHub, Web3…', icon: Plug, group: 'conectar', route: '/connectors' },
   { key: 'secrets', label: 'Cofre de segredos', hint: 'Chaves de API para o chat usar', icon: KeyRound, group: 'conectar', route: '/secrets' },
-  { key: 'agents', label: 'Habilidades', hint: 'Agentes e habilidades extras', icon: Puzzle, group: 'conectar', route: '/agents' },
+  { key: 'agents', label: 'Habilidades', hint: 'Agentes, habilidades extras e Huginn', icon: Puzzle, group: 'conectar', route: '/agents' },
 ];
 
 export const PANEL_BY_KEY = Object.fromEntries(PANEL_LIST.map((p) => [p.key, p])) as Record<PanelKey, PanelInfo>;
