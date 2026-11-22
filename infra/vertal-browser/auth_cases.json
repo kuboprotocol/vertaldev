@@ -1,0 +1,34 @@
+{
+  "_comment": "Casos compartilhados: secretMask.ts/navigatorAuthForms.ts (TS) e navd.py (Python) têm de concordar. Usado por src/lib/navigator/navigatorAuthForms.test.ts e infra/vertal-browser/test_navd_privacy.py.",
+  "mask": [
+    ["Falhou: o segredo é Zq8mT2vX9pL4kR7wN1bY6cH3jF5dG0sA, vinculado a ai-providers", "Falhou: o segredo é [segredo oculto], vinculado a ai-providers"],
+    ["chave sk-or-v1-0123456789abcdef0123456789abcdef no texto", "chave [segredo oculto] no texto"],
+    ["token ghp_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789", "token [segredo oculto]"],
+    ["jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U fim", "jwt [segredo oculto] fim"],
+    ["hex 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", "hex [segredo oculto]"],
+    ["AWS AKIAIOSFODNN7EXAMPLE ok", "AWS [segredo oculto] ok"]
+  ],
+  "keep": [
+    "Abri https://github.com/kuboprotocol/vertaldev/pull/201 e li o título",
+    "Sessão 3f2b8c1e-9a4d-4c6b-8e2f-1a2b3c4d5e6f encerrada",
+    "configuration_management_2024 e NavigatorPanelV2Component",
+    "Tarefa concluída: você tem 12 notificações no GitHub.",
+    "https://accounts.google.com/v3/signin/identifier",
+    "ServiceLoginAuthenticationFlow"
+  ],
+  "slug": [
+    ["accounts.google.com", "google-com"],
+    ["mail.google.com", "google-com"],
+    ["www.itau.com.br", "itau-com-br"],
+    ["github.com", "github-com"],
+    ["app.example.co.uk", "example-co-uk"],
+    ["localhost", ""],
+    ["10.0.0.1", ""]
+  ],
+  "connector": [
+    ["accounts.google.com", "https://accounts.google.com/ServiceLogin?service=mail&continue=https%3A%2F%2Fmail.google.com%2Fmail%2F", "", "gmail"],
+    ["accounts.google.com", "https://accounts.google.com/v3/signin/identifier", "leia meus e-mails", "gmail"],
+    ["accounts.google.com", "https://accounts.google.com/v3/signin/identifier", "abra o google drive", null],
+    ["github.com", "https://github.com/login", "leia meus e-mails", null]
+  ]
+}
