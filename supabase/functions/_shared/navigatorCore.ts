@@ -444,26 +444,119 @@ function sameSite(a: string, b: string): boolean {
 }
 
 // ─── Senha digitada no texto da tarefa ───────────────────────────────────
-const CREDENTIAL_RE = /\b(senh[a-z]*|seng[a-z]*|password|passwd|pwd|pass)\b\s*(?:é|e|eh|:|=|-)?\s*["'“]?([^\s"'”]{6,})/giu;
+// Palavra-chave (senha/password/pass/pwd/PIN/OTP/2FA/código de verificação…) seguida de
+// um VALOR = credencial em claro: a tarefa é recusada (credentials_in_task) e o valor é
+// trocado por [senha removida] antes de qualquer log/auditoria. Espelhado em navd.py
+// (find_credential_spans). Regras, para manter poucos falsos positivos:
+//   * "senha: x", "pwd=x", "senha do gmail: x" (com ":" ou "=") → QUALQUER valor conta;
+//   * "senha é Abc123!", "password is 'x y'" → só valor com dígito/símbolo ou entre aspas;
+//   * "senha Abc123!", "PIN 1234", "OTP 123456" (sem separador) → só valor com dígito/símbolo
+//     (4+ caracteres) ou, para PIN/OTP/2FA/código, 4–8 dígitos;
+//   * nunca conta: nome de segredo do cofre (GMAIL_PASSWORD), placeholder (***, [..], <..>),
+//     palavras como "do cofre"/"use", URLs (/password/reset) e frases sem valor
+//     ("trocar minha senha", "senha de 8 caracteres").
+const CRED_KEYWORD_RE =
+  /(?<![\p{L}\p{N}_./@#?&=-])(senh[a-z]*|seng[a-z]*|passwords?|passwd|passcode|passphrase|pass|pwd|pin|otp|totp|2fa|c[oó]digo(?:\s+(?:de\s+)?(?:2fa|otp|totp|sms|verifica[cç][aã]o|seguran[cç]a|acesso|autentica[cç][aã]o))|verification\s+code|security\s+code|one[\s-]time\s+code|c[oó]digo)(?![\p{L}\p{N}_])/giu;
+/** Qualificador entre a palavra e o separador ("senha do gmail: x"); até 3 palavras curtas, sem pontuação de fim de frase. */
+const CRED_COLON_RE = /^(?:\s+[^\s:=.!?;,"'“‘]{1,40}){0,3}?\s*[:=]\s*/u;
+const CRED_IS_RE = /^(?:\s+[^\s:=.!?;,"'“‘]{1,40}){0,3}?\s+(?:é|eh|is|was|será|seria)\s+/iu;
+const CRED_BARE_RE = /^(?:\s*[-–]\s*|\s+)/u;
+const VAULT_NAME_RE = /^[A-Z][A-Z0-9_]{1,63}$/;
+const CRED_STOPWORDS = new Set([
+  "cofre", "vault", "use", "usar", "usando", "do", "da", "de", "dos", "das", "no", "na", "nos", "nas", "em", "salva", "salvo",
+  "salvas", "salvos", "guardada", "guardado", "from", "the", "my", "minha", "meu", "sua", "seu", "nenhuma",
+  "nenhum", "none", "vazio", "vazia", "fill_secret", "preencha", "preencher", "o", "a", "os", "as", "um", "uma",
+]);
+const CODE_KEYWORD_RE = /^(pin|otp|totp|2fa|c[oó]digo|verification|security|one)/iu;
 
-/** O texto traz uma senha em claro? (palavra senha/password seguida de um valor com dígito ou símbolo). */
-export function looksLikeCredentials(text: unknown): boolean {
-  const s = String(text ?? "");
-  for (const m of s.matchAll(CREDENTIAL_RE)) {
-    const value = m[2];
-    if (/^[A-Z][A-Z0-9_]{1,63}$/.test(value)) continue; // nome de segredo do cofre (ex.: GMAIL_PASSWORD)
-    if (/[0-9]/.test(value) || /[^\p{L}\p{N}]/u.test(value)) return true;
-  }
-  return false;
+function credentialValueStrong(v: string): boolean {
+  return /[0-9]/.test(v) || /[^\p{L}\p{N}]/u.test(v);
 }
 
-/** Troca valores de senha no texto por [senha removida] (auditoria e logs). */
+/** Valor que NÃO é credencial: nome do cofre, placeholder, URL ou palavra de ligação. */
+function credentialValueIgnored(v: string, quoted: boolean): boolean {
+  const bare = v.trim();
+  if (!bare) return true;
+  if (VAULT_NAME_RE.test(bare)) return true; // nome de segredo do cofre (ex.: GMAIL_PASSWORD)
+  if (/^[*•·]+$/u.test(bare) || /^x{3,}$/i.test(bare) || /^[._-]{2,}$/.test(bare)) return true; // ****, xxxx
+  if (quoted) return false;
+  if (/^[([<{]/.test(bare)) return true; // placeholder: [segredo], <senha>, (do cofre)
+  if (/^(https?:|www\.|\/)/i.test(bare)) return true; // URL, não valor
+  return CRED_STOPWORDS.has(bare.toLowerCase());
+}
+
+/** Lê o valor em rest[at..]: entre aspas (pode ter espaços) ou até o próximo espaço/vírgula. */
+function readCredentialValue(rest: string, at: number): { start: number; value: string; quoted: boolean } | null {
+  const open = rest[at];
+  if (open && `"'“‘`.includes(open)) {
+    const m = /^([^"'”’\n]{1,120})["'”’]/u.exec(rest.slice(at + 1));
+    if (m) return { start: at + 1, value: m[1], quoted: true };
+    at += 1;
+  }
+  const m = /^[^\s"'”’,;]+/u.exec(rest.slice(at));
+  if (!m) return null;
+  const value = m[0].replace(/[.!?:]+$/u, "");
+  return value ? { start: at, value, quoted: false } : null;
+}
+
+/** Trechos [início, fim) dos VALORES de credencial em claro no texto. */
+export function findCredentialSpans(text: unknown): Array<[number, number]> {
+  const s = String(text ?? "");
+  const spans: Array<[number, number]> = [];
+  for (const m of s.matchAll(CRED_KEYWORD_RE)) {
+    const after = (m.index ?? 0) + m[0].length;
+    const rest = s.slice(after, after + 240);
+    const isCode = CODE_KEYWORD_RE.test(m[1]);
+    // "código" sozinho (sem 2FA/verificação): só "código: 123456" / "código é 123456" (4–8 dígitos).
+    if (/^c[oó]digo$/iu.test(m[1])) {
+      const sep = /^\s*(?:[:=]|\s(?:é|eh|is)\s)\s*/iu.exec(rest);
+      const v = sep ? readCredentialValue(rest, sep[0].length) : null;
+      if (v && /^\d{4,8}$/.test(v.value)) spans.push([after + v.start, after + v.start + v.value.length]);
+      continue;
+    }
+    let hit: { start: number; value: string } | null = null;
+    const colon = CRED_COLON_RE.exec(rest);
+    if (colon) {
+      const v = readCredentialValue(rest, colon[0].length);
+      if (v && !credentialValueIgnored(v.value, v.quoted)) hit = v;
+    }
+    if (!hit) {
+      const is = CRED_IS_RE.exec(rest);
+      const v = is ? readCredentialValue(rest, is[0].length) : null;
+      if (v && !credentialValueIgnored(v.value, v.quoted) && (v.quoted || credentialValueStrong(v.value))) hit = v;
+    }
+    if (!hit) {
+      const bare = CRED_BARE_RE.exec(rest);
+      const v = bare ? readCredentialValue(rest, bare[0].length) : null;
+      if (v && !credentialValueIgnored(v.value, v.quoted)) {
+        const strong = v.value.length >= 4 && credentialValueStrong(v.value) && /[\p{L}\p{N}]/u.test(v.value);
+        const code = isCode && /^\d{4,8}$/.test(v.value);
+        if (v.quoted || strong || code) hit = v;
+      }
+    }
+    if (hit) spans.push([after + hit.start, after + hit.start + hit.value.length]);
+  }
+  return spans;
+}
+
+/** O texto traz uma credencial em claro (senha, PIN, código 2FA/OTP com valor)? */
+export function looksLikeCredentials(text: unknown): boolean {
+  return findCredentialSpans(text).length > 0;
+}
+
+/** Troca valores de senha/PIN/código no texto por [senha removida] (auditoria e logs). */
 export function redactCredentials(text: string): string {
-  return String(text ?? "").replace(CREDENTIAL_RE, (all, word: string, value: string) => {
-    if (/^[A-Z][A-Z0-9_]{1,63}$/.test(value)) return all;
-    if (!(/[0-9]/.test(value) || /[^\p{L}\p{N}]/u.test(value))) return all;
-    return `${word} [senha removida]`;
-  });
+  const s = String(text ?? "");
+  const spans = findCredentialSpans(s);
+  if (!spans.length) return s;
+  let out = "";
+  let at = 0;
+  for (const [a, b] of spans) {
+    if (a < at) continue;
+    out += s.slice(at, a) + "[senha removida]";
+    at = b;
+  }
+  return out + s.slice(at);
 }
 
 /**
@@ -815,14 +908,32 @@ export interface NavigatorAuditRow {
 
 const AUDIT_DETAIL_KEYS = ["task", "name", "host", "store", "total", "target", "url", "reason", "limit", "items", "end_reason", "minutes"] as const;
 
-/** Detalhe de auditoria sem nada sensível: só chaves conhecidas, textos curtos, nunca valor de segredo. */
+/** URL guardada na auditoria: só origem + caminho (query e fragmento carregam tokens de login/reset). */
+export function auditUrl(raw: string): string {
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return "";
+    return `${u.origin}${u.pathname}`;
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Detalhe de auditoria sem nada sensível: só chaves conhecidas, textos curtos, nunca
+ * valor de segredo/senha/código/cookie. Todo texto passa por redactCredentials e URLs
+ * perdem query/fragmento. (A parte que identifica site/conta/conteúdo ainda é cifrada
+ * antes de gravar: navigatorAuditVault.ts.)
+ */
 export function auditDetail(raw: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const k of AUDIT_DETAIL_KEYS) {
     const v = raw[k];
-    if (typeof v === "string") out[k] = (k === "task" ? redactCredentials(v) : v).slice(0, k === "task" ? 300 : 200);
-    else if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
-    else if (k === "items" && Array.isArray(v)) out[k] = v.filter((i) => typeof i === "string").slice(0, 8).map((i) => String(i).slice(0, 160));
+    if (typeof v === "string") {
+      const val = k === "url" ? auditUrl(v) : redactCredentials(v);
+      if (val) out[k] = val.slice(0, k === "task" ? 300 : 200);
+    } else if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
+    else if (k === "items" && Array.isArray(v)) out[k] = v.filter((i) => typeof i === "string").slice(0, 8).map((i) => redactCredentials(String(i)).slice(0, 160));
   }
   return out;
 }

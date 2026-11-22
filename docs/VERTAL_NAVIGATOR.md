@@ -1,4 +1,4 @@
-# Vertal Navigator (fases 1–3) — navegador na nuvem com sessão persistente
+# Vertal Navigator (fases 1–4 + cofre da auditoria) — navegador na nuvem com sessão persistente
 
 O usuário pede no Vertal Chat, por exemplo: **"entre no meu GitHub e me diga quantas notificações eu tenho"**.
 Um agente (browser-use) opera um Chromium real num sandbox E2B self-hosted (vertalrun.com). O usuário
@@ -123,6 +123,9 @@ Padrão: **1 crédito/min** (`NAVIGATOR_CREDITS_PER_MINUTE`). LLM: custo do Open
 | `NAVIGATOR_LLM_PROVIDER` | var | não | `openrouter` (padrão) ou `deepseek` (sem visão, só DOM). |
 | `NAVIGATOR_MAX_SESSIONS` | var | não | Padrão `2` (capacidade atual da VM). |
 | `NAVIGATOR_CREDITS_PER_MINUTE` | var | não | Padrão `1`. |
+| `NAVIGATOR_AUDIT_KEY` | segredo | recomendada | **Cofre da auditoria (22/11).** AES-256-GCM, 32 bytes (`openssl rand -base64 32`). Cifra `navigator_audit` (`key_version 1`). Sem ela: fallback `NAVIGATOR_ENC_KEY` → `CONNECTOR_ENC_KEY` (`key_version 0`). Guardar cópia fora do Cloudflare: perdida, as linhas cifradas não abrem mais. |
+| `NAVIGATOR_LLM_DATA_COLLECTION` | var | não | `deny` (padrão): OpenRouter só usa provedores que não guardam/treinam com os prompts (`provider.data_collection`). `allow` só em emergência. |
+| `NAVIGATOR_LLM_ZDR` | var | não | `true` restringe o OpenRouter a endpoints de retenção zero (`provider.zdr`). Desligado por padrão: pode não haver provedor ZDR para o modelo. |
 
 ## Deploy (passo a passo)
 
@@ -130,7 +133,7 @@ Padrão: **1 crédito/min** (`NAVIGATOR_CREDITS_PER_MINUTE`). LLM: custo do Open
    `supabase db push` ou colar no SQL Editor do projeto.
 2. **Template E2B** (já construído e testado na VM em 21/11/2026; refazer só se mudar `infra/vertal-browser`):
    ```bash
-   # na VM (ubuntu@163.176.111.245), com os arquivos de infra/vertal-browser em /tmp/vb
+   # na VM (ubuntu@132.226.249.211 — IP reservado vertal-e2b-ip), com os arquivos de infra/vertal-browser em /tmp/vb
    sudo docker exec e2b-ready-1 cat /run/e2b/sdk.env | sed 's/^export //' > /tmp/vb/.sdkenv && chmod 600 /tmp/vb/.sdkenv
    I=us-docker.pkg.dev/e2b-artifacts/embed/node-e2b:v0.3.202609120109-ad1cddd091b
    sudo docker run --rm --network host --env-file /tmp/vb/.sdkenv -e TEMPLATE_DIR=/templates \
@@ -441,3 +444,99 @@ O que mudou:
    fase 1 (`node build-template.mjs` na imagem node-e2b). Sem o rebuild, o Worker já manda as regras de
    escopo e DuckDuckGo no texto da tarefa e recusa senha, mas o gate de escrita e a política do Chromium
    só valem depois do rebuild. Conferir depois: `chrome://policy` no sandbox mostra `DefaultSearchProviderName = DuckDuckGo`.
+
+# Cofre da auditoria e anti-telemetria (22/11)
+
+Pedido do Laércio: "um local onde os registros fiquem armazenados com criptografia e antitelemetria,
+para registros de login e senha".
+
+## O que fica cifrado e onde
+
+- **`navigator_audit`** (única tabela com texto de tarefa, URLs/hosts de login e nomes de segredos usados):
+  - Em **claro**, só o que serve para consultar: `user_id`, `session_id`, `kind`, `created_at` e, em
+    `detail`, no máximo `end_reason`/`minutes`/`limit` (constraint `navigator_audit_detail_clear_only`).
+  - **Cifrado** (AES-256-GCM) em `detail_ciphertext`/`detail_iv`/`detail_tag` + `key_version`: texto da
+    tarefa, URL (já sem query/fragmento), host, nome do segredo usado, loja, total, itens, botão, motivo.
+    AAD = `navigator_audit:v<key_version>:<user_id>:<kind>` — ciphertext copiado para outra linha não abre.
+  - **Nunca entra, nem cifrado:** valor preenchido por `fill_secret`, senha, código 2FA/OTP, cookie,
+    cabeçalho. Segredo aparece só pelo NOME (ex.: "Segredo usado: GMAIL_PASSWORD" na aba Atividade).
+    Texto da tarefa passa por `redactCredentials`.
+  - Decifra **só no Worker**, na rota `/api/navigator/activity`, para o dono (a resposta tem o mesmo formato
+    de antes; a aba Atividade não mudou). Linha que não decifra vem como `{ sealed: true }`.
+  - RLS: `authenticated` lê só `id, user_id, session_id, kind, created_at` das próprias linhas (sem
+    `detail` nem colunas cifradas); só o `service_role` (Worker) escreve.
+  - Código: `supabase/functions/_shared/navigatorAuditVault.ts` (mesmo módulo no Worker, nas edge functions,
+    nos testes e no backfill).
+- `navigator_profiles` (cookies) e `navigator_sessions.secret_*` já eram cifrados (`NAVIGATOR_ENC_KEY`).
+- `kubo_secret_audit` guarda só `host`/`session_id` do uso (sem valor) — inalterado.
+
+## Senha/PIN/código na tarefa (detecção mais forte)
+
+`findCredentialSpans` (TS, `navigatorCore.ts`) e `find_credential_spans` (`navd.py`), com os mesmos casos
+em `infra/vertal-browser/credential_cases.json`:
+- `senha: x`, `pwd=abc`, `senha do gmail: x` (com `:`/`=`) → **qualquer valor** recusa (`credentials_in_task`);
+- `senha é Abc123!`, `password is 'x y'` → valor com dígito/símbolo ou entre aspas;
+- `senha Abc123!`, `PIN 1234`, `OTP 123456`, `código 2FA 123456`, `código: 123456` → valor forte ou 4–8 dígitos;
+- não recusa: "trocar minha senha", "senha do cofre GMAIL_PASSWORD", "senha: ****", "senha de 8 caracteres",
+  URLs como `/password/reset`, "o código 2FA vai chegar por SMS".
+Recusa no aparelho (store), no Worker (`parseTaskBody`) e no navd (`/task` → `credentials_in_task`). Eventos do
+navd passam por `redact_credentials`; erros do agente por `redact_for_log` (sem query de URL).
+
+## Anti-telemetria
+
+- **browser-use 0.13.14** (conferido no código: `browser_use/config.py`, `telemetry/service.py`,
+  `sync/service.py`, `agent/service.py`, `tokens/service.py`): `ANONYMIZED_TELEMETRY=false` (sem PostHog),
+  `BROWSER_USE_CLOUD_SYNC=false`, `BROWSER_USE_VERSION_CHECK=false` (sem PyPI), `BROWSER_USE_CLOUD_HINTS=false`,
+  `BROWSER_USE_CALCULATE_COST=false` (sem baixar tabela de preços), `BROWSER_USE_LOGGING_LEVEL=warning`,
+  `DO_NOT_TRACK=1`. Forçadas no topo do `navd.py` (antes de importar o browser-use) e no `start.sh`.
+- **Chromium — flags** (`CHROMIUM_PRIVACY_FLAGS` no `navd.py`): `--metrics-recording-only` (métricas só em
+  memória, nunca enviadas), `--disable-breakpad`, `--disable-crash-reporter`, `--disable-domain-reliability`,
+  `--disable-component-update`, `--disable-client-side-phishing-detection`, `--disable-field-trial-config`,
+  `--no-pings`, `--disable-features=Translate,OptimizationHints*,AutofillServerCommunication,
+  CertificateTransparencyComponentUpdater,NetworkTimeServiceQuerying,PrivacySandboxSettings4,BrowsingTopics,…`
+  (além de `--disable-background-networking` e `--disable-sync`, que já existiam).
+- **Chromium — políticas gerenciadas** (`chromium-policy.json`): `MetricsReportingEnabled=false`,
+  `UrlKeyedAnonymizedDataCollectionEnabled=false`, `SafeBrowsingExtendedReportingEnabled=false`
+  (Safe Browsing padrão continua ligado: protege contra phishing), `SpellCheckServiceEnabled=false`,
+  `SearchSuggestEnabled=false`, `AlternateErrorPagesEnabled=false`, `NetworkPredictionOptions=2`,
+  `TranslateEnabled=false`, `BrowserSignin=0`, `SyncDisabled=true`, `PasswordManagerEnabled=false`,
+  `PasswordLeakDetectionEnabled=false`, `AutofillAddressEnabled=false`, `AutofillCreditCardEnabled=false`,
+  `PaymentMethodQueryEnabled=false`, `ChromeVariations=2` (sem field trials), `DomainReliabilityAllowed=false`,
+  `UserFeedbackAllowed=false`, `FeedbackSurveysEnabled=false`, `WebRtcEventLogCollectionAllowed=false`,
+  `BrowserNetworkTimeQueriesEnabled=false`, `ComponentUpdatesEnabled=false`, `PrivacySandbox*=false`,
+  recursos de IA do Chrome (`GenAiDefaultSettings`, `HelpMeWriteSettings`… = 2) desligados.
+- **LLM (OpenRouter):** `extra_body.provider.data_collection = "deny"` em toda chamada do agente (docs
+  OpenRouter → Provider Routing: só provedores que não guardam/treinam com os dados). ZDR opcional
+  (`NAVIGATOR_LLM_ZDR=true`). DeepSeek direto não tem essa opção (vale a política da DeepSeek).
+- **Logs do Worker/edge:** `redactForLog`/`safeErrorMessage` (`_shared/logRedact.ts`) em todo `console.*` do
+  Navigator e do `kubo-secrets`: sem texto de tarefa/senha, URL só origem+caminho, `Authorization`/`Cookie`/
+  `apikey`, JWT, tokens longos e e-mails mascarados.
+- **Frontend (Sentry):** `beforeBreadcrumb`/`beforeSend` (`src/lib/sentry.ts`): cliques/inputs dentro de
+  `[data-sentry-mask]` (painel do Navigator e cartão de aprovação) viram `[navigator]`; breadcrumbs de console
+  sem argumentos e redigidos; evento sem corpo de request, cookies, cabeçalhos de auth e query. Sem PostHog
+  ou outro analytics no front.
+
+## Deploy deste pacote (nesta ordem; nada foi aplicado ainda)
+
+1. **Segredo novo no Worker:** `NAVIGATOR_AUDIT_KEY` = `openssl rand -base64 32` (Cloudflare → Workers →
+   vertal → Settings → Variables and Secrets, tipo Secret). Guardar cópia no cofre da empresa.
+   (Opcional: `NAVIGATOR_LLM_ZDR=true`.)
+2. **Migration:** `supabase/migrations/20261122140000_navigator_audit_vault.sql` (idempotente; colunas novas,
+   constraints, RLS por coluna). A constraint `navigator_audit_detail_clear_only` entra `NOT VALID`.
+3. **Worker:** merge → Workers Builds (logo depois da migration: o Worker antigo teria as linhas de
+   auditoria recusadas pela constraint — a rota não quebra, só a linha se perde).
+4. **Edge function:** `supabase functions deploy kubo-secrets` (log redigido). `creative-router` não mudou.
+5. **Backfill (só com OK):** cifrar as linhas antigas (em 22/11: 30 linhas, 9 tarefas com texto em claro):
+   ```bash
+   SUPABASE_URL=… SUPABASE_SECRET_KEY=… NAVIGATOR_AUDIT_KEY=<a mesma do Worker> \
+     deno run --no-check -A scripts/navigator-audit-backfill.ts          # simulação: só conta
+   … deno run --no-check -A scripts/navigator-audit-backfill.ts --apply  # grava
+   ```
+   Depois: `alter table public.navigator_audit validate constraint navigator_audit_detail_clear_only;`
+6. **Template E2B `vertal-browser`: rebuild** (novo `navd.py`, `start.sh` e `chromium-policy.json`) — mesmo
+   comando da fase 1, na VM `ubuntu@132.226.249.211`. Conferir: `chrome://policy` mostra
+   `MetricsReportingEnabled=false` e `ChromeVariations=2`; `env | grep TELEMETRY` no sandbox = `false`.
+7. **Frontend:** build normal (Sentry com scrub).
+
+Rotação da chave (futuro): criar `NAVIGATOR_AUDIT_KEY` nova com `key_version` 2 exige ler a anterior para
+as linhas antigas — hoje só existem as versões 1 (dedicada) e 0 (fallback).
