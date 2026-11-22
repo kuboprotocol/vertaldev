@@ -29,7 +29,32 @@ Regras de segurança aplicadas aqui (as mesmas do núcleo TS navigatorCore.ts):
   * Navegação: só http/https públicos (guarda SSRF espelhada do browserForm.ts).
   * evaluate (JS arbitrário) e upload de arquivo ficam desligados; clique por
     coordenada também (o gate precisa saber qual elemento é).
+  * Senha/PIN/código 2FA/OTP com valor no texto da tarefa: recusa (credentials_in_task),
+    espelho de findCredentialSpans do navigatorCore.ts; eventos passam por redact.
+  * Anti-telemetria: browser-use sem telemetria/cloud sync/version check (variáveis
+    abaixo, forçadas ANTES de importar o browser_use), Chromium sem métricas/field
+    trials (flags em start_chromium + políticas gerenciadas em chromium-policy.json),
+    OpenRouter com provider.data_collection="deny" (não usa provedores que guardam/treinam).
 """
+import os as _os
+
+# browser-use 0.13.14 lê estas variáveis (browser_use/config.py) no import e a cada acesso.
+# Forçadas (não setdefault): nem uma variável herdada do template liga a telemetria.
+#   ANONYMIZED_TELEMETRY=false   → ProductTelemetry sem cliente PostHog (telemetry/service.py)
+#   BROWSER_USE_CLOUD_SYNC=false → CloudSync desligado (sync/service.py, agent/cloud_events.py)
+#   BROWSER_USE_VERSION_CHECK=false → sem consulta ao PyPI (agent/service.py)
+#   BROWSER_USE_CLOUD_HINTS=false → sem dicas/links do browser-use cloud
+#   BROWSER_USE_CALCULATE_COST=false → sem baixar tabela de preços (tokens/service.py)
+TELEMETRY_OFF_ENV = {
+    "ANONYMIZED_TELEMETRY": "false",
+    "BROWSER_USE_CLOUD_SYNC": "false",
+    "BROWSER_USE_VERSION_CHECK": "false",
+    "BROWSER_USE_CLOUD_HINTS": "false",
+    "BROWSER_USE_CALCULATE_COST": "false",
+    "BROWSER_USE_LOGGING_LEVEL": "warning",
+    "DO_NOT_TRACK": "1",
+}
+_os.environ.update(TELEMETRY_OFF_ENV)
 import asyncio
 import base64
 import hmac
@@ -237,6 +262,142 @@ def is_totp_name(name: str) -> bool:
     return bool(re.fullmatch(r"[A-Z][A-Z0-9_]{0,58}_TOTP", str(name or "").strip().upper()))
 
 
+# ── Senha/PIN/código no texto (espelho de findCredentialSpans em navigatorCore.ts) ──
+_CRED_KEYWORD_RE = re.compile(
+    r"(?<![\w./@#?&=-])(senh[a-z]*|seng[a-z]*|passwords?|passwd|passcode|passphrase|pass|pwd|pin|otp|totp|2fa|"
+    r"c[oó]digo(?:\s+(?:de\s+)?(?:2fa|otp|totp|sms|verifica[cç][aã]o|seguran[cç]a|acesso|autentica[cç][aã]o))|"
+    r"verification\s+code|security\s+code|one[\s-]time\s+code|c[oó]digo)(?!\w)",
+    re.IGNORECASE,
+)
+_CRED_COLON_RE = re.compile(r"^(?:\s+[^\s:=.!?;,\"'“‘]{1,40}){0,3}?\s*[:=]\s*")
+_CRED_IS_RE = re.compile(r"^(?:\s+[^\s:=.!?;,\"'“‘]{1,40}){0,3}?\s+(?:é|eh|is|was|será|seria)\s+", re.IGNORECASE)
+_CRED_BARE_RE = re.compile(r"^(?:\s*[-–]\s*|\s+)")
+_VAULT_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{1,63}$")
+_CODE_KEYWORD_RE = re.compile(r"^(pin|otp|totp|2fa|c[oó]digo|verification|security|one)", re.IGNORECASE)
+_CRED_STOPWORDS = {
+    "cofre", "vault", "use", "usar", "usando", "do", "da", "de", "dos", "das", "no", "na", "nos", "nas", "em", "salva", "salvo",
+    "salvas", "salvos", "guardada", "guardado", "from", "the", "my", "minha", "meu", "sua", "seu", "nenhuma",
+    "nenhum", "none", "vazio", "vazia", "fill_secret", "preencha", "preencher", "o", "a", "os", "as", "um", "uma",
+}
+
+
+def _cred_strong(v: str) -> bool:
+    return any(c.isdigit() for c in v) or any(not c.isalnum() for c in v)
+
+
+def _cred_ignored(v: str, quoted: bool) -> bool:
+    bare = v.strip()
+    if not bare:
+        return True
+    if _VAULT_NAME_RE.fullmatch(bare):
+        return True
+    if re.fullmatch(r"[*•·]+", bare) or re.fullmatch(r"x{3,}", bare, re.IGNORECASE) or re.fullmatch(r"[._-]{2,}", bare):
+        return True
+    if quoted:
+        return False
+    if bare[0] in "([<{":
+        return True
+    if re.match(r"(https?:|www\.|/)", bare, re.IGNORECASE):
+        return True
+    return bare.lower() in _CRED_STOPWORDS
+
+
+def _cred_value(rest: str, at: int) -> tuple[int, str, bool] | None:
+    if at < len(rest) and rest[at] in "\"'“‘":
+        m = re.match(r"([^\"'”’\n]{1,120})[\"'”’]", rest[at + 1:])
+        if m:
+            return at + 1, m.group(1), True
+        at += 1
+    m = re.match(r"[^\s\"'”’,;]+", rest[at:])
+    if not m:
+        return None
+    value = re.sub(r"[.!?:]+$", "", m.group(0))
+    return (at, value, False) if value else None
+
+
+def find_credential_spans(text: str) -> list[tuple[int, int]]:
+    s = str(text or "")
+    spans: list[tuple[int, int]] = []
+    for m in _CRED_KEYWORD_RE.finditer(s):
+        after = m.end()
+        rest = s[after:after + 240]
+        word = m.group(1)
+        if re.fullmatch(r"c[oó]digo", word, re.IGNORECASE):
+            sep = re.match(r"^\s*(?:[:=]|\s(?:é|eh|is)\s)\s*", rest, re.IGNORECASE)
+            v = _cred_value(rest, sep.end()) if sep else None
+            if v and re.fullmatch(r"\d{4,8}", v[1]):
+                spans.append((after + v[0], after + v[0] + len(v[1])))
+            continue
+        is_code = bool(_CODE_KEYWORD_RE.match(word))
+        hit = None
+        c = _CRED_COLON_RE.match(rest)
+        if c:
+            v = _cred_value(rest, c.end())
+            if v and not _cred_ignored(v[1], v[2]):
+                hit = v
+        if not hit:
+            i = _CRED_IS_RE.match(rest)
+            v = _cred_value(rest, i.end()) if i else None
+            if v and not _cred_ignored(v[1], v[2]) and (v[2] or _cred_strong(v[1])):
+                hit = v
+        if not hit:
+            b = _CRED_BARE_RE.match(rest)
+            v = _cred_value(rest, b.end()) if b else None
+            if v and not _cred_ignored(v[1], v[2]):
+                strong = len(v[1]) >= 4 and _cred_strong(v[1]) and any(ch.isalnum() for ch in v[1])
+                code = is_code and re.fullmatch(r"\d{4,8}", v[1]) is not None
+                if v[2] or strong or code:
+                    hit = v
+        if hit:
+            spans.append((after + hit[0], after + hit[0] + len(hit[1])))
+    return spans
+
+
+def looks_like_credentials(text: str) -> bool:
+    return bool(find_credential_spans(text))
+
+
+def redact_credentials(text: str) -> str:
+    s = str(text or "")
+    spans = find_credential_spans(s)
+    if not spans:
+        return s
+    out, at = [], 0
+    for a, b in spans:
+        if a < at:
+            continue
+        out.append(s[at:a] + "[senha removida]")
+        at = b
+    out.append(s[at:])
+    return "".join(out)
+
+
+_URL_IN_TEXT_RE = re.compile(r"https?://[^\s\"'<>)]+", re.IGNORECASE)
+
+
+def redact_for_log(text: Any, max_len: int = 4000) -> str:
+    """Texto seguro para evento/log: sem credenciais e com URLs sem query/fragmento (tokens)."""
+    s = redact_credentials(str(text or ""))
+
+    def _strip(m: re.Match) -> str:
+        u = m.group(0)
+        cut = min([i for i in (u.find("?"), u.find("#")) if i >= 0], default=-1)
+        return u if cut < 0 else u[:cut] + "?[…]"
+
+    s = _URL_IN_TEXT_RE.sub(_strip, s)
+    return s[:max_len]
+
+
+def _redact_event_value(v: Any) -> Any:
+    if isinstance(v, str):
+        return redact_credentials(v)
+    if isinstance(v, list):
+        return [_redact_event_value(x) for x in v]
+    if isinstance(v, dict):
+        return {k: _redact_event_value(x) for k, x in v.items()}
+    return v
+
+
 def secret_needs_password_field(name: str) -> bool:
     """Segredo que não é identificador (usuário/e-mail/login) só vai em <input type=password>,
     cujo valor o browser-use nunca mostra ao modelo."""
@@ -247,6 +408,8 @@ def secret_needs_password_field(name: str) -> bool:
 class State:
     def __init__(self) -> None:
         self.token: str | None = None
+        # Privacidade do LLM pedida pelo Worker (OpenRouter provider.data_collection / zdr).
+        self.llm_privacy: dict[str, Any] = {"data_collection": "deny", "zdr": False}
         self.procs: dict[str, subprocess.Popen] = {}
         self.events: list[dict[str, Any]] = []
         self.seq = 0
@@ -264,7 +427,8 @@ class State:
 
     def emit(self, type_: str, **data: Any) -> dict[str, Any]:
         self.seq += 1
-        ev = {"seq": self.seq, "ts": int(time.time() * 1000), "type": type_, **data}
+        # Defesa em profundidade: nenhum texto de evento leva senha/PIN/código em claro.
+        ev = {"seq": self.seq, "ts": int(time.time() * 1000), "type": type_, **{k: _redact_event_value(v) for k, v in data.items()}}
         self.events.append(ev)
         if len(self.events) > MAX_EVENTS:
             del self.events[: len(self.events) - MAX_EVENTS]
@@ -362,6 +526,22 @@ async def wait_port(port: int, timeout: float = 20) -> bool:
     return False
 
 
+# Anti-telemetria do Chromium (as políticas gerenciadas em chromium-policy.json cobrem o resto).
+# --metrics-recording-only: grava métricas só em memória e NUNCA envia (o que o Playwright também usa).
+CHROMIUM_PRIVACY_FLAGS = [
+    "--metrics-recording-only", "--disable-breakpad", "--disable-crash-reporter", "--disable-domain-reliability",
+    "--disable-component-update", "--disable-client-side-phishing-detection", "--disable-default-apps",
+    "--disable-field-trial-config", "--no-pings", "--no-service-autorun", "--disable-search-engine-choice-screen",
+    "--disable-features=" + ",".join([
+        "Translate", "MediaRouter", "OptimizationHints", "OptimizationHintsFetching", "OptimizationGuideModelDownloading",
+        "OptimizationTargetPrediction", "AutofillServerCommunication", "CertificateTransparencyComponentUpdater",
+        "InterestFeedContentSuggestions", "NetworkTimeServiceQuerying", "SpareRendererForSitePerProcess",
+        "PrivacySandboxSettings4", "BrowsingTopics", "FedCm", "DialMediaRouteProvider", "AcceptCHFrame",
+        "UkmSamplingRate", "HeavyAdPrivacyMitigations",
+    ]),
+]
+
+
 async def start_chromium() -> None:
     os.makedirs(PROFILE_DIR, exist_ok=True)
     spawn("chromium", [
@@ -371,7 +551,7 @@ async def start_chromium() -> None:
         "--remote-debugging-address=127.0.0.1",
         "--no-first-run", "--no-default-browser-check", "--password-store=basic",
         "--disable-dev-shm-usage", "--disable-background-networking", "--disable-sync",
-        "--disable-features=Translate,MediaRouter,OptimizationHints", "--no-sandbox",
+        *CHROMIUM_PRIVACY_FLAGS, "--no-sandbox",
         f"--window-size={VIEWPORT[0]},{VIEWPORT[1]}", "--window-position=0,0",
         "--lang=pt-BR", "about:blank",
     ])
@@ -483,6 +663,16 @@ async def ask(kind: str, hidden: dict[str, Any] | None = None, **meta: Any) -> A
 
 
 # ── Agente (browser-use 0.13.x, ações estruturadas) ──────────────────────────
+def openrouter_provider_prefs(privacy: dict | None) -> dict:
+    """Preferências de provedor do OpenRouter (docs: provider routing → data_collection / zdr).
+    "deny" = só provedores que não guardam nem treinam com os prompts. Padrão: deny."""
+    p = privacy or {}
+    prefs: dict = {"data_collection": "allow" if p.get("data_collection") == "allow" else "deny"}
+    if p.get("zdr") is True:
+        prefs["zdr"] = True
+    return prefs
+
+
 def build_agent(task: str, model: str, api_key: str, max_steps: int, provider: str = "openrouter"):
     from browser_use import Agent, BrowserSession, Tools
     from browser_use.agent.views import ActionResult
@@ -694,7 +884,8 @@ def build_agent(task: str, model: str, api_key: str, max_steps: int, provider: s
         llm = _DeepSeek(model=model, api_key=api_key, timeout=90)
         use_vision = False
     else:
-        llm = ChatOpenRouter(model=model, api_key=api_key, http_referer="https://vertal.dev", timeout=90)
+        llm = ChatOpenRouter(model=model, api_key=api_key, http_referer="https://vertal.dev", timeout=90,
+                             extra_body={"provider": openrouter_provider_prefs(S.llm_privacy)})
         use_vision = True
     session = BrowserSession(cdp_url=f"http://127.0.0.1:{CDP_PORT}", keep_alive=True)
 
@@ -738,7 +929,7 @@ async def run_agent(task: str, model: str, api_key: str, max_steps: int, provide
         if not final and history:
             errs = [e for e in history.errors() if e]
             if errs:
-                final = "Falhou: " + str(errs[-1]).splitlines()[0][:300]
+                final = "Falhou: " + redact_for_log(str(errs[-1]).splitlines()[0], 300)
         S.last_screenshot = await capture_screenshot() or S.last_screenshot
         S.status = "done" if ok else ("stopped" if getattr(agent.state, "stopped", False) else "failed")
         S.emit("done", runId=S.run_id, success=ok, result=(final or "")[:4000], status=S.status)
@@ -747,7 +938,7 @@ async def run_agent(task: str, model: str, api_key: str, max_steps: int, provide
         S.emit("done", runId=S.run_id, success=False, result="Parado pelo usuário.", status="stopped")
     except Exception as e:
         S.status = "failed"
-        S.emit("done", runId=S.run_id, success=False, result=f"Erro do agente: {type(e).__name__}: {str(e)[:300]}", status="failed")
+        S.emit("done", runId=S.run_id, success=False, result=f"Erro do agente: {type(e).__name__}: {redact_for_log(e, 300)}", status="failed")
     finally:
         S.agent = None
         for p in list(S.pending.values()):
@@ -812,6 +1003,14 @@ async def task(request: web.Request) -> web.Response:
     api_key = str(body.get("apiKey", ""))
     if not text or not model or not api_key:
         return j({"ok": False, "error": "bad_request"}, 400)
+    # Senha/PIN/código com valor no texto iria para o LLM e para os eventos: recusa.
+    if looks_like_credentials(text):
+        return j({"ok": False, "error": "credentials_in_task"}, 400)
+    privacy = body.get("llmPrivacy") if isinstance(body.get("llmPrivacy"), dict) else {}
+    S.llm_privacy = {
+        "data_collection": "allow" if privacy.get("dataCollection") == "allow" else "deny",
+        "zdr": privacy.get("zdr") is True,
+    }
     max_steps = max(1, min(int(body.get("maxSteps") or DEFAULT_MAX_STEPS), MAX_STEPS_CAP))
     provider = "deepseek" if body.get("provider") == "deepseek" else "openrouter"
     S.allowed_secrets = {}
@@ -951,9 +1150,7 @@ async def errors(request: web.Request, handler):
 
 
 def main() -> None:
-    os.environ.setdefault("ANONYMIZED_TELEMETRY", "false")
-    os.environ.setdefault("BROWSER_USE_CLOUD_SYNC", "false")
-    os.environ.setdefault("BROWSER_USE_LOGGING_LEVEL", "warning")
+    os.environ.update(TELEMETRY_OFF_ENV)
     app = web.Application(middlewares=[errors], client_max_size=4 * 1024 * 1024)
     app.add_routes([
         web.get("/health", health), web.post("/init", init), web.post("/task", task), web.get("/events", events),

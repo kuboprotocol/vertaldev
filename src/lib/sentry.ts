@@ -1,4 +1,73 @@
 import * as Sentry from "@sentry/react";
+import { redactForLog } from "../../supabase/functions/_shared/logRedact.ts";
+
+// Anti-telemetria do Vertal Navigator: nada da tarefa, do cartão de aprovação
+// (destinatário/assunto/corpo/loja/total) nem senha/código vai para o Sentry.
+// Elementos do Navigator usam data-sentry-mask / o seletor abaixo; breadcrumbs de
+// UI/console nesses elementos perdem o texto e toda string passa por redactForLog.
+const NAVIGATOR_UI_RE = /navigator|approval|aprova|vertal-chat-input|data-sentry-mask/i;
+
+/** Breadcrumb sem texto sensível (exportado para teste). */
+export function scrubBreadcrumb<T extends { category?: string; message?: string; data?: Record<string, unknown> }>(b: T, hint?: { event?: unknown }): T | null {
+  const category = String(b.category ?? "");
+  const target = (hint?.event as { target?: { closest?: (sel: string) => unknown } } | undefined)?.target;
+  if (category.startsWith("ui.") && typeof target?.closest === "function" && target.closest("[data-sentry-mask]")) {
+    return { ...b, message: "[navigator]" };
+  }
+  if (category === "console") {
+    // Console de qualquer tela pode citar a tarefa; guarda só a mensagem redigida, sem argumentos.
+    return { ...b, message: b.message ? redactForLog(b.message, 200) : b.message, data: undefined };
+  }
+  if (category.startsWith("ui.") && b.message && NAVIGATOR_UI_RE.test(b.message)) {
+    return { ...b, message: "[navigator]" };
+  }
+  if (b.message) b.message = redactForLog(b.message, 300);
+  if (b.data && typeof b.data.url === "string") {
+    try {
+      const u = new URL(b.data.url, "https://vertal.dev");
+      b.data.url = u.origin + u.pathname;
+    } catch {
+      b.data.url = "[url]";
+    }
+  }
+  return b;
+}
+
+/** Evento sem texto sensível (mensagem, exceções, extras, corpo de request). */
+interface ScrubbableEvent {
+  message?: unknown;
+  exception?: { values?: Array<{ value?: unknown }> };
+  request?: {
+    data?: unknown;
+    cookies?: unknown;
+    headers?: Record<string, string>;
+    url?: string;
+    query_string?: unknown;
+  };
+  extra?: Record<string, unknown>;
+}
+
+export function scrubEvent<T extends ScrubbableEvent>(event: T): T {
+  if (typeof event.message === "string") event.message = redactForLog(event.message, 500);
+  for (const ex of event.exception?.values ?? []) {
+    if (typeof ex.value === "string") ex.value = redactForLog(ex.value, 500);
+  }
+  if (event.request) {
+    delete event.request.data;
+    delete event.request.cookies;
+    if (event.request.headers) {
+      for (const h of Object.keys(event.request.headers)) {
+        if (/authorization|cookie|token|apikey/i.test(h)) delete event.request.headers[h];
+      }
+    }
+    if (typeof event.request.url === "string") event.request.url = event.request.url.split(/[?#]/)[0];
+    if (event.request.query_string) delete event.request.query_string;
+  }
+  if (event.extra) {
+    for (const k of Object.keys(event.extra)) event.extra[k] = redactForLog(event.extra[k], 300);
+  }
+  return event;
+}
 
 // Release version (bumped per build). Falls back to a static tag when
 // VITE_APP_VERSION is not injected. Correlates errors → release in Sentry.
@@ -34,15 +103,14 @@ export function initSentry() {
         }),
       ],
       tracesSampleRate: 0.1,
-      // Avoid leaking huge PII: strip query strings from breadcrumb URLs.
-      beforeBreadcrumb(breadcrumb) {
-        if (breadcrumb.data && typeof breadcrumb.data.url === "string") {
-          try {
-            const u = new URL(breadcrumb.data.url, window.location.origin);
-            breadcrumb.data.url = u.origin + u.pathname;
-          } catch {}
-        }
-        return breadcrumb;
+      sendDefaultPii: false,
+      // Avoid leaking PII: strip query strings from breadcrumb URLs, mask Navigator UI
+      // and redact credentials/tokens from every message (scrubBreadcrumb/scrubEvent).
+      beforeBreadcrumb(breadcrumb, hint) {
+        return scrubBreadcrumb(breadcrumb, hint);
+      },
+      beforeSend(event) {
+        return scrubEvent(event);
       },
     });
     initialized = true;

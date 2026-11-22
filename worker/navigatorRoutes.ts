@@ -16,9 +16,12 @@
 // O navegador fica num sandbox E2B self-hosted (template vertal-browser, ver
 // infra/vertal-browser e docs/VERTAL_NAVIGATOR.md). Auth: JWT do Supabase.
 // Segredos do cofre e cookies usam a CONNECTOR_ENC_KEY (mesmo AES-GCM das edge functions).
+// Auditoria (navigator_audit): conteúdo sensível cifrado com NAVIGATOR_AUDIT_KEY
+// (fallback NAVIGATOR_ENC_KEY/CONNECTOR_ENC_KEY), ver _shared/navigatorAuditVault.ts.
+// Logs (console.*) passam por safeErrorMessage: nunca texto de tarefa, URL com token, cookie ou cabeçalho.
 import { createRateLimiter } from '../supabase/functions/_shared/browserForm';
 import {
-  DEFAULT_NAVIGATOR_SETTINGS, NAVIGATOR_LIMITS, NAVIGATOR_MESSAGES, auditDetail, autoApproveDecision, extractCheckoutSummary, formatCents,
+  DEFAULT_NAVIGATOR_SETTINGS, NAVIGATOR_LIMITS, NAVIGATOR_MESSAGES, autoApproveDecision, extractCheckoutSummary, formatCents,
   liveViewUrl, minutesDue, normalizeNavigatorUrl, parseInputBody, parseSessionBody, parseSettingsBody, parseStartBody, parseTaskBody,
   pickSecretForHost, pickTotpForHost, isTotpSecretName, sanitizeEvents, sanitizePending, isBlockedHost, framedNavigatorTask, navigatorStartUrl, pickNavigatorModel,
   type CheckoutSummary, type NavigatorAuditKind, type NavigatorPending, type NavigatorSettings, type NavigatorStatus, type VaultSecretMeta,
@@ -27,6 +30,8 @@ import { parseTotpSeed, totpNow } from '../supabase/functions/_shared/totp.ts';
 import { createSandbox, e2bDomain, E2BError, killSandbox, navd, setSandboxTimeout, waitNavd, type E2BEnv, type NavdTarget } from './e2bClient';
 import { decryptWithConnectorKey, encryptWithConnectorKey, EncKeyMissingError, randomPassword, randomToken } from './navigatorCrypto';
 import { isAllowedOrigin } from './spotifyRoutes';
+import { auditWriteKey, openAuditDetail, sealAuditDetail } from '../supabase/functions/_shared/navigatorAuditVault.ts';
+import { safeErrorMessage } from '../supabase/functions/_shared/logRedact.ts';
 import { getUserId, rpc, table, type SupabaseEnv } from './supabaseRest';
 
 export const NAVIGATOR_API_PREFIX = '/api/navigator';
@@ -50,6 +55,12 @@ export interface NavigatorEnv extends SupabaseEnv, E2BEnv {
   NAVIGATOR_ENC_KEY?: string;
   /** Token interno compartilhado com a edge function kubo-secrets (fill_secret). */
   NAVIGATOR_INTERNAL_TOKEN?: string;
+  /** Chave dedicada da auditoria cifrada (AES-256-GCM, 32 bytes). Ausente: usa NAVIGATOR_ENC_KEY/CONNECTOR_ENC_KEY (key_version 0). */
+  NAVIGATOR_AUDIT_KEY?: string;
+  /** OpenRouter: "deny" (padrão) só usa provedores que não guardam/treinam com os prompts. "allow" só em emergência. */
+  NAVIGATOR_LLM_DATA_COLLECTION?: string;
+  /** OpenRouter: "true" restringe a endpoints ZDR (retenção zero). Desligado por padrão (pode faltar provedor para o modelo). */
+  NAVIGATOR_LLM_ZDR?: string;
 }
 
 const startLimiter = createRateLimiter(6, 10 * 60_000);
@@ -146,11 +157,18 @@ async function endSession(env: NavigatorEnv, row: SessionRow, reason: string): P
 }
 
 // ─── Auditoria (fase 2) ──────────────────────────────────────────────────
-/** Grava uma linha em navigator_audit. Nunca derruba a rota; detalhe passa por auditDetail (sem valores sensíveis). */
+/**
+ * Grava uma linha em navigator_audit. Nunca derruba a rota. O detalhe passa por auditDetail
+ * (sem valores de segredo/senha/código/cookie); o que identifica site, conta ou conteúdo
+ * (tarefa, URL, host, nome do segredo, loja, itens) vai cifrado (AES-256-GCM, AAD = dono+tipo).
+ */
 async function recordAudit(env: NavigatorEnv, userId: string, sessionId: string | null, kind: NavigatorAuditKind, detail: Record<string, unknown> = {}): Promise<void> {
-  await table(env, 'navigator_audit').insert({ user_id: userId, session_id: sessionId, kind, detail: auditDetail(detail) }).catch((e) => {
-    console.error('navigator: audit falhou', kind, e instanceof Error ? e.message.slice(0, 160) : e);
-  });
+  try {
+    const sealed = await sealAuditDetail(auditWriteKey(env), userId, kind, detail);
+    await table(env, 'navigator_audit').insert({ user_id: userId, session_id: sessionId, kind, ...sealed });
+  } catch (e) {
+    console.error('navigator: audit falhou', kind, safeErrorMessage(e, 160));
+  }
 }
 
 async function loadSettings(env: NavigatorEnv, userId: string): Promise<NavigatorSettings> {
@@ -257,7 +275,7 @@ async function saveProfile(env: NavigatorEnv, userId: string, target: NavdTarget
     );
     return cookies.length;
   } catch (e) {
-    console.error('navigator: saveProfile falhou', e instanceof Error ? e.message.slice(0, 200) : e);
+    console.error('navigator: saveProfile falhou', safeErrorMessage(e, 200));
     return null;
   }
 }
@@ -405,10 +423,10 @@ export async function handleNavigator(request: Request, env: NavigatorEnv, url: 
   } catch (e) {
     if (e instanceof EncKeyMissingError) return fail(request, 'not_configured', {}, 503);
     if (e instanceof E2BError) {
-      console.error('navigator: e2b', route, e.message.slice(0, 300));
+      console.error('navigator: e2b', route, safeErrorMessage(e));
       return fail(request, 'sandbox_error', {}, 502);
     }
-    console.error('navigator: erro', route, e instanceof Error ? e.message.slice(0, 300) : e);
+    console.error('navigator: erro', route, safeErrorMessage(e));
     return fail(request, 'error', {}, 500);
   }
 }
@@ -495,7 +513,7 @@ async function start(request: Request, env: NavigatorEnv, userId: string, body: 
       return json(request, { ok: true, status: 'ok', reused: false, cookiesRestored: init.data.cookiesImported ?? 0, ...sessionView(env, row, secrets) });
     } catch (e) {
       lastError = e;
-      console.warn(`[navigator] start tentativa ${attempt} falhou:`, e instanceof Error ? e.message : String(e));
+      console.warn(`[navigator] start tentativa ${attempt} falhou:`, safeErrorMessage(e));
       // Sandbox que não subiu não fica para trás (nem ocupa vaga).
       if (sandboxId) await killSandbox(env, sandboxId);
       if (!(e instanceof E2BError)) break;
@@ -560,10 +578,12 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
       const model = pickNavigatorModel(parsed.data.model, { defaultModel: env.NAVIGATOR_MODEL, allowed: env.NAVIGATOR_ALLOWED_MODELS, provider });
       const res = await navd<{ ok?: boolean; runId?: string; error?: string }>(env, target, 'POST', '/task', {
         task, provider, apiKey: llmKey,
-        model,
+        model, llmPrivacy: llmPrivacy(env),
         maxSteps: parsed.data.maxSteps, secrets: usable,
       });
       if (res.status === 409) return fail(request, 'busy', {}, 409);
+      // Defesa em profundidade: o navd também recusa senha/PIN/código com valor no texto.
+      if (res.data.error === 'credentials_in_task') return fail(request, 'credentials_in_task', {}, 400);
       if (!res.data.ok) return fail(request, 'bad_request', { detail: res.data.error }, 400);
       await recordAudit(env, userId, row.id, 'task', { task: parsed.data.task, url: parsed.data.url });
       return json(request, { ok: true, status: 'ok', runId: res.data.runId, ...sessionView(env, row, s) });
@@ -677,18 +697,49 @@ async function settingsRoute(request: Request, env: NavigatorEnv, userId: string
   return json(request, { ok: true, status: 'ok', settings: s, capCents: NAVIGATOR_LIMITS.autoApproveMaxCentsCap });
 }
 
+/** Privacidade das chamadas ao LLM (navd repassa ao OpenRouter em provider.data_collection / provider.zdr). */
+function llmPrivacy(env: NavigatorEnv): { dataCollection: 'deny' | 'allow'; zdr: boolean } {
+  return { dataCollection: env.NAVIGATOR_LLM_DATA_COLLECTION === 'allow' ? 'allow' : 'deny', zdr: env.NAVIGATOR_LLM_ZDR === 'true' };
+}
+
+interface AuditDbRow {
+  id: string;
+  session_id: string | null;
+  kind: string;
+  detail: Record<string, unknown>;
+  detail_ciphertext?: string | null;
+  detail_iv?: string | null;
+  detail_tag?: string | null;
+  key_version?: number | null;
+  created_at: string;
+}
+
+/** Lê a auditoria do dono e decifra no servidor; o cliente recebe só {id, session_id, kind, detail, created_at}. */
+async function loadOwnAudit(env: NavigatorEnv, userId: string): Promise<Array<Omit<AuditDbRow, 'detail_ciphertext' | 'detail_iv' | 'detail_tag' | 'key_version'>>> {
+  const base = { user_id: `eq.${userId}`, order: 'created_at.desc', limit: '150' };
+  let rows: AuditDbRow[];
+  try {
+    rows = await table(env, 'navigator_audit').select<AuditDbRow>({ ...base, select: 'id,session_id,kind,detail,detail_ciphertext,detail_iv,detail_tag,key_version,created_at' });
+  } catch {
+    // Migração do cofre ainda não aplicada: colunas novas não existem.
+    rows = await table(env, 'navigator_audit').select<AuditDbRow>({ ...base, select: 'id,session_id,kind,detail,created_at' }).catch(() => []);
+  }
+  return Promise.all(rows.map(async (r) => ({
+    id: r.id, session_id: r.session_id, kind: r.kind, created_at: r.created_at,
+    detail: await openAuditDetail(env, { ...r, user_id: userId }),
+  })));
+}
+
 async function activityRoute(request: Request, env: NavigatorEnv, userId: string): Promise<Response> {
   const [recentSessions, audit] = await Promise.all([
     sessions(env).select<{ id: string; status: string; started_at: string; ended_at: string | null; end_reason: string | null; billed_minutes: number }>({
       user_id: `eq.${userId}`, select: 'id,status,started_at,ended_at,end_reason,billed_minutes', order: 'started_at.desc', limit: '20',
     }),
-    table(env, 'navigator_audit').select<{ id: string; session_id: string | null; kind: string; detail: Record<string, unknown>; created_at: string }>({
-      user_id: `eq.${userId}`, select: 'id,session_id,kind,detail,created_at', order: 'created_at.desc', limit: '150',
-    }).catch(() => []),
+    loadOwnAudit(env, userId).catch(() => []),
   ]);
   return json(request, { ok: true, status: 'ok', sessions: recentSessions, audit });
 }
 
 /** Só para testes: o resumo que o cartão recebe a partir do pedido cru do navd. */
-export const __test = { withSummary, summaryAudit };
+export const __test = { withSummary, summaryAudit, llmPrivacy };
 export type { NavigatorPending };

@@ -21,6 +21,7 @@
 // com as regras de dono e convidado aplicadas aqui. Nenhum cliente lê as tabelas.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, sanitizeError } from "../_shared/cors.ts";
+import { safeErrorMessage } from "../_shared/logRedact.ts";
 import { encryptSecret, decryptSecret } from "../_shared/connectorCrypto.ts";
 import {
   ENV_KEY_RE,
@@ -537,7 +538,7 @@ Deno.serve(async (req) => {
         return fail("ação desconhecida");
     }
   } catch (e) {
-    console.error("[kubo-secrets] error:", e instanceof Error ? e.message : e);
+    console.error("[kubo-secrets] error:", safeErrorMessage(e));
     return json({ error: sanitizeError(e) }, 500);
   }
 });

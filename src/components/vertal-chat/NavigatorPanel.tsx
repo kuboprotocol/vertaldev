@@ -35,7 +35,7 @@ export function NavigatorPanel() {
   };
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-3 p-3 sm:p-4">
+    <div className="mx-auto flex max-w-6xl flex-col gap-3 p-3 sm:p-4" data-sentry-mask>
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Globe className="h-5 w-5 text-primary" aria-hidden />

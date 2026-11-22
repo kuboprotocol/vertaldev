@@ -42,7 +42,7 @@ export function NavigatorApprovalDialog() {
         if (!open && approval && getNavigatorState().pending.some((p) => p.id === approval.id)) void decide(false);
       }}
     >
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg" data-sentry-mask>
         {approval ? (
           <>
             <DialogHeader>
