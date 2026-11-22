@@ -232,3 +232,12 @@ Deno.test("cadeia do roteador: recusa do Claude cai para a reserva e fica regist
   assertEquals(r.attempts, ["claude-haiku-5-5:refusal", "deepseek-chat:ok"]);
   assertEquals(calls, 2);
 });
+
+Deno.test("emptyOutputFallbackProvider: OpenRouter com outro modelo, desligável", async () => {
+  const { emptyOutputFallbackProvider } = await import("./aiGateway.ts");
+  const env = (m: Record<string, string>) => (k: string) => m[k];
+  const p = emptyOutputFallbackProvider(env({ NAVIGATOR_OPENROUTER_KEY: "k" }));
+  if (!p || p.name !== "openrouter_rescue" || p.model !== "google/gemini-2.5-flash") throw new Error("provedor de resgate errado");
+  if (emptyOutputFallbackProvider(env({ OPENROUTER_API_KEY: "k", CHAT_EMPTY_FALLBACK_MODEL: "off" })) !== null) throw new Error("off não desligou");
+  if (emptyOutputFallbackProvider(env({})) !== null) throw new Error("sem chave deveria ser null");
+});
