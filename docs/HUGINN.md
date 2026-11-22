@@ -4,6 +4,12 @@
 
 Nada aqui cria uma edge function nova (o Supabase está no limite de 100): tudo passa pelo `creative-router` (tool `huginn`).
 
+## Marca branca (o que o usuário vê)
+
+Para quem usa o Vertal Chat e o painel de agentes, o Huginn é o **Vertal Agentes** e o Automatisch é o **Vertal Fluxos**. Nenhum texto de interface, cartão de permissão, mensagem de erro, rótulo do Cofre ou prompt do chat cita os nomes dos motores nem de provedores de hospedagem (Railway etc.), e o endereço da instância (`*.up.railway.app`) não aparece: o painel mostra só o botão "Abrir Vertal Agentes". O prompt do chat leva a regra `BRAND_RULES` sempre que uma das duas ferramentas está ligada. Os ids internos não mudaram: ferramentas `huginn`/`automatisch`, segredos `HUGINN_*`/`AUTOMATISCH_*`, slugs dos conectores e nomes no código. O teste `src/test/whitelabel-vendor-names.test.ts` falha se um nome de fornecedor voltar a um texto visível.
+
+Licenças (Huginn MIT, Automatisch AGPL-3.0 com a oferta de código-fonte para uso em rede): [LICENCAS-TERCEIROS.md](./LICENCAS-TERCEIROS.md). Não há entrada de licença na interface.
+
 ## Peças
 
 | Peça | Arquivo | O que faz |

@@ -52,7 +52,7 @@ describe('ponte Huginn ↔ Automatisch', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const created = h.agents.find((x) => x.id === 100)!;
-    expect(created).toMatchObject({ name: 'Vertal → Automatisch: Avisar no Slack', schedule: 'never', source_ids: [1] });
+    expect(created).toMatchObject({ name: 'Vertal Agentes → Vertal Fluxos: Avisar no Slack', schedule: 'never', source_ids: [1] });
     expect((created.options as Record<string, unknown>).post_url).toBe(`${ABASE}/webhooks/flows/${FLOW}`);
     expect(JSON.parse(h.calls.find((c) => c.path === '/agents.json' && c.method === 'POST')!.body!).agent.type).toBe('Agents::PostAgent');
     expect(r.data).toMatchObject({ automatisch_flow: { id: FLOW, published: false }, post_agent: { id: 100 } });
