@@ -67,6 +67,8 @@ export function table(env: SupabaseEnv, name: string) {
   return {
     select: <T>(filters: Filters) => call<T>('GET', { select: '*', ...filters }),
     insert: (row: Record<string, unknown>) => call('POST', {}, row, 'return=minimal'),
+    /** Insere e devolve as colunas pedidas (ex.: o id gerado). */
+    insertReturning: <T>(row: Record<string, unknown>, select = 'id') => call<T>('POST', { select }, row, 'return=representation'),
     upsert: (row: Record<string, unknown>, onConflict: string) =>
       call('POST', { on_conflict: onConflict }, row, 'resolution=merge-duplicates,return=minimal'),
     /** Atualiza e devolve as linhas alteradas (vazio = nenhuma casou com o filtro). */
