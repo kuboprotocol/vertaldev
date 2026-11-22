@@ -7,13 +7,9 @@ import { CheckCircle2, ChevronDown, Globe, Quote, XCircle } from 'lucide-react';
 import type { Artifact } from '@/lib/chatAgent/artifacts';
 import { currentTaskEvents, inlineApprovalMounted, panelMounted, useNavigator } from '@/lib/navigator/store';
 import { NavigatorApprovalInline, NavigatorControls, NavigatorFilling, NavigatorLiveFrame, NavigatorStepList } from '@/components/navigator/NavigatorParts';
-import { NavigatorRequestCard, isRequestCardKind } from '@/components/navigator/NavigatorSecureForms';
-import { hostOf, NAV_STATUS_LABEL } from '@/components/navigator/navigatorUi';
+import { NavigatorRequestCard } from '@/components/navigator/NavigatorSecureForms';
+import { hasLiveChatNavigatorTask, hostOf, isRequestCardKind, NAV_STATUS_LABEL } from '@/components/navigator/navigatorUi';
 
-/** Mostra o cartão ao vivo só para tarefas pedidas por este chat. */
-export function hasLiveChatNavigatorTask(origin: string | undefined, agentStatus: string): boolean {
-  return origin === 'vertal-chat' && agentStatus !== 'none';
-}
 
 export function VertalNavigatorLiveCard() {
   const nav = useNavigator();

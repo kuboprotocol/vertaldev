@@ -31,7 +31,7 @@ describe('ferramenta navigator no contrato do chat', () => {
     const on = buildAgentSystemPrompt({ secretNames: ['GITHUB_PASSWORD'], navigator: true });
     expect(on).toContain('{"tool":"navigator","op":"run|open|stop"');
     expect(on).toContain('nunca peça no chat');
-    expect(on).toContain('o usuário responde e aprova no painel, nunca você');
+    expect(on).toContain('num cartão seguro ali (nunca peça no chat, nunca aprove por ele)');
     // Com o navigator ligado, browser_form sai do prompt (orçamento).
     expect(buildAgentSystemPrompt({ secretNames: [], navigator: true, browserForm: true })).not.toContain('"tool":"browser_form"');
     const heavy = buildAgentSystemPrompt({

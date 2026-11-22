@@ -332,7 +332,7 @@ const NAVIGATOR_TOOL =
   `- {"tool":"navigator","op":"run|open|stop","task":"o que fazer","url":"https://... (opcional)"} → agente opera um navegador real na nuvem com login salvo: sites, área logada, várias telas (${TOOL_COSTS.navigator}). "open" só abre ao vivo (login à mão); "stop" fecha e salva.`;
 
 const NAVIGATOR_RULES =
-  "Navegador: roda num cartão ao vivo dentro desta conversa. Login, senha, código 2FA, telefone e pagar/comprar/confirmar pedido: o site pede e o usuário responde num cartão seguro ali mesmo (salva no Cofre se ele quiser) — nunca peça senha, código ou cartão no chat e nunca aprove por ele. Login do Google em pedido de e-mail: prefira o conector do Gmail. Publicar app em hospedagem (Hostinger etc.: logar, contratar VPS): navigator run; a contratação passa pela aprovação.";
+  "Navegador: cartão ao vivo na conversa; login, senha, 2FA, telefone e pagamento o usuário preenche/aprova num cartão seguro ali (nunca peça no chat, nunca aprove por ele). Publicar app em hospedagem (Hostinger etc.: logar, contratar VPS): navigator run; a contratação passa pela aprovação.";
 
 /** Vibe Code + GitHub (fase 3): só entra no prompt quando a conversa fala de GitHub (wantsGithub). */
 const GITHUB_TOOL =

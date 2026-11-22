@@ -10,7 +10,8 @@ import { NavigatorSecurity } from './NavigatorSecurity';
 import { panelMounted, runNavigatorTask, useNavigator } from '@/lib/navigator/store';
 // Fase 4: peças compartilhadas com o cartão do navegador no chat do Vibe Code.
 import { NavigatorControls, NavigatorFilling, NavigatorLiveFrame, NavigatorStepList } from '@/components/navigator/NavigatorParts';
-import { NavigatorRequestCard, isRequestCardKind } from '@/components/navigator/NavigatorSecureForms';
+import { NavigatorRequestCard } from '@/components/navigator/NavigatorSecureForms';
+import { isRequestCardKind } from '@/components/navigator/navigatorUi';
 import { hostOf, NAV_STATUS_LABEL, navInput, navPrimary } from '@/components/navigator/navigatorUi';
 
 export function NavigatorPanel() {

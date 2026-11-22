@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import {
   NavigatorApprovalInline, NavigatorControls, NavigatorFilling, NavigatorLiveFrame, NavigatorStepList,
 } from '@/components/navigator/NavigatorParts';
-import { NavigatorRequestCard, isRequestCardKind } from '@/components/navigator/NavigatorSecureForms';
+import { NavigatorRequestCard } from '@/components/navigator/NavigatorSecureForms';
+import { isRequestCardKind } from '@/components/navigator/navigatorUi';
 import { hostOf, NAV_STATUS_LABEL, navBtnSm, navPrimarySm } from '@/components/navigator/navigatorUi';
 import { currentTaskEvents, inlineApprovalMounted, panelMounted, useNavigator } from '@/lib/navigator/store';
 import type { NavigatorCardData } from '@/lib/navigator/vibeCard';

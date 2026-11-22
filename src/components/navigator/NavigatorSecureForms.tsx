@@ -226,6 +226,3 @@ export function NavigatorRequestCard({ pending, compact = false }: { pending: Na
   if (pending.kind === 'text') return <NavigatorPendingInput pending={pending} compact={compact} />;
   return null;
 }
-
-/** Pedidos que viram cartão seguro inline. */
-export const isRequestCardKind = (kind: string) => kind === 'login' || kind === 'code' || kind === 'phone' || kind === 'text';
