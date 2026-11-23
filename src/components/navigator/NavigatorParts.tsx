@@ -126,7 +126,7 @@ export function NavigatorLiveFrame({ nav, className = 'aspect-[16/10] w-full', c
           title="Tela ao vivo do Vertal Navigator"
           src={frameUrl}
           className={className}
-          allow="clipboard-read; clipboard-write"
+          allow="clipboard-read; clipboard-write; fullscreen"
           referrerPolicy="no-referrer"
         />
       ) : nav.screenshot ? (
