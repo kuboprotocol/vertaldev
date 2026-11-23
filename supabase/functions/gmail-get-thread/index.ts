@@ -6,11 +6,27 @@ const corsHeaders = {
 };
 import { z } from 'npm:zod@3'
 import { getFreshAccessToken, loadAccount } from '../_shared/gmailToken.ts'
+import { ATTACHMENT_TEXT_MAX, isTextAttachment } from '../_shared/gmailOps.ts'
 
 const Body = z.object({
   accountId: z.string().uuid(),
   threadId: z.string().min(1).max(128),
+  // Ler um anexo: e-mail + id do anexo (vem em messages[].attachments).
+  messageId: z.string().regex(/^[A-Za-z0-9_-]{6,128}$/).optional(),
+  attachmentId: z.string().regex(/^[A-Za-z0-9_-]{6,1024}$/).optional(),
 })
+
+/** Anexos do e-mail: nome, tipo, tamanho e id (para ler depois). */
+function listAttachments(payload: GPart | undefined): Array<{ filename: string; mimeType: string; size: number; attachmentId: string }> {
+  const out: Array<{ filename: string; mimeType: string; size: number; attachmentId: string }> = []
+  const walk = (p?: GPart) => {
+    if (!p) return
+    if (p.filename && p.body?.attachmentId) out.push({ filename: p.filename, mimeType: p.mimeType ?? '', size: p.body.size ?? 0, attachmentId: p.body.attachmentId })
+    p.parts?.forEach(walk)
+  }
+  walk(payload)
+  return out
+}
 
 interface GHeader { name: string; value: string }
 interface GPart {
@@ -80,6 +96,26 @@ Deno.serve(async (req) => {
     const acct = await loadAccount(admin, user.id, parsed.data.accountId)
     const token = await getFreshAccessToken(admin, acct)
 
+    if (parsed.data.attachmentId) {
+      const { messageId, attachmentId } = parsed.data
+      if (!messageId) return new Response(JSON.stringify({ error: 'messageId_required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      const base = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}`
+      const mr = await fetch(`${base}?format=full`, { headers: { Authorization: `Bearer ${token}` } })
+      const mj = await mr.json() as GMessage
+      if (!mr.ok) return new Response(JSON.stringify({ error: 'gmail_thread_failed' }), { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      const meta = listAttachments(mj.payload).find(a => a.attachmentId === attachmentId)
+      if (!meta) return new Response(JSON.stringify({ error: 'attachment_not_found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      let text: string | null = null
+      if (isTextAttachment(meta.mimeType, meta.filename) && meta.size <= 2_000_000) {
+        const ar = await fetch(`${base}/attachments/${encodeURIComponent(attachmentId)}`, { headers: { Authorization: `Bearer ${token}` } })
+        const aj = await ar.json() as { data?: string }
+        if (ar.ok && aj.data) text = b64urlDecode(aj.data).slice(0, ATTACHMENT_TEXT_MAX)
+      }
+      return new Response(JSON.stringify({ filename: meta.filename, mimeType: meta.mimeType, size: meta.size, text }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     const url = `https://gmail.googleapis.com/gmail/v1/users/me/threads/${encodeURIComponent(parsed.data.threadId)}?format=full`
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
     const json = await res.json() as { messages?: GMessage[]; id?: string; historyId?: string }
@@ -101,6 +137,7 @@ Deno.serve(async (req) => {
         labelIds: m.labelIds ?? [],
         bodyText: text,
         bodyHtml: html,
+        attachments: listAttachments(m.payload),
       }
     })
 

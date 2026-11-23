@@ -11,9 +11,11 @@ import { useAuth } from '@/hooks/useAuth'
 import { motion, AnimatePresence } from 'framer-motion'
 import { clearStoredReferralCode, getStoredReferralCode, storeReferralCode } from '@/lib/referral'
 
-// Temporary flag to hide Google sign-in while the OAuth 404 (redirect URI)
-// is being fixed. Set back to true once the provider callback is restored.
-const SHOW_GOOGLE_LOGIN = false
+// Google sign-in (Supabase Auth, provedor Google ligado; callback
+// https://sccizjlpwezsgaxkclot.supabase.co/auth/v1/callback no cliente OAuth).
+// Só openid/email/profile: o acesso ao Gmail é pedido à parte, no conector.
+const SHOW_GOOGLE_LOGIN = true
+const GOOGLE_LOGIN_SCOPES = 'openid email profile'
 
 const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
   const navigate = useNavigate()
@@ -172,11 +174,15 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
   }, [searchParams])
 
   const handleGoogleLogin = async () => {
-    // Google direto pelo Supabase Auth (precisa do provedor Google ligado no
-    // painel do Supabase antes de reativar SHOW_GOOGLE_LOGIN).
+    // Google direto pelo Supabase Auth. Conta de e-mail já existente com o mesmo
+    // e-mail verificado é vinculada (identity linking automático), não duplicada.
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}${safeRedirect}` },
+      options: {
+        redirectTo: `${window.location.origin}${safeRedirect}`,
+        scopes: GOOGLE_LOGIN_SCOPES,
+        queryParams: { prompt: 'select_account' },
+      },
     })
     if (error) toast.error('Error signing in with Google')
   }
@@ -389,9 +395,9 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
                 </motion.div>
               )}
 
-              {/* Google sign-in temporarily hidden (OAuth 404). Toggle SHOW_GOOGLE_LOGIN to re-enable. */}
               {SHOW_GOOGLE_LOGIN && (
                 <Button
+                  data-testid="auth-google"
                   variant="outline"
                   className="w-full h-12 rounded-xl mb-3 gap-3 text-sm font-medium border-border/50 hover:bg-secondary/80"
                   onClick={handleGoogleLogin}
