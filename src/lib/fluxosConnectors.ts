@@ -100,10 +100,17 @@ export const FLUXOS_SHARED_APPS: Record<string, string> = {
   discord: 'discord',
 }
 
+/** Logos oficiais de apps do Vertal Fluxos, por chave do app (arquivos em public/connectors). */
+const FLUXOS_APP_LOGOS: Record<string, string> = {
+  airbrake: '/connectors/airbrake.png',
+  airtable: '/connectors/airtable.png',
+}
+
 export const fluxosConnectors: ConnectorConfig[] = FLUXOS_NATIVE_APPS.map(a => ({
   name: a.name,
   slug: `fluxos-${a.app}`,
   icon: Workflow,
+  logoUrl: FLUXOS_APP_LOGOS[a.app],
   color: '#0059F7',
   authType: 'manual',
   category: a.category,
