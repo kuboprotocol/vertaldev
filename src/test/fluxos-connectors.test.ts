@@ -34,6 +34,11 @@ describe('catálogo unificado Vertal Dev ↔ Vertal Fluxos', () => {
     expect(anthropic?.name).toBe('Anthropic')
     expect(anthropic?.logoUrl).toBe('/connectors/anthropic.png')
   })
+  it('Appwrite mostra o logo oficial no catálogo', () => {
+    const appwrite = getConnectorBySlug('fluxos-appwrite')
+    expect(appwrite?.name).toBe('Appwrite')
+    expect(appwrite?.logoUrl).toBe('/connectors/appwrite.png')
+  })
   it('nenhum texto de UI cita fornecedores do motor', () => {
     const ui = JSON.stringify(connectors.filter(c => c.slug.startsWith('fluxos-')).map(c => [c.name, c.description, c.longDescription, c.features, c.setupSteps]))
     expect(ui).not.toMatch(/automatisch|huginn|railway/i)
