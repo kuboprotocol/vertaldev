@@ -13,6 +13,7 @@
 // duas cópias são iguais.
 import { isBlockedHost, normalizeFormUrl } from "./browserForm.ts";
 import { isTotpSecretName } from "./totp.ts";
+import { maskSecretLike } from "./secretMask.ts";
 
 export const NAVIGATOR_OPS = ["start", "task", "status", "input", "takeover", "release", "stop"] as const;
 export type NavigatorOp = (typeof NAVIGATOR_OPS)[number];
@@ -578,7 +579,9 @@ export function eventsForTask<T extends { seq: number; runId?: unknown }>(events
 
 export type InputBody =
   | { sessionId: string; requestId: string; kind: "approval"; approve: boolean }
-  | { sessionId: string; requestId: string; kind: "code" | "text"; value: string };
+  | { sessionId: string; requestId: string; kind: "code" | "text"; value: string }
+  /** Cartão seguro (login, senha, telefone, semente TOTP, conector): validado com parseAuthInput no Worker. */
+  | { sessionId: string; requestId: string; kind: "auth"; body: Record<string, unknown> };
 
 /**
  * Resposta do usuário a um pedido do agente. Aprovação de pagamento só vale com
@@ -593,6 +596,10 @@ export function parseInputBody(body: Record<string, unknown>): ParsedNavigator<I
     if (typeof body.approve !== "boolean") return { ok: false, status: "bad_request", detail: "approve" };
     if (body.approve && body.confirmed !== true) return { ok: false, status: "bad_request", detail: "confirmation_required" };
     return { ok: true, data: { sessionId: body.sessionId, requestId, kind: "approval", approve: body.approve } };
+  }
+  const authKinds = ["login", "phone", "connector"];
+  if (authKinds.includes(String(body.kind)) || (body.kind === "code" && (typeof body.totpSeed === "string" || body.cancel === true))) {
+    return { ok: true, data: { sessionId: body.sessionId, requestId, kind: "auth", body } };
   }
   if (body.kind === "code" || body.kind === "text") {
     const value = typeof body.value === "string" ? body.value.trim() : "";
@@ -619,7 +626,7 @@ export interface NavigatorEvent {
 
 export interface NavigatorPending {
   id: string;
-  kind: "approval" | "code" | "text" | "secret" | "totp";
+  kind: "approval" | "code" | "text" | "secret" | "totp" | "login" | "phone";
   question?: string;
   action?: string;
   target?: string;
@@ -640,6 +647,20 @@ export interface NavigatorPending {
   category?: ApprovalCategory;
   /** Ação de escrita: o conteúdo exato que vai sair (campos preenchidos na página: para, assunto, corpo…). */
   fields?: Array<{ label: string; value: string }>;
+  /** Cartão seguro: o que o site pediu (login: usuário e/ou senha). */
+  loginFields?: Array<"username" | "password">;
+  /** Código: totp | sms | email | unknown. */
+  otpKind?: string;
+  /** Slug do Cofre (google-com) e domínio mostrado ("salvar no Cofre para google.com"). */
+  site?: string;
+  domain?: string;
+  /** Login salvo recusado: o cartão volta com o usuário preenchido. */
+  retry?: boolean;
+  prefillUsername?: string;
+  /** Login do Google numa tarefa de e-mail: oferecer o conector do Gmail. */
+  connector?: "gmail";
+  /** Nomes das variáveis que o cartão vai criar/atualizar no Cofre. */
+  saveAs?: Record<string, string>;
 }
 
 const FORBIDDEN_EVENT_KEYS = new Set(["value", "password", "secret", "token", "apiKey", "api_key", "code"]);
@@ -654,7 +675,8 @@ export function sanitizeEvents(events: unknown): NavigatorEvent[] {
       const out: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(e)) {
         if (FORBIDDEN_EVENT_KEYS.has(k)) continue;
-        out[k] = typeof v === "string" ? v.slice(0, 4_000) : v;
+        // Incidente 22/11: chave/token com cara de segredo nunca chega ao chat.
+        out[k] = typeof v === "string" ? maskSecretLike(v).slice(0, 4_000) : v;
       }
       return out as NavigatorEvent;
     });
@@ -663,13 +685,29 @@ export function sanitizeEvents(events: unknown): NavigatorEvent[] {
 /** Pedidos que o usuário vê (segredos são resolvidos pelo Worker e só aparecem como aviso). */
 export function sanitizePending(pending: unknown): NavigatorPending[] {
   if (!Array.isArray(pending)) return [];
-  const kinds = new Set(["approval", "code", "text", "secret", "totp"]);
+  const kinds = new Set(["approval", "code", "text", "secret", "totp", "login", "phone"]);
   return pending
     .filter((p): p is Record<string, unknown> => !!p && typeof p === "object" && kinds.has(String((p as NavigatorPending).kind)) && REQUEST_ID_RE.test(String((p as NavigatorPending).id)))
     .map((p) => {
       const out: NavigatorPending = { id: String(p.id), kind: p.kind as NavigatorPending["kind"] };
       for (const k of ["question", "action", "target", "url", "reason", "name", "host", "store", "pageTitle", "total", "currency"] as const) {
-        if (typeof p[k] === "string") out[k] = String(p[k]).slice(0, 400);
+        if (typeof p[k] === "string") out[k] = maskSecretLike(String(p[k])).slice(0, 400);
+      }
+      // Cartões seguros: só metadados (host, o que o site pediu, onde salvar). Nunca valores, exceto o usuário
+      // pré-preenchido no retry (identificador do próprio dono, nunca senha).
+      if (out.kind === "login" || out.kind === "code" || out.kind === "phone") {
+        for (const k of ["otpKind", "site", "domain", "prefillUsername"] as const) {
+          if (typeof p[k] === "string" && p[k]) out[k] = String(p[k]).slice(0, k === "prefillUsername" ? 254 : 120);
+        }
+        if (p.retry === true) out.retry = true;
+        if (p.connector === "gmail") out.connector = "gmail";
+        const lf = Array.isArray(p.loginFields) ? p.loginFields : [];
+        if (out.kind === "login") out.loginFields = (["username", "password"] as const).filter((f) => lf.includes(f));
+        if (p.saveAs && typeof p.saveAs === "object") {
+          const sa: Record<string, string> = {};
+          for (const [k, v] of Object.entries(p.saveAs as Record<string, unknown>)) if (/^[a-z]{1,12}$/.test(k) && typeof v === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(v)) sa[k] = v;
+          out.saveAs = sa;
+        }
       }
       if (typeof p.totalCents === "number" && Number.isFinite(p.totalCents) && p.totalCents >= 0) out.totalCents = Math.round(p.totalCents);
       if (Array.isArray(p.items)) out.items = p.items.filter((i): i is string => typeof i === "string").slice(0, 10).map((i) => i.slice(0, 160));
@@ -895,6 +933,8 @@ export function autoApproveDecision(settings: NavigatorSettings | null | undefin
 export const NAVIGATOR_AUDIT_KINDS = [
   "session_start", "session_end", "task", "secret_used", "totp_used", "code_entered", "approval_granted",
   "approval_denied", "auto_approved", "takeover", "release", "settings_changed", "totp_consent",
+  // Formulários seguros (22/11): só host/nomes, nunca valores.
+  "login_entered", "secret_saved", "phone_entered", "connector_chosen",
 ] as const;
 export type NavigatorAuditKind = (typeof NAVIGATOR_AUDIT_KINDS)[number];
 
@@ -930,7 +970,7 @@ export function auditDetail(raw: Record<string, unknown>): Record<string, unknow
   for (const k of AUDIT_DETAIL_KEYS) {
     const v = raw[k];
     if (typeof v === "string") {
-      const val = k === "url" ? auditUrl(v) : redactCredentials(v);
+      const val = k === "url" ? auditUrl(v) : maskSecretLike(redactCredentials(v));
       if (val) out[k] = val.slice(0, k === "task" ? 300 : 200);
     } else if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
     else if (k === "items" && Array.isArray(v)) out[k] = v.filter((i) => typeof i === "string").slice(0, 8).map((i) => redactCredentials(String(i)).slice(0, 160));
@@ -969,6 +1009,10 @@ export function describeAudit(row: Pick<NavigatorAuditRow, "kind" | "detail">): 
     case "release": return "Controle devolvido ao agente";
     case "settings_changed": return s("limit") ? `Aprovação automática ligada até ${s("limit")}` : "Aprovação automática desligada (sempre pedir)";
     case "totp_consent": return `Autenticador (TOTP) guardado no cofre: ${s("name")} para ${s("host")}`;
+    case "login_entered": return `Você preencheu o login pelo cartão seguro${s("host") ? ` em ${s("host")}` : ""}`;
+    case "secret_saved": return `Salvo no Cofre: ${s("name")}${s("host") ? ` para ${s("host")}` : ""}`;
+    case "phone_entered": return `Você informou um telefone pelo cartão seguro${s("host") ? ` em ${s("host")}` : ""}`;
+    case "connector_chosen": return `Você escolheu o conector ${s("name") || "Gmail"} em vez do login no navegador`;
     default: return row.kind;
   }
 }

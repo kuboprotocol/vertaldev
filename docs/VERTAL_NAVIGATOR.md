@@ -549,3 +549,66 @@ navd passam por `redact_credentials`; erros do agente por `redact_for_log` (sem 
 
 Rotação da chave (futuro): criar `NAVIGATOR_AUDIT_KEY` nova com `key_version` 2 exige ler a anterior para
 as linhas antigas — hoje só existem as versões 1 (dedicada) e 0 (fallback).
+
+# Formulários seguros inline (22/11) — "bloquinhos" como no Hark
+
+Pedido do Laércio: o Vertal Chat funciona como o Hark. Tudo acontece **dentro da conversa**: a tela ao vivo
+do navegador é um cartão na própria mensagem (`VertalNavigatorLiveCard`), sem painel lateral nem subpágina,
+e sempre que o site pede algo o cartão mostra um formulário seguro ali mesmo; a tarefa continua no mesmo cartão.
+No fim, o cartão vira o recibo (artefato `navigator`, guardado na conversa sem a captura).
+
+## Pedidos estruturados (navd.py → Worker → cartão)
+
+| Ferramenta do agente | Evento | Cartão | Guardar no Cofre |
+|---|---|---|---|
+| `request_login(username_index?, password_index?)` | `needs_login` / `needs_password` (só senha, ex.: 2ª etapa do Google) | E-mail/usuário + senha (`type=password`) | **ligado por padrão**: `<SITE>_LOGIN` (identificador) e `<SITE>_PASSWORD`, `bound_to` = slug do domínio |
+| login do Google em tarefa de e-mail | `suggest_connector {gmail}` | "Conectar Gmail (recomendado)" — OAuth em janela própria, depois "Já conectei — usar o conector" | — |
+| `request_user_code(index, pergunta, kind)` | `needs_otp {otpKind: totp\|sms\|email\|unknown}` | Código; se `totp`, opção "guardar a chave do autenticador" (+ consentimento) | `<SITE>_TOTP`; o servidor gera o código já nesta vez (RFC 6238) e nas próximas |
+| `request_phone(index, pergunta)` | `needs_phone` | País (padrão **+55**) + DDD + número → **E.164** | desligado por padrão: `<SITE>_PHONE` |
+| `ask_user` (pergunta comum) | `needs_user_input` | Campo de resposta | — |
+
+- **Slug do domínio** (`siteSlugForHost`, espelho em Python): domínio registrável (`accounts.google.com` → `google-com`,
+  `www.itau.com.br` → `itau-com-br`). O vínculo continua obrigatório: um segredo `bound_to=ai-providers` **não** é usado
+  em `accounts.google.com`; agora o próprio erro do `fill_secret` manda o agente chamar `request_login`, e o cartão cria
+  (ou atualiza, `rotate`) o segredo certo para o domínio na hora. SSO (`accounts.google.com`) só com segredo vinculado a `google-com`.
+- **Próxima vez:** o Worker resolve o pedido sozinho com o login salvo (`pickLoginForHost` → valores por id do segredo,
+  decifrados no Worker e entregues ao navd; o modelo nunca vê). Telefone salvo idem.
+- **Login recusado:** o agente chama `request_login` de novo → `retry: true` → o Worker **não** repete o salvo e o cartão
+  volta com o usuário preenchido. Teto: 3 pedidos de login por site por tarefa (depois o agente para e explica).
+- **Sem adivinhar:** `input` em campo `type=password` é recusado (manda usar `request_login`/`fill_secret`); `ask_user`
+  pedindo senha/código/telefone é recusado e indica a ferramenta certa; regras `AUTH_RULES` no prompt do agente.
+- **Caminho do valor:** cartão → `POST /api/navigator/input {kind:"login"|"code"|"phone"|"connector", …}` (HTTPS, JWT) →
+  Worker (`authInput`: confere o pedido pendente no navd, só aceita os campos que o site pediu, salva cifrado
+  AES-GCM/`CONNECTOR_ENC_KEY` em `kubo_secrets` se marcado) → navd `/input` → digitado no campo. A resposta ao
+  cliente só tem `{ok, saved:[nomes], saveError?}`. O estado do cartão é limpo no envio; nada vai para o histórico do
+  chat, para o modelo, para logs ou para `navigator_audit` (que grava só `login_entered`/`secret_saved`/`phone_entered`/
+  `connector_chosen`/`code_entered` com host e nome, cifrados).
+
+## Vazamento do valor do segredo (corrigido)
+
+Um resultado de falha mostrou no chat o valor bruto de um segredo (32 caracteres). Defesa em camadas:
+- `secretMask.ts` (`maskSecretLike`) + espelho `mask_secret_like` no navd: JWT, chaves com prefixo (`sk-`, `ghp_`, `AKIA`,
+  `AIza`…), hex ≥ 32 e tokens ≥ 20 com maiúscula+minúscula+dígito misturados viram `[segredo oculto]` (UUID e URLs comuns
+  ficam). Casos compartilhados TS/Python em `infra/vertal-browser/auth_cases.json`.
+- navd: todo evento, o `done.result` e os erros passam por `mask_all` (credenciais + forma de token + **valores exatos**
+  entregues nesta sessão, guardados só como HMAC com chave aleatória do processo). `read_page_text` também mascara os valores entregues.
+- Worker: `sanitizeEvents`/`sanitizePending`/`auditDetail` mascaram. Front: `runNavigator` mascara antes de mostrar e
+  antes de devolver ao modelo.
+- A causa exata daquela execução não ficou registrada (o log não guarda o texto); o caminho provável é o agente ecoar um
+  valor visível na página. Com as camadas acima, nenhum valor com cara de segredo chega ao chat, à auditoria ou ao log.
+
+## Deploy deste pacote (nada aplicado ainda)
+
+1. **Migration:** `supabase/migrations/20261122180000_navigator_secure_forms.sql` (só amplia `navigator_audit.kind`).
+   Aplicar **antes** do Worker (senão as linhas novas de auditoria são recusadas — a rota não quebra, só a linha se perde).
+2. **Worker** (`worker/navigatorRoutes.ts`, `worker/supabaseRest.ts`): merge → Workers Builds. Precisa de `CONNECTOR_ENC_KEY`
+   (já existe) para salvar no Cofre; sem ela o cartão funciona mas avisa que usou o valor só nesta tarefa.
+3. **Edge function `creative-router`:** `supabase functions deploy creative-router` (texto do prompt: cartão inline).
+   Nenhuma edge function nova (limite de 100).
+4. **Template E2B `vertal-browser`: rebuild** (novo `navd.py`: `request_login`, `request_phone`, `kind` no
+   `request_user_code`, máscara, guardas) — mesmo comando da fase 1 na VM `ubuntu@132.226.249.211`. Sem o rebuild o
+   agente antigo não emite `needs_login`/`needs_phone` (cai no fluxo antigo).
+5. **Frontend:** build normal (cartão inline, formulários, recibo).
+6. **Teste:** "entre no meu GitHub e diga quantas notificações eu tenho" sem segredo salvo → cartão de login na conversa →
+   enviar com "Guardar no Cofre" → Cofre mostra `GITHUB_COM_LOGIN`/`GITHUB_COM_PASSWORD` (`bound_to github-com`) → repetir a
+   tarefa numa sessão nova: preenche sozinho. "Leia meus e-mails pelo navegador" → cartão do conector Gmail.

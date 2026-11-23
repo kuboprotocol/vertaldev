@@ -50,6 +50,7 @@ export type Artifact =
   | (Base & { kind: 'podcast_studio'; topic: string; duration?: number; style?: string; podcastId?: string })
   | (Base & { kind: 'download'; url: string; format: string })
   | (Base & { kind: 'api'; method: string; host: string; status: number; ok: boolean; body: string })
+  | (Base & { kind: 'navigator' } & NavigatorArtifactData)
   /** Formulário de site lido/preenchido/enviado pelo navegador na nuvem. */
   | (Base & {
     kind: 'browser_form';
@@ -63,6 +64,17 @@ export type Artifact =
     confirmation?: string;
     notes?: string[];
   });
+
+/** Resultado de uma tarefa do Vertal Navigator feita inline no chat (o cartão ao vivo vira este recibo). */
+export interface NavigatorArtifactData {
+  task: string;
+  ok: boolean;
+  answer: string;
+  finalUrl?: string;
+  steps: string[];
+  /** Captura final (data URL só durante a sessão; não é guardada no histórico). */
+  screenshot?: StoredImage;
+}
 
 export type BrowserFormStage = 'inspect' | 'preview' | 'submitted' | 'cancelled' | 'failed';
 
@@ -113,6 +125,7 @@ function forStorage(a: Artifact): Artifact {
   if (a.kind === 'image') return { ...a, image: slim(a.image) };
   if (a.kind === 'design') return { ...a, images: a.images.map(slim) };
   if (a.kind === 'browser_form' && a.screenshot) return { ...a, screenshot: slim(a.screenshot) };
+  if (a.kind === 'navigator' && a.screenshot) return { ...a, screenshot: slim(a.screenshot) };
   if (a.kind === 'app' && a.projectId && a.html.length > INLINE_HTML_MAX) return { ...a, html: '' };
   return a;
 }
@@ -173,6 +186,7 @@ export const KIND_LABEL: Record<ArtifactKind, string> = {
   download: 'Download',
   api: 'Resposta da API',
   browser_form: 'Formulário',
+  navigator: 'Navegador',
 };
 
 /** O que o agente enxerga do histórico: o texto e uma nota por artefato, com o id para editar. */
@@ -213,6 +227,8 @@ export function artifactSourceText(a: Artifact): string {
       return a.content;
     case 'api':
       return a.body;
+    case 'navigator':
+      return [a.task, a.answer, a.finalUrl ?? ''].filter(Boolean).join('\n');
     case 'browser_form':
       return [a.url, ...a.fields.map((f) => `${f.label}: ${f.value ?? ''}`), a.confirmation ?? ''].filter(Boolean).join('\n');
     case 'vibe':

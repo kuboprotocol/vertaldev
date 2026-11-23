@@ -114,6 +114,14 @@ WRITE_KEYWORDS = [
 RSVP_WORDS = ["sim", "nao", "talvez", "yes", "no", "maybe", "vou", "nao vou", "going", "not going"]
 INVITE_HINTS = ["mail.google.com", "calendar.google.com", "outlook.live.com", "outlook.office.com", "convite", "invitation", "rsvp", "evento", "event"]
 DUCKDUCKGO_SEARCH = "https://duckduckgo.com/?q="
+AUTH_RULES = (
+    "Login (regra dura): se a página pedir usuário/e-mail/senha e houver segredo do cofre vinculado ao site, use fill_secret; "
+    "senão chame request_login(username_index, password_index) e espere: o usuário preenche num cartão seguro e você nunca vê os valores. "
+    "Login em duas etapas (Google, Microsoft): request_login só com o campo da etapa atual. Se o site recusar o login, chame request_login de novo (no máximo 2 vezes). "
+    "Código de verificação: request_user_code(index, pergunta, kind='totp'|'sms'|'email'). Telefone para SMS: request_phone(index, pergunta). "
+    "Tela 'Escolha uma conta': clique na conta pedida; se houver mais de uma e a tarefa não disser qual, use ask_user. "
+    "Nunca digite senha com input, nunca invente usuário/senha/código, nunca peça credencial com ask_user."
+)
 SCOPE_RULES = (
     "Escopo (regra dura): faça SOMENTE o que a tarefa pede, nada além. Não invente etapas, objetivos ou tarefas novas; "
     "não clique em ofertas, anúncios, links ou botões que a tarefa não pediu. Assim que o pedido estiver feito, chame done e pare. "
@@ -373,12 +381,143 @@ def redact_credentials(text: str) -> str:
     return "".join(out)
 
 
+# ── Máscara de segredos (espelho de secretMask.ts; casos em auth_cases.json) ──
+# Incidente 22/11: um resultado mostrou no chat o valor bruto de um segredo de 32 caracteres.
+# Todo texto que sai do navd (eventos, resultado, erros) passa por mask_secret_like e pela
+# máscara de valores exatos entregues nesta sessão (guardados só como HMAC, nunca em claro).
+SECRET_MASK = "[segredo oculto]"
+_JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}")
+_PREFIXED_KEY_RE = re.compile(r"\b(?:sk|pk|rk|ghp|gho|ghs|ghu|github_pat|xox[abprs]|glpat|shpat|whsec)[-_][A-Za-z0-9_-]{12,}|\bAKIA[A-Z0-9]{16}\b|\bAIza[A-Za-z0-9_-]{30,}")
+_TOKEN_RE = re.compile(r"[A-Za-z0-9_+=-]{20,}")
+_UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE)
+
+
+def is_secret_like_token(tok: str) -> bool:
+    if len(tok) < 20 or _UUID_RE.fullmatch(tok):
+        return False
+    if re.fullmatch(r"[0-9a-fA-F]{32,}", tok) and re.search(r"\d", tok) and re.search(r"[a-fA-F]", tok):
+        return True
+    if not (re.search(r"[a-z]", tok) and re.search(r"[A-Z]", tok) and re.search(r"\d", tok)):
+        return False
+    switches = sum(1 for i in range(1, len(tok)) if tok[i].isdigit() != tok[i - 1].isdigit())
+    return switches >= 4
+
+
+def mask_secret_like(text: Any) -> str:
+    s = str(text or "")
+    if not s or s.startswith("data:image/"):
+        return s
+    s = _JWT_RE.sub(SECRET_MASK, s)
+    s = _PREFIXED_KEY_RE.sub(SECRET_MASK, s)
+    return _TOKEN_RE.sub(lambda m: SECRET_MASK if is_secret_like_token(m.group(0)) else m.group(0), s)
+
+
+class KnownValueMask:
+    """Valores entregues ao navegador nesta sessão (login, senha, código, telefone), só como HMAC."""
+
+    def __init__(self) -> None:
+        self._key = os.urandom(32)
+        self._hashes: set[bytes] = set()
+        self._lengths: set[int] = set()
+
+    def _h(self, v: str) -> bytes:
+        return hmac.new(self._key, v.encode("utf-8", "ignore"), "sha256").digest()
+
+    def add(self, value: Any) -> None:
+        v = str(value or "")
+        if len(v) >= 4:
+            self._hashes.add(self._h(v))
+            self._lengths.add(len(v))
+
+    def mask(self, text: str) -> str:
+        s = text
+        for n in sorted(self._lengths, reverse=True):
+            i = 0
+            while i <= len(s) - n:
+                if self._h(s[i:i + n]) in self._hashes:
+                    s = s[:i] + SECRET_MASK + s[i + n:]
+                    i += len(SECRET_MASK)
+                else:
+                    i += 1
+        return s
+
+
+KNOWN = KnownValueMask()
+
+
+def mask_all(text: Any) -> str:
+    return KNOWN.mask(mask_secret_like(redact_credentials(str(text or ""))))
+
+
+# ── Formulários seguros: domínio → slug do Cofre (espelho de navigatorAuthForms.ts) ──
+_SECOND_LEVEL = {"com", "co", "org", "net", "gov", "edu", "ac", "mil", "nom", "art", "blog", "app", "ind", "eng", "adv", "jus", "leg", "med", "inf"}
+
+
+def registrable_domain(host: str) -> str:
+    h = str(host or "").lower().rstrip(".")
+    if h.startswith("www."):
+        h = h[4:]
+    if not h or h == "localhost" or h.endswith(_BLOCKED_SUFFIXES) or re.fullmatch(r"\d+(\.\d+){3}", h) or ":" in h:
+        return ""
+    labels = [x for x in h.split(".") if x]
+    if len(labels) < 2:
+        return ""
+    take = 3 if len(labels) >= 3 and len(labels[-1]) == 2 and labels[-2] in _SECOND_LEVEL else 2
+    return ".".join(labels[-take:])
+
+
+def site_slug_for_host(host: str) -> str:
+    d = registrable_domain(host)
+    return re.sub(r"[^a-z0-9]+", "-", d).strip("-")[:64] if d else ""
+
+
+_MAIL_TASK_RE = re.compile(r"\b(e-?mails?|gmail|inbox|caixa de entrada|correio)\b", re.IGNORECASE)
+
+
+def connector_for_login(host: str, url: str = "", task: str = "") -> str | None:
+    """Login do Google numa tarefa de e-mail → oferecer o conector do Gmail (espelho de connectorForLogin)."""
+    from urllib.parse import unquote
+    h = str(host or "").lower()
+    google_login = h == "accounts.google.com" or h.endswith(".accounts.google.com")
+    is_mail = h == "mail.google.com" or re.search(r"[?&]service=mail\b", url or "") is not None or "mail.google.com" in unquote(url or "") or bool(_MAIL_TASK_RE.search(task or ""))
+    return "gmail" if (google_login or h == "mail.google.com") and is_mail else None
+
+
+_ASKS_CREDENTIAL_RE = re.compile(
+    r"\b(senha|password|passcode|login|usu[aá]rio|username|e-?mail de acesso|c[oó]digo|code|2fa|otp|token|pin|telefone|celular|phone)\b", re.IGNORECASE)
+
+
+def otp_kind_of(kind: Any, question: Any = "") -> str:
+    """totp | sms | email | unknown (espelho de normalizeOtpKind)."""
+    k = str(kind or "").lower()
+    for raw in (k, normalize_text(question)):
+        if re.search(r"totp|authenticator|autenticador|\bapp\b", raw):
+            return "totp"
+        if re.search(r"sms|texto|celular|phone|telefone", raw):
+            return "sms"
+        if re.search(r"e-?mail", raw):
+            return "email"
+    return "unknown"
+
+
+def credential_question_tool(question: str) -> str | None:
+    """ask_user não pede credencial: devolve a ferramenta certa (o cartão seguro)."""
+    q = normalize_text(question)
+    if not _ASKS_CREDENTIAL_RE.search(q):
+        return None
+    if re.search(r"\b(codigo|code|2fa|otp|token|pin)\b", q):
+        return "request_user_code"
+    if re.search(r"\b(telefone|celular|phone)\b", q):
+        return "request_phone"
+    return "request_login"
+
+
 _URL_IN_TEXT_RE = re.compile(r"https?://[^\s\"'<>)]+", re.IGNORECASE)
 
 
 def redact_for_log(text: Any, max_len: int = 4000) -> str:
     """Texto seguro para evento/log: sem credenciais e com URLs sem query/fragmento (tokens)."""
-    s = redact_credentials(str(text or ""))
+    s = mask_all(text)
 
     def _strip(m: re.Match) -> str:
         u = m.group(0)
@@ -391,7 +530,7 @@ def redact_for_log(text: Any, max_len: int = 4000) -> str:
 
 def _redact_event_value(v: Any) -> Any:
     if isinstance(v, str):
-        return redact_credentials(v)
+        return mask_all(v)
     if isinstance(v, list):
         return [_redact_event_value(x) for x in v]
     if isinstance(v, dict):
@@ -424,6 +563,9 @@ class State:
         self.allowed_secrets: dict[str, str | None] = {}
         self.totp_secrets: dict[str, str | None] = {}
         self.view_password: str | None = None
+        # Formulários seguros: tentativas de login por site (loop guard) e se a tarefa é de e-mail.
+        self.login_attempts: dict[str, int] = {}
+        self.mail_task = False
         self.lock = asyncio.Lock()
 
     def emit(self, type_: str, **data: Any) -> dict[str, Any]:
@@ -652,7 +794,10 @@ async def ask(kind: str, hidden: dict[str, Any] | None = None, **meta: Any) -> A
     S.pending[rid] = {"id": rid, "kind": kind, "future": fut, **meta, **(hidden or {})}
     prev = S.status
     S.status = "waiting"
-    event_type = {"approval": "needs_approval", "secret": "needs_secret", "totp": "needs_totp"}.get(kind, "needs_user_input")
+    event_type = {
+        "approval": "needs_approval", "secret": "needs_secret", "totp": "needs_totp", "code": "needs_otp", "phone": "needs_phone",
+        "login": "needs_password" if meta.get("fields") == ["password"] else "needs_login",
+    }.get(kind, "needs_user_input")
     S.emit(event_type, id=rid, kind=kind, **meta)
     try:
         return await asyncio.wait_for(fut, INPUT_TIMEOUT_S)
@@ -734,6 +879,15 @@ def build_agent(task: str, model: str, api_key: str, max_steps: int, provider: s
                     setattr(getattr(action, name), "engine", "duckduckgo")
                 except Exception:
                     return ActionResult(error="Pesquise com engine=duckduckgo (buscador padrão do Vertal Navigator).")
+            if name == "input" and isinstance(params, dict) and params.get("index") is not None:
+                # Senha nunca é digitada pelo modelo: o usuário preenche no cartão seguro (request_login) ou vem do Cofre.
+                try:
+                    node = await browser_session.get_element_by_index(int(params.get("index")))
+                except Exception:
+                    node = None
+                ftype = str((getattr(node, "attributes", {}) or {}).get("type", "")).lower() if node is not None else ""
+                if ftype == "password":
+                    return ActionResult(error="Não digite senha com input. Use fill_secret (se houver segredo do site) ou request_login(password_index=...) — o usuário preenche num cartão seguro.")
             if name in GATED_ACTIONS:
                 url = title = ""
                 try:
@@ -788,7 +942,8 @@ def build_agent(task: str, model: str, api_key: str, max_steps: int, provider: s
         url = await browser_session.get_current_page_url()
         host = (urlsplit(url).hostname or "").lower()
         if not is_public_url(url) or not secret_matches_host(S.allowed_secrets.get(name), host):
-            return ActionResult(error=f"O segredo {name} não está vinculado a {host}; não foi preenchido.")
+            return ActionResult(error=f"O segredo {name} não está vinculado a {host}; não foi preenchido. "
+                                      "Chame request_login com os índices dos campos: o usuário preenche num cartão seguro e pode salvar no Cofre para este site.")
         try:
             node = await browser_session.get_element_by_index(int(index))
         except Exception:
@@ -812,7 +967,7 @@ def build_agent(task: str, model: str, api_key: str, max_steps: int, provider: s
 
     @tools.action("Pede ao usuário um código de verificação (2FA, SMS, e-mail, app autenticador) e digita direto no campo do índice dado. "
                   "Use quando o site pedir um código que só o usuário tem.")
-    async def request_user_code(index: int, question: str, browser_session: BrowserSession):
+    async def request_user_code(index: int, question: str, browser_session: BrowserSession, kind: str = "unknown"):
         host = ""
         try:
             host = (urlsplit(await browser_session.get_current_page_url()).hostname or "").lower()
@@ -832,19 +987,97 @@ def build_agent(task: str, model: str, api_key: str, max_steps: int, provider: s
                     return ActionResult(extracted_content=f"Código do autenticador digitado no campo {index}.", long_term_memory="Código 2FA (TOTP) digitado.")
             S.emit("log", message="totp_unavailable: pedindo o código ao usuário")
         # 2) Sem TOTP (ou falhou): pede ao usuário, como antes.
-        code = await ask("code", question=str(question or "Digite o código de verificação")[:300], host=host)
+        otp_kind = otp_kind_of(kind, question)
+        code = await ask("code", question=str(question or "Digite o código de verificação")[:300], host=host, otpKind=otp_kind)
         if not isinstance(code, str) or not code.strip():
             return ActionResult(error="O usuário não enviou o código.")
+        KNOWN.add(code.strip())
         err = await type_into(browser_session, index, code.strip())
+        code = None  # noqa: F841
         if err:
             return ActionResult(error=err)
         return ActionResult(extracted_content=f"Código digitado no campo {index}.", long_term_memory="Código de verificação digitado.")
+
+    @tools.action("O site pede login (usuário/e-mail e/ou senha) e não há segredo do cofre vinculado a ele (ou o login salvo foi recusado). "
+                  "Passe os índices dos campos visíveis: username_index e/ou password_index (login em 2 etapas, como o Google: só o campo da etapa atual). "
+                  "O usuário preenche num cartão seguro no chat; os valores são digitados direto e você nunca os vê. Depois clique em Entrar/Próximo.")
+    async def request_login(browser_session: BrowserSession, username_index: int | None = None, password_index: int | None = None):
+        url = ""
+        try:
+            url = await browser_session.get_current_page_url()
+        except Exception:
+            pass
+        host = (urlsplit(url).hostname or "").lower()
+        if not is_public_url(url):
+            return ActionResult(error="Login só em sites públicos.")
+        fields = [f for f, i in (("username", username_index), ("password", password_index)) if i is not None]
+        if not fields:
+            return ActionResult(error="Informe username_index e/ou password_index (índices dos campos de login da página).")
+        if password_index is not None:
+            try:
+                pnode = await browser_session.get_element_by_index(int(password_index))
+            except Exception:
+                pnode = None
+            if pnode is None or str((getattr(pnode, "attributes", {}) or {}).get("type", "")).lower() != "password":
+                return ActionResult(error=f"O campo {password_index} não é um campo de senha (type=password); confira o índice.")
+        site = site_slug_for_host(host) or host
+        attempts = S.login_attempts.get(site, 0)
+        if attempts >= 3:
+            return ActionResult(error="O login foi recusado 3 vezes neste site. Pare: chame done explicando que o usuário precisa conferir o login (ou assumir o controle).")
+        S.login_attempts[site] = attempts + 1
+        connector = connector_for_login(host, url, "mail" if S.mail_task else "")
+        if connector:
+            S.emit("suggest_connector", connector=connector, host=host)
+        ans = await ask("login", host=host, url=url[:300], fields=fields, retry=attempts > 0, mailTask=S.mail_task,
+                        **({"connector": connector} if connector else {}))
+        if isinstance(ans, dict) and ans.get("connector") == "gmail":
+            return ActionResult(extracted_content="O usuário conectou o Gmail pelo conector seguro (sem senha no navegador). Pare agora: chame done dizendo que o e-mail será lido pelo conector do Gmail no chat.",
+                                long_term_memory="Usuário escolheu o conector do Gmail; tarefa no navegador encerrada.")
+        if not isinstance(ans, dict):
+            return ActionResult(error="O usuário não enviou o login (cancelou ou o pedido expirou). Pare e relate com done.")
+        typed = []
+        try:
+            for f, idx in (("username", username_index), ("password", password_index)):
+                v = ans.get(f)
+                if idx is None or not isinstance(v, str) or not v:
+                    continue
+                KNOWN.add(v)
+                err = await type_into(browser_session, int(idx), v)
+                if err:
+                    return ActionResult(error=err)
+                typed.append(f)
+        finally:
+            ans = None  # noqa: F841 — não guarda os valores
+        if not typed:
+            return ActionResult(error="Nenhum campo de login foi preenchido.")
+        S.emit("login_filled", host=host, fields=typed)
+        return ActionResult(extracted_content=f"Preenchi {', '.join(typed)} no site {host} (valores do cartão seguro; você não os vê). Clique em Entrar/Próximo. "
+                                              "Se o site disser que o login ou a senha está errado, chame request_login de novo.",
+                            long_term_memory=f"Login preenchido em {host}: {', '.join(typed)}.")
+
+    @tools.action("O site pede um número de telefone (ex.: para receber código por SMS). O usuário informa num cartão seguro e o número é digitado direto no campo do índice dado.")
+    async def request_phone(index: int, question: str, browser_session: BrowserSession):
+        host = ""
+        try:
+            host = (urlsplit(await browser_session.get_current_page_url()).hostname or "").lower()
+        except Exception:
+            pass
+        phone = await ask("phone", question=str(question or "Qual telefone o site deve usar?")[:300], host=host)
+        if not isinstance(phone, str) or not re.fullmatch(r"\+?[0-9]{8,15}", phone.strip()):
+            return ActionResult(error="O usuário não enviou o telefone.")
+        KNOWN.add(phone.strip())
+        err = await type_into(browser_session, index, phone.strip())
+        phone = None  # noqa: F841
+        if err:
+            return ActionResult(error=err)
+        S.emit("phone_filled", host=host)
+        return ActionResult(extracted_content=f"Telefone digitado no campo {index}.", long_term_memory="Telefone digitado (cartão seguro).")
 
     @tools.action("Lê o TEXTO visível da aba atual (até max_chars caracteres) para responder com o que está escrito na página. "
                   "Use para ler respostas, títulos, mensagens de erro e números antes de concluir. Só leitura.")
     async def read_page_text(max_chars: int = 6000):
         limit = max(500, min(int(max_chars or 6000), 12000))
-        text = await page_text(limit)
+        text = KNOWN.mask(await page_text(limit))
         if not text.strip():
             return ActionResult(error="Não consegui ler texto nesta página (vazia, ainda carregando ou só imagem).")
         S.emit("page_read", runId=S.run_id, chars=len(text))
@@ -853,6 +1086,9 @@ def build_agent(task: str, model: str, api_key: str, max_steps: int, provider: s
 
     @tools.action("Faz uma pergunta curta ao usuário (que não seja senha nem código) e devolve a resposta.")
     async def ask_user(question: str):
+        tool = credential_question_tool(question)
+        if tool:
+            return ActionResult(error=f"Não peça credencial com ask_user: use {tool} (o usuário responde num cartão seguro e o valor não passa por você).")
         answer = await ask("text", question=str(question or "")[:300])
         if not isinstance(answer, str):
             return ActionResult(error="Sem resposta do usuário.")
@@ -863,6 +1099,7 @@ def build_agent(task: str, model: str, api_key: str, max_steps: int, provider: s
     extend = (
         "Regras do Vertal Navigator: responda e resuma em português do Brasil. "
         "Para senhas/tokens use SEMPRE fill_secret com o nome do segredo; nunca peça senha ao usuário. "
+        + AUTH_RULES + " "
         f"Segredos disponíveis: {secrets_hint}. "
         "Se o site pedir código de verificação, use request_user_code"
         + (f" (para {totp_hint} o código do autenticador é gerado sozinho). " if totp_hint else ". ") +
@@ -935,7 +1172,7 @@ async def run_agent(task: str, model: str, api_key: str, max_steps: int, provide
                 final = "Falhou: " + redact_for_log(str(errs[-1]).splitlines()[0], 300)
         S.last_screenshot = await capture_screenshot() or S.last_screenshot
         S.status = "done" if ok else ("stopped" if getattr(agent.state, "stopped", False) else "failed")
-        S.emit("done", runId=S.run_id, success=ok, result=(final or "")[:4000], status=S.status)
+        S.emit("done", runId=S.run_id, success=ok, result=mask_all(final or "")[:4000], status=S.status)
     except asyncio.CancelledError:
         S.status = "stopped"
         S.emit("done", runId=S.run_id, success=False, result="Parado pelo usuário.", status="stopped")
@@ -1022,6 +1259,8 @@ async def task(request: web.Request) -> web.Response:
         if isinstance(s, dict) and re.fullmatch(r"[A-Z][A-Z0-9_]{1,63}", str(s.get("name", ""))):
             bucket = S.totp_secrets if is_totp_name(s["name"]) else S.allowed_secrets
             bucket[s["name"]] = (str(s.get("boundTo")) if s.get("boundTo") else None)
+    S.login_attempts = {}
+    S.mail_task = bool(_MAIL_TASK_RE.search(text))
     S.run_id = uuid.uuid4().hex[:12]
     S.agent_task = asyncio.create_task(run_agent(text, model, api_key, max_steps, provider))
     return j({"ok": True, "runId": S.run_id})
@@ -1065,6 +1304,14 @@ async def submit_input(request: web.Request) -> web.Response:
         return j({"ok": False, "error": "kind_mismatch"}, 409)
     if p["kind"] == "approval":
         value: Any = body.get("approve") is True
+    elif p["kind"] == "login":
+        raw = body.get("value")
+        if isinstance(raw, dict) and raw.get("connector") == "gmail":
+            value = {"connector": "gmail"}
+        elif isinstance(raw, dict):
+            value = {f: raw[f][:256] for f in ("username", "password") if isinstance(raw.get(f), str) and raw.get(f)} or None
+        else:
+            value = None
     else:
         value = body.get("value")
         value = value[:512] if isinstance(value, str) else None

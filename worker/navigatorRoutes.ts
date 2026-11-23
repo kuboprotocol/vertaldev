@@ -27,6 +27,9 @@ import {
   type CheckoutSummary, type NavigatorAuditKind, type NavigatorPending, type NavigatorSettings, type NavigatorStatus, type VaultSecretMeta,
 } from '../supabase/functions/_shared/navigatorCore.ts';
 import { parseTotpSeed, totpNow } from '../supabase/functions/_shared/totp.ts';
+import {
+  authPendingView, parseAuthInput, pickLoginForHost, pickPhoneForHost, siteSecretNames, siteSlugForHost,
+} from '../supabase/functions/_shared/navigatorAuthForms.ts';
 import { createSandbox, e2bDomain, E2BError, killSandbox, navd, navdStream, setSandboxTimeout, waitNavd, type E2BEnv, type NavdTarget } from './e2bClient';
 import { signAudioTicket, verifyAudioTicket } from './navigatorAudio';
 import { decryptWithConnectorKey, encryptWithConnectorKey, EncKeyMissingError, randomPassword, randomToken } from './navigatorCrypto';
@@ -388,6 +391,184 @@ async function internalLlmKey(env: NavigatorEnv): Promise<string | undefined> {
   return data.value;
 }
 
+// ─── Formulários seguros (bloquinhos inline no chat) ─────────────────────
+/** Só os campos do cartão (nunca valores). */
+function sanitizeAuthView(v: ReturnType<typeof authPendingView>): Partial<NavigatorPending> {
+  return {
+    host: v.host, site: v.site, domain: v.domain,
+    ...(v.loginFields ? { loginFields: v.loginFields } : {}),
+    ...(v.otpKind ? { otpKind: v.otpKind } : {}),
+    ...(v.retry ? { retry: true } : {}),
+    ...(v.connector ? { connector: v.connector } : {}),
+    ...(v.saveAs ? { saveAs: v.saveAs as Record<string, string> } : {}),
+  };
+}
+
+/** Dica mascarada do Cofre: identificador mostra o começo; senha/telefone/semente nunca mostram nada. */
+function hintFor(value: string, identifier: boolean): string {
+  if (!identifier || value.length <= 6) return '••••';
+  return `${value.slice(0, 2)}••••${value.slice(-2)}`;
+}
+
+/**
+ * Cria ou atualiza um segredo do Cofre vinculado ao site (o mesmo formato AES-GCM do kubo-secrets).
+ * Só o Worker escreve aqui, só para o dono, só com o vínculo do domínio da página.
+ */
+export async function saveVaultSecret(
+  env: NavigatorEnv, userId: string,
+  s: { envKey: string; value: string; boundTo: string; label: string; identifier: boolean; host: string },
+): Promise<{ ok: true; envKey: string; created: boolean } | { ok: false; reason: string }> {
+  if (!env.CONNECTOR_ENC_KEY) return { ok: false, reason: 'no_key' };
+  if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(s.envKey) || !/^[a-z0-9_-]{1,64}$/.test(s.boundTo)) return { ok: false, reason: 'bad_name' };
+  const enc = await encryptWithConnectorKey(env.CONNECTOR_ENC_KEY, s.value);
+  const now = new Date().toISOString();
+  const hint = hintFor(s.value, s.identifier);
+  const existing = await table(env, 'kubo_secrets').select<{ id: string }>({ owner_id: `eq.${userId}`, env_key: `eq.${s.envKey}`, select: 'id', limit: '1' });
+  let id: string;
+  let created = false;
+  if (existing[0]) {
+    id = existing[0].id;
+    await table(env, 'kubo_secrets').update({ id: `eq.${id}`, owner_id: `eq.${userId}` }, {
+      ciphertext: enc.ciphertext, iv: enc.iv, tag: enc.tag, masked_hint: hint, bound_to: s.boundTo, rotated_at: now, updated_at: now,
+    });
+  } else {
+    const rows = await table(env, 'kubo_secrets').insertReturning<{ id: string }>({
+      owner_id: userId, name: s.label.slice(0, 80), env_key: s.envKey, group_name: 'navigator', bound_to: s.boundTo,
+      description: `Salvo pelo Vertal Navigator (cartão seguro) em ${now.slice(0, 10)} para ${s.host}`.slice(0, 300),
+      ciphertext: enc.ciphertext, iv: enc.iv, tag: enc.tag, masked_hint: hint,
+    });
+    id = Array.isArray(rows) && rows[0]?.id ? rows[0].id : '';
+    created = true;
+  }
+  await table(env, 'kubo_secret_audit').insert({
+    secret_id: id || null, owner_id: userId, actor_id: userId, action: created ? 'create' : 'rotate', env_key: s.envKey,
+    meta: { target: 'navigator', source: 'secure_form', host: s.host },
+  }).catch(() => undefined);
+  return { ok: true, envKey: s.envKey, created };
+}
+
+/** Pedido de login: usa o login salvo do site se houver tudo o que o site pediu (e não é retry). */
+async function fulfillLoginFromVault(env: NavigatorEnv, userId: string, row: SessionRow, target: NavdTarget, p: NavigatorPending, raw: RawPending): Promise<{ filled: boolean; prefillUsername?: string }> {
+  const host = String(p.host ?? '');
+  const fields = p.loginFields?.length ? p.loginFields : ['username', 'password'];
+  const login = pickLoginForHost(await visibleSecrets(env, userId), host);
+  if (raw.retry === true) {
+    // Login salvo recusado: o cartão volta com o usuário (identificador do próprio dono) preenchido.
+    const u = login.username && login.username.role === 'owner' ? await resolveVaultValue(env, userId, login.username.id, host, row.id).catch(() => null) : null;
+    return { filled: false, ...(u ? { prefillUsername: u.slice(0, 254) } : {}) };
+  }
+  const need = fields.map((f) => (f === 'username' ? login.username : login.password));
+  if (need.some((x) => !x)) {
+    const u = fields.includes('username') && login.username?.role === 'owner' ? await resolveVaultValue(env, userId, login.username.id, host, row.id).catch(() => null) : null;
+    return { filled: false, ...(u ? { prefillUsername: u.slice(0, 254) } : {}) };
+  }
+  const value: Record<string, string> = {};
+  for (const f of fields) {
+    const meta = f === 'username' ? login.username! : login.password!;
+    const v = await resolveVaultValue(env, userId, meta.id, host, row.id).catch(() => null);
+    if (!v) return { filled: false };
+    value[f] = v;
+  }
+  const res = await navd<{ ok?: boolean }>(env, target, 'POST', '/input', { id: p.id, kind: 'login', value }).catch(() => null);
+  for (const k of Object.keys(value)) value[k] = '';
+  if (!res?.data.ok) return { filled: false };
+  for (const f of fields) {
+    const meta = f === 'username' ? login.username! : login.password!;
+    await table(env, 'kubo_secrets').update({ id: `eq.${meta.id}` }, { last_used_at: new Date().toISOString() }).catch(() => undefined);
+    await recordAudit(env, userId, row.id, 'secret_used', { name: meta.env_key, host });
+  }
+  return { filled: true };
+}
+
+async function fulfillPhoneFromVault(env: NavigatorEnv, userId: string, row: SessionRow, target: NavdTarget, p: NavigatorPending): Promise<boolean> {
+  const host = String(p.host ?? '');
+  const meta = pickPhoneForHost(await visibleSecrets(env, userId), host);
+  if (!meta) return false;
+  let v = await resolveVaultValue(env, userId, meta.id, host, row.id).catch(() => null);
+  if (!v) return false;
+  const res = await navd<{ ok?: boolean }>(env, target, 'POST', '/input', { id: p.id, kind: 'phone', value: v }).catch(() => null);
+  v = null;
+  if (!res?.data.ok) return false;
+  await recordAudit(env, userId, row.id, 'secret_used', { name: meta.env_key, host });
+  return true;
+}
+
+/**
+ * Resposta de um cartão seguro. O valor chega por HTTPS do cartão, é salvo no Cofre (se o usuário
+ * marcou) e vai direto ao navd. Nunca volta ao cliente, nunca vai para log nem para a auditoria.
+ */
+async function authInput(
+  request: Request, env: NavigatorEnv, userId: string, row: SessionRow, target: NavdTarget,
+  requestId: string, body: Record<string, unknown>, asked: RawPending | undefined,
+): Promise<Response> {
+  if (!asked || (asked.kind !== 'login' && asked.kind !== 'code' && asked.kind !== 'phone')) return fail(request, 'not_pending', {}, 409);
+  const host = String(asked.host ?? '').toLowerCase();
+  const slug = siteSlugForHost(host);
+  const names = slug ? siteSecretNames(slug) : null;
+  const fields = (Array.isArray(asked.fields) ? asked.fields : ['username', 'password']).filter((f): f is 'username' | 'password' => f === 'username' || f === 'password');
+  const parsed = parseAuthInput(body, fields.length ? fields : ['username', 'password']);
+  if (!parsed.ok) return fail(request, 'bad_request', { detail: parsed.detail }, 400);
+  const a = parsed.data;
+  const saved: string[] = [];
+  let saveError: string | undefined;
+  const save = async (envKey: string, value: string, identifier: boolean, label: string) => {
+    if (!slug) { saveError = 'Este site não tem domínio público para vincular no Cofre.'; return; }
+    try {
+      const r = await saveVaultSecret(env, userId, { envKey, value, boundTo: slug, label, identifier, host });
+      if (r.ok) {
+        saved.push(r.envKey);
+        await recordAudit(env, userId, row.id, 'secret_saved', { name: r.envKey, host });
+      } else saveError = r.reason === 'no_key' ? 'O Cofre não está disponível agora; o valor foi usado só nesta tarefa.' : 'Não consegui salvar no Cofre.';
+    } catch (e) {
+      console.error('navigator: salvar no cofre falhou', safeErrorMessage(e, 160));
+      saveError = 'Não consegui salvar no Cofre; o valor foi usado só nesta tarefa.';
+    }
+  };
+  const send = (kind: string, value: unknown) => navd<{ ok?: boolean; error?: string }>(env, target, 'POST', '/input', { id: requestId, kind, value });
+
+  let res: Awaited<ReturnType<typeof send>>;
+  if (a.kind === 'cancel') {
+    res = await send(String(asked.kind), null);
+  } else if (a.kind === 'connector') {
+    if (asked.kind !== 'login') return fail(request, 'bad_request', { detail: 'kind' }, 400);
+    res = await send('login', { connector: 'gmail' });
+    await recordAudit(env, userId, row.id, 'connector_chosen', { name: 'Gmail', host });
+  } else if (a.kind === 'login') {
+    if (asked.kind !== 'login') return fail(request, 'bad_request', { detail: 'kind' }, 400);
+    const value: Record<string, string> = {};
+    if (a.username) value.username = a.username;
+    if (a.password) value.password = a.password;
+    res = await send('login', value);
+    if (res.data.ok && a.save && names) {
+      if (a.username) await save(names.username, a.username, true, `Login ${slug}`);
+      if (a.password) await save(names.password, a.password, false, `Senha ${slug}`);
+    }
+    for (const k of Object.keys(value)) value[k] = '';
+    if (res.data.ok) await recordAudit(env, userId, row.id, 'login_entered', { host });
+  } else if (a.kind === 'code') {
+    if (asked.kind !== 'code') return fail(request, 'bad_request', { detail: 'kind' }, 400);
+    let code = a.value;
+    if (a.totpSeed) {
+      const params = parseTotpSeed(a.totpSeed);
+      if (!params) return fail(request, 'bad_request', { detail: 'totp_seed' }, 400);
+      if (!code) code = (await totpNow(params)).code;
+    }
+    res = await send('code', code);
+    if (res.data.ok && a.totpSeed && names) {
+      await save(names.totp, a.totpSeed, false, `Autenticador ${slug}`);
+      if (saved.includes(names.totp)) await recordAudit(env, userId, row.id, 'totp_consent', { name: names.totp, host: slug });
+    }
+    if (res.data.ok) await recordAudit(env, userId, row.id, 'code_entered', { host });
+  } else {
+    if (asked.kind !== 'phone') return fail(request, 'bad_request', { detail: 'kind' }, 400);
+    res = await send('phone', a.value);
+    if (res.data.ok && a.save && names) await save(names.phone, a.value, true, `Telefone ${slug}`);
+    if (res.data.ok) await recordAudit(env, userId, row.id, 'phone_entered', { host });
+  }
+  if (!res.data.ok) return fail(request, 'not_pending', { detail: res.data.error }, 409);
+  return json(request, { ok: true, status: 'ok', saved, ...(saveError ? { saveError } : {}) });
+}
+
 // ─── Rotas ────────────────────────────────────────────────────────────────
 export async function handleNavigator(request: Request, env: NavigatorEnv, url: URL): Promise<Response> {
   const route = url.pathname.slice(NAVIGATOR_API_PREFIX.length).replace(/^\/+|\/+$/g, '');
@@ -673,6 +854,20 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
       for (const p of pending.filter((x) => x.kind === 'totp')) {
         await fulfillTotp(env, userId, row, target, p);
       }
+      // Cartões seguros (login/senha/código/telefone): Cofre primeiro; senão o usuário vê o cartão inline.
+      const autoFilled = new Set<string>();
+      const raws = new Map(rawPending.map((r) => [String(r?.id), r]));
+      for (const p of pending.filter((x) => x.kind === 'login' || x.kind === 'phone' || x.kind === 'code')) {
+        const raw = raws.get(p.id) ?? {};
+        Object.assign(p, sanitizeAuthView(authPendingView(p.kind as 'login' | 'phone' | 'code', raw)));
+        if (p.kind === 'login') {
+          const r = await fulfillLoginFromVault(env, userId, row, target, p, raw);
+          if (r.filled) autoFilled.add(p.id);
+          else if (r.prefillUsername) p.prefillUsername = r.prefillUsername;
+        } else if (p.kind === 'phone' && (await fulfillPhoneFromVault(env, userId, row, target, p))) {
+          autoFilled.add(p.id);
+        }
+      }
       const events = sanitizeEvents(res.data.events);
       let cookiesSaved: number | null = null;
       if (events.some((e) => e.type === 'done')) cookiesSaved = await saveProfile(env, userId, target);
@@ -680,8 +875,11 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
       return json(request, {
         ok: true, status: 'ok', agentStatus: res.data.status, runId: res.data.runId, takeover: !!res.data.takeover,
         url: pageUrl, events, lastSeq: res.data.lastSeq ?? base.data.after,
-        pending: pending.filter((p) => p.kind !== 'secret' && p.kind !== 'totp'),
-        filling: pending.filter((p) => p.kind === 'secret' || p.kind === 'totp').map((p) => ({ name: p.name, host: p.host, kind: p.kind })),
+        pending: pending.filter((p) => p.kind !== 'secret' && p.kind !== 'totp' && !autoFilled.has(p.id)),
+        filling: [
+          ...pending.filter((p) => p.kind === 'secret' || p.kind === 'totp').map((p) => ({ name: p.name, host: p.host, kind: p.kind })),
+          ...pending.filter((p) => autoFilled.has(p.id)).map((p) => ({ name: p.kind === 'phone' ? 'telefone' : 'login salvo', host: p.host, kind: p.kind })),
+        ],
         screenshot: typeof res.data.screenshot === 'string' && res.data.screenshot.startsWith('data:image/jpeg;base64,') ? res.data.screenshot : undefined,
         ...(cookiesSaved !== null ? { cookiesSaved } : {}),
         ...sessionView(env, row, s),
@@ -694,6 +892,7 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
       // Detalhes do pedido (loja/total/botão) para a auditoria, antes de responder.
       const before = await navd<{ ok?: boolean; pending?: RawPending[] }>(env, target, 'GET', '/pending').catch(() => null);
       const asked = (before?.data.pending ?? []).find((p) => p?.id === d.requestId);
+      if (d.kind === 'auth') return await authInput(request, env, userId, row, target, d.requestId, d.body, asked);
       const res = await navd<{ ok?: boolean; error?: string }>(env, target, 'POST', '/input',
         d.kind === 'approval' ? { id: d.requestId, kind: 'approval', approve: d.approve } : { id: d.requestId, kind: d.kind, value: d.value });
       if (!res.data.ok) return fail(request, 'not_pending', { detail: res.data.error }, 409);
@@ -795,5 +994,5 @@ async function activityRoute(request: Request, env: NavigatorEnv, userId: string
 }
 
 /** Só para testes: o resumo que o cartão recebe a partir do pedido cru do navd. */
-export const __test = { withSummary, summaryAudit, llmPrivacy };
+export const __test = { withSummary, summaryAudit, llmPrivacy, authInput, fulfillLoginFromVault, fulfillPhoneFromVault, sanitizeAuthView };
 export type { NavigatorPending };

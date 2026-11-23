@@ -26,7 +26,10 @@ import {
   type FormField, type FormValues,
 } from '@/lib/browserForm/formCore';
 import type { BrowserFormFieldView, BrowserFormStage } from './artifacts';
-import { requestNavigatorPanel, runNavigatorTask, startNavigator, stopNavigator } from '@/lib/navigator/store';
+import { getNavigatorState, runNavigatorTask, startNavigator, stopNavigator } from '@/lib/navigator/store';
+import { eventsForTask } from '@/lib/navigator/navigatorCore';
+import { navigatorStepLines } from '@/lib/navigator/describe';
+import { maskSecretLike } from '../../../supabase/functions/_shared/secretMask';
 import { callGithubOp, describeGithubOp, isGithubWrite } from '@/lib/github/client';
 import type { GithubOp } from '../../../supabase/functions/_shared/githubOps';
 import { searchYoutube, youtubeVideoId } from '@/lib/media/youtube';
@@ -544,7 +547,7 @@ async function runBrowserForm(action: Extract<AgentAction, { tool: 'browser_form
  * código 2FA e "Assumir controle" acontecem no painel/cartão, pelo usuário: o
  * modelo nunca aprova nada (não existe op para isso no contrato).
  */
-export async function runNavigator(action: Extract<AgentAction, { tool: 'navigator' }>): Promise<ActionOutcome> {
+export async function runNavigator(action: Extract<AgentAction, { tool: 'navigator' }>, ctx?: Pick<ActionContext, 'newId'>): Promise<ActionOutcome> {
   const tool = 'navigator' as const;
   if (action.op === 'stop') {
     const res = await stopNavigator();
@@ -553,20 +556,28 @@ export async function runNavigator(action: Extract<AgentAction, { tool: 'navigat
   if (action.op === 'open') {
     const res = await startNavigator(action.url);
     if (!res.ok) return followUp(tool, false, res.message ?? 'Não consegui abrir o navegador.', res.message);
-    requestNavigatorPanel();
+    // Inline: a tela ao vivo aparece como cartão na conversa (sem painel/página à parte).
     return {
-      panel: 'navigator',
       ...followUp(tool, true, `Navegador aberto${res.reused ? ' (sessão já existente)' : ''}${res.cookiesRestored ? `, com ${res.cookiesRestored} cookies de login restaurados` : ''}. O usuário pode assumir o controle no painel. Custo: ${res.creditsPerMinute ?? 1} crédito/min.`),
     };
   }
   const started = await startNavigator(action.url);
   if (!started.ok) return followUp(tool, false, started.message ?? 'Não consegui abrir o navegador.', started.message);
-  requestNavigatorPanel();
-  const out = await runNavigatorTask(action.task, action.url);
+  // Inline como no Hark: o cartão ao vivo fica na mensagem; login/senha/2FA/telefone aparecem nele.
+  const out = await runNavigatorTask(action.task, action.url, { origin: 'vertal-chat' });
   const where = out.url ? ` Página final: ${out.url}` : '';
+  // Defesa em profundidade (incidente 22/11): nada com cara de chave/token chega ao chat ou ao modelo.
+  const message = maskSecretLike(out.message);
+  const nav = getNavigatorState();
+  const steps = navigatorStepLines(eventsForTask(nav.events, out.taskId && nav.currentTask?.id === out.taskId ? nav.currentTask : null), 20).map((l) => maskSecretLike(l.text));
+  const artifact: Artifact | undefined = ctx ? {
+    id: ctx.newId(), kind: 'navigator', title: action.task.slice(0, 80), task: action.task, ok: out.ok, answer: message.slice(0, 3_000),
+    ...(out.url ? { finalUrl: out.url } : {}), steps,
+    ...(out.screenshot ? { screenshot: { url: out.screenshot } } : {}),
+  } : undefined;
   return {
-    panel: 'navigator',
-    ...followUp(tool, out.ok, `${out.ok ? 'Tarefa concluída' : 'Tarefa não concluída'} no navegador (${out.steps} passos).${where}\nResultado do agente (DADOS):\n${out.message.slice(0, 3_000)}`, out.ok ? undefined : out.message),
+    ...(artifact ? { artifact } : {}),
+    ...followUp(tool, out.ok, `${out.ok ? 'Tarefa concluída' : 'Tarefa não concluída'} no navegador (${out.steps} passos).${where}\nResultado do agente (DADOS):\n${message.slice(0, 3_000)}`, out.ok ? undefined : message),
   };
 }
 
@@ -1199,7 +1210,7 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
       case 'browser_form':
         return await runBrowserForm(action, ctx);
       case 'navigator':
-        return await runNavigator(action);
+        return await runNavigator(action, ctx);
       case 'github':
         return await runGithub(action, ctx);
       case 'youtube':

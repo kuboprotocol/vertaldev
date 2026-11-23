@@ -73,3 +73,62 @@ class TelemetryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+AUTH = json.loads((HERE / "auth_cases.json").read_text(encoding="utf-8"))
+
+
+class SecureFormsTests(unittest.TestCase):
+    """Formulários seguros (bloquinhos) e máscara de segredos — mesmos casos do TS."""
+
+    def test_mask(self):
+        for src, want in AUTH["mask"]:
+            self.assertEqual(navd.mask_secret_like(src), want, src)
+
+    def test_keep(self):
+        for t in AUTH["keep"]:
+            self.assertEqual(navd.mask_secret_like(t), t)
+
+    def test_slug(self):
+        for host, want in AUTH["slug"]:
+            self.assertEqual(navd.site_slug_for_host(host), want, host)
+
+    def test_connector(self):
+        for host, url, task, want in AUTH["connector"]:
+            self.assertEqual(navd.connector_for_login(host, url, task), want, (host, task))
+
+    def test_known_values_masked_in_events(self):
+        navd.KNOWN.add("minhaSenhaForte")
+        ev = navd.S.emit("done", result="Entrei com minhaSenhaForte no site")
+        self.assertNotIn("minhaSenhaForte", json.dumps(ev))
+        self.assertIn("[segredo oculto]", ev["result"])
+
+    def test_leaked_value_never_in_result(self):
+        ev = navd.S.emit("done", result="Erro: segredo Zq8mT2vX9pL4kR7wN1bY6cH3jF5dG0sA recusado em accounts.google.com")
+        self.assertNotIn("Zq8mT2vX9pL4kR7wN1bY6cH3jF5dG0sA", json.dumps(ev))
+
+    def test_ask_user_redirects_credentials(self):
+        self.assertEqual(navd.credential_question_tool("Qual é a sua senha do Gmail?"), "request_login")
+        self.assertEqual(navd.credential_question_tool("Qual o código 2FA que chegou?"), "request_user_code")
+        self.assertEqual(navd.credential_question_tool("Qual telefone usar para o SMS?"), "request_phone")
+        self.assertIsNone(navd.credential_question_tool("Qual das duas contas devo escolher?"))
+
+    def test_otp_kind(self):
+        self.assertEqual(navd.otp_kind_of("", "Digite o código do app autenticador"), "totp")
+        self.assertEqual(navd.otp_kind_of("sms", ""), "sms")
+        self.assertEqual(navd.otp_kind_of("", "Enviamos um código para seu e-mail"), "email")
+
+    def test_login_event_types(self):
+        loop = navd.asyncio.new_event_loop()
+        try:
+            async def run():
+                t = navd.asyncio.ensure_future(navd.ask("login", host="accounts.google.com", fields=["password"]))
+                await navd.asyncio.sleep(0)
+                ev = navd.S.events[-1]
+                self.assertEqual(ev["type"], "needs_password")
+                pid = ev["id"]
+                navd.S.pending[pid]["future"].set_result({"password": "x"})
+                return await t
+            self.assertEqual(loop.run_until_complete(run()), {"password": "x"})
+        finally:
+            loop.close()

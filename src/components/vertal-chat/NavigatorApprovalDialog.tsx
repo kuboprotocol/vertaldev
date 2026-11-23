@@ -9,6 +9,7 @@ import { CreditCard, KeyRound, Send, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { answerNavigator, getNavigatorState, useNavigator } from '@/lib/navigator/store';
 import { NavigatorApprovalDetails } from '@/components/navigator/NavigatorParts';
+import { NavigatorRequestCard } from '@/components/navigator/NavigatorSecureForms';
 import { approvalCopy, hostOf, navInput as inputCls } from '@/components/navigator/navigatorUi';
 
 export function NavigatorApprovalDialog() {
@@ -18,7 +19,9 @@ export function NavigatorApprovalDialog() {
   // Fase 4: com o cartão do navegador aberto no chat do Vibe Code, a aprovação aparece lá (inline).
   const approval = nav.inlineApprovalHosts > 0 ? null : nav.pending.find((p) => p.kind === 'approval') ?? null;
   const ask = !approval && nav.panelsMounted === 0 ? nav.pending.find((p) => p.kind === 'code' || p.kind === 'text') ?? null : null;
-  const current = approval ?? ask;
+  // Cartão seguro (login/senha/telefone) quando nenhum cartão inline nem painel está montado.
+  const secure = !approval && !ask && nav.panelsMounted === 0 ? nav.pending.find((p) => p.kind === 'login' || p.kind === 'phone') ?? null : null;
+  const current = approval ?? ask ?? secure;
 
   const decide = async (approve: boolean) => {
     if (!approval) return;
@@ -91,6 +94,14 @@ export function NavigatorApprovalDialog() {
               </button>
             </DialogFooter>
           </form>
+        ) : secure ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>O site pediu seus dados</DialogTitle>
+              <DialogDescription>Preencha no cartão seguro: vai direto ao site e a IA não vê.</DialogDescription>
+            </DialogHeader>
+            <NavigatorRequestCard pending={secure} />
+          </>
         ) : null}
       </DialogContent>
     </Dialog>
