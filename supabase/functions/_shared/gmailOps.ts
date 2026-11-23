@@ -117,3 +117,15 @@ export function isTextAttachment(mime: string, filename: string): boolean {
 }
 
 export const ATTACHMENT_TEXT_MAX = 20_000;
+
+/** Créditos por ação do Gmail pelo chat (buscar, ler, resumir, rascunho, responder, enviar, encaminhar, organizar, lixeira, anexos). */
+export const GMAIL_SECRETARY_COST = 2;
+
+/** chatCharge: uuid que o chat manda para ser cobrado (e chave de idempotência da cobrança). */
+export const CHAT_CHARGE_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Falha na cobrança vira resposta: saldo insuficiente é 402 insufficient_credits. */
+export function gmailChargeError(ded: { error: string; status?: number }): { status: number; error: string } {
+  if (ded.error === "deduction_failed" || ded.error === "insufficient_credits") return { status: 402, error: "insufficient_credits" };
+  return { status: ded.status ?? 402, error: ded.error };
+}

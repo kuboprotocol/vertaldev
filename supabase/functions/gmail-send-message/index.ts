@@ -5,11 +5,15 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 import { z } from 'npm:zod@3'
+import { withRefundOnFailure } from '../_shared/creative.ts'
+import { chargeGmailChat } from '../_shared/gmailBilling.ts'
 import { getFreshAccessToken, loadAccount } from '../_shared/gmailToken.ts'
 import { sanitizeError } from '../_shared/cors.ts'
 import { b64url, buildMime, forwardBody, forwardSubject, isInsufficientScope } from '../_shared/gmailOps.ts'
 
 const Body = z.object({
+  // Vertal Chat: cobra 2 créditos (chave de idempotência da cobrança). Sem ela, grátis (caixa no app).
+  chatCharge: z.string().uuid().optional(),
   accountId: z.string().uuid(),
   to: z.string().email(),
   cc: z.string().max(2_000).optional(),
@@ -58,7 +62,7 @@ async function loadOriginal(token: string, id: string) {
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
-Deno.serve(async (req) => {
+Deno.serve(withRefundOnFailure(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   try {
     const authHeader = req.headers.get('Authorization')
@@ -72,6 +76,9 @@ Deno.serve(async (req) => {
 
     const parsed = Body.safeParse(await req.json())
     if (!parsed.success) return json(400, { error: 'invalid_input' })
+    // Vertal Chat: 2 créditos por ação (devolvidos se a ação no Gmail falhar).
+    const charge = await chargeGmailChat(user, parsed.data.chatCharge, parsed.data.forwardOf ? 'forward' : parsed.data.mode === 'draft' ? 'draft' : parsed.data.threadId ? 'reply' : 'send')
+    if (charge) return json(charge.status, { error: charge.error })
     const { accountId, to, cc, threadId, inReplyTo, references, mode, forwardOf } = parsed.data
     let subject = parsed.data.subject ?? ''
     let body = parsed.data.body
@@ -120,4 +127,4 @@ Deno.serve(async (req) => {
     console.error('[gmail-send-message] error:', e);
     return json(500, { error: sanitizeError(e) })
   }
-})
+}))

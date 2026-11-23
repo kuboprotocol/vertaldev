@@ -5,11 +5,15 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 import { z } from 'npm:zod@3'
+import { withRefundOnFailure } from '../_shared/creative.ts'
+import { chargeGmailChat } from '../_shared/gmailBilling.ts'
 import { getFreshAccessToken, loadAccount } from '../_shared/gmailToken.ts'
 import { sanitizeError } from '../_shared/cors.ts'
 import { GMAIL_MODIFY_OPS, isInsufficientScope, modifyBody, resolveLabelIds, type GmailModifyOp } from '../_shared/gmailOps.ts'
 
 const Body = z.object({
+  // Vertal Chat: cobra 2 créditos (chave de idempotência da cobrança). Sem ela, grátis (caixa no app).
+  chatCharge: z.string().uuid().optional(),
   accountId: z.string().uuid(),
   // Um e-mail (messageId) ou a conversa inteira (threadId).
   messageId: z.string().regex(/^[A-Za-z0-9_-]{6,128}$/).optional(),
@@ -24,7 +28,7 @@ const Body = z.object({
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
-Deno.serve(async (req) => {
+Deno.serve(withRefundOnFailure(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   try {
     const authHeader = req.headers.get('Authorization')
@@ -40,6 +44,9 @@ Deno.serve(async (req) => {
     if (!parsed.success) return json(400, { error: 'invalid_input' })
     const { accountId, messageId, threadId, markAs, labels } = parsed.data
     const op: GmailModifyOp = parsed.data.op ?? (markAs as GmailModifyOp)
+    // Vertal Chat: 2 créditos por ação (devolvidos se a ação no Gmail falhar).
+    const charge = await chargeGmailChat(user, parsed.data.chatCharge, op)
+    if (charge) return json(charge.status, { error: charge.error })
 
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
     const acct = await loadAccount(admin, user.id, accountId)
@@ -98,4 +105,4 @@ Deno.serve(async (req) => {
     console.error('[gmail-modify-message] error:', e)
     return json(500, { error: sanitizeError(e) })
   }
-})
+}))

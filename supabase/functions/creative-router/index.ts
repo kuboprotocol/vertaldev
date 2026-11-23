@@ -78,6 +78,7 @@ import {
 } from "../_shared/chatDelegate.ts";
 import { validatePublicUrl } from "../_shared/security.ts";
 import { decodeImageDataUrl, generateChatImage } from "../_shared/chatImage.ts";
+import { GMAIL_SECRETARY_COST } from "../_shared/gmailBilling.ts";
 
 const InputSchema = z.object({
   messages: z.array(z.object({
@@ -124,6 +125,9 @@ const COSTS: Record<string, number> = {
   api_request: 0,  // Vertal Chat: chamada de API externa não é cobrada (tem limite de requisições)
   automatisch: 0,  // Vertal Chat: Automatisch do cliente, não é cobrado (tem limite de requisições)
   huginn: 0,       // Vertal Chat: Huginn do cliente, não é cobrado (tem limite de requisições)
+  // Vertal Chat: cada ação de secretário do Gmail (buscar/ler/resumir, rascunho, responder, enviar,
+  // encaminhar, organizar, lixeira, anexos). Cobrada nas próprias gmail-* (chatCharge), com estorno se falhar.
+  gmail_secretary: GMAIL_SECRETARY_COST,
 };
 
 Deno.serve(withRefundOnFailure(async (req) => {

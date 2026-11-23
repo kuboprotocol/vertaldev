@@ -4,7 +4,7 @@ import { AGENT_PROMPT_BUDGET, TOOL_COSTS, buildAgentSystemPrompt, parseAgentActi
 import { EMAIL_RULES } from '../../../supabase/functions/_shared/emailRouting';
 import { isParallelSafe } from '../../../supabase/functions/_shared/chatOrchestrator';
 import {
-  GMAIL_MODIFY_OPS, buildMime, encodeSubject, forwardBody, forwardSubject, isInsufficientScope, isTextAttachment,
+  CHAT_CHARGE_RE, GMAIL_MODIFY_OPS, GMAIL_SECRETARY_COST, buildMime, gmailChargeError, encodeSubject, forwardBody, forwardSubject, isInsufficientScope, isTextAttachment,
   modifyBody, resolveLabelIds,
 } from '../../../supabase/functions/_shared/gmailOps';
 import { GMAIL_CHAT_MODIFY_OPS } from '../../../supabase/functions/_shared/chatAgent';
@@ -42,8 +42,17 @@ describe('gmail secretário: parse das ações', () => {
     expect(isParallelSafe({ tool: 'gmail_modify', op: 'trash', thread: T })).toBe(false);
     expect(isParallelSafe({ tool: 'gmail_forward', message: T, to: 'a@b.com', note: '' })).toBe(false);
   });
-  it('custos: grátis como as outras ações do Gmail (sem tabela de desconto no repo)', () => {
-    for (const t of ['gmail_draft', 'gmail_forward', 'gmail_modify', 'gmail_attachment'] as const) expect(TOOL_COSTS[t]).toMatch(/^grátis/);
+  it('custos: toda ação do Gmail pelo chat custa 2 créditos', () => {
+    expect(GMAIL_SECRETARY_COST).toBe(2);
+    for (const t of ['gmail_search', 'gmail_read', 'gmail_send', 'gmail_draft', 'gmail_forward', 'gmail_modify', 'gmail_attachment'] as const) {
+      expect(TOOL_COSTS[t]).toMatch(/^2 créditos/);
+    }
+  });
+  it('cobrança: saldo insuficiente vira 402 insufficient_credits; chatCharge é uuid', () => {
+    expect(gmailChargeError({ error: 'deduction_failed' })).toEqual({ status: 402, error: 'insufficient_credits' });
+    expect(gmailChargeError({ error: 'rate_limit_exceeded:x:20/60s', status: 429 })).toEqual({ status: 429, error: 'rate_limit_exceeded:x:20/60s' });
+    expect(CHAT_CHARGE_RE.test(crypto.randomUUID())).toBe(true);
+    expect(CHAT_CHARGE_RE.test('gmail:1')).toBe(false);
   });
   it('ops do chat batem com as da função', () => {
     expect([...GMAIL_CHAT_MODIFY_OPS]).toEqual([...GMAIL_MODIFY_OPS]);

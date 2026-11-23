@@ -5,9 +5,13 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 import { z } from 'npm:zod@3'
+import { withRefundOnFailure } from '../_shared/creative.ts'
+import { chargeGmailChat } from '../_shared/gmailBilling.ts'
 import { getFreshAccessToken, loadAccount } from '../_shared/gmailToken.ts'
 
 const Body = z.object({
+  // Vertal Chat: cobra 2 créditos (chave de idempotência da cobrança). Sem ela, grátis (caixa no app).
+  chatCharge: z.string().uuid().optional(),
   accountId: z.string().uuid(),
   q: z.string().max(512).optional(),
   from: z.string().max(256).optional(),
@@ -25,7 +29,7 @@ function buildQuery(input: { q?: string; from?: string; subject?: string }) {
   return parts.join(' ')
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withRefundOnFailure(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   try {
     const authHeader = req.headers.get('Authorization')
@@ -39,6 +43,9 @@ Deno.serve(async (req) => {
 
     const parsed = Body.safeParse(await req.json())
     if (!parsed.success) return new Response(JSON.stringify({ error: parsed.error.flatten().fieldErrors }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    // Vertal Chat: 2 créditos por ação (devolvidos se a ação no Gmail falhar).
+    const charge = await chargeGmailChat(user, parsed.data.chatCharge, 'search')
+    if (charge) return new Response(JSON.stringify({ error: charge.error }), { status: charge.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
     const acct = await loadAccount(admin, user.id, parsed.data.accountId)
@@ -79,4 +86,4 @@ Deno.serve(async (req) => {
   } catch (e) {
     return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
-})
+}))
