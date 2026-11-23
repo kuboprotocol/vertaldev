@@ -3,7 +3,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { NAVIGATOR_MESSAGES, type NavigatorEvent, type NavigatorPending, type NavigatorSettings, type NavigatorStatus } from './navigatorCore';
 
-export type NavigatorRoute = 'start' | 'task' | 'status' | 'input' | 'takeover' | 'release' | 'stop' | 'forget' | 'settings' | 'activity';
+export type NavigatorRoute = 'start' | 'task' | 'status' | 'input' | 'takeover' | 'release' | 'stop' | 'forget' | 'settings' | 'activity' | 'audio-ticket';
 
 export interface NavigatorSessionSummary {
   id: string;
@@ -52,6 +52,8 @@ export interface NavigatorResponse {
   /** /activity (fase 2). */
   sessions?: NavigatorSessionSummary[];
   audit?: NavigatorAuditEntry[];
+  /** /audio-ticket: ticket curto do stream de áudio (ver navigatorAudio.ts no Worker). */
+  ticket?: string;
 }
 
 const PRODUCTION_ORIGIN = 'https://vertal.dev';
@@ -64,6 +66,18 @@ export function navigatorApiBase(
   if (override) return `${override.replace(/\/+$/, '').replace(/\/api\/browser$/, '')}/api/navigator`;
   const host = location?.hostname ?? '';
   return host === 'vertal.dev' || host === 'www.vertal.dev' ? '/api/navigator' : `${PRODUCTION_ORIGIN}/api/navigator`;
+}
+
+/**
+ * URL do stream de áudio do navegador desta sessão, para o <audio> do celular.
+ * O ticket vai na query (o elemento <audio> não envia cabeçalhos); vale 10 min para
+ * abrir a conexão. Falha devolve a mensagem pronta para mostrar.
+ */
+export async function navigatorAudioUrl(sessionId: string): Promise<{ ok: true; url: string; expiresAt: number } | { ok: false; message: string }> {
+  const res = await callNavigator('audio-ticket', { sessionId });
+  if (!res.ok || !res.ticket) return { ok: false, message: res.message ?? NAVIGATOR_MESSAGES.error };
+  const expiresAt = res.expiresAt ? Date.parse(res.expiresAt) : Date.now() + 5 * 60_000;
+  return { ok: true, url: `${navigatorApiBase()}/audio?ticket=${encodeURIComponent(res.ticket)}`, expiresAt };
 }
 
 /** Chama uma rota do Navigator. Sempre devolve o mesmo formato, mesmo se o HTTP falhar. */

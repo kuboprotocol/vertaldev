@@ -18,7 +18,7 @@ export interface AutomatischCallResult {
   data?: unknown;
 }
 
-const RATE = 'Muitos pedidos ao Automatisch em pouco tempo. Aguarde um minuto.';
+const RATE = 'Muitos pedidos ao Vertal Fluxos em pouco tempo. Aguarde um minuto.';
 
 export async function callAutomatischOp(op: AutomatischOp): Promise<AutomatischCallResult> {
   const { data, error } = await supabase.functions.invoke('creative-router', {

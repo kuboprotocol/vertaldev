@@ -106,6 +106,26 @@ export async function navd<T = Record<string, unknown>>(
 }
 
 /**
+ * GET do navd que devolve um stream (áudio do navegador, /audio). O timeout vale só
+ * até os cabeçalhos chegarem: depois disso o corpo fica aberto enquanto o cliente
+ * ouvir; quando ele sai, o cancelamento do body fecha a conexão com o navd.
+ */
+export async function navdStream(env: E2BEnv, target: NavdTarget, path: string, connectTimeoutMs = 15_000): Promise<Response> {
+  const url = `https://${sandboxHost(NAVD_PORT, target.sandboxId, e2bDomain(env))}${path}`;
+  const headers: Record<string, string> = { 'User-Agent': USER_AGENT };
+  if (target.token) headers.Authorization = `Bearer ${target.token}`;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), connectTimeoutMs);
+  try {
+    return await fetch(url, { method: 'GET', headers, signal: ac.signal });
+  } catch (e) {
+    throw new E2BError(`navd ${path}: ${e instanceof Error ? e.message : String(e)}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * Espera o navd responder (o sandbox acabou de ser criado). Fase 4: espera mais
  * (padrão 40 s) e com backoff (400 ms → 2,5 s), porque na 1ª abertura do dia o
  * proxy do E2B e o navd demoram mais para subir e o start falhava com

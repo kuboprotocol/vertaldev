@@ -2,7 +2,11 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 const { callNavigator } = vi.hoisted(() => ({ callNavigator: vi.fn(async () => ({ ok: true, status: "ok" })) }));
-vi.mock("@/lib/navigator/client", () => ({ callNavigator }));
+vi.mock("@/lib/navigator/client", () => ({
+  callNavigator,
+  // Áudio do navegador (ticket): no teste o prefetch falha em silêncio, o botão fica desligado.
+  navigatorAudioUrl: vi.fn(async () => ({ ok: false, message: "sem áudio no teste" })),
+}));
 
 import { VibeNavigatorCard } from "@/components/vibe-code/VibeNavigatorCard";
 import KuboFlowSelector from "@/components/builder/KuboFlowSelector";
