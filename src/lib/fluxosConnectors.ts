@@ -104,6 +104,7 @@ export const FLUXOS_SHARED_APPS: Record<string, string> = {
 const FLUXOS_APP_LOGOS: Record<string, string> = {
   airbrake: '/connectors/airbrake.png',
   airtable: '/connectors/airtable.png',
+  anthropic: '/connectors/anthropic.png',
 }
 
 export const fluxosConnectors: ConnectorConfig[] = FLUXOS_NATIVE_APPS.map(a => ({
