@@ -30,6 +30,7 @@ E2B self-hosted (VM Oracle vertal-e2b-vm, api.vertalrun.com, portas em https://<
        navd :8787   daemon (aiohttp) que o Worker controla; roda o agente browser-use 0.13.14
        Chromium     CDP só em 127.0.0.1:9222, perfil em /home/user/.vertal-profile
        Xvfb :99 → x11vnc (127.0.0.1:5900, senha de ver ≠ senha de controlar) → websockify/noVNC :6080
+       PulseAudio, sink "vertal" (null-sink) ← Chromium toca aqui; navd GET /audio = ffmpeg no monitor → MP3 stream
 ```
 
 ### Rotas do Worker
@@ -48,6 +49,14 @@ Todas `POST`, `Authorization: Bearer <JWT do Supabase>`, resposta `{ok, status, 
 | `/api/navigator/forget` | `{}` | Apaga os cookies salvos do usuário. |
 | `/api/navigator/settings` | `{}` lê · `{autoApproveEnabled, autoApproveMaxCents, confirmed}` grava · `{consent:"totp", name, boundTo, confirmed}` | **Fase 2.** "Aprovar automático até R$X" (padrão: sempre pedir) e registro do consentimento TOTP. |
 | `/api/navigator/activity` | `{}` | **Fase 2.** Últimas 20 sessões + 150 linhas de auditoria do usuário (aba Atividade). |
+| `/api/navigator/audio-ticket` | `{sessionId}` | **Áudio.** Devolve `ticket` (HMAC de sessão + validade de 10 min, `worker/navigatorAudio.ts`). O botão "Ouvir no celular" monta `…/audio?ticket=…`. |
+| `GET /api/navigator/audio?ticket=…` | — | **Áudio.** Não usa JWT (o `<audio>` não envia cabeçalhos): valida o ticket, abre `GET /audio` do navd com o token da sessão guardado cifrado e repassa o MP3 (`audio/mpeg`, sem cache). Um ouvinte por sessão; sessão encerrada → 410. |
+
+**Áudio do navegador (no celular):** o Chromium roda com `--autoplay-policy=no-user-gesture-required` e
+toca no sink do PulseAudio; o navd captura o monitor com ffmpeg (MP3 128 kb/s, estéreo, 44,1 kHz). O
+usuário toca em "Ouvir no celular" (o toque é obrigatório em iOS/Android). Limite conhecido: ao
+bloquear a tela ou trocar de app, o navegador do celular pode pausar o `<audio>`; o botão avisa e
+reconecta com um toque. Exige rebuild do template `vertal-browser` (novos pacotes: pulseaudio, ffmpeg).
 
 `status` pode ser `ok`, `blocked_url`, `busy`, `capacity`, `no_session`, `session_ended`, `not_pending`,
 `rate_limited`, `insufficient_credits`, `not_configured`, `unauthorized`, `bad_request`, `sandbox_error`, `error`.
