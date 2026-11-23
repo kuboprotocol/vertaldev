@@ -41,7 +41,7 @@ export function approvalCopy(approval: { category?: string; url?: string }): { i
 }
 
 /** Pedidos do agente que viram cartão seguro inline (login, senha, código, telefone, pergunta). */
-export const isRequestCardKind = (kind: string) => kind === 'login' || kind === 'code' || kind === 'phone' || kind === 'text';
+export const isRequestCardKind = (kind: string) => kind === 'login' || kind === 'code' || kind === 'phone' || kind === 'text' || kind === 'card';
 
 /** Cartão ao vivo do Vertal Chat: só para tarefas pedidas por este chat. */
 export function hasLiveChatNavigatorTask(origin: string | undefined, agentStatus: string): boolean {

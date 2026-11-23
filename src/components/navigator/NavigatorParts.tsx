@@ -194,6 +194,26 @@ export function NavigatorPendingInput({ pending, compact = false }: { pending: N
   );
 }
 
+/** Recibos das ações automáticas (pagamento dentro do teto, envio no modo "automatizar tudo"). */
+export function NavigatorReceipts({ receipts, compact = false }: { receipts: Array<{ kind: string; store?: string; total?: string; source?: string; limit?: string; target?: string; at: string; recurring?: boolean }>; compact?: boolean }) {
+  if (!receipts.length) return null;
+  return (
+    <ul className={`space-y-1 ${compact ? 'text-[11px]' : 'text-xs'}`} aria-label="Recibos das ações automáticas" data-testid="navigator-receipts">
+      {receipts.map((r, i) => (
+        <li key={`${r.at}-${i}`} className="flex items-start gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/5 px-2 py-1.5">
+          <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" aria-hidden />
+          <span>
+            {r.kind === 'payment'
+              ? <>Recibo: paguei <strong>{r.total}</strong>{r.store ? <> em <strong>{r.store}</strong></> : null}{r.recurring ? ' (assinatura)' : ''}{r.source ? ` · ${r.source}` : ''} — dentro do seu teto{r.limit ? ` de ${r.limit}` : ''}.</>
+              : <>Recibo: confirmei “{r.target}” sozinho (modo automatizar tudo).</>}
+            <span className="ml-1 text-muted-foreground">{new Date(r.at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** Aviso "preenchendo do cofre…" (segredos/TOTP resolvidos no servidor). */
 export function NavigatorFilling({ nav }: { nav: NavigatorState }) {
   if (nav.filling.length === 0) return null;
@@ -287,6 +307,24 @@ export function NavigatorApprovalDetails({ approval, screenshot }: { approval: N
           <p className="text-lg font-semibold">{approval.total || 'Não identificado'}</p>
         </div>
       </div>
+      {approval.totalChanged && (
+        <p className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs font-medium">O valor mudou desde a sua aprovação. Este é o total novo: confira e aprove de novo.</p>
+      )}
+      {(approval.recurring || approval.renewalTerms) && (
+        <div className="rounded-lg border border-border/40 px-3 py-2" data-testid="navigator-subscription">
+          <p className="text-xs text-muted-foreground">Cobrança</p>
+          <p className="font-medium">{approval.recurring ? `Assinatura recorrente${approval.period ? ` (${approval.period})` : ''}` : 'Pagamento único'}</p>
+          {approval.renewalTerms && <p className="text-xs text-muted-foreground">Como a página diz: “{approval.renewalTerms}”</p>}
+        </div>
+      )}
+      {!approval.recurring && !approval.renewalTerms && approval.total && <p className="text-xs text-muted-foreground">Cobrança: pagamento único (a página não fala em renovação).</p>}
+      {(approval.paySource || approval.vertalPayLine) && (
+        <div className="rounded-lg border border-border/40 px-3 py-2">
+          <p className="text-xs text-muted-foreground">Forma de pagamento</p>
+          {approval.paySource && <p className="font-medium">Cartão •••• {approval.paySource.last4} (da sua carteira)</p>}
+          {approval.vertalPayLine && <p className="text-xs">{approval.vertalPayLine}</p>}
+        </div>
+      )}
       {approval.items && approval.items.length > 0 && (
         <div className="rounded-lg border border-border/40 px-3 py-2">
           <p className="mb-1 text-xs text-muted-foreground">Itens</p>

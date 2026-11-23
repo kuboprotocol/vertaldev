@@ -22,6 +22,9 @@ function AutoApproveSettings() {
   const [reais, setReais] = useState('');
   const [saved, setSaved] = useState<{ enabled: boolean; cents: number }>({ enabled: false, cents: 0 });
   const [sending, setSending] = useState(false);
+  const [periodReais, setPeriodReais] = useState('');
+  const [merchants, setMerchants] = useState('');
+  const [recurring, setRecurring] = useState(false);
   const cap = NAVIGATOR_LIMITS.autoApproveMaxCentsCap;
 
   useEffect(() => {
@@ -31,16 +34,22 @@ function AutoApproveSettings() {
       setEnabled(res.settings.autoApproveEnabled);
       setSaved({ enabled: res.settings.autoApproveEnabled, cents: res.settings.autoApproveMaxCents });
       if (res.settings.autoApproveMaxCents > 0) setReais(String(res.settings.autoApproveMaxCents / 100).replace('.', ','));
+      const x = res.settings as typeof res.settings & { periodMaxCents?: number; merchants?: string[]; allowRecurring?: boolean };
+      if (x.periodMaxCents) setPeriodReais(String(x.periodMaxCents / 100).replace('.', ','));
+      if (x.merchants?.length) setMerchants(x.merchants.join(', '));
+      setRecurring(!!x.allowRecurring);
     });
   }, []);
 
   const cents = Math.round(Number(reais.replace(/\./g, '').replace(',', '.')) * 100);
-  const valid = !enabled || (Number.isFinite(cents) && cents > 0 && cents <= cap);
+  const periodCents = periodReais.trim() ? Math.round(Number(periodReais.replace(/\./g, '').replace(',', '.')) * 100) : 0;
+  const merchantList = merchants.split(/[,\s]+/).map((m) => m.trim().toLowerCase()).filter(Boolean).slice(0, 10);
+  const valid = !enabled || (Number.isFinite(cents) && cents > 0 && cents <= cap && Number.isFinite(periodCents) && periodCents >= 0 && periodCents <= 500_000);
 
   const save = async () => {
     if (!valid) return;
     setSending(true);
-    const res = await saveNavigatorSettings(enabled, enabled ? cents : 0);
+    const res = await saveNavigatorSettings(enabled, enabled ? cents : 0, enabled ? { periodMaxCents: periodCents, periodDays: 30, merchants: merchantList, allowRecurring: recurring } : undefined);
     setSending(false);
     if (!res.ok) {
       toast.error(res.message ?? 'Não consegui salvar.');
@@ -66,6 +75,17 @@ function AutoApproveSettings() {
           reais (máximo {formatCents(cap)}).
         </span>
       </label>
+      {enabled && (
+        <div className="space-y-1.5 pl-6 text-sm">
+          <label className="block">Teto por loja a cada 30 dias (opcional)
+            <input className={`${inputCls} mt-1 w-28`} inputMode="decimal" value={periodReais} onChange={(e) => setPeriodReais(e.target.value.replace(/[^\d.,]/g, ''))} placeholder="200,00" aria-label="Teto por loja em 30 dias" />
+          </label>
+          <label className="block">Só nestas lojas (opcional, separadas por vírgula)
+            <input className={`${inputCls} mt-1`} value={merchants} onChange={(e) => setMerchants(e.target.value)} placeholder="folha.uol.com.br, ifood.com.br" aria-label="Lojas permitidas" />
+          </label>
+          <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} /> Incluir assinaturas recorrentes (padrão: sempre perguntar)</label>
+        </div>
+      )}
       <p className="text-[11px] leading-snug text-muted-foreground">
         Só vale quando o valor total foi lido com segurança na página (rótulo de total, em reais). Sem isso, ou acima do limite, o cartão de aprovação aparece como sempre. Cada aprovação automática fica na Atividade.
       </p>

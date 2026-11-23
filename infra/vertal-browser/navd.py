@@ -120,7 +120,9 @@ AUTH_RULES = (
     "Login em duas etapas (Google, Microsoft): request_login só com o campo da etapa atual. Se o site recusar o login, chame request_login de novo (no máximo 2 vezes). "
     "Código de verificação: request_user_code(index, pergunta, kind='totp'|'sms'|'email'). Telefone para SMS: request_phone(index, pergunta). "
     "Tela 'Escolha uma conta': clique na conta pedida; se houver mais de uma e a tarefa não disser qual, use ask_user. "
-    "Nunca digite senha com input, nunca invente usuário/senha/código, nunca peça credencial com ask_user."
+    "Nunca digite senha com input, nunca invente usuário/senha/código, nunca peça credencial com ask_user. "
+    "Pagamento/assinatura/paywall: dados do cartão SEMPRE com fill_payment_card (nunca input); cartão recusado → fill_payment_card(refused=true). "
+    "Antes de pagar, deixe na tela o resumo com o total; o clique em pagar/assinar/comprar sempre espera a aprovação do usuário no chat, e se o valor mudar ele aprova de novo."
 )
 SCOPE_RULES = (
     "Escopo (regra dura): faça SOMENTE o que a tarefa pede, nada além. Não invente etapas, objetivos ou tarefas novas; "
@@ -258,6 +260,8 @@ def secret_matches_host(bound_to: str | None, host: str) -> bool:
     if not bound_to:
         return False
     slug = bound_to.lower()
+    if slug == "vertal-wallet":  # carteira: só fill_payment_card
+        return False
     host = (host or "").lower().rstrip(".")
     labels = host.split(".")
     if slug.replace("-", ".") == host or any(slug.replace("-", ".") == ".".join(labels[i:]) for i in range(len(labels) - 1)):
@@ -487,6 +491,40 @@ _ASKS_CREDENTIAL_RE = re.compile(
     r"\b(senha|password|passcode|login|usu[aá]rio|username|e-?mail de acesso|c[oó]digo|code|2fa|otp|token|pin|telefone|celular|phone)\b", re.IGNORECASE)
 
 
+def luhn_ok(number: str) -> bool:
+    d = re.sub(r"\D", "", str(number or ""))
+    if not 12 <= len(d) <= 19:
+        return False
+    total = 0
+    for i, ch in enumerate(reversed(d)):
+        n = int(ch)
+        if i % 2 == 1:
+            n *= 2
+            if n > 9:
+                n -= 9
+        total += n
+    return total % 10 == 0
+
+
+def looks_like_card_number(text: Any) -> bool:
+    """Número de cartão digitado pelo modelo (13–19 dígitos que passam no Luhn): nunca."""
+    for m in re.finditer(r"(?:\d[ -]?){13,19}", str(text or "")):
+        if luhn_ok(m.group(0)):
+            return True
+    return False
+
+
+def approved_amount(value: Any) -> dict | None:
+    """Total que o usuário aprovou no cartão (centavos + moeda + loja), se veio."""
+    if isinstance(value, dict) and value.get("approve") is True and isinstance(value.get("totalCents"), int) and value.get("totalCents") > 0:
+        return {"cents": value["totalCents"], "currency": str(value.get("currency") or "BRL")[:3], "store": str(value.get("store") or "")[:200]}
+    return None
+
+
+def is_approved(value: Any) -> bool:
+    return value is True or (isinstance(value, dict) and value.get("approve") is True)
+
+
 def otp_kind_of(kind: Any, question: Any = "") -> str:
     """totp | sms | email | unknown (espelho de normalizeOtpKind)."""
     k = str(kind or "").lower()
@@ -566,6 +604,9 @@ class State:
         # Formulários seguros: tentativas de login por site (loop guard) e se a tarefa é de e-mail.
         self.login_attempts: dict[str, int] = {}
         self.mail_task = False
+        # Pagamentos: tentativas de cartão por tarefa e o cartão preenchido (só o final, para o cartão de aprovação).
+        self.card_attempts = 0
+        self.card_filled: dict[str, str] | None = None
         self.lock = asyncio.Lock()
 
     def emit(self, type_: str, **data: Any) -> dict[str, Any]:
@@ -797,6 +838,7 @@ async def ask(kind: str, hidden: dict[str, Any] | None = None, **meta: Any) -> A
     event_type = {
         "approval": "needs_approval", "secret": "needs_secret", "totp": "needs_totp", "code": "needs_otp", "phone": "needs_phone",
         "login": "needs_password" if meta.get("fields") == ["password"] else "needs_login",
+        "card": "needs_card", "payment_check": "payment_check",
     }.get(kind, "needs_user_input")
     S.emit(event_type, id=rid, kind=kind, **meta)
     try:
@@ -809,6 +851,42 @@ async def ask(kind: str, hidden: dict[str, Any] | None = None, **meta: Any) -> A
         if S.status == "waiting":
             S.status = prev if prev != "waiting" else "running"
 
+
+
+async def payment_gate(name: str, target: str, url: str, title: str, reason: str) -> str | None:
+    """Gate de pagamento: pausa e pede aprovação; UMA aprovação = UM pagamento no total exato.
+    Logo antes do clique relê a página (payment_check, resolvido no Worker com o mesmo extrator
+    do cartão); se o total mudou, pergunta de novo. Devolve o erro para o agente, ou None se pode clicar."""
+    shot = await capture_screenshot()
+    if shot:
+        S.last_screenshot = shot
+    hidden = {"pageText": await page_text(), "pageTitle": title[:200], **({"screenshot": shot} if shot else {})}
+    pay_meta = {"paySource": {"kind": "card", "last4": S.card_filled["last4"]}} if S.card_filled else {}
+    approved = await ask("approval", hidden=hidden, category="payment", action=name, target=target[:200], url=url[:300], reason=reason,
+                         question="O agente quer clicar num botão de pagamento/compra/confirmação de pedido. Aprovar?", **pay_meta)
+    if not is_approved(approved):
+        S.emit("approval_denied", action=name, target=target[:200])
+        return "O usuário NÃO aprovou esta ação de pagamento/compra. Não tente de novo; pare e relate."
+    for _ in range(2):
+        amount = approved_amount(approved)
+        if not amount:
+            break  # total não lido: o usuário aprovou sabendo disso (o cartão avisa)
+        same = await ask("payment_check", hidden={"pageText": await page_text(), "pageTitle": title[:200]}, url=url[:300],
+                         approvedTotalCents=amount["cents"], currency=amount["currency"], store=amount["store"])
+        if same is True:
+            break
+        S.emit("payment_total_changed", target=target[:200])
+        shot = await capture_screenshot()
+        hidden = {"pageText": await page_text(), "pageTitle": title[:200], **({"screenshot": shot} if shot else {})}
+        approved = await ask("approval", hidden=hidden, category="payment", action=name, target=target[:200], url=url[:300], reason=reason,
+                             totalChanged=True, question="O valor mudou desde a sua aprovação. Confira o novo total.", **pay_meta)
+        if not is_approved(approved):
+            S.emit("approval_denied", action=name, target=target[:200])
+            return "O total mudou e o usuário não aprovou o novo valor. Não pague; pare e relate."
+    else:
+        return "O total da página continua mudando; não paguei. Pare e relate ao usuário."
+    S.emit("approval_granted", action=name, target=target[:200])
+    return None
 
 # ── Agente (browser-use 0.13.x, ações estruturadas) ──────────────────────────
 def openrouter_provider_prefs(privacy: dict | None) -> dict:
@@ -886,6 +964,8 @@ def build_agent(task: str, model: str, api_key: str, max_steps: int, provider: s
                 except Exception:
                     node = None
                 ftype = str((getattr(node, "attributes", {}) or {}).get("type", "")).lower() if node is not None else ""
+                if looks_like_card_number(params.get("text", "")):
+                    return ActionResult(error="Não digite número de cartão com input. Use fill_payment_card com os índices dos campos (o cartão vem do Cofre ou do cartão seguro do usuário).")
                 if ftype == "password":
                     return ActionResult(error="Não digite senha com input. Use fill_secret (se houver segredo do site) ou request_login(password_index=...) — o usuário preenche num cartão seguro.")
             if name in GATED_ACTIONS:
@@ -898,18 +978,9 @@ def build_agent(task: str, model: str, api_key: str, max_steps: int, provider: s
                 target = await describe_node(browser_session, params.get("index")) if isinstance(params, dict) else ""
                 reason = needs_payment_approval(name, target, url, title, str(params.get("keys", "")) if isinstance(params, dict) else "")
                 if reason:
-                    shot = await capture_screenshot()
-                    if shot:
-                        S.last_screenshot = shot
-                    hidden = {"pageText": await page_text(), "pageTitle": title[:200]}
-                    if shot:
-                        hidden["screenshot"] = shot
-                    approved = await ask("approval", hidden=hidden, category="payment", action=name, target=target[:200], url=url[:300], reason=reason,
-                                         question="O agente quer clicar num botão de pagamento/compra/confirmação de pedido. Aprovar?")
-                    if approved is not True:
-                        S.emit("approval_denied", action=name, target=target[:200])
-                        return ActionResult(error="O usuário NÃO aprovou esta ação de pagamento/compra. Não tente de novo; pare e relate.")
-                    S.emit("approval_granted", action=name, target=target[:200])
+                    err = await payment_gate(name, target, url, title, reason)
+                    if err:
+                        return ActionResult(error=err)
                 else:
                     # Escrita em nome do usuário (enviar/responder e-mail, convite, publicar, excluir, formulário):
                     # pausa e mostra o conteúdo exato que vai sair. Nunca aprovada automaticamente.
@@ -923,7 +994,7 @@ def build_agent(task: str, model: str, api_key: str, max_steps: int, provider: s
                             hidden["screenshot"] = shot
                         approved = await ask("approval", hidden=hidden, category="write", action=name, target=target[:200], url=url[:300], reason=wreason,
                                              question="O agente quer enviar/confirmar algo em seu nome (e-mail, convite, publicação, exclusão ou formulário). Confira o conteúdo e aprove.")
-                        if approved is not True:
+                        if not is_approved(approved):
                             S.emit("approval_denied", action=name, target=target[:200], category="write")
                             return ActionResult(error="O usuário NÃO aprovou esta ação (envio/confirmação). Não tente de novo nem por outro caminho; pare e relate.")
                         S.emit("approval_granted", action=name, target=target[:200], category="write")
@@ -1054,6 +1125,48 @@ def build_agent(task: str, model: str, api_key: str, max_steps: int, provider: s
         return ActionResult(extracted_content=f"Preenchi {', '.join(typed)} no site {host} (valores do cartão seguro; você não os vê). Clique em Entrar/Próximo. "
                                               "Se o site disser que o login ou a senha está errado, chame request_login de novo.",
                             long_term_memory=f"Login preenchido em {host}: {', '.join(typed)}.")
+
+    @tools.action("Checkout/paywall pede os dados do cartão. Passe os índices dos campos visíveis (number_index obrigatório; exp_index para MM/AA "
+                  "ou exp_month_index/exp_year_index; cvv_index; holder_index; zip_index). O cartão vem do Cofre do usuário ou ele preenche num "
+                  "cartão seguro; você nunca vê o número. Se o site recusar o cartão, chame de novo com refused=true. Pagar ainda exige aprovação.")
+    async def fill_payment_card(browser_session: BrowserSession, number_index: int, exp_index: int | None = None, exp_month_index: int | None = None,
+                                exp_year_index: int | None = None, cvv_index: int | None = None, holder_index: int | None = None,
+                                zip_index: int | None = None, refused: bool = False):
+        url = ""
+        try:
+            url = await browser_session.get_current_page_url()
+        except Exception:
+            pass
+        host = (urlsplit(url).hostname or "").lower()
+        if not is_public_url(url):
+            return ActionResult(error="Pagamento só em sites públicos.")
+        idx = {"number": number_index, "exp": exp_index, "expMonth": exp_month_index, "expYear": exp_year_index,
+               "cvv": cvv_index, "holder": holder_index, "zip": zip_index}
+        fields = [f for f, i in idx.items() if i is not None]
+        if S.card_attempts >= 3:
+            return ActionResult(error="O cartão foi recusado 3 vezes. Pare: chame done explicando que precisa de um cartão válido.")
+        retry = bool(refused) or S.card_attempts > 0
+        S.card_attempts += 1
+        ans = await ask("card", host=host, url=url[:300], fields=fields, retry=retry)
+        if not isinstance(ans, dict) or not ans.get("number"):
+            return ActionResult(error="O usuário não enviou o cartão (cancelou ou expirou). Pare e relate com done.")
+        last4 = re.sub(r"\D", "", str(ans.get("number")))[-4:]
+        try:
+            for f in fields:
+                v = ans.get(f)
+                if not isinstance(v, str) or not v:
+                    continue
+                KNOWN.add(v)
+                err = await type_into(browser_session, int(idx[f]), v)
+                if err:
+                    return ActionResult(error=err)
+        finally:
+            ans = None  # noqa: F841 — não guarda o cartão
+        S.card_filled = {"last4": last4}
+        S.emit("card_filled", host=host, last4=last4)
+        return ActionResult(extracted_content=f"Cartão final {last4} preenchido (você não vê o número). Agora clique em pagar/assinar: o sistema pede a aprovação do usuário. "
+                                              "Se o site recusar o cartão, chame fill_payment_card de novo com refused=true.",
+                            long_term_memory=f"Cartão final {last4} preenchido.")
 
     @tools.action("O site pede um número de telefone (ex.: para receber código por SMS). O usuário informa num cartão seguro e o número é digitado direto no campo do índice dado.")
     async def request_phone(index: int, question: str, browser_session: BrowserSession):
@@ -1260,6 +1373,8 @@ async def task(request: web.Request) -> web.Response:
             bucket = S.totp_secrets if is_totp_name(s["name"]) else S.allowed_secrets
             bucket[s["name"]] = (str(s.get("boundTo")) if s.get("boundTo") else None)
     S.login_attempts = {}
+    S.card_attempts = 0
+    S.card_filled = None
     S.mail_task = bool(_MAIL_TASK_RE.search(text))
     S.run_id = uuid.uuid4().hex[:12]
     S.agent_task = asyncio.create_task(run_agent(text, model, api_key, max_steps, provider))
@@ -1304,6 +1419,14 @@ async def submit_input(request: web.Request) -> web.Response:
         return j({"ok": False, "error": "kind_mismatch"}, 409)
     if p["kind"] == "approval":
         value: Any = body.get("approve") is True
+        if value and isinstance(body.get("totalCents"), int):
+            value = {"approve": True, "totalCents": body["totalCents"], "currency": str(body.get("currency") or "BRL")[:3], "store": str(body.get("store") or "")[:200]}
+    elif p["kind"] == "payment_check":
+        value = body.get("value") is True
+    elif p["kind"] == "card":
+        raw = body.get("value")
+        allowed = ("number", "exp", "expMonth", "expYear", "cvv", "holder", "zip")
+        value = {f: raw[f][:80] for f in allowed if isinstance(raw, dict) and isinstance(raw.get(f), str) and raw.get(f)} or None
     elif p["kind"] == "login":
         raw = body.get("value")
         if isinstance(raw, dict) and raw.get("connector") == "gmail":

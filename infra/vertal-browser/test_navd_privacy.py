@@ -132,3 +132,79 @@ class SecureFormsTests(unittest.TestCase):
             self.assertEqual(loop.run_until_complete(run()), {"password": "x"})
         finally:
             loop.close()
+
+
+class PaymentGateTests(unittest.TestCase):
+    """Gate de pagamento: sem aprovação não clica; total que muda pergunta de novo."""
+
+    def setUp(self):
+        navd.S.pending.clear()
+        navd.S.events.clear()
+        navd.S.card_filled = None
+        self._orig = (navd.capture_screenshot, navd.page_text)
+
+        async def no_shot():
+            return None
+
+        async def text():
+            return "Total do pedido: R$ 19,90"
+        navd.capture_screenshot = no_shot
+        navd.page_text = text
+
+    def tearDown(self):
+        navd.capture_screenshot, navd.page_text = self._orig
+
+    def run_gate(self, answers):
+        """answers: lista de respostas para cada pedido, na ordem (o 'usuário' e o 'Worker')."""
+        loop = navd.asyncio.new_event_loop()
+        seen = []
+
+        async def go():
+            task = navd.asyncio.ensure_future(navd.payment_gate("click", "Pagar R$ 19,90", "https://loja.com.br/checkout", "Checkout", "pagar"))
+            for ans in answers:
+                for _ in range(50):
+                    await navd.asyncio.sleep(0)
+                    if navd.S.pending:
+                        break
+                p = next(iter(navd.S.pending.values()))
+                seen.append(p["kind"])
+                p["future"].set_result(ans)
+            return await task
+        try:
+            return loop.run_until_complete(go()), seen
+        finally:
+            loop.close()
+
+    def test_no_approval_no_click(self):
+        err, seen = self.run_gate([False])
+        self.assertIn("NÃO aprovou", err)
+        self.assertEqual(seen, ["approval"])
+
+    def test_timeout_none_is_denial(self):
+        err, _ = self.run_gate([None])
+        self.assertIsNotNone(err)
+
+    def test_same_total_clicks(self):
+        err, seen = self.run_gate([{"approve": True, "totalCents": 1990, "currency": "BRL", "store": "loja.com.br"}, True])
+        self.assertIsNone(err)
+        self.assertEqual(seen, ["approval", "payment_check"])
+
+    def test_total_changed_asks_again(self):
+        ok = {"approve": True, "totalCents": 1990, "currency": "BRL"}
+        err, seen = self.run_gate([ok, False, {"approve": True, "totalCents": 2490, "currency": "BRL"}, True])
+        self.assertIsNone(err)
+        self.assertEqual(seen, ["approval", "payment_check", "approval", "payment_check"])
+        self.assertTrue(any(e["type"] == "payment_total_changed" for e in navd.S.events))
+
+    def test_total_changed_and_denied_does_not_pay(self):
+        err, seen = self.run_gate([{"approve": True, "totalCents": 1990, "currency": "BRL"}, False, False])
+        self.assertIn("não aprovou o novo valor", err)
+        self.assertEqual(seen, ["approval", "payment_check", "approval"])
+
+    def test_card_guard_and_luhn(self):
+        self.assertTrue(navd.luhn_ok("4111 1111 1111 1111"))
+        self.assertFalse(navd.luhn_ok("4111 1111 1111 1112"))
+        self.assertTrue(navd.looks_like_card_number("cartão 4111-1111-1111-1111 ok"))
+        self.assertFalse(navd.looks_like_card_number("pedido 20261122 total 1990"))
+        self.assertEqual(navd.approved_amount({"approve": True, "totalCents": 1990, "currency": "BRL"})["cents"], 1990)
+        self.assertIsNone(navd.approved_amount(True))

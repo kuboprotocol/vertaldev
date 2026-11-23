@@ -61,6 +61,7 @@ export type NavigatorStatus =
   | "bad_request"
   | "sandbox_error"
   | "credentials_in_task"
+  | "total_changed"
   | "error";
 
 export const NAVIGATOR_MESSAGES: Record<Exclude<NavigatorStatus, "ok">, string> = {
@@ -77,6 +78,7 @@ export const NAVIGATOR_MESSAGES: Record<Exclude<NavigatorStatus, "ok">, string> 
   bad_request: "Pedido inválido para o navegador.",
   sandbox_error: "O navegador na nuvem não respondeu. Tente abrir de novo.",
   credentials_in_task: "Não mande senha na tarefa: ela iria para o modelo e para o histórico. Salve a senha no Cofre (Segredos) — o navegador preenche sozinho sem ver o valor — ou clique em \"Assumir controle\" e digite você mesmo.",
+  total_changed: "O valor mudou desde que você viu o cartão. Confira o novo total e aprove de novo.",
   error: "Algo falhou no navegador na nuvem.",
 };
 
@@ -224,6 +226,8 @@ export function needsActionApproval(action: string, targetText: unknown, url: un
 export function secretMatchesHost(boundTo: unknown, host: unknown): boolean {
   if (typeof boundTo !== "string" || !boundTo) return false;
   const slug = boundTo.toLowerCase();
+  // Carteira (cartões): nunca casa com host nenhum; só o fluxo de pagamento (fill_payment_card) usa.
+  if (slug === "vertal-wallet") return false;
   const h = String(host ?? "").toLowerCase().replace(/\.$/, "");
   if (!h || isBlockedHost(h)) return false;
   const labels = h.split(".");
@@ -578,7 +582,7 @@ export function eventsForTask<T extends { seq: number; runId?: unknown }>(events
 }
 
 export type InputBody =
-  | { sessionId: string; requestId: string; kind: "approval"; approve: boolean }
+  | { sessionId: string; requestId: string; kind: "approval"; approve: boolean; totalCents?: number; currency?: string }
   | { sessionId: string; requestId: string; kind: "code" | "text"; value: string }
   /** Cartão seguro (login, senha, telefone, semente TOTP, conector): validado com parseAuthInput no Worker. */
   | { sessionId: string; requestId: string; kind: "auth"; body: Record<string, unknown> };
@@ -595,9 +599,12 @@ export function parseInputBody(body: Record<string, unknown>): ParsedNavigator<I
   if (body.kind === "approval") {
     if (typeof body.approve !== "boolean") return { ok: false, status: "bad_request", detail: "approve" };
     if (body.approve && body.confirmed !== true) return { ok: false, status: "bad_request", detail: "confirmation_required" };
-    return { ok: true, data: { sessionId: body.sessionId, requestId, kind: "approval", approve: body.approve } };
+    // O cartão manda o total que o usuário viu: o Worker confere com a página (uma aprovação = um total).
+    const totalCents = Number.isInteger(body.totalCents) && (body.totalCents as number) > 0 ? (body.totalCents as number) : undefined;
+    const currency = typeof body.currency === "string" && /^[A-Z]{3}$/.test(body.currency) ? body.currency : undefined;
+    return { ok: true, data: { sessionId: body.sessionId, requestId, kind: "approval", approve: body.approve, ...(totalCents ? { totalCents } : {}), ...(currency ? { currency } : {}) } };
   }
-  const authKinds = ["login", "phone", "connector"];
+  const authKinds = ["login", "phone", "connector", "card"];
   if (authKinds.includes(String(body.kind)) || (body.kind === "code" && (typeof body.totpSeed === "string" || body.cancel === true))) {
     return { ok: true, data: { sessionId: body.sessionId, requestId, kind: "auth", body } };
   }
@@ -626,7 +633,7 @@ export interface NavigatorEvent {
 
 export interface NavigatorPending {
   id: string;
-  kind: "approval" | "code" | "text" | "secret" | "totp" | "login" | "phone";
+  kind: "approval" | "code" | "text" | "secret" | "totp" | "login" | "phone" | "card";
   question?: string;
   action?: string;
   target?: string;
@@ -661,6 +668,21 @@ export interface NavigatorPending {
   connector?: "gmail";
   /** Nomes das variáveis que o cartão vai criar/atualizar no Cofre. */
   saveAs?: Record<string, string>;
+  /** Pagamento: assinatura recorrente, período e termos de renovação como a página diz. */
+  recurring?: boolean;
+  period?: string;
+  renewalTerms?: string;
+  /** O total mudou depois da aprovação: este é o novo cartão. */
+  totalChanged?: boolean;
+  /** Cartão já preenchido nesta tarefa (só o final). */
+  paySource?: { kind: "card"; last4: string };
+  /** "Você tem R$ X no Vertal Pay. Pagar R$ Y?" — só com saldo real da API (flag ligada). */
+  vertalPayLine?: string;
+  /** Cartão: campos que o checkout pediu; sem cartão válido no Cofre / cartão recusado. */
+  cardFields?: string[];
+  cardRequired?: boolean;
+  /** Cartão salvo sem CVV: o cartão pede só o CVV (rótulo "Visa •••• 4441"). */
+  cvvOnlyFor?: string;
 }
 
 const FORBIDDEN_EVENT_KEYS = new Set(["value", "password", "secret", "token", "apiKey", "api_key", "code"]);
@@ -685,7 +707,7 @@ export function sanitizeEvents(events: unknown): NavigatorEvent[] {
 /** Pedidos que o usuário vê (segredos são resolvidos pelo Worker e só aparecem como aviso). */
 export function sanitizePending(pending: unknown): NavigatorPending[] {
   if (!Array.isArray(pending)) return [];
-  const kinds = new Set(["approval", "code", "text", "secret", "totp", "login", "phone"]);
+  const kinds = new Set(["approval", "code", "text", "secret", "totp", "login", "phone", "card"]);
   return pending
     .filter((p): p is Record<string, unknown> => !!p && typeof p === "object" && kinds.has(String((p as NavigatorPending).kind)) && REQUEST_ID_RE.test(String((p as NavigatorPending).id)))
     .map((p) => {
@@ -711,6 +733,21 @@ export function sanitizePending(pending: unknown): NavigatorPending[] {
       }
       if (typeof p.totalCents === "number" && Number.isFinite(p.totalCents) && p.totalCents >= 0) out.totalCents = Math.round(p.totalCents);
       if (Array.isArray(p.items)) out.items = p.items.filter((i): i is string => typeof i === "string").slice(0, 10).map((i) => i.slice(0, 160));
+      if (out.kind === "approval") {
+        if (p.recurring === true) out.recurring = true;
+        for (const k of ["period", "renewalTerms", "vertalPayLine"] as const) if (typeof p[k] === "string" && p[k]) out[k] = maskSecretLike(String(p[k])).slice(0, 240);
+        if (p.totalChanged === true) out.totalChanged = true;
+        const ps = p.paySource as { kind?: unknown; last4?: unknown } | undefined;
+        if (ps && ps.kind === "card" && typeof ps.last4 === "string" && /^\d{4}$/.test(ps.last4)) out.paySource = { kind: "card", last4: ps.last4 };
+      }
+      if (out.kind === "card") {
+        const cf = Array.isArray(p.cardFields) ? p.cardFields : Array.isArray(p.fields) ? p.fields : [];
+        out.cardFields = cf.filter((f): f is string => typeof f === "string" && ["number", "exp", "expMonth", "expYear", "cvv", "holder", "zip"].includes(f));
+        if (p.cardRequired === true) out.cardRequired = true;
+        if (p.retry === true) out.retry = true;
+        if (typeof p.cvvOnlyFor === "string" && /^[A-Za-z]{2,12} •••• \d{4}$/.test(p.cvvOnlyFor)) out.cvvOnlyFor = p.cvvOnlyFor;
+        for (const k of ["domain"] as const) if (typeof p[k] === "string" && p[k]) out[k] = String(p[k]).slice(0, 120);
+      }
       // Sem categoria (navd antigo) = pagamento, como antes.
       if (out.kind === "approval" && (p.category === "write" || p.category === "payment")) out.category = p.category;
       if (out.kind === "approval" && Array.isArray(p.fields)) {
@@ -935,6 +972,8 @@ export const NAVIGATOR_AUDIT_KINDS = [
   "approval_denied", "auto_approved", "takeover", "release", "settings_changed", "totp_consent",
   // Formulários seguros (22/11): só host/nomes, nunca valores.
   "login_entered", "secret_saved", "phone_entered", "connector_chosen",
+  // Pagamentos (22/11): cada pagamento (aprovado, recusado, automático) com loja/valor/status; ações automáticas.
+  "payment", "auto_action",
 ] as const;
 export type NavigatorAuditKind = (typeof NAVIGATOR_AUDIT_KINDS)[number];
 
@@ -946,7 +985,7 @@ export interface NavigatorAuditRow {
   created_at: string;
 }
 
-const AUDIT_DETAIL_KEYS = ["task", "name", "host", "store", "total", "target", "url", "reason", "limit", "items", "end_reason", "minutes"] as const;
+const AUDIT_DETAIL_KEYS = ["task", "name", "host", "store", "total", "target", "url", "reason", "limit", "items", "end_reason", "minutes", "status", "source", "currency", "cents", "recurring"] as const;
 
 /** URL guardada na auditoria: só origem + caminho (query e fragmento carregam tokens de login/reset). */
 export function auditUrl(raw: string): string {
@@ -1012,6 +1051,8 @@ export function describeAudit(row: Pick<NavigatorAuditRow, "kind" | "detail">): 
     case "login_entered": return `Você preencheu o login pelo cartão seguro${s("host") ? ` em ${s("host")}` : ""}`;
     case "secret_saved": return `Salvo no Cofre: ${s("name")}${s("host") ? ` para ${s("host")}` : ""}`;
     case "phone_entered": return `Você informou um telefone pelo cartão seguro${s("host") ? ` em ${s("host")}` : ""}`;
+    case "payment": return `Pagamento ${s("status") === "auto_approved" ? "automático (dentro do teto)" : s("status") === "approved" ? "aprovado por você" : s("status") === "denied" ? "recusado" : s("status")}${s("store") ? ` em ${s("store")}` : ""}${s("total") ? ` · ${s("total")}` : ""}${s("source") ? ` · ${s("source")}` : ""}`;
+    case "auto_action": return `Ação automática (modo automatizar tudo)${s("target") ? `: ${s("target")}` : ""}${s("url") ? ` em ${hostLabel(s("url"))}` : ""}`;
     case "connector_chosen": return `Você escolheu o conector ${s("name") || "Gmail"} em vez do login no navegador`;
     default: return row.kind;
   }

@@ -30,6 +30,22 @@ export interface NavigatorState {
   inlineApprovalHosts: number;
   /** Tarefa em andamento (fase 4): passos e resposta são só desta tarefa. */
   currentTask: CurrentTask | null;
+  /** Recibos de ações automáticas (pagamento dentro do teto, envio no modo "automatizar tudo"). */
+  receipts: NavigatorReceipt[];
+}
+
+export interface NavigatorReceipt {
+  kind: 'payment' | 'write';
+  store?: string;
+  total?: string;
+  totalCents?: number;
+  currency?: string;
+  recurring?: boolean;
+  source?: string;
+  limit?: string;
+  target?: string;
+  url?: string;
+  at: string;
 }
 
 export interface CurrentTask {
@@ -48,7 +64,7 @@ export interface CurrentTask {
 const INITIAL: NavigatorState = {
   sessionId: null, liveViewUrl: null, controlUrl: null, takeover: false, agentStatus: 'none', runId: null,
   events: [], lastSeq: 0, pending: [], filling: [], screenshot: null, url: null, billedMinutes: 0, creditsPerMinute: 1,
-  busy: false, error: null, panelsMounted: 0, inlineApprovalHosts: 0, currentTask: null,
+  busy: false, error: null, panelsMounted: 0, inlineApprovalHosts: 0, currentTask: null, receipts: [],
 };
 
 let state: NavigatorState = INITIAL;
@@ -146,6 +162,7 @@ export async function poll(): Promise<void> {
         events, lastSeq: res.lastSeq ?? state.lastSeq, pending: res.pending ?? [], filling: res.filling ?? [],
         screenshot: res.screenshot ?? state.screenshot, url: res.url ?? state.url, takeover: !!res.takeover,
         agentStatus: res.agentStatus ?? state.agentStatus, runId: res.runId ?? state.runId, error: null,
+        ...(res.receipts?.length ? { receipts: [...state.receipts, ...(res.receipts as unknown as NavigatorReceipt[])].slice(-20) } : {}),
       });
       // Pedido do agente (código, login, telefone, pergunta): o cartão inline do chat mostra. Só abre o
       // painel lateral se não houver nenhum cartão/painel montado para responder.
@@ -204,13 +221,18 @@ export interface TaskOutcome {
   runId?: string | null;
   /** Última captura da tela quando a tarefa terminou (data:image/jpeg). */
   screenshot?: string | null;
+  receipts?: NavigatorReceipt[];
 }
 
 /** Envia uma tarefa e espera ela terminar (passos chegam pelo poller). */
 export async function runNavigatorTask(
   task: string,
   url?: string,
-  opts: { timeoutMs?: number; maxSteps?: number; model?: string; origin?: string; onStart?: (t: CurrentTask) => void } = {},
+  opts: {
+    timeoutMs?: number; maxSteps?: number; model?: string; origin?: string; onStart?: (t: CurrentTask) => void;
+    /** "Automatizar tudo": só depois do toque do usuário no cartão de confirmação (confirmed: true). */
+    automation?: { confirmed: true; paymentMaxCents?: number; periodMaxCents?: number; merchants?: string[]; allowRecurring?: boolean };
+  } = {},
 ): Promise<TaskOutcome> {
   // Em dia com o sandbox antes de marcar o início da tarefa. Se a sessão que existia
   // terminou (expirou, sandbox sumiu, sem créditos), o poll zera o sessionId: aí abrimos
@@ -229,6 +251,7 @@ export async function runNavigatorTask(
   const baseSeq = state.lastSeq;
   const res = await callNavigator('task', {
     sessionId: state.sessionId, task, ...(url ? { url } : {}), ...(opts.maxSteps ? { maxSteps: opts.maxSteps } : {}), ...(opts.model ? { model: opts.model } : {}),
+    ...(opts.automation ? { automation: opts.automation } : {}),
   });
   if (!res.ok) return { ok: false, message: messageOf(res), steps: 0 };
   const runId = res.runId ?? `run-${Date.now().toString(36)}`;
@@ -236,7 +259,7 @@ export async function runNavigatorTask(
     id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `t-${Date.now().toString(36)}`,
     task, ...(url ? { url } : {}), runId, baseSeq, startedAt: Date.now(), ...(opts.origin ? { origin: opts.origin } : {}),
   };
-  set({ agentStatus: 'running', runId, currentTask: current });
+  set({ agentStatus: 'running', runId, currentTask: current, receipts: [] });
   opts.onStart?.(current);
   const done = await new Promise<NavigatorEvent | null>((resolve) => {
     waiters.set(runId, { runId, baseSeq, resolve });
@@ -250,7 +273,7 @@ export async function runNavigatorTask(
     }, opts.timeoutMs ?? 20 * 60_000);
   });
   const steps = eventsForTask(state.events, current).filter((e) => e.type === 'step').length;
-  const base = { steps, url: state.url, taskId: current.id, runId, screenshot: state.screenshot };
+  const base = { steps, url: state.url, taskId: current.id, runId, screenshot: state.screenshot, receipts: state.receipts };
   if (!done) return { ok: false, message: 'A tarefa do navegador não terminou a tempo (ou a sessão foi encerrada).', ...base };
   const result = typeof done.result === 'string' ? done.result : '';
   return { ok: done.success === true, message: result || (done.success ? 'Tarefa concluída.' : 'A tarefa não foi concluída.'), result, ...base };
@@ -260,10 +283,16 @@ export async function answerNavigator(p: NavigatorPending, answer: { approve: bo
   if (!state.sessionId) return { ok: false, status: 'no_session', message: NAVIGATOR_MESSAGES.no_session };
   const body = 'approve' in answer
     // confirmed: true só sai daqui, do clique do usuário no cartão.
-    ? { sessionId: state.sessionId, requestId: p.id, kind: 'approval', approve: answer.approve, ...(answer.approve ? { confirmed: true } : {}) }
+    // Uma aprovação = um total: manda o total e a moeda que o usuário viu no cartão (o Worker confere com a página).
+    ? {
+      sessionId: state.sessionId, requestId: p.id, kind: 'approval', approve: answer.approve,
+      ...(answer.approve ? { confirmed: true, ...(typeof p.totalCents === 'number' && p.currency ? { totalCents: p.totalCents, currency: p.currency } : {}) } : {}),
+    }
     : { sessionId: state.sessionId, requestId: p.id, kind: p.kind, value: answer.value };
   const res = await callNavigator('input', body);
-  set({ pending: state.pending.filter((x) => x.id !== p.id) });
+  // Total mudou: o cartão continua (o poll traz o valor novo) e o usuário aprova de novo.
+  if (res.status === 'total_changed') set({ error: messageOf(res) });
+  else set({ pending: state.pending.filter((x) => x.id !== p.id) });
   void poll();
   return res;
 }
@@ -274,7 +303,9 @@ export type NavigatorAuthAnswer =
   | { kind: 'code'; value?: string; totpSeed?: string; confirmed?: boolean }
   | { kind: 'phone'; value: string; save: boolean }
   | { kind: 'connector'; connector: 'gmail' }
-  | { kind: 'login' | 'code' | 'phone'; cancel: true };
+  | { kind: 'card'; number: string; exp: string; cvv?: string; holder: string; zip: string; save: boolean; saveCvv?: boolean }
+  | { kind: 'card'; useSaved: true; cvv: string }
+  | { kind: 'login' | 'code' | 'phone' | 'card'; cancel: true };
 
 /**
  * Responde um cartão seguro. Os valores vão direto ao Worker (HTTPS) e saem do estado do
@@ -325,8 +356,11 @@ export async function loadNavigatorSettings(): Promise<NavigatorResponse> {
  * Grava a preferência. Ligar o automático exige `confirmed: true`, que só o clique
  * do usuário no painel envia (o modelo não tem ferramenta para isso).
  */
-export async function saveNavigatorSettings(enabled: boolean, maxCents: number): Promise<NavigatorResponse> {
-  return callNavigator('settings', { autoApproveEnabled: enabled, autoApproveMaxCents: enabled ? maxCents : 0, ...(enabled ? { confirmed: true } : {}) });
+export async function saveNavigatorSettings(
+  enabled: boolean, maxCents: number,
+  extras?: { periodMaxCents: number; periodDays: number; merchants: string[]; allowRecurring: boolean },
+): Promise<NavigatorResponse> {
+  return callNavigator('settings', { autoApproveEnabled: enabled, autoApproveMaxCents: enabled ? maxCents : 0, ...(enabled ? { confirmed: true, ...(extras ?? {}) } : {}) });
 }
 
 /** Histórico para a aba Atividade: sessões e auditoria (segredos só por nome). */

@@ -126,7 +126,8 @@ describe('o que o cartão recebe', () => {
   });
   it('tipos novos de auditoria', () => {
     for (const k of ['login_entered', 'secret_saved', 'phone_entered', 'connector_chosen']) expect(NAVIGATOR_AUDIT_KINDS).toContain(k);
-    const sql = readFileSync(resolve(__dirname, '../../../supabase/migrations/20261122180000_navigator_secure_forms.sql'), 'utf8');
+    // A migration mais nova que recria a constraint precisa listar todos os tipos.
+    const sql = readFileSync(resolve(__dirname, '../../../supabase/migrations/20261122190000_navigator_payments.sql'), 'utf8');
     for (const k of NAVIGATOR_AUDIT_KINDS) expect(sql).toContain(`'${k}'`);
   });
 });

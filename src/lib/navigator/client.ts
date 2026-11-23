@@ -52,6 +52,11 @@ export interface NavigatorResponse {
   /** /activity (fase 2). */
   sessions?: NavigatorSessionSummary[];
   audit?: NavigatorAuditEntry[];
+  /** Recibos de ações automáticas (status). */
+  receipts?: Array<Record<string, unknown>>;
+  /** Cartão seguro: nomes guardados no Cofre. */
+  saved?: string[];
+  saveError?: string;
   /** /audio-ticket: ticket curto do stream de áudio (ver navigatorAudio.ts no Worker). */
   ticket?: string;
 }
