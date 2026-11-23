@@ -8,6 +8,8 @@ const corsHeaders = {
 const SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/gmail.send',
+  // Secretário: organizar (rótulos, arquivar, lido, lixeira) e rascunhos. Conta antiga reconecta (include_granted_scopes).
+  'https://www.googleapis.com/auth/gmail.modify',
   'https://www.googleapis.com/auth/userinfo.email',
   'https://www.googleapis.com/auth/userinfo.profile',
 ].join(' ')

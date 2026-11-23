@@ -5,8 +5,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { functionErrorCode } from '@/lib/functionError';
 import { streamChat, type Msg as CodeMsg } from '@/lib/streamChat';
 import { splitProseAndCode } from '@/lib/builderTurn';
-import type { AgentAction, PanelKey, ToolResult } from './contract';
-import { secretPlaceholders } from './contract';
+import type { AgentAction, GmailChatModifyOp, PanelKey, ToolResult } from './contract';
+import { AGENT_LIMITS, secretPlaceholders } from './contract';
 import { artifactSourceText, type Artifact, type StoredImage } from './artifacts';
 import { loadConnections, parseMcpBody, weatherText } from './connections';
 import { describeDays } from '@/lib/clock/alarms';
@@ -882,14 +882,14 @@ async function runGmailSearch(action: Extract<AgentAction, { tool: 'gmail_search
   const account = await gmailAccount();
   if (!account) return { ...followUp('gmail_search', false, NOT_CONNECTED('O Gmail')), panel: 'connectors' };
   const { data, error } = await supabase.functions.invoke('gmail-list-messages', {
-    body: { accountId: account.id, q: action.query || undefined, maxResults: action.max },
+    body: { accountId: account.id, chatCharge: crypto.randomUUID(), q: action.query || undefined, maxResults: action.max },
   });
-  if (error) return followUp('gmail_search', false, 'Não foi possível ler o Gmail agora.');
-  const messages = ((data?.messages ?? []) as Array<{ from?: string; subject?: string; date?: string; snippet?: string; threadId?: string; labelIds?: string[] }>);
+  if (error) return gmailFailure('gmail_search', error, 'Não foi possível ler o Gmail agora.');
+  const messages = ((data?.messages ?? []) as Array<{ id?: string; from?: string; subject?: string; date?: string; snippet?: string; threadId?: string; labelIds?: string[] }>);
   // thread: para gmail_read / responder na mesma conversa. Marca importantes e não lidos.
   const lines = messages.map((m, i) => {
     const flags = [m.labelIds?.includes('UNREAD') ? 'não lido' : '', m.labelIds?.includes('IMPORTANT') ? 'importante' : ''].filter(Boolean).join(', ');
-    return `${i + 1}. De: ${m.from ?? '?'} | Assunto: ${m.subject ?? '(sem assunto)'} | ${m.date ?? ''}${flags ? ` | ${flags}` : ''}${m.threadId ? ` | thread: ${m.threadId}` : ''}\n   ${m.snippet ?? ''}`;
+    return `${i + 1}. De: ${m.from ?? '?'} | Assunto: ${m.subject ?? '(sem assunto)'} | ${m.date ?? ''}${flags ? ` | ${flags}` : ''}${m.threadId ? ` | thread: ${m.threadId}` : ''}${m.id ? ` | message: ${m.id}` : ''}\n   ${m.snippet ?? ''}`;
   });
   return followUp('gmail_search', true, `Conta ${account.email}. ${messages.length} e-mail(s):\n${lines.join('\n') || '(nenhum)'}`);
 }
@@ -905,6 +905,11 @@ export function formatGmailThread(thread: { threadId?: string; messages?: Array<
       `De: ${s('from')} | Para: ${s('to')} | ${s('date')}`,
       `Assunto: ${s('subject')}${invite ? ' | CONVITE (pergunte Sim/Não/Talvez antes de responder)' : ''}`,
       s('messageIdHeader') ? `Message-ID (in_reply_to): ${s('messageIdHeader')}` : '',
+      s('id') ? `message: ${s('id')}` : '',
+      Array.isArray(m.attachments) && m.attachments.length
+        ? `Anexos: ${(m.attachments as Array<{ filename?: string; mimeType?: string; size?: number; attachmentId?: string }>).slice(0, 10)
+          .map((a) => `${a.filename ?? '?'} (${a.mimeType ?? '?'}, ${Math.round((a.size ?? 0) / 1024)} KB, attachment: ${a.attachmentId ?? '?'})`).join('; ')}`
+        : '',
       body.slice(0, 2_000),
     ].filter(Boolean).join('\n');
   });
@@ -915,8 +920,8 @@ export function formatGmailThread(thread: { threadId?: string; messages?: Array<
 async function runGmailRead(action: Extract<AgentAction, { tool: 'gmail_read' }>): Promise<ActionOutcome> {
   const account = await gmailAccount();
   if (!account) return { ...followUp('gmail_read', false, NOT_CONNECTED('O Gmail')), panel: 'connectors' };
-  const { data, error } = await supabase.functions.invoke('gmail-get-thread', { body: { accountId: account.id, threadId: action.thread } });
-  if (error || !data) return followUp('gmail_read', false, 'Não foi possível abrir essa conversa do Gmail agora.');
+  const { data, error } = await supabase.functions.invoke('gmail-get-thread', { body: { accountId: account.id, chatCharge: crypto.randomUUID(), threadId: action.thread } });
+  if (error || !data) return gmailFailure('gmail_read', error, 'Não foi possível abrir essa conversa do Gmail agora.');
   return followUp('gmail_read', true, `Conta ${account.email}. ${formatGmailThread(data as { threadId?: string; messages?: Array<Record<string, unknown>> })}`);
 }
 
@@ -931,13 +936,103 @@ async function runGmailSend(action: Extract<AgentAction, { tool: 'gmail_send' }>
   if (!ok) return followUp('gmail_send', false, 'O usuário não autorizou o envio.', 'E-mail não enviado.');
   const { error } = await supabase.functions.invoke('gmail-send-message', {
     body: {
-      accountId: account.id, to: action.to, subject: action.subject, body: action.body,
+      accountId: account.id, chatCharge: crypto.randomUUID(), to: action.to, subject: action.subject, body: action.body,
       ...(action.thread ? { threadId: action.thread } : {}),
       ...(action.in_reply_to ? { inReplyTo: action.in_reply_to, references: action.in_reply_to } : {}),
     },
   });
-  if (error) return followUp('gmail_send', false, 'O Gmail recusou o envio.', 'Não foi possível enviar o e-mail.');
+  if (error) return gmailFailure('gmail_send', error, 'O Gmail recusou o envio.', 'Não foi possível enviar o e-mail.');
   return followUp('gmail_send', true, `E-mail enviado para ${action.to} pela conta ${account.email}.`);
+}
+
+/** Conta conectada antes do escopo de organizar: pede para reconectar o Gmail em Conectores. */
+const GMAIL_RECONSENT = 'Para organizar a caixa e criar rascunhos, reconecte o Gmail em Conectores (o Google pede a permissão nova uma vez).';
+
+/** Cada ação do Gmail pelo chat custa 2 créditos (devolvidos se o Gmail falhar). */
+export const GMAIL_NO_CREDITS = 'Você não tem créditos suficientes: cada ação do Gmail pelo chat custa 2 créditos. Recarregue seus créditos para continuar.';
+
+async function gmailFailure(tool: AgentAction['tool'], error: unknown, fallback: string, userMessage?: string): Promise<ActionOutcome> {
+  const code = await functionErrorCode(error);
+  if (code === 'insufficient_credits' || code === 'deduction_failed') return followUp(tool, false, GMAIL_NO_CREDITS, GMAIL_NO_CREDITS);
+  if (code?.startsWith('rate_limit_exceeded')) return followUp(tool, false, 'Muitos pedidos em pouco tempo. Aguarde um minuto e tente de novo.');
+  if (code === 'gmail_needs_reconsent') return { ...followUp(tool, false, GMAIL_RECONSENT), panel: 'connectors' };
+  if (code === 'label_not_found') return followUp(tool, false, 'Esse rótulo não existe no Gmail.');
+  if (code === 'attachment_not_found') return followUp(tool, false, 'Esse anexo não está nesse e-mail.');
+  return followUp(tool, false, fallback, userMessage);
+}
+
+const GMAIL_MODIFY_DONE: Record<GmailChatModifyOp, string> = {
+  read: 'marcado como lido', unread: 'marcado como não lido', archive: 'arquivado', inbox: 'de volta à caixa de entrada',
+  star: 'com estrela', unstar: 'sem estrela', important: 'marcado como importante', not_important: 'desmarcado como importante',
+  label: 'com o rótulo', unlabel: 'sem o rótulo', trash: 'movido para a lixeira', untrash: 'tirado da lixeira',
+};
+
+async function runGmailDraft(action: Extract<AgentAction, { tool: 'gmail_draft' }>): Promise<ActionOutcome> {
+  const account = await gmailAccount();
+  if (!account) return { ...followUp('gmail_draft', false, NOT_CONNECTED('O Gmail')), panel: 'connectors' };
+  // Rascunho não sai da caixa: fica no Gmail para o usuário revisar e enviar.
+  const { error } = await supabase.functions.invoke('gmail-send-message', {
+    body: {
+      accountId: account.id, chatCharge: crypto.randomUUID(), mode: 'draft', to: action.to, subject: action.subject, body: action.body,
+      ...(action.cc ? { cc: action.cc } : {}),
+      ...(action.thread ? { threadId: action.thread } : {}),
+      ...(action.in_reply_to ? { inReplyTo: action.in_reply_to, references: action.in_reply_to } : {}),
+    },
+  });
+  if (error) return gmailFailure('gmail_draft', error, 'Não foi possível salvar o rascunho no Gmail.');
+  return followUp('gmail_draft', true, `Rascunho para ${action.to} salvo nos Rascunhos do Gmail (${account.email}). Nada foi enviado.`);
+}
+
+async function runGmailForward(action: Extract<AgentAction, { tool: 'gmail_forward' }>, ctx: ActionContext): Promise<ActionOutcome> {
+  const account = await gmailAccount();
+  if (!account) return { ...followUp('gmail_forward', false, NOT_CONNECTED('O Gmail')), panel: 'connectors' };
+  const ok = await ctx.approveApi({
+    method: 'ENCAMINHAR E-MAIL', url: `Para ${action.to}${action.cc ? ` (Cc ${action.cc})` : ''}`, host: `Gmail (${account.email})`,
+    reason: action.note ? (action.note.length > 4_000 ? `${action.note.slice(0, 4_000)}…` : action.note) : '(encaminhar sem nota)', secrets: [], hasBody: true,
+  });
+  if (!ok) return followUp('gmail_forward', false, 'O usuário não autorizou o encaminhamento.', 'E-mail não encaminhado.');
+  const { error } = await supabase.functions.invoke('gmail-send-message', {
+    body: { accountId: account.id, chatCharge: crypto.randomUUID(), to: action.to, body: action.note, forwardOf: action.message, ...(action.cc ? { cc: action.cc } : {}) },
+  });
+  if (error) return gmailFailure('gmail_forward', error, 'Não foi possível encaminhar o e-mail.');
+  return followUp('gmail_forward', true, `E-mail encaminhado para ${action.to} pela conta ${account.email}.`);
+}
+
+async function runGmailModify(action: Extract<AgentAction, { tool: 'gmail_modify' }>, ctx: ActionContext): Promise<ActionOutcome> {
+  const account = await gmailAccount();
+  if (!account) return { ...followUp('gmail_modify', false, NOT_CONNECTED('O Gmail')), panel: 'connectors' };
+  const what = action.thread ? 'a conversa' : 'o e-mail';
+  if (action.op === 'trash') {
+    const ok = await ctx.approveApi({
+      method: 'MOVER PARA A LIXEIRA', url: `${what} ${action.thread ?? action.message}`, host: `Gmail (${account.email})`,
+      reason: 'Vai para a lixeira do Gmail (o Gmail apaga de vez depois de 30 dias).', secrets: [], hasBody: false,
+    });
+    if (!ok) return followUp('gmail_modify', false, 'O usuário não autorizou mover para a lixeira.', 'Nada foi para a lixeira.');
+  }
+  const { error } = await supabase.functions.invoke('gmail-modify-message', {
+    body: {
+      accountId: account.id, chatCharge: crypto.randomUUID(), op: action.op,
+      ...(action.thread ? { threadId: action.thread } : { messageId: action.message }),
+      ...(action.labels ? { labels: action.labels } : {}),
+    },
+  });
+  if (error) return gmailFailure('gmail_modify', error, 'Não foi possível organizar no Gmail agora.');
+  const labels = action.labels?.length ? ` "${action.labels.join('", "')}"` : '';
+  return followUp('gmail_modify', true, `Pronto: ${what} ficou ${GMAIL_MODIFY_DONE[action.op]}${labels}.`);
+}
+
+async function runGmailAttachment(action: Extract<AgentAction, { tool: 'gmail_attachment' }>): Promise<ActionOutcome> {
+  const account = await gmailAccount();
+  if (!account) return { ...followUp('gmail_attachment', false, NOT_CONNECTED('O Gmail')), panel: 'connectors' };
+  const { data, error } = await supabase.functions.invoke('gmail-get-thread', {
+    body: { accountId: account.id, chatCharge: crypto.randomUUID(), threadId: action.thread, messageId: action.message, attachmentId: action.attachment },
+  });
+  if (error || !data) return gmailFailure('gmail_attachment', error, 'Não foi possível abrir esse anexo agora.');
+  const d = data as { filename?: string; mimeType?: string; size?: number; text?: string | null };
+  const head = `Anexo ${d.filename ?? '?'} (${d.mimeType ?? '?'}, ${Math.round((d.size ?? 0) / 1024)} KB).`;
+  if (!d.text) return followUp('gmail_attachment', true, `${head} Não é um arquivo de texto: diga ao usuário que dá para abrir no Gmail ou mandar no Notebook para ler.`);
+  const text = d.text.length > AGENT_LIMITS.maxToolResultChars ? `${d.text.slice(0, AGENT_LIMITS.maxToolResultChars)}…` : d.text;
+  return followUp('gmail_attachment', true, `${head}\n${text}`);
 }
 
 async function runSlackSend(action: Extract<AgentAction, { tool: 'slack_send' }>, ctx: ActionContext): Promise<ActionOutcome> {
@@ -1251,6 +1346,14 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
         return await runGmailSend(action, ctx);
       case 'gmail_read':
         return await runGmailRead(action);
+      case 'gmail_draft':
+        return await runGmailDraft(action);
+      case 'gmail_forward':
+        return await runGmailForward(action, ctx);
+      case 'gmail_modify':
+        return await runGmailModify(action, ctx);
+      case 'gmail_attachment':
+        return await runGmailAttachment(action);
       case 'slack_send':
         return await runSlackSend(action, ctx);
       case 'channel_send':
@@ -1425,6 +1528,10 @@ export function actionLabel(action: AgentAction): string {
     case 'gmail_search': return 'Lendo o Gmail';
     case 'gmail_send': return 'Enviando e-mail pelo Gmail';
     case 'gmail_read': return 'Lendo a conversa no Gmail';
+    case 'gmail_draft': return 'Salvando rascunho no Gmail';
+    case 'gmail_forward': return 'Encaminhando e-mail pelo Gmail (você confirma antes)';
+    case 'gmail_modify': return action.op === 'trash' ? 'Movendo para a lixeira do Gmail (você confirma antes)' : 'Organizando o Gmail';
+    case 'gmail_attachment': return 'Lendo o anexo no Gmail';
     case 'slack_send': return 'Enviando mensagem no Slack';
     case 'channel_send': return `Enviando mensagem pelo ${CHANNEL_NAME[action.channel]}`;
     case 'channel_inbox': return 'Lendo as mensagens dos canais';

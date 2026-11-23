@@ -27,6 +27,19 @@ import { NAVIGATOR_LIMITS, normalizeNavigatorUrl } from "./navigatorCore.ts";
 import { EMAIL_RULES, type EmailRoute } from "./emailRouting.ts";
 
 const GMAIL_THREAD_RE = /^[A-Za-z0-9_-]{6,64}$/;
+const GMAIL_ATTACHMENT_RE = /^[A-Za-z0-9_-]{6,1024}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Organizar a caixa pelo chat. "trash" pede aprovação no cartão; o resto é reversível. */
+export const GMAIL_CHAT_MODIFY_OPS = [
+  "read", "unread", "archive", "inbox", "star", "unstar", "important", "not_important",
+  "label", "unlabel", "trash", "untrash",
+] as const;
+export type GmailChatModifyOp = (typeof GMAIL_CHAT_MODIFY_OPS)[number];
+/** Lista de e-mails separados por vírgula (Cc); vazio se algum for inválido. */
+function emailList(v: unknown): string {
+  const parts = str(v, 1_000).split(/[,;]/).map((x) => x.trim()).filter(Boolean).slice(0, 10);
+  return parts.length && parts.every((x) => EMAIL_RE.test(x)) ? parts.join(", ") : "";
+}
 import { parseGithubOp, type GithubOp } from "./githubOps.ts";
 import { YOUTUBE_LIMITS, youtubeVideoId } from "./youtubeCore.ts";
 import { AUTOMATISCH_SECRETS, parseAutomatischOp, type AutomatischOp } from "./automatischCore.ts";
@@ -128,6 +141,11 @@ export type AgentAction =
   | { tool: "gmail_search"; query: string; max: number }
   | { tool: "gmail_send"; to: string; subject: string; body: string; thread?: string; in_reply_to?: string }
   | { tool: "gmail_read"; thread: string }
+  // Gmail como secretário: rascunho, encaminhar, organizar (rótulos/arquivar/lido/lixeira) e ler anexo.
+  | { tool: "gmail_draft"; to: string; subject: string; body: string; cc?: string; thread?: string; in_reply_to?: string }
+  | { tool: "gmail_forward"; message: string; to: string; note: string; cc?: string }
+  | { tool: "gmail_modify"; op: GmailChatModifyOp; thread?: string; message?: string; labels?: string[] }
+  | { tool: "gmail_attachment"; message: string; attachment: string; thread: string }
   | { tool: "spotify"; op: SpotifyChatOp; query?: string; max?: number }
   | { tool: "slack_send"; channel: string; text: string }
   | { tool: "channel_send"; channel: "instagram" | "whatsapp"; to: string; text: string }
@@ -220,9 +238,13 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   podcast_studio: "2-4 créditos por episódio (varia com duração e qualidade)",
   news_feed: "grátis",
   news_weather: "grátis",
-  gmail_search: "grátis",
-  gmail_send: "grátis",
-  gmail_read: "grátis",
+  gmail_search: "2 créditos",
+  gmail_send: "2 créditos (você confirma o envio)",
+  gmail_read: "2 créditos",
+  gmail_draft: "2 créditos",
+  gmail_forward: "2 créditos (você confirma o envio)",
+  gmail_modify: "2 créditos (lixeira pede sua confirmação)",
+  gmail_attachment: "2 créditos",
   spotify: "grátis",
   slack_send: "grátis",
   channel_send: "grátis (você confirma cada envio)",
@@ -743,6 +765,50 @@ export function parseAgentAction(raw: unknown): AgentAction | null {
     case "gmail_read": {
       const thread = str(a.thread, 64);
       return GMAIL_THREAD_RE.test(thread) ? { tool: "gmail_read", thread } : null;
+    }
+    case "gmail_draft": {
+      const to = str(a.to, 254);
+      const subject = str(a.subject, 200).replace(/[\r\n]+/g, " ");
+      const body = str(a.body, 20_000);
+      if (!(EMAIL_RE.test(to) && subject && body)) return null;
+      const thread = str(a.thread, 64);
+      const inReplyTo = str(a.in_reply_to, 300).replace(/[\r\n]+/g, "");
+      const cc = emailList(a.cc);
+      return {
+        tool: "gmail_draft", to, subject, body,
+        ...(cc ? { cc } : {}),
+        ...(GMAIL_THREAD_RE.test(thread) ? { thread } : {}),
+        ...(/^<[^<>\s]+@[^<>\s]+>$/.test(inReplyTo) ? { in_reply_to: inReplyTo } : {}),
+      };
+    }
+    case "gmail_forward": {
+      const message = str(a.message, 64);
+      const to = str(a.to, 254);
+      if (!(GMAIL_THREAD_RE.test(message) && EMAIL_RE.test(to))) return null;
+      const cc = emailList(a.cc);
+      return { tool: "gmail_forward", message, to, note: str(a.note, 5_000), ...(cc ? { cc } : {}) };
+    }
+    case "gmail_modify": {
+      const op = str(a.op, 20) as GmailChatModifyOp;
+      if (!(GMAIL_CHAT_MODIFY_OPS as readonly string[]).includes(op)) return null;
+      const thread = str(a.thread, 64);
+      const message = str(a.message, 64);
+      const target = GMAIL_THREAD_RE.test(thread) ? { thread } : GMAIL_THREAD_RE.test(message) ? { message } : null;
+      if (!target) return null;
+      if (op === "label" || op === "unlabel") {
+        const labels = (Array.isArray(a.labels) ? a.labels : [a.labels])
+          .map((l) => str(l, 100).replace(/[\r\n]+/g, " ")).filter(Boolean).slice(0, 5);
+        return labels.length ? { tool: "gmail_modify", op, ...target, labels } : null;
+      }
+      return { tool: "gmail_modify", op, ...target };
+    }
+    case "gmail_attachment": {
+      const message = str(a.message, 64);
+      const thread = str(a.thread, 64);
+      const attachment = str(a.attachment, 1_024);
+      return GMAIL_THREAD_RE.test(message) && GMAIL_THREAD_RE.test(thread) && GMAIL_ATTACHMENT_RE.test(attachment)
+        ? { tool: "gmail_attachment", message, thread, attachment }
+        : null;
     }
     case "slack_send": {
       const channel = str(a.channel, 64);

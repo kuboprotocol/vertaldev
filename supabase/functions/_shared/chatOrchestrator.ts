@@ -202,6 +202,7 @@ export function isParallelSafe(action: AgentAction): boolean {
     case "world_time":
     case "gmail_search":
     case "gmail_read":
+    case "gmail_attachment":
     case "channel_inbox":
       return true;
     case "spotify":
