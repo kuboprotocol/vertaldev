@@ -160,7 +160,8 @@ export type AgentAction =
   | { tool: "memory"; op: "forget"; query: string }
   | { tool: "plan"; goal: string; tasks: ChatPlanTask[] }
   // Ponte Chat → Vibe Code: start/continue/ask levam prompt; continue/status exigem a conversa.
-  | { tool: "vibe_code"; op: VibeCodeOp; prompt: string; conversationId?: string }
+  // authKit: o Dev aceitou o "Login com Google gerenciado pelo Vertal" (logo do Vertal; marca branca só no Vertal Code).
+  | { tool: "vibe_code"; op: VibeCodeOp; prompt: string; conversationId?: string; authKit?: boolean }
   // Navegador na nuvem: lê, pré-visualiza e (com aprovação do usuário) envia formulários de sites.
   | { tool: "browser_form"; op: BrowserFormOp; url: string; values?: FormValues; submitSelector?: string }
   // Vertal Navigator: navegador na nuvem com sessão persistente (login, navegar, pesquisar dentro de sites).
@@ -298,6 +299,8 @@ export interface AgentPromptContext {
   media?: boolean;
   /** A conversa fala de Automatisch/automação/fluxos: inclui a ferramenta automatisch (ver wantsAutomatisch). */
   automatisch?: boolean;
+  /** A conversa fala de login/cadastro: inclui a oferta do Login com Google gerenciado pelo Vertal (ver wantsAuthKit). */
+  authKit?: boolean;
   /** A conversa fala de Huginn: inclui a ferramenta huginn (ver wantsHuginn). */
   huginn?: boolean;
   /** Pedido sobre o e-mail do usuário (ver emailRoute): "gmail" inclui as regras do conector. */
@@ -375,6 +378,10 @@ const HUGINN_TOOL =
 
 const HUGINN_RULES =
   "Vertal Agentes: ids são números que a ferramenta devolveu; nunca invente. create_agent leva todas as options do tipo (o Vertal Agentes não completa). \"Quando o Vertal Agentes detectar X, rode o fluxo Y\" = connect_to_automatisch (source_agent_id, flow_id; o fluxo precisa de gatilho webhook/catchRawWebhook). \"Quando o fluxo Y rodar, avise o Vertal Agentes\" = connect_from_automatisch (step_id de um passo de ação do Vertal Fluxos). Depois, diga o que ficou ligado e o que falta (testar e publicar o fluxo).";
+
+/** Login com Google gerenciado pelo Vertal: só entra no prompt quando a conversa fala de login (wantsAuthKit). */
+export const AUTH_KIT_RULES =
+  'Login: app/site com login, cadastro ou área logada → ofereça UMA vez o "Login com Google gerenciado pelo Vertal" (tela pronta com e-mail, senha e Google, sem configurar OAuth; logo do Vertal Dev). Aceitou: vibe_code start/continue com "auth_kit":true. Para usar o logo dele (marca branca), ele aceita os termos no botão Login Vertal do Vertal Code; nunca aceite por ele.';
 
 /** Marca branca: Vertal Agentes e Vertal Fluxos são produtos do ecossistema Vertal para o usuário. */
 export const BRAND_RULES =
@@ -510,6 +517,7 @@ function buildPrompt(ctx: AgentPromptContext): string {
     ctx.automatisch ? `${AUTOMATISCH_RULES}\n` : "",
     ctx.huginn ? `${HUGINN_RULES}\n` : "",
     ctx.automatisch || ctx.huginn ? `${BRAND_RULES}\n` : "",
+    ctx.authKit ? `${AUTH_KIT_RULES}\n` : "",
     ctx.memoryEnabled === false ? MEMORY_OFF : ctx.memoryEnabled === null ? MEMORY_UNAVAILABLE : MEMORY_RULES,
     ctx.localNow
       ? `Agora, para o usuário: ${ctx.localNow}${ctx.timezone ? ` (fuso ${ctx.timezone})` : ""}.`
@@ -611,8 +619,9 @@ export function parseVibeCodeAction(a: Record<string, unknown>): Extract<AgentAc
   if (prompt.length < 3) return null;
   if (op === "continue" && !conversationId) return null;
   // "start" sempre abre uma conversa nova no Vibe Code: ignora um id que tenha vindo junto.
-  if (op === "start") return { tool: "vibe_code", op, prompt };
-  return conversationId ? { tool: "vibe_code", op, prompt, conversationId } : { tool: "vibe_code", op, prompt };
+  const authKit = (a.auth_kit === true || a.authKit === true) && op !== "ask" ? { authKit: true } : {};
+  if (op === "start") return { tool: "vibe_code", op, prompt, ...authKit };
+  return conversationId ? { tool: "vibe_code", op, prompt, conversationId, ...authKit } : { tool: "vibe_code", op, prompt, ...authKit };
 }
 
 /** Navegador na nuvem. URL pública obrigatória; valores e botão só fazem sentido em preview/submit. */

@@ -40,7 +40,8 @@ export function vibeCodeRequestBody(action: VibeCodeAction, chatConversationId?:
   switch (action.op) {
     case 'start':
     case 'continue':
-      return { ...base, prompt: action.prompt, mode: 'preview' };
+      // Pelo chat, o kit sai sempre com o logo do Vertal: marca branca exige o checkbox no Vertal Code.
+      return { ...base, prompt: action.prompt, mode: 'preview', ...(action.authKit ? { authKit: { enabled: true, branding: 'vertal' } } : {}) };
     case 'ask':
       return { ...base, prompt: action.prompt, review: { command: 'ask', question: action.prompt } };
     case 'status':

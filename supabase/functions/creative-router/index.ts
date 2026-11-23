@@ -77,6 +77,7 @@ import {
   parseChatOrigin,
 } from "../_shared/chatDelegate.ts";
 import { validatePublicUrl } from "../_shared/security.ts";
+import { wantsAuthKit } from "../_shared/vertalAuthKit.ts";
 import { decodeImageDataUrl, generateChatImage } from "../_shared/chatImage.ts";
 import { GMAIL_SECRETARY_COST } from "../_shared/gmailBilling.ts";
 
@@ -684,6 +685,8 @@ async function handleAgentChat(
   const mediaOn = wantsMedia([...all.slice(-6), ...results.slice(-4)]);
   const automatischOn = !delegated && wantsAutomatisch([...all.slice(-8), ...results.slice(-6)]);
   const huginnOn = !delegated && wantsHuginn([...all.slice(-8), ...results.slice(-6)]);
+  // Login com Google gerenciado pelo Vertal: a oferta só entra quando o Dev fala de login.
+  const authKitOn = !delegated && wantsAuthKit(all.filter((m) => m.role === "user").slice(-6));
   const system = buildAgentSystemPrompt({
     secretNames,
     today: new Date().toISOString().slice(0, 10),
@@ -702,6 +705,7 @@ async function handleAgentChat(
     media: mediaOn,
     automatisch: automatischOn,
     huginn: huginnOn,
+    authKit: authKitOn,
   }) + (delegated ? DELEGATED_CHAT_PROMPT : "");
   const final = agent.data.final === true || brain.planPhase === "final";
   const convo = results.length

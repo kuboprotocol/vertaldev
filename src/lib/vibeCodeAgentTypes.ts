@@ -1,6 +1,7 @@
 // Shared types between the Vibe Code Agent UI and the `vibe-code-agent` edge function.
 import type { DetectedRequirement } from "@/config/connectorCatalog";
 import type { DevContext, ReviewCommand, ReviewFinding, ReviewPayload } from "@/lib/vibeReview/engine";
+import type { AuthKitRequest } from "@/lib/vertalAuthKit";
 import type { AutonomyLevel, ClientAgentState, ModelPack, TaskStatus } from "@/lib/vibePlan/engine";
 
 /** Estado do plano/executor como o navegador recebe (sem a cópia da base; diff pronto). */
@@ -38,6 +39,8 @@ export type VibeStepKind =
   | "handoff"
   /** Fase 4: cartão do Vertal Navigator no chat (/navegar ou ação use_browser do agente). */
   | "navigator"
+  /** Login com Google gerenciado pelo Vertal: kit adicionado (success) ou oferecido (skipped + authKit.offer). */
+  | "auth_kit"
   /** Resposta em texto do agente ao usuário (o balão do chat). */
   | "reply"
   | "error"
@@ -78,6 +81,8 @@ export interface VibeStep {
   delegate?: unknown;
   /** Cartão do Vertal Navigator (kind "navigator"; ver src/lib/navigator/vibeCard.ts). */
   navigator?: unknown;
+  /** Kit de login (kind "auth_kit"). */
+  authKit?: { offer?: boolean; branding?: "vertal" | "white_label"; managed?: boolean };
   /** Botão de ação do passo (só rota interna, ex.: /connectors/github). */
   link?: { href: string; label: string };
   /** O cliente deve seguir sozinho para a próxima tarefa (autonomia semi/full). */
@@ -147,6 +152,8 @@ export interface VibeAgentRequest {
   plan?: VibePlanRequest;
   /** Contexto do Dev: erros recentes, arquivo aberto, decisões da fila. */
   devContext?: DevContext;
+  /** Login com Google gerenciado pelo Vertal (ver src/lib/vertalAuthKit.ts). */
+  authKit?: AuthKitRequest;
 }
 
 export type VibePlanAction =
