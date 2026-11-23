@@ -14,6 +14,7 @@ FROM python:3.12-slim-bookworm
 
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y --no-install-recommends \
   xvfb x11vnc novnc websockify procps ca-certificates curl sudo \
+  pulseaudio pulseaudio-utils ffmpeg \
   fonts-liberation fonts-dejavu-core fonts-noto-color-emoji && \
   rm -rf /var/lib/apt/lists/*
 

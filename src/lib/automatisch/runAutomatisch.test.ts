@@ -29,7 +29,7 @@ describe('runAutomatisch (navegador)', () => {
     expect(approveApi).toHaveBeenCalledTimes(1);
     const req = approveApi.mock.calls[0][0];
     expect(req.secrets).toEqual(['AUTOMATISCH_URL', 'AUTOMATISCH_EMAIL', 'AUTOMATISCH_PASSWORD']);
-    expect(req.method).toBe('AUTOMATISCH');
+    expect(req.method).toBe('VERTAL FLUXOS');
     expect(req.hasBody).toBe(false);
     expect(out.result).toMatchObject({ tool: 'automatisch', ok: true });
     expect(out.result.summary).toContain('Nenhum fluxo');

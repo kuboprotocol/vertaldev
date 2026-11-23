@@ -15,6 +15,7 @@ O Worker do vertal.dev é o único cliente:
   POST /takeover | /release | /stop
   GET  /cookies                      exporta os cookies (CDP Storage.getCookies)
   GET  /pending                      pedidos pendentes (com texto da página, sem screenshot) — auditoria
+  GET  /audio                        áudio do navegador em MP3 (stream; ffmpeg no monitor do PulseAudio)
 
 Regras de segurança aplicadas aqui (as mesmas do núcleo TS navigatorCore.ts):
   * Gate de pagamento: todo clique/tecla cujo alvo pareça pagar/comprar/confirmar
@@ -734,6 +735,8 @@ async def start_chromium() -> None:
         "--remote-debugging-address=127.0.0.1",
         "--no-first-run", "--no-default-browser-check", "--password-store=basic",
         "--disable-dev-shm-usage", "--disable-background-networking", "--disable-sync",
+        # Vídeos da página tocam com som sem clique (o usuário ouve pelo celular, GET /audio).
+        "--autoplay-policy=no-user-gesture-required",
         *CHROMIUM_PRIVACY_FLAGS, "--no-sandbox",
         f"--window-size={VIEWPORT[0]},{VIEWPORT[1]}", "--window-position=0,0",
         "--lang=pt-BR", "about:blank",
@@ -1519,6 +1522,48 @@ async def errors(request: web.Request, handler):
         return j({"ok": False, "error": f"internal_{type(e).__name__}"}, 500)
 
 
+# ─── Áudio do navegador ─────────────────────────────────────────────────────
+# O Chromium toca no sink "vertal" do PulseAudio (start.sh). GET /audio captura o
+# monitor desse sink com ffmpeg e devolve MP3 em stream chunked. Só um ouvinte por
+# vez: um novo pedido derruba o anterior. O Worker é o único cliente (com o token).
+AUDIO_SOURCE = os.environ.get("NAVD_AUDIO_SOURCE", "vertal.monitor")
+AUDIO_CMD = [
+    "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
+    "-f", "pulse", "-i", AUDIO_SOURCE,
+    "-ac", "2", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", "128k",
+    "-flush_packets", "1", "-f", "mp3", "pipe:1",
+]
+_audio_proc: asyncio.subprocess.Process | None = None
+
+
+async def audio(request: web.Request) -> web.StreamResponse:
+    global _audio_proc
+    if not authed(request):
+        return j({"ok": False, "error": "unauthorized"}, 401)
+    if _audio_proc is not None and _audio_proc.returncode is None:
+        _audio_proc.kill()
+    proc = await asyncio.create_subprocess_exec(
+        *AUDIO_CMD, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL, start_new_session=True,
+    )
+    _audio_proc = proc
+    resp = web.StreamResponse(status=200, headers={"Content-Type": "audio/mpeg", "Cache-Control": "no-store"})
+    await resp.prepare(request)
+    try:
+        while True:
+            chunk = await proc.stdout.read(4096)
+            if not chunk:
+                break
+            await resp.write(chunk)
+    except Exception:
+        # Cliente saiu (ou o Worker fechou): encerra o ffmpeg abaixo.
+        pass
+    finally:
+        if proc.returncode is None:
+            proc.kill()
+        await proc.wait()
+    return resp
+
+
 def main() -> None:
     os.environ.update(TELEMETRY_OFF_ENV)
     app = web.Application(middlewares=[errors], client_max_size=4 * 1024 * 1024)
@@ -1526,6 +1571,7 @@ def main() -> None:
         web.get("/health", health), web.post("/init", init), web.post("/task", task), web.get("/events", events),
         web.post("/input", submit_input), web.post("/takeover", takeover), web.post("/release", release),
         web.post("/stop", stop), web.get("/cookies", cookies), web.get("/pending", pending_list),
+        web.get("/audio", audio),
     ])
     signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
     web.run_app(app, host="0.0.0.0", port=PORT, access_log=None, print=None)

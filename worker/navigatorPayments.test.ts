@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Pagamentos do Navigator no Worker: aprovação automática só com pré-aprovação e dentro do teto,
 // cartão da carteira (Cofre) preenchido por id, sem cartão → formulário "Precisa de um cartão válido".
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

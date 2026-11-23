@@ -26,7 +26,7 @@ describe('runHuginn (navegador)', () => {
     invoke.mockResolvedValue({ data: { ok: true, op: 'list_agents', data: { agents: [] }, summary: 'Nenhum agente.\n{}' }, error: null });
     const out = await runHuginn({ tool: 'huginn', op: 'list_agents' }, c);
     const req = approveApi.mock.calls[0][0];
-    expect(req.method).toBe('HUGINN');
+    expect(req.method).toBe('VERTAL AGENTES');
     expect(req.secrets).toEqual(['HUGINN_URL', 'HUGINN_USERNAME', 'HUGINN_PASSWORD']);
     expect(req.hasBody).toBe(false);
     expect(out.result).toMatchObject({ tool: 'huginn', ok: true });
@@ -40,8 +40,8 @@ describe('runHuginn (navegador)', () => {
     const req = approveApi.mock.calls[0][0];
     expect(req.secrets).toEqual(['HUGINN_URL', 'HUGINN_USERNAME', 'HUGINN_PASSWORD', 'AUTOMATISCH_URL', 'AUTOMATISCH_EMAIL', 'AUTOMATISCH_PASSWORD']);
     expect(req.hasBody).toBe(true);
-    expect(req.reason).toContain('Automatisch');
-    expect(actionLabel({ tool: 'huginn', op: 'connect_to_automatisch', source_agent_id: 3, flow_id: FLOW })).toContain('Automatisch');
+    expect(req.reason).toContain('Vertal Fluxos');
+    expect(actionLabel({ tool: 'huginn', op: 'connect_to_automatisch', source_agent_id: 3, flow_id: FLOW })).toContain('Vertal Fluxos');
   });
 
   it('sem permissão não chama o servidor', async () => {

@@ -205,7 +205,7 @@ export function describeAutomatischOp(op: AutomatischOp): string {
       : `Pausar o fluxo ${short(op.flow_id)}…`;
     case "list_executions": return `Listar as execuções${op.status ? ` com status ${op.status}` : ""}${op.page ? ` (página ${op.page})` : ""}`;
     case "get_execution": return `Ler a execução ${short(op.execution_id)}… e o resultado de cada passo`;
-    case "list_apps": return `Listar os apps do Automatisch${op.name ? ` com "${op.name}"` : ""}`;
+    case "list_apps": return `Listar os apps do Vertal Fluxos${op.name ? ` com "${op.name}"` : ""}`;
     case "app_steps": return `Listar os ${op.kind === "triggers" ? "gatilhos" : "ações"} do app ${op.app_key}`;
     case "app_fields": return `Ler os campos de ${op.app_key} → ${op.key}`;
     case "list_connections": return `Listar suas conexões do app ${op.app_key}`;
@@ -214,21 +214,21 @@ export function describeAutomatischOp(op: AutomatischOp): string {
 
 /** Mensagens das respostas (pt-BR), por código. */
 export const AUTOMATISCH_ERROR_MESSAGES: Record<string, string> = {
-  missing_secrets: "Faltam segredos do Automatisch no Cofre (AUTOMATISCH_URL, AUTOMATISCH_EMAIL, AUTOMATISCH_PASSWORD).",
-  bad_url: "AUTOMATISCH_URL no Cofre não é um endereço https válido (ex.: https://sua-instancia.up.railway.app).",
-  url_not_allowed: "Esse endereço do Automatisch não pode ser chamado (só endereços públicos em https).",
-  auth_failed: "O Automatisch recusou o login. Confira AUTOMATISCH_EMAIL e AUTOMATISCH_PASSWORD no Cofre.",
-  forbidden: "Seu usuário do Automatisch não tem permissão para isso.",
-  not_found: "Não encontrado no Automatisch (fluxo, passo, execução ou app).",
-  invalid: "O Automatisch recusou os dados enviados.",
+  missing_secrets: "Faltam segredos do Vertal Fluxos no Cofre (AUTOMATISCH_URL, AUTOMATISCH_EMAIL, AUTOMATISCH_PASSWORD).",
+  bad_url: "AUTOMATISCH_URL no Cofre não é um endereço https válido (ex.: https://fluxos.suaempresa.com.br).",
+  url_not_allowed: "Esse endereço do Vertal Fluxos não pode ser chamado (só endereços públicos em https).",
+  auth_failed: "O Vertal Fluxos recusou o login. Confira AUTOMATISCH_EMAIL e AUTOMATISCH_PASSWORD no Cofre.",
+  forbidden: "Seu usuário do Vertal Fluxos não tem permissão para isso.",
+  not_found: "Não encontrado no Vertal Fluxos (fluxo, passo, execução ou app).",
+  invalid: "O Vertal Fluxos recusou os dados enviados.",
   incomplete_flow: "O fluxo ainda tem passos incompletos: configure e teste cada passo antes de publicar.",
-  rate_limited: "Muitos pedidos ao Automatisch em pouco tempo. Aguarde um minuto.",
-  redirect_blocked: "O Automatisch respondeu com um redirecionamento, que não é seguido por segurança. Confira AUTOMATISCH_URL.",
-  timeout: "O Automatisch não respondeu a tempo.",
-  network_error: "Não foi possível falar com o Automatisch (rede).",
-  bad_response: "O Automatisch respondeu num formato inesperado.",
-  automatisch_error: "O Automatisch não respondeu como esperado.",
-  invalid_input: "Pedido inválido para o Automatisch.",
+  rate_limited: "Muitos pedidos ao Vertal Fluxos em pouco tempo. Aguarde um minuto.",
+  redirect_blocked: "O Vertal Fluxos respondeu com um redirecionamento, que não é seguido por segurança. Confira AUTOMATISCH_URL.",
+  timeout: "O Vertal Fluxos não respondeu a tempo.",
+  network_error: "Não foi possível falar com o Vertal Fluxos (rede).",
+  bad_response: "O Vertal Fluxos respondeu num formato inesperado.",
+  automatisch_error: "O Vertal Fluxos não respondeu como esperado.",
+  invalid_input: "Pedido inválido para o Vertal Fluxos.",
   confirmation_required: "Esta chamada precisa da sua permissão.",
 };
 
@@ -470,7 +470,7 @@ export function summarizeAutomatischResult(op: AutomatischOp, data: unknown): st
     case "list_apps": head = `${arr(d.apps).length} app(s):`; break;
     case "app_steps": head = `${op.kind === "triggers" ? "Gatilhos" : "Ações"} de ${op.app_key}:`; break;
     case "app_fields": head = `Campos de ${op.app_key} → ${op.key} (use as chaves em "parameters"):`; break;
-    case "list_connections": head = arr(d.connections).length ? `Conexões de ${op.app_key}:` : `Nenhuma conexão de ${op.app_key}: o cliente cria no próprio Automatisch.`; break;
+    case "list_connections": head = arr(d.connections).length ? `Conexões de ${op.app_key}:` : `Nenhuma conexão de ${op.app_key}: o cliente cria no próprio Vertal Fluxos.`; break;
   }
   return `${head}\n${json(data)}`.slice(0, AUTOMATISCH_LIMITS.maxSummaryChars);
 }
@@ -570,7 +570,7 @@ export async function runAutomatischOp(
 
 // ─── Quando ligar a ferramenta no prompt ─────────────────────────────────
 
-const AUTOMATISCH_HINTS = /\b(automatisch|automa[çc](?:[aã]o|[oõ]es)|automatiz\w*|workflows?|flows?)\b/i;
+const AUTOMATISCH_HINTS = /\b(automatisch|vertal\s+fluxos|automa[çc](?:[aã]o|[oõ]es)|automatiz\w*|workflows?|flows?)\b/i;
 const FLUXO_HINT = /\bfluxos?\b(?!\s+de\s+caixa)/i;
 
 /** A conversa recente fala de Automatisch/automação/fluxo? (liga a ferramenta automatisch no prompt) */

@@ -19,7 +19,7 @@ export interface HuginnCallResult {
   data?: unknown;
 }
 
-const RATE = 'Muitos pedidos ao Huginn em pouco tempo. Aguarde um minuto.';
+const RATE = 'Muitos pedidos ao Vertal Agentes em pouco tempo. Aguarde um minuto.';
 
 /** Nomes dos segredos que a operação usa (a ponte também usa os do Automatisch). */
 export const huginnSecretsFor = (op: HuginnOp): string[] =>

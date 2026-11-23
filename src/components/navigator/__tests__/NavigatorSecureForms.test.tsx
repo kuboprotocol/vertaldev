@@ -2,7 +2,11 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const { callNavigator } = vi.hoisted(() => ({ callNavigator: vi.fn(async (..._args: unknown[]) => ({ ok: true, status: "ok", saved: ["GOOGLE_COM_PASSWORD"] })) }));
-vi.mock("@/lib/navigator/client", () => ({ callNavigator }));
+vi.mock("@/lib/navigator/client", () => ({
+  callNavigator,
+  // Áudio do navegador (ticket): no teste o prefetch falha em silêncio, o botão fica desligado.
+  navigatorAudioUrl: vi.fn(async () => ({ ok: false, message: "sem áudio no teste" })),
+}));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: { functions: { invoke: vi.fn(async () => ({ data: { url: "https://accounts.google.com/o/oauth2" }, error: null })) } } }));
 
 import { NavigatorRequestCard } from "@/components/navigator/NavigatorSecureForms";

@@ -35,7 +35,8 @@ import {
 import {
   authPendingView, parseAuthInput, pickLoginForHost, pickPhoneForHost, siteSecretNames, siteSlugForHost,
 } from '../supabase/functions/_shared/navigatorAuthForms.ts';
-import { createSandbox, e2bDomain, E2BError, killSandbox, navd, setSandboxTimeout, waitNavd, type E2BEnv, type NavdTarget } from './e2bClient';
+import { createSandbox, e2bDomain, E2BError, killSandbox, navd, navdStream, setSandboxTimeout, waitNavd, type E2BEnv, type NavdTarget } from './e2bClient';
+import { signAudioTicket, verifyAudioTicket } from './navigatorAudio';
 import { decryptWithConnectorKey, encryptWithConnectorKey, EncKeyMissingError, randomPassword, randomToken } from './navigatorCrypto';
 import { isAllowedOrigin } from './spotifyRoutes';
 import { auditWriteKey, openAuditDetail, sealAuditDetail } from '../supabase/functions/_shared/navigatorAuditVault.ts';
@@ -743,8 +744,10 @@ async function cardInput(request: Request, env: NavigatorEnv, userId: string, ro
 export async function handleNavigator(request: Request, env: NavigatorEnv, url: URL): Promise<Response> {
   const route = url.pathname.slice(NAVIGATOR_API_PREFIX.length).replace(/^\/+|\/+$/g, '');
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders(request) });
+  // Áudio: GET com ticket na URL (o <audio> não envia JWT). Antes da checagem de POST/JWT.
+  if (request.method === 'GET' && route === 'audio') return handleAudio(env, url);
   if (request.method !== 'POST') return fail(request, 'bad_request', {}, 405);
-  if (!['start', 'task', 'status', 'input', 'takeover', 'release', 'stop', 'forget', 'settings', 'activity'].includes(route)) return fail(request, 'bad_request', {}, 404);
+  if (!['start', 'task', 'status', 'input', 'takeover', 'release', 'stop', 'forget', 'settings', 'activity', 'audio-ticket'].includes(route)) return fail(request, 'bad_request', {}, 404);
 
   let userId: string | null;
   try {
@@ -769,6 +772,8 @@ export async function handleNavigator(request: Request, env: NavigatorEnv, url: 
         return await settingsRoute(request, env, userId, body);
       case 'activity':
         return await activityRoute(request, env, userId);
+      case 'audio-ticket':
+        return await audioTicketRoute(request, env, userId, body);
       default:
         return await withSession(request, env, userId, route, body);
     }
@@ -780,6 +785,55 @@ export async function handleNavigator(request: Request, env: NavigatorEnv, url: 
     }
     console.error('navigator: erro', route, safeErrorMessage(e));
     return fail(request, 'error', {}, 500);
+  }
+}
+
+/** POST /audio-ticket: ticket curto (10 min) para o <audio> tocar o áudio desta sessão. */
+async function audioTicketRoute(request: Request, env: NavigatorEnv, userId: string, body: Record<string, unknown>): Promise<Response> {
+  const key = navKey(env);
+  if (!key) return fail(request, 'not_configured', {}, 503);
+  const base = parseSessionBody(body);
+  if (!base.ok) return fail(request, base.status, { detail: base.detail }, 400);
+  const row = await loadSession(env, userId, base.data.sessionId);
+  if (!row) return fail(request, 'no_session', {}, 404);
+  if (row.status === 'ended' || !row.sandbox_id || Date.parse(row.expires_at) <= Date.now()) return fail(request, 'session_ended');
+  const { ticket, expiresAt } = await signAudioTicket(key, base.data.sessionId);
+  return json(request, { ok: true, status: 'ok', ticket, expiresAt: new Date(expiresAt).toISOString() });
+}
+
+/**
+ * GET /audio?ticket=… : repassa o MP3 do áudio do navegador (navd /audio) ao <audio>
+ * do celular. Sem JWT: o ticket HMAC prova que foi emitido pelo Worker para esta sessão.
+ */
+async function handleAudio(env: NavigatorEnv, url: URL): Promise<Response> {
+  const plain = (status: number, text: string) =>
+    new Response(text, { status, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' } });
+  const key = navKey(env);
+  if (!key || !env.E2B_API_KEY || !env.SUPABASE_SECRET_KEY) return plain(503, NAVIGATOR_MESSAGES.not_configured);
+  const sessionId = await verifyAudioTicket(key, url.searchParams.get('ticket') ?? '');
+  if (!sessionId) return plain(401, 'unauthorized');
+  try {
+    const rows = await sessions(env).select<SessionRow>({ id: `eq.${sessionId}`, limit: '1' });
+    const row = rows[0];
+    if (!row || row.status === 'ended' || !row.sandbox_id || Date.parse(row.expires_at) <= Date.now()) return plain(410, 'session_ended');
+    const s = await secretsOf(env, row);
+    const upstream = await navdStream(env, { sandboxId: row.sandbox_id, token: s.token }, '/audio');
+    if (!upstream.ok || !upstream.body) {
+      await upstream.body?.cancel().catch(() => undefined);
+      return plain(502, 'sandbox_error');
+    }
+    return new Response(upstream.body, {
+      status: 200,
+      headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
+    });
+  } catch (e) {
+    if (e instanceof EncKeyMissingError) return plain(503, NAVIGATOR_MESSAGES.not_configured);
+    if (e instanceof E2BError) {
+      console.error('navigator: audio', safeErrorMessage(e));
+      return plain(502, 'sandbox_error');
+    }
+    console.error('navigator: audio erro', safeErrorMessage(e));
+    return plain(500, 'error');
   }
 }
 

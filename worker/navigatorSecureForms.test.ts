@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Formulários seguros do Navigator no Worker: o valor vai do cartão ao navd e ao Cofre
 // (cifrado, vinculado ao domínio), nunca para a resposta, a auditoria ou o log.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
