@@ -89,6 +89,15 @@ import {
 } from "../_shared/vibePlandexEngine.ts";
 import { type PlanActionName, PlanError, parsePlanRequest, READ_ONLY_PLAN_ACTIONS, runPlanAction } from "./plan.ts";
 import { type ChatDelegateResult, formatChatAnswerForAgent, type RouterCall, runChatDelegation } from "../_shared/chatDelegate.ts";
+import {
+  AUTH_KIT_OFFER_PROMPT,
+  buildAuthKitFiles,
+  formatAuthKitForPrompt,
+  isAuthKitPath,
+  parseAuthKitRequest,
+  resolveManagedAuth,
+  wantsAuthKit,
+} from "../_shared/vertalAuthKit.ts";
 
 /**
  * Ponte Vibe Code → Vertal Chat: pergunta ao creative-router (tool agent_chat,
@@ -528,6 +537,8 @@ Deno.serve(async (req) => {
     handoff?: unknown;
     /** Fase 4: grava uma troca feita no chat (/navegar, /github, navegador do agente) sem rodar o agente. */
     record?: unknown;
+    /** Login com Google gerenciado pelo Vertal: {enabled, appName?, branding?, logoUrl?, termsAccepted?, termsVersion?}. */
+    authKit?: unknown;
   };
   try {
     body = await req.json();
@@ -1170,8 +1181,17 @@ Deno.serve(async (req) => {
           });
         }
 
+        // Login com Google gerenciado pelo Vertal: ligado = o kit entra na entrega;
+        // desligado e o pedido fala de login = o agente oferece.
+        const authKit = parseAuthKitRequest(body.authKit);
+        const authOffer = !authKit.enabled && wantsAuthKit(prompt);
+        if (authKit.enabled) {
+          for (const w of authKit.warnings) send({ kind: "auth_kit", status: "skipped", title: "Login Vertal", detail: w });
+        }
+
         const system =
           SYSTEM +
+          (authKit.enabled ? formatAuthKitForPrompt(authKit.options) : authOffer ? AUTH_KIT_OFFER_PROMPT : "") +
           (design.enabled ? buildDesignPrompt(design.surface, { target: "react" }) : "") +
           formatMemoriesForPrompt(memories) +
           formatConnectorsForPrompt(connected) +
@@ -1488,6 +1508,30 @@ Deno.serve(async (req) => {
             rejected.push(`${path}: ${problems.join("; ")}`);
           }
         }
+        // Kit de login: arquivos determinísticos (o agente não escreve esses paths).
+        if (authKit.enabled) {
+          for (const path of [...proposed.keys()]) if (isAuthKitPath(path)) proposed.delete(path);
+          const managed = resolveManagedAuth(Deno.env.get("VERTAL_AUTH_SUPABASE_URL"), Deno.env.get("VERTAL_AUTH_SUPABASE_PUBLISHABLE_KEY"));
+          for (const f of buildAuthKitFiles(authKit.options, managed)) proposed.set(f.path, { content: f.content, reason: f.reason });
+          send({
+            kind: "auth_kit",
+            status: "success",
+            title: "Login com Google gerenciado pelo Vertal adicionado",
+            detail: authKit.options.branding === "white_label"
+              ? `Marca branca: logo do Dev e a linha "${authKit.options.footer}" embaixo do formulário.`
+              : "Tela com e-mail, senha e Google, com o logo do Vertal Dev.",
+            authKit: { branding: authKit.options.branding, managed: !!managed },
+          });
+        } else if (authOffer) {
+          send({
+            kind: "auth_kit",
+            status: "skipped",
+            title: "Quer o Login com Google gerenciado pelo Vertal?",
+            detail: "Tela pronta com e-mail, senha e Google, sem configurar OAuth. Ligue em Login Vertal.",
+            authKit: { offer: true },
+          });
+        }
+
         if (Object.keys(reviewProblems).length) {
           send({
             kind: "review",

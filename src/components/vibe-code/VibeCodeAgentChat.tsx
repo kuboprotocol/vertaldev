@@ -54,6 +54,8 @@ import type { VibeChatMessage, VibePlanRequest, VibePlanState, VibeStep, VibeSte
 import type { VibeConversationsApi } from "@/hooks/useVibeConversations";
 import { VibeConversationList } from "./VibeConversationList";
 import { VibeRequirementsCard } from "./VibeRequirementsCard";
+import { VibeAuthKitButton } from "./VibeAuthKitButton";
+import { authKitRequestFromPrefs, loadAuthKitPrefs, saveAuthKitPrefs, type AuthKitPrefs } from "@/lib/vertalAuthKit";
 import { VibeFixQueueCard } from "./VibeFixQueueCard";
 import { VibePlanPanel } from "./VibePlanPanel";
 import { VibeStagedChanges } from "./VibeStagedChanges";
@@ -136,6 +138,7 @@ const STEP_ICON: Record<VibeStepKind, typeof Brain> = {
   design: Palette,
   delegate: MessagesSquare,
   navigator: Globe,
+  auth_kit: ShieldCheck,
   handoff: MessagesSquare,
   reply: MessageSquare,
   error: AlertCircle,
@@ -279,6 +282,15 @@ export function VibeCodeAgentChat({
   const [chatAsking, setChatAsking] = useState(false);
   const [chatAnswers, setChatAnswers] = useState<Array<ChatDelegateResult & { id: string }>>([]);
   const [autoApply, setAutoApply] = useState(false);
+  // Login com Google gerenciado pelo Vertal: escolha do Dev por projeto.
+  const authKitKey = projectId ?? "default";
+  const [authKit, setAuthKitState] = useState<AuthKitPrefs>(() => loadAuthKitPrefs(authKitKey));
+  const [authKitOpen, setAuthKitOpen] = useState(false);
+  useEffect(() => setAuthKitState(loadAuthKitPrefs(authKitKey)), [authKitKey]);
+  const setAuthKit = useCallback((next: AuthKitPrefs) => {
+    setAuthKitState(next);
+    saveAuthKitPrefs(authKitKey, next);
+  }, [authKitKey]);
   const abortRef = useRef<AbortController | null>(null);
 
   // Vibe Reviewer (PR-Agent): fila de correções "um a um, conversando com o Dev".
@@ -1034,7 +1046,7 @@ export function VibeCodeAgentChat({
     browserArmedRef.current.add(assistantId);
 
     try {
-      const call = () => runStream({ prompt, mode: autoApply ? "apply" : "preview", devContext: buildDevContext() }, assistantId);
+      const call = () => runStream({ prompt, mode: autoApply ? "apply" : "preview", devContext: buildDevContext(), authKit: authKitRequestFromPrefs(authKit) }, assistantId);
       if (autoApply) await withWriter("manual", call);
       else await call();
     } catch (e) {
@@ -1147,6 +1159,7 @@ export function VibeCodeAgentChat({
               <VibeConversationList api={conversations} onSelect={(id) => void openConversation(id)} onNew={newConversation} disabled={running} className="h-full" />
             </PopoverContent>
           </Popover>
+          <VibeAuthKitButton prefs={authKit} onChange={setAuthKit} open={authKitOpen} onOpenChange={setAuthKitOpen} disabled={running} />
           <div className="flex items-center gap-2 rounded-full bg-black/40 px-3 py-1 border border-border/20">
             <Label htmlFor="auto-apply" className="text-[10px] font-bold uppercase tracking-tighter text-muted-foreground">
               Auto-Commit
@@ -1277,6 +1290,23 @@ export function VibeCodeAgentChat({
                     </div>
                   );
                 })()}
+
+                {!authKit.enabled && (m.steps ?? []).some((st) => st.kind === "auth_kit" && st.authKit?.offer) && (
+                  <div className={`${surfaceCard} ml-8 flex items-center gap-2 px-3 py-2 text-xs`} data-testid="vibe-auth-kit-offer">
+                    <span className="flex-1">Este app tem login. Quer a tela pronta com Google gerenciada pelo Vertal?</span>
+                    <Button
+                      size="sm"
+                      className="h-7 px-2 text-[11px]"
+                      onClick={() => {
+                        setAuthKit({ ...authKit, enabled: true });
+                        setAuthKitOpen(true);
+                        toast.success("Login Vertal ligado: entra no próximo pedido.");
+                      }}
+                    >
+                      Ligar Login Vertal
+                    </Button>
+                  </div>
+                )}
 
                 {requirementsStep?.requirements && (
                   <div className="pl-8">
