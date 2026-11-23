@@ -24,6 +24,11 @@ describe('catálogo unificado Vertal Dev ↔ Vertal Fluxos', () => {
     expect(airbrake?.name).toBe('Airbrake')
     expect(airbrake?.logoUrl).toBe('/connectors/airbrake.png')
   })
+  it('Airtable mostra o logo oficial no catálogo', () => {
+    const airtable = getConnectorBySlug('fluxos-airtable')
+    expect(airtable?.name).toBe('Airtable')
+    expect(airtable?.logoUrl).toBe('/connectors/airtable.png')
+  })
   it('nenhum texto de UI cita fornecedores do motor', () => {
     const ui = JSON.stringify(connectors.filter(c => c.slug.startsWith('fluxos-')).map(c => [c.name, c.description, c.longDescription, c.features, c.setupSteps]))
     expect(ui).not.toMatch(/automatisch|huginn|railway/i)
