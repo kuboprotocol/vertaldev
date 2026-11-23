@@ -28,6 +28,8 @@ import {
   toGmailRaw,
 } from "../_shared/officeEmail.ts";
 import { getFreshAccessToken, loadAccount } from "../_shared/gmailToken.ts";
+import { decryptSecret as decryptConnectorSecret } from "../_shared/connectorCrypto.ts";
+import { brokerToken, isFluxosSharedApp, makeFluxosKey, verifyFluxosKey } from "../_shared/fluxosBroker.ts";
 import { handleChatBrainOp, loadChatBrain, saveChatBrain } from "../_shared/chatBrain.ts";
 import { callWithTierFallback, chooseAgentTier, ORCHESTRATOR_LIMITS, type AgentTier } from "../_shared/chatOrchestrator.ts";
 import {
@@ -126,6 +128,10 @@ const COSTS: Record<string, number> = {
 
 Deno.serve(withRefundOnFailure(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  // Vertal Fluxos ("Conta do Vertal"): o servidor do Fluxos se autentica com a
+  // chave VERTAL_FLUXOS_KEY do usuário, não com a sessão.
+  if (req.headers.get("X-Vertal-Fluxos-Key")) return await handleFluxosBroker(req);
 
   const user = await getUser(req.headers.get("Authorization"));
   if (!user) {
@@ -993,9 +999,16 @@ async function handleAutomatisch(user: { id: string; email?: string | null }, ra
   const ownHost = new URL(Deno.env.get("SUPABASE_URL")!).host;
   if (host === ownHost) return jsonResponse(400, { error: "url_not_allowed" });
 
+  let vertalKey: string | undefined;
+  if (op.op === "sync_connection") {
+    const secret = Deno.env.get("FLUXOS_BROKER_SECRET");
+    if (!secret) return jsonResponse(503, { error: "fluxos_broker_not_configured" });
+    vertalKey = await makeFluxosKey(user.id, secret);
+  }
+
   const result = await runAutomatischOp(
     op,
-    { url: base, email: env.AUTOMATISCH_EMAIL, password: env.AUTOMATISCH_PASSWORD },
+    { url: base, email: env.AUTOMATISCH_EMAIL, password: env.AUTOMATISCH_PASSWORD, vertalKey },
     {
       fetch: async (url, init) => {
         // Cada chamada fica no mesmo host da base (um redirecionamento não é seguido).
@@ -1015,6 +1028,73 @@ async function handleAutomatisch(user: { id: string; email?: string | null }, ra
   }).then(({ error }) => { if (error) console.error("[creative-router] automatisch log failed:", error.message); });
 
   return jsonResponse(200, result);
+}
+
+// ─── Vertal Fluxos: corretor "Conta do Vertal" ───────────────────────────
+
+/**
+ * Chamado pelo servidor do Vertal Fluxos com a chave do usuário.
+ * ops: whoami | token {app} (access token de curta duração do conector
+ * compartilhado) | api {request} (chamada com segredos do Cofre, para o app
+ * Vertal). Refresh tokens e client secrets nunca saem daqui.
+ */
+async function handleFluxosBroker(req: Request): Promise<Response> {
+  const userId = await verifyFluxosKey(req.headers.get("X-Vertal-Fluxos-Key"), Deno.env.get("FLUXOS_BROKER_SECRET"));
+  if (!userId) return jsonResponse(401, { error: "invalid_key" });
+  const limit = await enforceRateLimit(userId, "fluxos_broker", { max: 120, windowSeconds: 60, userEmail: null });
+  if (!limit.ok) return jsonResponse(429, { error: limit.error });
+
+  const body = await req.json().catch(() => ({})) as { op?: unknown; app?: unknown; request?: unknown };
+  const admin = supaAdmin();
+  if (body.op === "whoami") return jsonResponse(200, { ok: true });
+
+  if (body.op === "token") {
+    if (!isFluxosSharedApp(body.app)) return jsonResponse(400, { error: "invalid_app" });
+    const app = body.app;
+    let token = null;
+    try {
+      token = await brokerToken(userId, app, {
+        gmail: async (uid) => {
+          const { data } = await admin.from("gmail_accounts").select("*").eq("user_id", uid)
+            .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+          return data ? await getFreshAccessToken(admin, data) : null;
+        },
+        spotify: async (uid) => {
+          const internal = Deno.env.get("NAVIGATOR_INTERNAL_TOKEN");
+          if (!internal) return null;
+          const origin = Deno.env.get("VERTAL_WORKER_ORIGIN") ?? "https://vertal.dev";
+          const r = await fetch(`${origin}/api/spotify/internal/token`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-navigator-token": internal },
+            body: JSON.stringify({ user_id: uid }),
+            redirect: "manual",
+            signal: AbortSignal.timeout(15_000),
+          });
+          return r.ok ? await r.json() : null;
+        },
+        apiKey: async (uid, slug) => {
+          const { data } = await admin.from("api_credentials").select("ciphertext, iv, tag")
+            .eq("user_id", uid).eq("connector_slug", slug).maybeSingle();
+          return data ? await decryptConnectorSecret(data) : null;
+        },
+      });
+    } catch (e) {
+      console.error("[creative-router] fluxos token failed:", app, e instanceof Error ? e.message : e);
+      token = null;
+    }
+    await admin.from("connector_activity_logs").insert({
+      user_id: userId, connector_slug: app, event_type: "fluxos_token",
+      message: `Vertal Fluxos pediu acesso a ${app}`, status: token ? "success" : "error", metadata: { app },
+    }).then(({ error }) => { if (error) console.error("[creative-router] fluxos log failed:", error.message); });
+    if (!token) return jsonResponse(404, { error: "not_connected" });
+    return new Response(JSON.stringify(token), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" } });
+  }
+
+  if (body.op === "api") {
+    const { data } = await admin.auth.admin.getUserById(userId);
+    return await handleApiRequest({ id: userId, email: data?.user?.email ?? null }, body.request ?? {});
+  }
+  return jsonResponse(400, { error: "invalid_op" });
 }
 
 // ─── Vertal Chat: Huginn do cliente ──────────────────────────────────────

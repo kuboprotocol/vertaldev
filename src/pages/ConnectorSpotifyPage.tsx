@@ -1,3 +1,4 @@
+import { syncFluxosConnection } from '@/lib/automatisch/fluxosSync'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -23,7 +24,7 @@ export default function ConnectorSpotifyPage() {
   useEffect(() => {
     const err = params.get('error')
     if (err) toast.error(`Falha ao conectar o Spotify: ${err}`)
-    if (params.get('spotify') === 'connected') toast.success('Spotify conectado')
+    if (params.get('spotify') === 'connected') { toast.success('Spotify conectado'); void syncFluxosConnection('spotify') }
     if (err || params.get('spotify')) {
       const next = new URLSearchParams(params)
       next.delete('error'); next.delete('spotify')
