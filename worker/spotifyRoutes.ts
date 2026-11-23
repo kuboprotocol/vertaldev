@@ -11,7 +11,7 @@ import {
   type SpotifyTrack,
 } from '../src/lib/spotify/spotifyCore';
 import {
-  accountRow, accounts, exchangeAuthCode, SpotifyApiError, spotifyCall, type SpotifyAccountRow, type SpotifyEnv,
+  accountRow, accounts, exchangeAuthCode, getFreshAccessToken, SpotifyApiError, spotifyCall, type SpotifyAccountRow, type SpotifyEnv,
 } from './spotifyApi';
 import { getUserId, table } from './supabaseRest';
 
@@ -20,6 +20,8 @@ export const SPOTIFY_API_PREFIX = '/api/spotify';
 export interface SpotifyRoutesEnv extends SpotifyEnv {
   /** Para onde o callback volta quando o state não indica a origem. Padrão: https://vertal.dev. */
   APP_ORIGIN?: string;
+  /** Segredo compartilhado com as funções do Supabase (corretor do Vertal Fluxos). */
+  NAVIGATOR_INTERNAL_TOKEN?: string;
 }
 
 /** Origens que podem chamar a API e para onde o callback pode voltar. */
@@ -83,6 +85,7 @@ export async function handleSpotify(request: Request, env: SpotifyRoutesEnv, url
     if (request.method !== 'POST') return json(request, { ok: false, code: 'bad_request', message: 'Use POST.' }, 405);
     if (route === '/start') return await start(request, env);
     if (route === '/action') return await action(request, env);
+    if (route === '/internal/token') return await internalToken(request, env);
     return json(request, { ok: false, code: 'bad_request', message: 'Rota desconhecida.' }, 404);
   } catch (e) {
     console.error('spotify: erro', route, e instanceof Error ? e.message : e);
@@ -236,4 +239,30 @@ async function runOp(env: SpotifyEnv, account: SpotifyAccountRow, op: SpotifyOp,
   }
 
   throw new SpotifyApiError('bad_request', 400);
+}
+
+const sameSecret = (a: string, b: string) => {
+  if (!a || a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+};
+
+/**
+ * Corretor do Vertal Fluxos: só o servidor do Vertal (com o segredo interno)
+ * pede um access token de curta duração do Spotify de um usuário.
+ */
+async function internalToken(request: Request, env: SpotifyRoutesEnv): Promise<Response> {
+  const secret = env.NAVIGATOR_INTERNAL_TOKEN ?? '';
+  if (!secret || !sameSecret(request.headers.get('x-navigator-token') ?? '', secret)) {
+    return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+  }
+  if (!isConfigured(env)) return new Response(JSON.stringify({ error: 'spotify_not_configured' }), { status: 503 });
+  const body = (await request.json().catch(() => ({}))) as { user_id?: string };
+  const userId = String(body.user_id ?? '');
+  if (!/^[0-9a-f-]{36}$/i.test(userId)) return new Response(JSON.stringify({ error: 'bad_request' }), { status: 400 });
+  const [row] = await accounts(env).select<SpotifyAccountRow>({ user_id: `eq.${userId}` });
+  if (!row) return new Response(JSON.stringify({ error: 'not_connected' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+  const access_token = await getFreshAccessToken(env, row);
+  return new Response(JSON.stringify({ access_token, expires_in: 3000 }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
 }

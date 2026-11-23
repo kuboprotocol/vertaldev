@@ -58,6 +58,7 @@ const AUTOMATISCH_SAMPLES: Record<string, AutomatischOp> = {
   app_steps: { op: 'app_steps', app_key: 'webhook', kind: 'triggers' },
   app_fields: { op: 'app_fields', app_key: 'webhook', kind: 'triggers', key: 'catchRawWebhook' },
   list_connections: { op: 'list_connections', app_key: 'slack' },
+  sync_connection: { op: 'sync_connection', app_key: 'gmail' },
 } as unknown as Record<string, AutomatischOp>;
 
 describe('marca branca: Vertal Agentes e Vertal Fluxos', () => {

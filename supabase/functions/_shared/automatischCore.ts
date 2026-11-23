@@ -19,11 +19,12 @@ export const AUTOMATISCH_SECRETS = ["AUTOMATISCH_URL", "AUTOMATISCH_EMAIL", "AUT
 export const AUTOMATISCH_OPS = [
   "list_flows", "get_flow", "create_flow", "add_step", "update_step", "test_step", "set_flow_status",
   "list_executions", "get_execution", "list_apps", "app_steps", "app_fields", "list_connections",
+  "sync_connection",
 ] as const;
 export type AutomatischOpName = (typeof AUTOMATISCH_OPS)[number];
 
 export const AUTOMATISCH_WRITE_OPS: ReadonlySet<AutomatischOpName> = new Set([
-  "create_flow", "add_step", "update_step", "test_step", "set_flow_status",
+  "create_flow", "add_step", "update_step", "test_step", "set_flow_status", "sync_connection",
 ]);
 
 export const AUTOMATISCH_LIMITS = {
@@ -54,7 +55,13 @@ export type AutomatischOp =
   | { op: "list_apps"; name?: string }
   | { op: "app_steps"; app_key: string; kind: AutomatischStepKind }
   | { op: "app_fields"; app_key: string; kind: AutomatischStepKind; key: string }
-  | { op: "list_connections"; app_key: string };
+  | { op: "list_connections"; app_key: string }
+  // "Conta do Vertal": cria/atualiza a conexão do app compartilhado (e a do app Vertal).
+  | { op: "sync_connection"; app_key: string };
+
+/** Apps que podem usar a "Conta do Vertal" no Fluxos (o app "vertal" é o dos conectores só do Vertal). */
+export const FLUXOS_SYNC_APPS: ReadonlySet<string> = new Set(["gmail", "spotify", "slack", "github", "stripe", "discord", "vertal"]);
+export const FLUXOS_SCREEN_NAME = "Conta do Vertal";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const APP_KEY_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -178,6 +185,10 @@ export function parseAutomatischOp(raw: unknown): AutomatischOp | null {
       const app_key = text(pick(a, "app_key", "appKey"), 64);
       return APP_KEY_RE.test(app_key) ? { op: "list_connections", app_key } : null;
     }
+    case "sync_connection": {
+      const app_key = text(pick(a, "app_key", "appKey"), 64);
+      return FLUXOS_SYNC_APPS.has(app_key) ? { op: "sync_connection", app_key } : null;
+    }
     default:
       return null;
   }
@@ -209,6 +220,7 @@ export function describeAutomatischOp(op: AutomatischOp): string {
     case "app_steps": return `Listar os ${op.kind === "triggers" ? "gatilhos" : "ações"} do app ${op.app_key}`;
     case "app_fields": return `Ler os campos de ${op.app_key} → ${op.key}`;
     case "list_connections": return `Listar suas conexões do app ${op.app_key}`;
+    case "sync_connection": return `Usar sua conta ${op.app_key} do Vertal no Vertal Fluxos`;
   }
 }
 
@@ -269,6 +281,8 @@ export interface AutomatischCreds {
   url: string;
   email: string;
   password: string;
+  /** Chave VERTAL_FLUXOS_KEY do usuário (só para sync_connection; nunca volta na resposta). */
+  vertalKey?: string;
 }
 
 /** Subconjunto do fetch que o executor usa (o servidor injeta o fetch real com timeout e sem redirect). */
@@ -470,13 +484,14 @@ export function summarizeAutomatischResult(op: AutomatischOp, data: unknown): st
     case "list_apps": head = `${arr(d.apps).length} app(s):`; break;
     case "app_steps": head = `${op.kind === "triggers" ? "Gatilhos" : "Ações"} de ${op.app_key}:`; break;
     case "app_fields": head = `Campos de ${op.app_key} → ${op.key} (use as chaves em "parameters"):`; break;
+    case "sync_connection": head = `Conexões "${FLUXOS_SCREEN_NAME}" no Vertal Fluxos:`; break;
     case "list_connections": head = arr(d.connections).length ? `Conexões de ${op.app_key}:` : `Nenhuma conexão de ${op.app_key}: o cliente cria no próprio Vertal Fluxos.`; break;
   }
   return `${head}\n${json(data)}`.slice(0, AUTOMATISCH_LIMITS.maxSummaryChars);
 }
 
 /** Faz a(s) chamada(s) de uma operação, já autenticado. Devolve os dados filtrados. */
-async function perform(op: AutomatischOp, call: (c: Call) => Promise<unknown>): Promise<unknown> {
+async function perform(op: AutomatischOp, call: (c: Call) => Promise<unknown>, vertalKey?: string): Promise<unknown> {
   const data = (body: unknown) => rec(body).data;
   switch (op.op) {
     case "list_flows": {
@@ -529,6 +544,34 @@ async function perform(op: AutomatischOp, call: (c: Call) => Promise<unknown>): 
       const items = arr(data(await call({ method: "GET", path: `/apps/${op.app_key}/connections` })));
       return { connections: items.map((c) => compact({ id: c.id, screenName: rec(c.formattedData).screenName, verified: c.verified })) };
     }
+    case "sync_connection": {
+      if (!vertalKey) throw new AutomatischHttpError("invalid_input");
+      const out: Rec[] = [];
+      for (const app of [...new Set([op.app_key, "vertal"])]) {
+        const items = arr(data(await call({ method: "GET", path: `/apps/${app}/connections` })));
+        const found = items.find((c) => rec(c.formattedData).screenName === FLUXOS_SCREEN_NAME && typeof c.id === "string");
+        // Só a chave do usuário vai para o Fluxos, nunca o token do provedor.
+        const formattedData = app === "vertal"
+          ? { screenName: FLUXOS_SCREEN_NAME, vertalKey }
+          : { screenName: FLUXOS_SCREEN_NAME, vertalBroker: true, vertalKey };
+        let id: string;
+        if (found) {
+          id = String(found.id);
+          await call({ method: "PATCH", path: `/connections/${id}`, body: { formattedData } });
+        } else {
+          id = String(rec(data(await call({ method: "POST", path: `/apps/${app}/connections`, body: { formattedData } }))).id ?? "");
+          if (!UUID_RE.test(id)) throw new AutomatischHttpError("bad_response");
+        }
+        let verified = false;
+        try {
+          verified = rec(data(await call({ method: "POST", path: `/connections/${id}/verify` }))).verified === true;
+        } catch {
+          verified = false; // provedor ainda não conectado no Vertal: a conexão fica pendente
+        }
+        out.push({ app, id, created: !found, verified });
+      }
+      return { connections: out };
+    }
   }
 }
 
@@ -548,12 +591,12 @@ export async function runAutomatischOp(
   try {
     token = await login(deps.fetch, c);
     const t = token;
-    const raw = await perform(op, (callSpec) => send(deps.fetch, base, callSpec, t));
-    const data = scrubSecrets(raw, [t, c.password, c.email]);
+    const raw = await perform(op, (callSpec) => send(deps.fetch, base, callSpec, t), c.vertalKey);
+    const data = scrubSecrets(raw, [t, c.password, c.email, c.vertalKey ?? ""]);
     return { ok: true, op: op.op, data, summary: summarizeAutomatischResult(op, data) };
   } catch (e) {
     const err = e instanceof AutomatischHttpError ? e : new AutomatischHttpError("automatisch_error");
-    const detail = err.detail ? scrubSecrets(err.detail, [token ?? "", c.password, c.email]) : undefined;
+    const detail = err.detail ? scrubSecrets(err.detail, [token ?? "", c.password, c.email, c.vertalKey ?? ""]) : undefined;
     return {
       ok: false, op: op.op, code: err.code,
       message: `${AUTOMATISCH_ERROR_MESSAGES[err.code] ?? AUTOMATISCH_ERROR_MESSAGES.automatisch_error}${detail ? ` (${detail})` : ""}`,

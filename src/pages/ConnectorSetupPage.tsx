@@ -1,3 +1,4 @@
+import { syncFluxosConnection } from '@/lib/automatisch/fluxosSync'
 import { APP_NAME } from '@/config/brand'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -91,6 +92,7 @@ export default function ConnectorSetupPage() {
       if (error) throw error
       if ((data as any)?.error) throw new Error(JSON.stringify((data as any).error))
       const gh = (data as any)?.github as GithubProfile | null
+      void syncFluxosConnection(slug ?? '')
       if (slug === 'github' && gh?.login) {
         setGithubProfile(gh)
         setApiKey('')

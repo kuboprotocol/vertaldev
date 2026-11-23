@@ -1,3 +1,4 @@
+import { syncFluxosConnection } from '@/lib/automatisch/fluxosSync'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
@@ -89,6 +90,7 @@ export default function ConnectorGmailPage() {
     const email = params.get('email')
     if (err) toast.error(`Falha ao conectar Gmail: ${err}`)
     if (gmail === 'connected' && email) toast.success(`${email} conectado com sucesso`)
+    if (gmail === 'connected') void syncFluxosConnection('gmail')
     if (err || gmail) {
       const next = new URLSearchParams(params); next.delete('error'); next.delete('gmail'); next.delete('email')
       setParams(next, { replace: true })
