@@ -1,5 +1,6 @@
 import { Github, CreditCard, Globe, Figma, Server, Smartphone, Cloud, Database, Mail, MessageSquare, Shield, Container, Wallet, Zap, Leaf, Rocket, Terminal, TrendingUp, Instagram, MessageCircle, Music, Workflow, Radar } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { fluxosConnectors, FLUXOS_SHARED_APPS } from './fluxosConnectors'
 
 export interface ConnectorSetupStep {
   title: string
@@ -30,9 +31,11 @@ export interface ConnectorConfig {
   /** URL de um servidor MCP remoto (Streamable HTTP) que o usuário cola no cliente de IA. */
   mcpUrl?: string
   setupSteps: ConnectorSetupStep[]
+  /** Chave do app equivalente no Vertal Fluxos (mesma base de conexão). */
+  fluxosApp?: string
 }
 
-export const connectors: ConnectorConfig[] = [
+const baseConnectors: ConnectorConfig[] = [
   {
     name: 'Vertal.app',
     slug: 'vertal-app',
@@ -602,6 +605,14 @@ export const connectors: ConnectorConfig[] = [
       { title: 'Cole aqui', description: 'A Vertal solicitará assinatura via WalletConnect quando necessário.' },
     ],
   },
+]
+
+export const connectors: ConnectorConfig[] = [
+  ...baseConnectors.map(c => {
+    const app = FLUXOS_SHARED_APPS[c.slug]
+    return app ? { ...c, fluxosApp: app, features: [...c.features, 'Também no Vertal Fluxos'] } : c
+  }),
+  ...fluxosConnectors,
 ]
 
 export function getConnectorBySlug(slug: string): ConnectorConfig | undefined {
