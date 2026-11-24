@@ -4,23 +4,23 @@ import { getMusicCost, getCostMessage, MUSIC_PRICING } from '@/config/musicPrici
 describe('CreativeMusic - Music Pricing', () => {
   it('should calculate cost for single song', () => {
     const cost = getMusicCost(1);
-    expect(cost).toBe(3);
+    expect(cost).toBe(1);
   });
 
   it('should calculate cost for multiple songs', () => {
     const cost = getMusicCost(5);
-    expect(cost).toBe(15);
+    expect(cost).toBe(5);
   });
 
-  it('should have minimum cost of 3 credits', () => {
+  it('should have minimum cost of 1 credit', () => {
     const cost = getMusicCost(0);
-    expect(cost).toBeGreaterThanOrEqual(3);
+    expect(cost).toBeGreaterThanOrEqual(1);
   });
 
   it('should return correct cost message when credits available', () => {
     const message = getCostMessage(1, 100);
     expect(message).toContain('✅');
-    expect(message).toContain('3 crédito');
+    expect(message).toContain('1 crédito');
     expect(message).toContain('R$');
   });
 
@@ -33,7 +33,7 @@ describe('CreativeMusic - Music Pricing', () => {
   it('should calculate correct cost in reais', () => {
     const cost = getMusicCost(1);
     const costInReais = cost * 0.40;
-    expect(costInReais).toBeCloseTo(1.20, 2);
+    expect(costInReais).toBeCloseTo(0.40, 2);
   });
 
   it('should have consistent pricing across music generations', () => {
@@ -43,21 +43,17 @@ describe('CreativeMusic - Music Pricing', () => {
   });
 
   it('should validate pricing configuration', () => {
-    expect(MUSIC_PRICING.costPerSong).toBe(3);
-    expect(MUSIC_PRICING.costInReais).toBe(1.20);
-    expect(MUSIC_PRICING.actualCostUSD).toBe(0.005);
-    expect(MUSIC_PRICING.profitMargin).toBeGreaterThan(0.99);
+    expect(MUSIC_PRICING.costPerSong).toBe(1);
+    expect(MUSIC_PRICING.costInReais).toBe(0.40);
+    // Custo real e margem só entram depois de medidos no provedor.
+    expect(MUSIC_PRICING.actualCostUSD).toBeNull();
+    expect(MUSIC_PRICING.profitMargin).toBeNull();
   });
 
   it('should calculate cost correctly for edge cases', () => {
-    expect(getMusicCost(1)).toBe(3);
-    expect(getMusicCost(10)).toBe(30);
-    expect(getMusicCost(100)).toBe(300);
-  });
-
-  it('should ensure profit margin is high', () => {
-    const margin = MUSIC_PRICING.profitMargin;
-    expect(margin).toBeGreaterThan(0.95);
+    expect(getMusicCost(1)).toBe(1);
+    expect(getMusicCost(10)).toBe(10);
+    expect(getMusicCost(100)).toBe(100);
   });
 
   it('should generate accurate cost message format', () => {

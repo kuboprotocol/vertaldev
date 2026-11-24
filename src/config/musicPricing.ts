@@ -61,11 +61,13 @@ export const MUSIC_MOODS = {
   melancholic: { label: 'Melancólico', emoji: '🌧️' },
 };
 
+// Preço alinhado ao que creative-music já cobra (COST_GEN = 1 crédito).
+// Não aumentar sem antes medir o custo real por música na API do Suno.
 export const MUSIC_PRICING = {
-  costPerSong: 3, // 3 créditos por música
-  costInReais: 1.20, // R$ 1.20 (3 × R$0.40)
-  actualCostUSD: 0.005, // ~$0.005 (FREE tier Llama 2 + music APIs)
-  profitMargin: 0.996, // 99.6% profit margin
+  costPerSong: 1, // 1 crédito por música (igual ao cobrado no backend)
+  costInReais: 0.40, // R$ 0,40 (1 × R$0,40)
+  actualCostUSD: null, // não verificado: o valor antigo (~$0,005) era estimativa de outro provedor
+  profitMargin: null, // só calcular com o custo real medido
 };
 
 export const CREDIT_PACKAGES = [
@@ -101,7 +103,7 @@ export const FREE_TIER = {
 };
 
 export function getMusicCost(count: number): number {
-  return Math.max(3, count * MUSIC_PRICING.costPerSong);
+  return Math.max(1, count * MUSIC_PRICING.costPerSong);
 }
 
 export function getCostMessage(count: number, creditsAvailable: number): string {
