@@ -81,6 +81,7 @@ const AdminTeamsPage = lazy(() => import("./pages/AdminTeamsPage"));
 const AdminSkillsPage = lazy(() => import("./pages/AdminSkillsPage"));
 const DomainsPage = lazy(() => import("./pages/DomainsPage"));
 const CreativePage = lazy(() => import("./pages/CreativePage"));
+const VertalStudioPage = lazy(() => import("./pages/creative/VertalStudioPage"));
 const InvestigationPage = lazy(() => import("./pages/creative/InvestigationPage"));
 const AuditTrailPage = lazy(() => import("./pages/creative/AuditTrailPage"));
 const PresetsPage = lazy(() => import("./pages/creative/PresetsPage"));
@@ -303,6 +304,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/secrets" element={<ProtectedRoute><SecretsVaultPage /></ProtectedRoute>} />
                 
                 <Route path="/creative" element={<ProtectedRoute><CreativeEconomyGate><CreativePage /></CreativeEconomyGate></ProtectedRoute>} />
+                <Route path="/creative/studio" element={<ProtectedRoute><CreativeEconomyGate><ErrorBoundary resourceName="VertalStudio"><VertalStudioPage /></ErrorBoundary></CreativeEconomyGate></ProtectedRoute>} />
                 <Route path="/creative/investigation" element={<ProtectedRoute><CreativeEconomyGate><ErrorBoundary resourceName="InvestigationPage"><InvestigationPage /></ErrorBoundary></CreativeEconomyGate></ProtectedRoute>} />
                 <Route path="/creative/audit" element={<ProtectedRoute><CreativeEconomyGate><ErrorBoundary resourceName="AuditTrailPage"><AuditTrailPage /></ErrorBoundary></CreativeEconomyGate></ProtectedRoute>} />
                 <Route path="/creative/presets" element={<ProtectedRoute><CreativeEconomyGate><ErrorBoundary resourceName="PresetsPage"><PresetsPage /></ErrorBoundary></CreativeEconomyGate></ProtectedRoute>} />
