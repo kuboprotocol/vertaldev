@@ -1,0 +1,43 @@
+// Exemplo de uso na Activity principal (adapte ao seu layout).
+package dev.vertal.node
+
+import android.app.Activity
+import android.os.Bundle
+import android.widget.Button
+import android.widget.Switch
+import android.widget.TextView
+
+class MainActivity : Activity() {
+    private val node get() = (application as VertalNodeApp).node
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
+        // Texto obrigatório: deixa claro que é o Honeygain SDK e o que é o exit node.
+        findViewById<TextView>(R.id.disclosure).text =
+            "O Vertal Node usa o Honeygain SDK. Com a sua permissão, este aparelho vira um ponto de " +
+            "saída (exit node) e compartilha parte da sua internet não usada com clientes verificados " +
+            "da Honeygain. Você pode desligar quando quiser."
+
+        findViewById<Button>(R.id.activate).setOnClickListener { node.activate() }
+
+        // Opt-out sempre visível
+        findViewById<Switch>(R.id.share_switch).setOnCheckedChangeListener { _, checked ->
+            if (checked) node.activate() else node.optOut()
+        }
+        // Depois do login Supabase: node.setAccessToken(session.accessToken)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        node.onResume()
+        findViewById<Switch>(R.id.share_switch).isChecked = node.isOptedIn && node.isRunning
+        findViewById<TextView>(R.id.status).text = when {
+            !node.isOptedIn -> "Sem consentimento — nada está sendo compartilhado."
+            node.isRunning -> "Compartilhando agora"
+            node.lastError != null -> "Parado: ${node.lastError?.message}"
+            else -> "Parado"
+        }
+    }
+}

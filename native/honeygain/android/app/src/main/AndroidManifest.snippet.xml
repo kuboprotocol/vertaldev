@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Trecho para o AndroidManifest.xml do app Vertal Node (Honeygain SDK). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Rodar em segundo plano (HgSdk.isBackground = true) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Android 13+: a notificação do serviço em primeiro plano precisa de permissão -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:name="dev.vertal.node.VertalNodeApp"
+        android:label="Vertal Node">
+        <!-- O serviço em primeiro plano é do próprio hgsdk.aar (manifest merge). Não declare outro. -->
+    </application>
+</manifest>

@@ -1,0 +1,3 @@
+# Binário do Honeygain SDK: baixar do dashboard (scripts/fetch-sdk.sh). Nunca commitar.
+app/libs/*.aar
+local.properties

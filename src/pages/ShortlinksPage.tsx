@@ -10,6 +10,8 @@ import { useAuth } from '@/hooks/useAuth'
 import AnimatedLogo from '@/components/branding/AnimatedLogo'
 import ShortlinksList from '@/components/shortlinks/ShortlinksList'
 import TerraRewardsPanel from '@/components/shortlinks/TerraRewardsPanel'
+import RewardedVideoPanel from '@/components/shortlinks/RewardedVideoPanel'
+import HoneygainNodeCard from '@/components/shortlinks/HoneygainNodeCard'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 
@@ -209,6 +211,17 @@ export default function ShortlinksPage() {
             transition={{ duration: 0.5, delay: 0.28 }}
           >
             <TerraRewardsPanel onWithdrawn={loadData} />
+          </motion.div>
+
+          {/* Vídeo premiado (Google Ad Manager) e Vertal Node (Honeygain SDK) */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.29 }}
+            className="grid gap-4 md:grid-cols-2"
+          >
+            <RewardedVideoPanel onCredited={loadData} />
+            <HoneygainNodeCard />
           </motion.div>
 
           {/* Info Card */}
