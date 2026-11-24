@@ -1,4 +1,5 @@
 // deno-lint-ignore-file no-explicit-any
+/* eslint-disable @typescript-eslint/no-explicit-any -- cliente Supabase sem tipos gerados nas edge functions, como no vibe-code-agent */
 // VERTAL AI API — endpoint compatível com OpenAI para desenvolvedores (marca VERTAL).
 //
 //   GET  …/vertal-ai-api/v1/models

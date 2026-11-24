@@ -1,4 +1,5 @@
 // deno-lint-ignore-file no-explicit-any
+/* eslint-disable @typescript-eslint/no-explicit-any -- cliente Supabase sem tipos gerados nas edge functions, como no vibe-code-agent */
 // VERTAL Code AI — agente de programação 100% na nuvem (aditivo ao Vibe Code).
 //
 //   status          ─► perfis disponíveis, sandbox, cota grátis restante

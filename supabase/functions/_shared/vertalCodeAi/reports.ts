@@ -118,6 +118,7 @@ export function formatReport(m: OpsMetrics): string {
 
 /** Relatório enviado pelo Laércio (texto/CSV/MD): limpa e corta para caber no contexto. */
 export function prepareIngestedReport(name: string, text: string, max = 40_000): { name: string; text: string; truncated: boolean } {
+  // eslint-disable-next-line no-control-regex -- remove caracteres de controle de relatórios enviados
   const clean = text.replace(/\r\n/g, "\n").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
   return { name: name.slice(0, 120) || "relatorio.txt", text: clean.slice(0, max), truncated: clean.length > max };
 }

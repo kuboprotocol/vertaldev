@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- testes com dublês */
 import { describe, expect, it } from "vitest";
 import {
   PROFILES,

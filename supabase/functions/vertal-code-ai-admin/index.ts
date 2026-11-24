@@ -1,4 +1,5 @@
 // deno-lint-ignore-file no-explicit-any
+/* eslint-disable @typescript-eslint/no-explicit-any -- cliente Supabase sem tipos gerados nas edge functions, como no vibe-code-agent */
 // VERTAL Code AI — agente de operação do Vertal Dev (só o operador: papel admin
 // + VERTAL_ADMIN_USER_IDS). Lê métricas, usuários (ids), créditos, erros, PRs e uso
 // da API; monta e envia relatórios; recebe relatórios enviados pelo Laércio.

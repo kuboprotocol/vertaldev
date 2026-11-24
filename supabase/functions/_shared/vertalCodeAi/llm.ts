@@ -27,7 +27,7 @@ export interface ChainResult<T> {
   finishReason: string;
 }
 
-export interface ChainOptions<T> {
+export interface CallChainOptions<T> {
   chain: ResolvedBackend[];
   messages: ChatMessage[];
   effort: ReasoningEffort;
@@ -79,7 +79,7 @@ export function readUsage(data: unknown, messages: ChatMessage[], raw: string): 
  * Tenta a cadeia em ordem: erro HTTP, timeout, resposta vazia ou parse inválido
  * passam para o próximo backend. Nunca expõe o nome do backend na mensagem de erro.
  */
-export async function callChain<T>(o: ChainOptions<T>): Promise<ChainResult<T>> {
+export async function callChain<T>(o: CallChainOptions<T>): Promise<ChainResult<T>> {
   const f = o.fetchImpl ?? fetch;
   const log = o.log ?? ((m: string) => console.warn(m));
   const deadline = Date.now() + (o.budgetMs ?? 130_000);
