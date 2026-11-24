@@ -75,8 +75,8 @@ export function applyEdit(current: string, edit: FileEdit): { ok: true; text: st
   let text = current;
   for (const [i, c] of edit.changes.entries()) {
     const r = replaceOnce(text, c.search, c.replace);
-    if (!r.ok) return { ok: false, error: `troca ${i + 1}: ${r.error}` };
-    text = r.text;
+    if (r.ok === false) return { ok: false, error: `troca ${i + 1}: ${(r as { error: string }).error}` };
+    text = (r as { text: string }).text;
   }
   return { ok: true, text };
 }
@@ -217,13 +217,13 @@ export function applyEdits(currentFiles: Record<string, string>, edits: FileEdit
     const prev = working.get(e.path);
     const base = prev ? prev.after : currentFiles[e.path] ?? "";
     const r = applyEdit(base, e);
-    if (!r.ok) {
-      failures.push({ path: e.path, error: r.error });
+    if (r.ok === false) {
+      failures.push({ path: e.path, error: (r as { error: string }).error });
       continue;
     }
     working.set(e.path, {
       before: prev ? prev.before : currentFiles[e.path] ?? "",
-      after: r.text,
+      after: (r as { text: string }).text,
       action: prev ? prev.action : e.action,
       reasons: [...(prev?.reasons ?? []), ...(e.reason ? [e.reason] : [])],
     });
