@@ -1,0 +1,39 @@
+# VERTAL Code AI · servidor próprio de modelo (Ollama) atrás de um proxy com token.
+# Pensado para CPU (sem GPU): Oracle Ampere A1 (ARM) ou a VM vertal-e2b-vm.
+# Ollama NÃO tem autenticação: ele só escuta na rede interna; o Caddy exige o token.
+services:
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    environment:
+      - OLLAMA_NUM_PARALLEL=1          # 1 pedido por vez (CPU)
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-10m}   # descarrega da RAM quando ocioso
+      - OLLAMA_CONTEXT_LENGTH=${OLLAMA_CONTEXT_LENGTH:-8192}
+    volumes:
+      - ollama:/root/.ollama
+      - ./Modelfile:/vertal/Modelfile:ro
+    # Limites para conviver com o Navigator/E2B na mesma VM. Ajuste no .env.
+    mem_limit: ${OLLAMA_MEM_LIMIT:-6g}
+    cpus: ${OLLAMA_CPUS:-1.5}
+    expose:
+      - "11434"
+
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [ollama]
+    environment:
+      - VERTAL_OLLAMA_TOKEN=${VERTAL_OLLAMA_TOKEN:?defina VERTAL_OLLAMA_TOKEN no .env}
+      - VERTAL_OLLAMA_DOMAIN=${VERTAL_OLLAMA_DOMAIN:?defina VERTAL_OLLAMA_DOMAIN no .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    mem_limit: 128m
+
+volumes:
+  ollama:
+  caddy_data:

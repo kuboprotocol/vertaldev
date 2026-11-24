@@ -1,0 +1,29 @@
+# VERTAL Code AI · guarda de não-regressão. Só roda em PRs que tocam o VERTAL Code AI,
+# então não pesa nos PRs de outras frentes. Prova que o motor existente não foi alterado.
+name: VERTAL Code AI guard
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/functions/vertal-code-ai/**'
+      - 'supabase/functions/_shared/vertalCodeAi/**'
+      - 'src/lib/vertalCodeAi/**'
+      - 'src/components/vertal-code-ai/**'
+      - 'src/pages/VertalCodeAIPage.tsx'
+      - 'scripts/vertal-code-ai/**'
+      - 'infra/vertal-ollama/**'
+
+permissions:
+  contents: read
+
+jobs:
+  engine-unchanged:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Motor do Vertal Code intacto
+        run: node scripts/vertal-code-ai/engine-guard.mjs --base origin/${{ github.base_ref }}

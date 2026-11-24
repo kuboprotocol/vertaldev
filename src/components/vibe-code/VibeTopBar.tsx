@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { VibeCreditMeter } from "./VibeCreditMeter";
+import { VertalCodeAiEntryButton } from "@/components/vertal-code-ai/VertalCodeAiEntryButton";
 
 export function VibeTopBar() {
   const handleDownload = () => {
@@ -30,6 +31,8 @@ export function VibeTopBar() {
       </div>
 
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+        {/* VERTAL Code AI: não renderiza nada com VITE_VERTAL_CODE_AI desligado (padrão). */}
+        <VertalCodeAiEntryButton from="vibe" />
         <VibeCreditMeter />
 
         <div className="hidden items-center gap-1 rounded-full border border-border/60 bg-background/40 p-1 md:flex">

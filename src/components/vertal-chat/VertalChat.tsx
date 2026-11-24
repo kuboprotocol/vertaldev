@@ -28,6 +28,7 @@ import { VertalNavigatorInline } from './VertalNavigatorCard';
 import { previewHtml } from '@/lib/chatAgent/previewHtml';
 import { toast } from 'sonner';
 import { DICTATION_ERROR_TEXT, useDictation } from '@/lib/voice/useDictation';
+import { VertalCodeAiEntryButton } from '@/components/vertal-code-ai/VertalCodeAiEntryButton';
 
 const SIDEBAR_KEY = 'vertal-chat-sidebar';
 const CHAT_ONLY_KEY = 'vertal-chat-only';
@@ -360,6 +361,8 @@ export function VertalChat() {
             </button>
           )}
           <h1 className="min-w-0 flex-1 truncate text-sm font-medium text-foreground/80">{currentTitle ?? 'Vertal Chat'}</h1>
+          {/* VERTAL Code AI: não renderiza nada com VITE_VERTAL_CODE_AI desligado (padrão). */}
+          <VertalCodeAiEntryButton from="chat" />
           <button
             type="button"
             onClick={() => setChatOnly(!chatOnly)}
