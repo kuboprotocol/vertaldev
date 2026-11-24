@@ -14,3 +14,17 @@ describe('bytesToBase64', () => {
     expect(atob(bytesToBase64(big)).length).toBe(big.length);
   });
 });
+
+import { SCANNER_PDF_CREDITS, scannerChargeMessage } from './pricing';
+
+describe('scanner pricing', () => {
+  it('charges 4 credits per PDF', () => {
+    expect(SCANNER_PDF_CREDITS).toBe(4);
+  });
+
+  it('explains charge failures in Portuguese', () => {
+    expect(scannerChargeMessage('insufficient_credits')).toMatch(/Créditos insuficientes/);
+    expect(scannerChargeMessage('Unauthorized')).toMatch(/Entre na sua conta/);
+    expect(scannerChargeMessage(undefined)).toMatch(/Tente de novo/);
+  });
+});

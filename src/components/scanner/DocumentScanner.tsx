@@ -6,6 +6,8 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { buildScanPdf } from '@/lib/scanner/pdf';
 import { deliverPdf, isNativeApp, takeNativePhoto } from '@/lib/scanner/platform';
+import { SCANNER_PDF_CREDITS, scannerChargeMessage } from '@/lib/scanner/pricing';
+import { supabase } from '@/integrations/supabase/client';
 import { enhance, insetQuad, outputSize, warpPerspective, type Pt, type Quad, type ScanMode } from '@/lib/scanner/geometry';
 import { cn } from '@/lib/utils';
 
@@ -168,6 +170,22 @@ export function DocumentScanner() {
     if (pages.length === 0) return;
     setBusy(true);
     try {
+      // Cobra antes de montar o PDF: se faltar saldo, nada é entregue.
+      const { data, error } = await supabase.functions.invoke('scanner-export', {
+        body: { pages: pages.length },
+        headers: { 'X-Idempotency-Key': crypto.randomUUID() },
+      });
+      if (error || !data?.ok) {
+        // Em erro HTTP o corpo (com o código, ex.: insufficient_credits) vem em error.context.
+        let code: string | undefined;
+        try {
+          code = (await (error as { context?: Response } | null)?.context?.json())?.error;
+        } catch {
+          code = undefined;
+        }
+        toast.error(scannerChargeMessage(code));
+        return;
+      }
       const jpegs = [];
       for (const page of pages) {
         const out = processPage(page, mode);
@@ -212,7 +230,7 @@ export function DocumentScanner() {
           aria-label="Escolher fotos do documento"
         />
         <Button variant="secondary" onClick={() => void exportPdf()} disabled={busy || pages.length === 0}>
-          <Download className="mr-2 h-4 w-4" /> {isNativeApp() ? 'Salvar PDF' : 'Exportar PDF'}
+          <Download className="mr-2 h-4 w-4" /> {isNativeApp() ? 'Salvar PDF' : 'Exportar PDF'} · {SCANNER_PDF_CREDITS} créditos
         </Button>
       </div>
 

@@ -1,6 +1,6 @@
 ---
 title: "Scanner de documentos para PDF no navegador — digitalize papéis sem nuvem | Vertal"
-description: "Scanner de documentos gratuito no Vertal: transforme fotos de contratos, recibos e cartas em PDF nítido, com recorte automático de bordas e filtro preto e branco. Processa no seu navegador, sem enviar a imagem para a nuvem."
+description: "Scanner de documentos no Vertal: transforme fotos de contratos, recibos e cartas em PDF nítido, com recorte de perspectiva e filtro preto e branco. PDF por 4 créditos. Processa no seu navegador, sem enviar a imagem para a nuvem."
 keywords: "scanner de documentos, escanear documento, digitalizar documento, foto para PDF, scanner offline, scanner sem nuvem, app de scanner, alternativa Microsoft Lens, escanear no celular, PDF de foto, scanner privado, MakeACopy, Vertal"
 ---
 
@@ -17,7 +17,7 @@ Ele vive no **Painel Criativo** do Vertal Chat. Você pode abri-lo pelo menu de 
 - Digitalizar **contratos, recibos, notas fiscais, cartas e formulários** com a câmera do celular.
 - Fazer um **PDF a partir de fotos** em poucos toques, com várias páginas.
 - Substituir apps de scanner que exigem conta ou enviam seus documentos para a nuvem.
-- Ter uma alternativa **gratuita** ao Microsoft Lens, que foi descontinuado.
+- Ter uma alternativa ao Microsoft Lens, que foi descontinuado, sem enviar o documento para a nuvem.
 
 ## Como usar
 
@@ -71,6 +71,10 @@ O Capacitor gera apps para Android e iOS, não para Mac. Hoje o caminho é o nav
 - A imagem não é enviada para nenhum servidor do Vertal durante a digitalização.
 - Nada de telemetria ou rastreamento na digitalização.
 
+## Créditos
+
+A exportação cobra **4 créditos** do seu saldo, via a função `scanner-export`. O preço fica em `supabase/functions/_shared/scanner.ts` e é o mesmo que o painel mostra no botão. Se faltar saldo, o PDF não é entregue e a mensagem explica o motivo. Fazer a exportação exige entrar na conta, então a página `/scanner` pede login ao salvar.
+
 ## Limites desta versão
 
 - Os cantos são **ajustados à mão**. A detecção automática de bordas ainda não existe no Vertal.
@@ -79,11 +83,11 @@ O Capacitor gera apps para Android e iOS, não para Mac. Hoje o caminho é o nav
 
 ## Perguntas frequentes
 
-**O scanner é gratuito?**
-Sim. Digitalizar e exportar PDF não consome créditos do Vertal.
+**Quanto custa?**
+4 créditos por PDF exportado. Ajustar cantos, trocar o filtro e adicionar páginas não cobra nada; o débito acontece uma vez, quando você salva o PDF. Sem saldo, o PDF não é gerado.
 
 **Funciona offline?**
-A digitalização e a exportação dependem do navegador já carregado. Depois que o painel abre, o processamento não precisa de conexão com servidores do Vertal.
+O recorte e o filtro rodam no aparelho. Salvar o PDF exige conexão e conta, porque a cobrança de 4 créditos é feita no servidor.
 
 **Serve para escanear no celular?**
 Sim. No Android e no iPhone, o app nativo abre a câmera ou a galeria. No navegador do celular, o botão de foto abre a câmera traseira.
