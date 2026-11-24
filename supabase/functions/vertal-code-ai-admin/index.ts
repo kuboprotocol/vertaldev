@@ -22,14 +22,16 @@ import {
   approvalCardText,
   argsHash,
   canonicalJson,
+  decideTool,
   findTool,
-  gate,
   isOperator,
-  reportRecipientAllowed,
+  reportOutbound,
   signApproval,
   verifyApproval,
 } from "../_shared/vertalCodeAi/admin.ts";
 import { aggregate, formatReport, periodRange, prepareIngestedReport } from "../_shared/vertalCodeAi/reports.ts";
+import { ChannelError, type OperatorIdentity, operatorIdentityFromEnv, outboundCardText, parseInbound, parseOutbound } from "../_shared/vertalCodeAi/channels.ts";
+import { type ChannelDeps, readVia, receiveVia, sendVia } from "../_shared/vertalCodeAi/channelAdapters.ts";
 
 const env = (k: string) => Deno.env.get(k) ?? undefined;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -45,7 +47,10 @@ function approvalSecret(): string {
 const AGENT_PROMPT = `Você é o VERTAL Code AI no modo operação, ajudando o Laércio a administrar o Vertal Dev.
 Responda em português do Brasil. Ferramentas disponíveis (use só estas):
 ${ADMIN_TOOLS.filter((t) => t.phase !== "spec").map((t) => `- ${t.name} [${t.risk}]: ${t.description}`).join("\n")}
-Argumentos: period ("daily"|"weekly") para métricas/relatórios; keyId e monthlyCapCredits para chaves; to (opcional) para e-mail.
+Argumentos: period ("daily"|"weekly") para métricas/relatórios; keyId e monthlyCapCredits para chaves.
+Canais: channel = "gmail" | "slack" | "outlook" | "own_email" | "crm:pipedrive" | "crm:hubspot".
+inbox_list {channel, query?, scope?, limit?} (Slack: scope = id do canal; CRM: scope = deals/persons/contacts…); inbox_read {channel, id}.
+send_message {channel, to: [..], subject?, text}; send_report {period, channel?, to?} (padrão: Gmail do Laércio).
 Ações que não são leitura SEMPRE passam por um cartão de aprovação do Laércio; nunca diga que já executou uma delas.
 Responda SOMENTE com JSON: {"reply":"texto curto","calls":[{"tool":"nome","args":{}}]}. Sem ferramentas, "calls": [].`;
 
@@ -71,6 +76,8 @@ Deno.serve(async (req) => {
   if (!operator) return json(404, { error: "not_found" });
 
   const admin: any = createClient(env("SUPABASE_URL")!, env("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+  const me: OperatorIdentity = operatorIdentityFromEnv(env, u.user.email ?? null);
+  const deps = channelDeps(admin, userId, jwt);
   const audit = async (kind: string, detail: Record<string, unknown>) => {
     try {
       const sealed = await sealAuditDetail(auditWriteKey({ NAVIGATOR_AUDIT_KEY: env("NAVIGATOR_AUDIT_KEY"), NAVIGATOR_ENC_KEY: env("NAVIGATOR_ENC_KEY"), CONNECTOR_ENC_KEY: env("CONNECTOR_ENC_KEY") }), userId, kind, detail);
@@ -116,7 +123,7 @@ Deno.serve(async (req) => {
       const cards: Array<{ approvalId: string; token: string; tool: string; text: string; args: unknown }> = [];
       for (const c of calls) {
         const args = c.args && typeof c.args === "object" ? c.args : {};
-        const decision = gate(c.tool, operator, false);
+        const decision = decideTool(c.tool, args as Record<string, unknown>, { operator, approvalVerified: false, me });
         if (decision.kind === "deny") {
           results.push({ tool: String(c.tool), ok: false, result: decision.reason });
           continue;
@@ -134,12 +141,22 @@ Deno.serve(async (req) => {
             continue;
           }
           const token = await signApproval(approvalSecret(), { approvalId: ap.id, adminId: userId, tool: decision.tool.name, argsHash: hash, exp });
-          cards.push({ approvalId: ap.id, token, tool: decision.tool.name, text: approvalCardText(decision.tool, args), args });
+          let text = approvalCardText(decision.tool, args);
+          try {
+            if (decision.tool.name === "send_message") text = outboundCardText(parseOutbound(args));
+            if (decision.tool.name === "send_report") text = outboundCardText(parseOutbound(reportOutbound(args as Record<string, unknown>, me)));
+          } catch {
+            /* fica o texto genérico */
+          }
+          cards.push({ approvalId: ap.id, token, tool: decision.tool.name, text, args });
           await audit("vcai_admin:approval_requested", { name: decision.tool.name, target: canonicalJson(args), status: "pending" });
           continue;
         }
         try {
-          const result = await runReadTool(admin, String(c.tool), args as Record<string, unknown>);
+          // Leitura, ou envio só para o próprio Laércio (decideTool já liberou).
+          const result = ["send_message", "send_report"].includes(String(c.tool))
+            ? await runApprovedTool(admin, String(c.tool), args as Record<string, unknown>, deps, me)
+            : await runReadTool(admin, String(c.tool), args as Record<string, unknown>, deps);
           results.push({ tool: String(c.tool), ok: true, result });
           await audit("vcai_admin:read", { name: String(c.tool), target: canonicalJson(args), status: "ok" });
         } catch (e) {
@@ -180,7 +197,7 @@ Deno.serve(async (req) => {
         await audit("vcai_admin:approval_denied", { name: ap.tool, reason: (check as { reason: string }).reason, status: "denied" });
         return json(403, { error: `Aprovação recusada: ${(check as { reason: string }).reason}.` });
       }
-      const decision = gate(ap.tool, operator, true);
+      const decision = decideTool(ap.tool, ap.args ?? {}, { operator, approvalVerified: true, me });
       if (decision.kind !== "run") return json(403, { error: decision.kind === "deny" ? decision.reason : "Aprovação necessária." });
       // Uso único: só um pedido consegue mudar pending → executing.
       const { data: claimed } = await admin
@@ -192,7 +209,7 @@ Deno.serve(async (req) => {
         .select("id");
       if (!claimed?.length) return json(409, { error: "Este cartão já foi usado ou expirou." });
       try {
-        const result = await runApprovedTool(admin, ap.tool, ap.args ?? {}, { userId, email: u.user.email ?? null, jwt });
+        const result = await runApprovedTool(admin, ap.tool, ap.args ?? {}, deps, me);
         await admin.from("vertal_ai_approvals").update({ status: "done", result }).eq("id", ap.id);
         await audit("vcai_admin:executed", { name: ap.tool, target: canonicalJson(ap.args), status: "done" });
         return json(200, { ok: true, status: "done", result });
@@ -207,6 +224,7 @@ Deno.serve(async (req) => {
     return json(400, { error: "Ação desconhecida." });
   } catch (e) {
     if (e instanceof GatewayError) return json(503, { error: e.message });
+    if (e instanceof ChannelError) return json(e.code === "not_configured" ? 409 : 400, { error: e.message });
     console.error("[vertal-code-ai-admin]", e instanceof Error ? e.message : e);
     return json(500, { error: "Algo deu errado no modo operação." });
   }
@@ -236,7 +254,34 @@ async function listPrs(): Promise<Array<{ number: number; title: string }>> {
   return ((await r.json()) as any[]).map((p) => ({ number: p.number, title: String(p.title).slice(0, 140) }));
 }
 
-async function runReadTool(admin: any, tool: string, args: Record<string, unknown>): Promise<unknown> {
+/** Dependências dos canais: as funções existentes chamadas com o JWT do próprio operador. */
+function channelDeps(admin: any, userId: string, jwt: string): ChannelDeps {
+  return {
+    env,
+    callFunction: async (name, body, opts) => {
+      const qs = opts?.query ? `?${new URLSearchParams(opts.query).toString()}` : "";
+      const r = await fetch(`${env("SUPABASE_URL")}/functions/v1/${name}${qs}`, {
+        method: opts?.method ?? "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}`, apikey: env("SUPABASE_ANON_KEY") ?? "" },
+        body: opts?.method === "GET" || body === null ? undefined : JSON.stringify(body),
+        signal: AbortSignal.timeout(55_000),
+      });
+      return { status: r.status, data: await r.json().catch(() => null) };
+    },
+    gmailAccountId: async () => {
+      const { data } = await admin.from("gmail_accounts").select("id").eq("user_id", userId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      return data?.id ?? null;
+    },
+    smtpSend: async (cfg, msg) => {
+      const nodemailer = (await import("npm:nodemailer@6.9.16")).default;
+      const t = nodemailer.createTransport({ host: cfg.host, port: cfg.port, secure: true, auth: { user: cfg.user, pass: cfg.pass } });
+      const info = await t.sendMail({ from: cfg.from, to: msg.to.join(", "), subject: msg.subject, text: msg.text });
+      return { messageId: info.messageId };
+    },
+  };
+}
+
+async function runReadTool(admin: any, tool: string, args: Record<string, unknown>, deps: ChannelDeps): Promise<unknown> {
   const period = args.period === "weekly" ? "weekly" : "daily";
   switch (tool) {
     case "metrics_overview": {
@@ -268,12 +313,18 @@ async function runReadTool(admin: any, tool: string, args: Record<string, unknow
     }
     case "ops_report":
       return formatReport(await collectMetrics(admin, period));
+    case "inbox_list":
+      return await receiveVia(parseInbound(args), deps);
+    case "inbox_read": {
+      const q = parseInbound(args);
+      return await readVia(q.channel, String(args.id ?? ""), deps);
+    }
     default:
       throw new Error("ferramenta de leitura desconhecida");
   }
 }
 
-async function runApprovedTool(admin: any, tool: string, args: Record<string, unknown>, who: { userId: string; email: string | null; jwt: string }): Promise<unknown> {
+async function runApprovedTool(admin: any, tool: string, args: Record<string, unknown>, deps: ChannelDeps, me: OperatorIdentity): Promise<unknown> {
   const t = findTool(tool);
   if (!t || t.phase === "spec") throw new Error("ferramenta indisponível");
   switch (tool) {
@@ -289,23 +340,12 @@ async function runApprovedTool(admin: any, tool: string, args: Record<string, un
       await admin.from("vertal_ai_api_keys").update({ monthly_cap_credits: cap }).eq("id", args.keyId);
       return { keyId: args.keyId, monthlyCapCredits: cap };
     }
-    case "send_report_email": {
-      const to = typeof args.to === "string" && args.to ? args.to : who.email ?? "";
-      if (!reportRecipientAllowed(to, who.email, (env("VERTAL_ADMIN_REPORT_RECIPIENTS") ?? "").split(","))) {
-        throw new Error("destinatário não permitido (padrão: só o seu e-mail)");
-      }
+    case "send_message":
+      return await sendVia(parseOutbound(args), deps);
+    case "send_report": {
       const period = args.period === "weekly" ? "weekly" : "daily";
       const text = formatReport(await collectMetrics(admin, period));
-      const { data: acct } = await admin.from("gmail_accounts").select("id").eq("user_id", who.userId).limit(1).maybeSingle();
-      if (!acct) throw new Error("conecte o Gmail no Vertal Chat para enviar relatórios");
-      const r = await fetch(`${env("SUPABASE_URL")}/functions/v1/gmail-send-message`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${who.jwt}`, apikey: env("SUPABASE_ANON_KEY") ?? "" },
-        body: JSON.stringify({ accountId: acct.id, to, subject: `Vertal Dev — ${period === "weekly" ? "relatório semanal" : "relatório diário"}`, body: text, mode: "send" }),
-        signal: AbortSignal.timeout(30_000),
-      });
-      if (!r.ok) throw new Error(`envio falhou (${r.status})`);
-      return { sentTo: to };
+      return await sendVia(parseOutbound({ ...reportOutbound(args, me), text }), deps);
     }
     default:
       throw new Error("ferramenta sem executor");

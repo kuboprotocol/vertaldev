@@ -32,7 +32,7 @@ describe("portões de aprovação", () => {
   it("leitura roda; o resto pede cartão; cliente é negado", () => {
     expect(gate("metrics_overview", true, false)).toEqual({ kind: "run" });
     expect(gate("revoke_api_key", true, false)).toMatchObject({ kind: "needs_approval" });
-    expect(gate("send_report_email", true, false)).toMatchObject({ kind: "needs_approval" });
+    expect(gate("send_message", true, false)).toMatchObject({ kind: "needs_approval" });
     expect(gate("set_key_cap", true, true)).toEqual({ kind: "run" });
     expect(gate("metrics_overview", false, true)).toMatchObject({ kind: "deny" });
     expect(gate("rm_rf", true, true)).toMatchObject({ kind: "deny" });

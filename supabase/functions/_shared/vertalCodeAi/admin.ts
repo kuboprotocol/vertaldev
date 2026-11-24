@@ -9,6 +9,7 @@
 //  3. Tudo vai para a auditoria cifrada (mesmo cofre do navigator_audit).
 //  4. Cliente nunca vê nem chama nada disto (isolamento por papel + lista de ids).
 // Módulo puro (WebCrypto): Vitest, navegador e edge function.
+import { channelDecision, type OperatorIdentity, parseInbound, parseOutbound } from "./channels.ts";
 
 export type ToolRisk = "read" | "write" | "destructive" | "money" | "deploy" | "user_facing";
 
@@ -28,7 +29,10 @@ export const ADMIN_TOOLS: AdminTool[] = [
   { name: "list_prs", risk: "read", description: "Pull requests abertos do repositório do Vertal.", phase: 1 },
   { name: "api_usage", risk: "read", description: "Uso da API VERTAL por chave (tokens, créditos).", phase: 1 },
   { name: "ops_report", risk: "read", description: "Monta o relatório de operação (diário/semanal) sem enviar.", phase: 1 },
-  { name: "send_report_email", risk: "user_facing", description: "Envia o relatório por e-mail (padrão: só para o Laércio).", phase: 1 },
+  { name: "inbox_list", risk: "read", description: "Lista o que chegou num canal (gmail, slack, outlook, crm:pipedrive, crm:hubspot). Só leitura.", phase: 1 },
+  { name: "inbox_read", risk: "read", description: "Abre um item de um canal (fio do e-mail, canal do Slack, registros do CRM). Só leitura.", phase: 1 },
+  { name: "send_message", risk: "user_facing", description: "Envia por um canal (gmail, slack, outlook, own_email) ou registra nota no CRM. Para o próprio Laércio vai direto; para outros, cartão.", phase: 1 },
+  { name: "send_report", risk: "user_facing", description: "Envia o relatório de operação por um canal (padrão: Gmail, só para o Laércio).", phase: 1 },
   { name: "revoke_api_key", risk: "destructive", description: "Revoga uma chave da API VERTAL.", phase: 1 },
   { name: "set_key_cap", risk: "money", description: "Muda o teto mensal de gasto de uma chave.", phase: 1 },
   { name: "grant_credits", risk: "money", description: "Dá créditos a um usuário.", phase: "spec" },
@@ -44,6 +48,9 @@ export function findTool(name: unknown): AdminTool | null {
 export function requiresApproval(tool: AdminTool): boolean {
   return tool.risk !== "read";
 }
+
+/** Ferramentas de canal: a aprovação depende do destino (channels.ts). */
+export const CHANNEL_TOOLS = new Set(["inbox_list", "inbox_read", "send_message", "send_report"]);
 
 export interface AdminIdentity {
   userId: string;
@@ -69,6 +76,49 @@ export function gate(toolName: unknown, operator: boolean, approvalVerified: boo
   if (tool.phase === "spec") return { kind: "deny", reason: `"${tool.name}" ainda não existe (planejada para uma próxima fase).` };
   if (!requiresApproval(tool)) return { kind: "run" };
   return approvalVerified ? { kind: "run" } : { kind: "needs_approval", tool };
+}
+
+/**
+ * Decisão completa de um pedido do agente: catálogo + política dos canais.
+ * Para send_message/send_report, mandar só para o próprio Laércio roda direto;
+ * qualquer outro destino (ou escrita no CRM) pede cartão. Leitura de canal roda direto.
+ * `defaults` completa o envio do relatório (texto montado no servidor, destino padrão).
+ */
+export function decideTool(
+  toolName: unknown,
+  args: Record<string, unknown>,
+  ctx: { operator: boolean; approvalVerified: boolean; me: OperatorIdentity },
+): GateDecision {
+  const base = gate(toolName, ctx.operator, ctx.approvalVerified);
+  if (base.kind === "deny" || !CHANNEL_TOOLS.has(String(toolName))) return base;
+  const tool = findTool(toolName)!;
+  try {
+    if (toolName === "inbox_list" || toolName === "inbox_read") {
+      const q = parseInbound(args);
+      const d = channelDecision(toolName === "inbox_list" ? "receive" : "read", q.channel, ctx.operator);
+      return d.kind === "deny" ? d : { kind: "run" };
+    }
+    const msg = parseOutbound(toolName === "send_report" ? reportOutbound(args, ctx.me) : args);
+    const d = channelDecision("send", msg.channel, ctx.operator, { outbound: msg, me: ctx.me });
+    if (d.kind === "deny") return d;
+    if (d.kind === "run") return { kind: "run" };
+    return ctx.approvalVerified ? { kind: "run" } : { kind: "needs_approval", tool };
+  } catch (e) {
+    return { kind: "deny", reason: e instanceof Error ? e.message : "pedido inválido" };
+  }
+}
+
+/** Relatório: canal padrão Gmail, destino padrão o próprio Laércio; o texto é marcado aqui e montado no servidor. */
+export function reportOutbound(args: Record<string, unknown>, me: OperatorIdentity): Record<string, unknown> {
+  const channel = typeof args.channel === "string" ? args.channel : "gmail";
+  const defaultTo = channel === "slack" ? me.slackUserIds[0] : me.emails[0];
+  const period = args.period === "weekly" ? "semanal" : "diário";
+  return {
+    channel,
+    to: args.to ?? defaultTo ?? "",
+    subject: `Vertal Dev — relatório ${period}`,
+    text: typeof args.text === "string" && args.text ? args.text : "(relatório gerado no envio)",
+  };
 }
 
 /** JSON estável (chaves ordenadas) para o hash dos argumentos. */
@@ -167,7 +217,7 @@ export function approvalCardText(tool: AdminTool, args: unknown): string {
   return `Aprovar "${tool.name}" (${risk[tool.risk]})? ${tool.description}\nArgumentos: ${canonicalJson(args).slice(0, 600)}`;
 }
 
-/** E-mail do relatório: por padrão só o do próprio Laércio; outro destino exige estar na lista. */
+/** (Legado) destino do relatório permitido sem cartão. A política atual é decideTool/channelDecision. */
 export function reportRecipientAllowed(to: string, operatorEmail: string | null, extraAllowed: string[]): boolean {
   const t = to.trim().toLowerCase();
   if (operatorEmail && t === operatorEmail.trim().toLowerCase()) return true;

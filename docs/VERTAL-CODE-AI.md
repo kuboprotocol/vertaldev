@@ -512,3 +512,146 @@ Preço de varejo (só proposta; cobrança desligada): créditos = (custo real + 
 ## Data Library (Vertaldephin)
 
 O uso do VERTAL Code AI pode ser enviado ao livro "Vertal Code AI" do Knowledge Book: desligado por padrão, só com consentimento já gravado (painel de recompensas / banner de cookies), uso anonimizado. Ver [VERTAL-CODE-AI-DATA-LIBRARY.md](VERTAL-CODE-AI-DATA-LIBRARY.md).
+---
+
+# Parte 2 · Plataforma (PR empilhado sobre `feat/vertal-code-ai-cloud`)
+
+Tudo abaixo é **aditivo e desligado por padrão**. Nenhuma migração foi aplicada: as tabelas novas estão em
+`docs/vertal-code-ai/proposed-migration.sql` (fora de `supabase/migrations` de propósito; o deploy não roda
+`db push`). Sem a migração, a tela da Parte 1 continua igual; API e Operação respondem erro até ela existir.
+
+## 13. Interruptores e segredos novos
+
+| Env (Supabase Secrets) | Padrão | Liga |
+|---|---|---|
+| `VERTAL_AI_API_ENABLED` | off | API para desenvolvedores (`vertal-ai-api`) |
+| `VERTAL_CODE_AI_ADMIN_ENABLED` | off | agente de operação (`vertal-code-ai-admin`) |
+| `VERTAL_ADMIN_USER_IDS` | vazio = ninguém | ids do operador (além do papel `admin`) |
+| `VERTAL_ADMIN_APPROVAL_KEY` | usa `CONNECTOR_ENC_KEY` | segredo (32+) que assina os cartões de aprovação |
+| `VERTAL_CODE_AI_CHARGE_ENABLED` | off | cobrança de varejo em créditos na tela (Vibe Code/Chat → VERTAL Code AI) |
+| `VERTAL_CODE_AI_PRICING` | tabela padrão | JSON parcial que sobrescreve preços (inválido → padrão inteiro) |
+| `VERTAL_OPERATOR_EMAILS`, `VERTAL_OPERATOR_SLACK_IDS` | e-mail do login | quem conta como "o próprio Laércio" nos canais |
+| `VERTAL_OUTLOOK_TENANT/CLIENT_ID/CLIENT_SECRET/REFRESH_TOKEN` | vazio | Outlook (Microsoft Graph) |
+| `VERTAL_MAIL_SMTP_HOST/PORT/USER/PASS`, `VERTAL_MAIL_FROM` | vazio | e-mail do domínio próprio (SMTP 465) |
+| `VERTAL_CRM_MAP` | Pipedrive + HubSpot padrão | JSON com as chaves das ações do Fluxos por CRM |
+
+Arquivo compartilhado tocado: `supabase/config.toml` (`[functions.vertal-ai-api] verify_jwt = false`, porque a
+função autentica a chave `vtl_ai_` ela mesma). Também mudaram, só no código do VERTAL Code AI:
+`supabase/functions/vertal-code-ai/index.ts` (cobrança atrás de flag), `src/pages/VertalCodeAIPage.tsx` (botões
+Chaves e Operação), `src/lib/vertalCodeAi/client.ts` (texto do erro de crédito). Motor, jogos, design: intocados
+(`engine-guard.mjs` + `regression.existing-engines.test.ts` com snapshots).
+
+## 14. API VERTAL para desenvolvedores (OpenAI-compatível)
+
+```
+POST {SUPABASE_URL}/functions/v1/vertal-ai-api/v1/chat/completions   Authorization: Bearer vtl_ai_…
+GET  {SUPABASE_URL}/functions/v1/vertal-ai-api/v1/models
+POST {SUPABASE_URL}/functions/v1/vertal-ai-api/keys  (JWT)  {"action":"create|list|revoke|set_cap|usage"}
+```
+
+- Modelos públicos (só marca VERTAL): `vertal-code-ai` (auto), `-fast` (low), `-reasoning` (high), `-max`,
+  `-vision`. Mapeiam para o esforço da cadeia grátis-primeiro do `router.ts` (mesmo roteamento da tela).
+- `reasoning_effort` do cliente (low/medium/high) ajusta o esforço. Sem `tools` na fase 1; `stream:true` devolve
+  um único pedaço SSE + `[DONE]` (compatível com SDKs, não incremental). Resposta sem nenhum dado do provedor real,
+  com `vertal.cost_credits`. Um system prompt de marca é colocado antes das mensagens.
+- **Chaves por desenvolvedor**: `vtl_ai_` + 43 chars, só o SHA-256 no banco (mesmo padrão das chaves MCP/Cofre),
+  mostrada uma vez, até 10 ativas, cada uma com teto mensal em créditos e RPM.
+- **Ordem de cada pedido**: chave → RPM (`bump_rate_limit`) → corpo → mesmo `Idempotency-Key` já atendido?
+  devolve a resposta guardada **sem cobrar** → saldo e teto para o **pior caso** (`max_tokens`, classe mais cara da
+  cadeia) → modelo → `vertal_ai_record_usage` (RPC atômica: uso gravado uma vez, fração acumulada, gasto da chave)
+  → se passou de 1 crédito inteiro, `execute_atomic_credit_deduction` com idempotência `vai-<usage_id>`.
+  Débito falhou no meio (saldo sumiu)? O uso fica `owed` e bloqueia novos pedidos até pagar.
+- Erros no formato OpenAI: 401 (chave), 402 `insufficient_credits`, 429 `rate_limit_exceeded`/`spend_cap_reached`,
+  503 `model_unavailable` (com `Retry-After`). Domínio `api.vertal.dev/v1` (proxy no Worker): fase 2.
+
+## 15. Preços (config, não código)
+
+`_shared/vertalCodeAi/pricing.ts` + `VERTAL_CODE_AI_PRICING`. Conta em microcréditos (1 crédito = 1.000.000 µc).
+Fórmula padrão por 1M tokens: `(custo real US$ + infra US$ 0,05) × margem 1,5 ÷ US$ 0,03 por crédito`.
+O crédito de referência (US$ 0,03) vem do Starter (US$ 4,99 / ~150 créditos/mês ≈ US$ 0,033), o mais barato por
+crédito, então nunca vendemos abaixo do custo. Margem < 1 é recusada pelo validador.
+
+| Classe de quem respondeu | Custo real US$/1M (in / out) | Créditos/1M (in / out) | Pedido típico 3K in + 1K out |
+|---|---|---|---|
+| Grátis | 0 / 0 | 2,5 / 2,5 | 0,011 crédito |
+| Servidor próprio (VM paga, ~US$ 1,85/1M de saída a ~6 tok/s) | 0,20 / 1,85 | 12,5 / 95 | 0,134 crédito |
+| Pago (tabela pública do provedor no dia — confira) | 0,27 / 1,10 | 16 / 57,5 | 0,107 crédito |
+
+\+ 0,001 crédito por pedido. Grátis é barato de propósito: o custo real é a cota diária, não dinheiro.
+
+**Varejo dentro do Vertal** (créditos inteiros, `inApp`): Planejar 0, Construir 1 nos modelos grátis/próprio;
+Planejar 1, Construir 4 no pago (alinhado ao Vibe Code: flash 1 / pro 4); auto-correção incluída. Com
+`VERTAL_CODE_AI_CHARGE_ENABLED=true` a função checa o saldo para o pior caso **antes** (402 se faltar) e cobra uma
+vez **depois**, pelo modelo mais caro que respondeu, com idempotência `vcai-<user>-<modo>-<requestId>`. Vale para
+quem chega pelo Vibe Code e pelo Vertal Chat (a ponte do Chat abre esta mesma tela).
+
+## 16. Agente de operação ("o cérebro" do Vertal Dev)
+
+Só o **operador**: papel `admin` (`has_role`) **e** id em `VERTAL_ADMIN_USER_IDS`. Para qualquer outro a função
+responde 404 e a tela nem mostra o botão. Cliente usa o VERTAL Code AI nos próprios projetos, sem poder de admin.
+
+| Ferramenta | Tipo | Execução |
+|---|---|---|
+| `metrics_overview`, `credits_by_category`, `top_users` (ids mascarados), `recent_errors`, `list_prs`, `api_usage`, `ops_report` | leitura | direto |
+| `inbox_list`, `inbox_read` (qualquer canal) | leitura | direto, nada é marcado/alterado |
+| `send_message`, `send_report` | envio | direto **só** se todos os destinos são o próprio Laércio; senão cartão |
+| `revoke_api_key` (destrutiva), `set_key_cap` (dinheiro) | escrita | cartão |
+| `grant_credits`, `rerun_ci`, `trigger_deploy`, `notify_users` | — | fase 2 (servidor recusa) |
+
+**Cartão de aprovação**: linha `pending` em `vertal_ai_approvals` + token HMAC-SHA256 que amarra id, admin,
+ferramenta, **hash dos argumentos** e validade (15 min). Executar exige assinatura válida, mesmo admin, mesma
+ferramenta, **mesmos argumentos** e a troca atômica `pending → executing` (uso único). Tudo vai para
+`vertal_ai_audit`, cifrado com o mesmo cofre do `navigator_audit` (AES-256-GCM, AAD amarrado ao dono e ao tipo).
+
+**Relatórios**: diário/semanal (créditos por área, usuários ativos, top 10 mascarado, erros agrupados, uso da API,
+PRs abertos); botão na tela, envio por qualquer canal (§17) e **ingestão** de relatórios que o Laércio sobe
+(txt/md/csv/json até 200 KB) para perguntar sobre eles. Fase 2: envio agendado (cron) e receita em R$.
+
+## 17. Canais: Gmail, Slack, Outlook, e-mail próprio e CRMs
+
+Abstração única `send / receive / read` (`_shared/vertalCodeAi/channels.ts` = tipos, validação, roteamento e
+política; `channelAdapters.ts` = adaptadores). Nada de Gmail fixo; os adaptadores **reaproveitam** o que existe,
+chamando as funções atuais com o JWT do próprio operador (mesmas regras, logs e isolamento):
+
+| Canal | Enviar | Receber / ler | Reaproveita | Estado |
+|---|---|---|---|---|
+| Gmail | `gmail-send-message` (um por destinatário) | `gmail-list-messages`, `gmail-get-thread` | conector Gmail do Vertal Chat | fase 1 |
+| Slack | `slack-send-message` | `slack-list-messages` (scope = canal) | conector Slack existente | fase 1 |
+| Outlook | Graph `POST /me/sendMail` | Graph `/me/mailFolders/inbox/messages`, `/me/messages/{id}` | — (refresh token por env) | código pronto; **sem credenciais = "não configurado"** |
+| E-mail do domínio próprio | SMTP 465 (nodemailer) por env | IMAP | — | envio fase 1; leitura **fase 2** (IMAP não roda bem em Edge; plano: relay no Worker do vertal.dev) |
+| Pipedrive (CRM) | nota (`createNote`) via **Vertal Fluxos** | buscas (`newDeals`, `newPersons`…) | conexão do usuário no Fluxos (creative-router `fluxos_apps`) | fase 1 quando o OAuth do Pipedrive estiver no Fluxos |
+| HubSpot (CRM) | nota via Fluxos | `newContacts`, `newDeals` | idem | fase 1 |
+
+Chaves das ações do CRM são config (`VERTAL_CRM_MAP`); se uma não existir na versão do Fluxos, o handler responde
+`action_not_found` e nada é executado. Novos CRMs = uma entrada no mapa (o Fluxos já tem 74 apps).
+
+**Política (testada em `channels.test.ts`)**: receber/ler é só leitura e roda direto; enviar para qualquer destino
+que não seja o Laércio (e-mails em `VERTAL_OPERATOR_EMAILS` + o do login, Slack em `VERTAL_OPERATOR_SLACK_IDS`)
+pede cartão — basta **um** destino de fora; escrita em CRM **sempre** pede cartão; cliente nunca usa canais do cérebro.
+
+## 18. Isolamento entre clientes
+
+- Tela: leitura e aplicação só no cofre do próprio usuário/projeto (`vibe_project_files` por `user_id` + projeto
+  verificado por RLS) — já era assim na Parte 1.
+- API: toda gestão de chave filtra por `owner_id` (inclusive para admin: `assertOwner`); a migração dá RLS de
+  leitura só ao dono em chaves, uso e fração; aprovações e auditoria só pelo service role.
+- Cobrança: sempre na conta do dono da chave / do usuário do pedido; idempotência inclui o id dele.
+- Operação/canais: negados para não-operador em três camadas (404 na função, `gate`, `channelDecision`).
+
+## 19. Fases
+
+| Fase | Conteúdo |
+|---|---|
+| 1 (este PR, desligado) | API OpenAI-compatível com chaves/medição/débito fracionário/tetos/RPM; preços em config; varejo atrás de flag; agente de operação (leituras + cartões + auditoria cifrada); relatórios (montar, enviar, ingerir); canais Gmail/Slack/Outlook(stub sem credencial)/SMTP próprio/CRMs via Fluxos; testes |
+| 2 | Streaming real na API, `tools`, domínio `api.vertal.dev`; IMAP do domínio próprio via Worker; relatórios agendados e receita em R$; executores `grant_credits`/`rerun_ci` com cartão; página pública de docs/preços; caixa de entrada unificada na tela |
+| 3 | Agente que sugere ações a partir das caixas de entrada (sempre com cartão); webhooks de entrada (Slack Events, Graph subscriptions) |
+
+## 20. Decisões em aberto da Parte 2 (Laércio)
+
+1. Aplicar `docs/vertal-code-ai/proposed-migration.sql`?
+2. Preços: crédito de referência US$ 0,03 e margem 1,5× ok? Construir = 1 crédito nos grátis?
+3. Ligar a cobrança de varejo (`VERTAL_CODE_AI_CHARGE_ENABLED`) junto com a abertura para todos?
+4. Outlook: registrar o app no Microsoft Entra (Mail.Read, Mail.Send, offline_access) e gerar o refresh token.
+5. E-mail próprio: qual provedor SMTP (IONOS, Zoho, Google Workspace…) e endereço (`ops@vertal.dev`?).
+6. Pipedrive/HubSpot: confirmar as chaves das ações no Fluxos (ou ajustar `VERTAL_CRM_MAP`).
+7. Quem mais conta como "você" nos canais (`VERTAL_OPERATOR_EMAILS`, `VERTAL_OPERATOR_SLACK_IDS`).

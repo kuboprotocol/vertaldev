@@ -6,3 +6,5 @@ export * from '../../../supabase/functions/_shared/vertalCodeAi/openaiCompat';
 export * from '../../../supabase/functions/_shared/vertalCodeAi/admin';
 export * from '../../../supabase/functions/_shared/vertalCodeAi/reports';
 export * from '../../../supabase/functions/_shared/vertalCodeAi/gateway';
+export * from '../../../supabase/functions/_shared/vertalCodeAi/channels';
+export * from '../../../supabase/functions/_shared/vertalCodeAi/channelAdapters';
