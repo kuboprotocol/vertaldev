@@ -133,3 +133,48 @@ describe("tela do VERTAL Code AI", () => {
     expect(document.body.textContent).not.toMatch(VENDOR);
   });
 });
+
+import { VertalCodeAiOpsPanel } from "../VertalCodeAiOpsPanel";
+
+describe("modo Operação e isolamento na tela", () => {
+  it("cliente comum não vê o modo Operação", async () => {
+    render(<MemoryRouter><VertalCodeAiApp api={fakeApi()} /></MemoryRouter>);
+    await screen.findByText(/42 pedidos grátis/);
+    expect(screen.queryByLabelText("Modo Operação")).toBeNull();
+  });
+
+  it("operador vê o modo Operação", async () => {
+    const api = fakeApi({ status: vi.fn(async () => ({ ...(await fakeApi().status()), operator: true })) as VcaiApi["status"] });
+    render(<MemoryRouter><VertalCodeAiApp api={api} /></MemoryRouter>);
+    expect(await screen.findByLabelText("Modo Operação")).toBeTruthy();
+  });
+
+  it("sem permissão de aplicar: botão Aplicar desligado", async () => {
+    const api = fakeApi({ status: vi.fn(async () => ({ ...(await fakeApi().status()), canApply: false })) as VcaiApi["status"] });
+    render(<MemoryRouter><VertalCodeAiApp api={api} /></MemoryRouter>);
+    await screen.findByText(/42 pedidos grátis/);
+    fireEvent.change(screen.getByLabelText("Pedido"), { target: { value: "x" } });
+    fireEvent.click(screen.getByLabelText("Enviar"));
+    fireEvent.click(await screen.findByText("Construir este plano"));
+    await screen.findByText(/Revisar mudanças/);
+    expect((screen.getByRole("button", { name: /Aplicar/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(api.apply).not.toHaveBeenCalled();
+  });
+
+  it("ação só executa depois de tocar em Aprovar", async () => {
+    const card = { approvalId: "ap1", token: "t", tool: "revoke_api_key", text: 'Aprovar "revoke_api_key" (DESTRUTIVA)?', args: { keyId: "k" } };
+    const ops = {
+      ask: vi.fn(async () => ({ reply: "Preciso da sua aprovação.", results: [], approvals: [card] })),
+      decide: vi.fn(async () => ({ ok: true, status: "done" })),
+      report: vi.fn(),
+    };
+    render(<VertalCodeAiOpsPanel api={ops as any} />);
+    fireEvent.change(screen.getByLabelText("Pergunta de operação"), { target: { value: "revoga a chave k" } });
+    fireEvent.click(screen.getByLabelText("Perguntar"));
+    await screen.findByText(/DESTRUTIVA/);
+    expect(ops.decide).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("Aprovar"));
+    await waitFor(() => expect(ops.decide).toHaveBeenCalledWith(card, "approve"));
+    await screen.findByText("Executado");
+  });
+});

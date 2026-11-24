@@ -86,7 +86,7 @@ function mergeDeep<T>(base: T, patch: unknown): T {
   for (const [k, v] of Object.entries(patch as Record<string, unknown>)) {
     const cur = out[k];
     if (cur && typeof cur === "object" && !Array.isArray(cur)) out[k] = mergeDeep(cur, v);
-    else if (k in out && typeof v === typeof cur) out[k] = v;
+    else if (k in out ? typeof v === typeof cur : typeof v === "number") out[k] = v;
   }
   return out as T;
 }

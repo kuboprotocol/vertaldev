@@ -21,6 +21,38 @@ export interface StatusResponse {
   selfHosted: boolean;
   customProviders: boolean;
   freeRequestsLeft: number | null;
+  /** false: o motor grava no repositório da plataforma e este usuário não é o operador. */
+  canApply?: boolean;
+  /** Operador do Vertal (Laércio): libera o modo Operação. */
+  operator?: boolean;
+  pricing?: { plan: Record<string, number>; build: Record<string, number>; fixRound: Record<string, number>; sandboxRun: number };
+}
+
+export interface ApprovalCard {
+  approvalId: string;
+  token: string;
+  tool: string;
+  text: string;
+  args: unknown;
+}
+
+export interface OpsAskResponse {
+  reply: string;
+  results: Array<{ tool: string; ok: boolean; result: unknown }>;
+  approvals: ApprovalCard[];
+}
+
+export interface ApiKeyRecord {
+  id: string;
+  name: string;
+  key_prefix: string;
+  monthly_cap_credits: number | null;
+  rpm: number;
+  spent_micro: number;
+  spent_period: string | null;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
 }
 
 export interface RouteInfo {
@@ -89,8 +121,8 @@ async function token(): Promise<string> {
   return t;
 }
 
-async function call<T>(action: string, payload: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(`${BASE}/vertal-code-ai`, {
+async function call<T>(action: string, payload: Record<string, unknown>, signal?: AbortSignal, fn = "vertal-code-ai", subpath = ""): Promise<T> {
+  const res = await fetch(`${BASE}/${fn}${subpath}`, {
     method: "POST",
     signal,
     headers: {
@@ -103,7 +135,7 @@ async function call<T>(action: string, payload: Record<string, unknown>, signal?
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg =
-      res.status === 404 && data?.error === "vertal_code_ai_disabled"
+      res.status === 404 && (data?.error === "vertal_code_ai_disabled" || data?.error === "disabled")
         ? "O VERTAL Code AI ainda não foi ligado neste servidor."
         : typeof data?.error === "string"
           ? data.error
@@ -170,4 +202,20 @@ export const vcaiApi: VcaiApi = {
     if (!res.ok) return { ok: false, message: text.slice(0, 300) || `Falha (${res.status}).` };
     return readApplyStream(text);
   },
+};
+
+/** Modo Operação (só o operador; o servidor responde 404 para qualquer outro). */
+export const opsApi = {
+  ask: (prompt: string, attachments?: Attachment[]) => call<OpsAskResponse>("ask", { prompt, attachments }, undefined, "vertal-code-ai-admin"),
+  decide: (card: ApprovalCard, decision: "approve" | "reject") =>
+    call<{ ok: boolean; status: string; result?: unknown }>("approve", { approvalId: card.approvalId, token: card.token, decision }, undefined, "vertal-code-ai-admin"),
+  report: (period: "daily" | "weekly") => call<{ report: string }>("report", { period }, undefined, "vertal-code-ai-admin"),
+};
+
+/** Chaves da API VERTAL do próprio desenvolvedor. */
+export const keysApi = {
+  list: () => call<{ keys: ApiKeyRecord[] }>("list", {}, undefined, "vertal-ai-api", "/keys"),
+  create: (name: string, monthlyCapCredits: number | null) =>
+    call<{ key: string; record: ApiKeyRecord }>("create", { name, monthlyCapCredits }, undefined, "vertal-ai-api", "/keys"),
+  revoke: (id: string) => call<{ ok: boolean }>("revoke", { id }, undefined, "vertal-ai-api", "/keys"),
 };

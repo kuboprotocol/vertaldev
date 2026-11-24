@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, ClipboardList, Hammer, ImagePlus, Loader2, Paperclip, Send, Settings2, Square, X, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ClipboardList, Hammer, ImagePlus, KeyRound, Loader2, Paperclip, Send, Settings2, ShieldCheck, Square, X, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,6 +14,8 @@ import { runBuildLoop, type LoopEvent } from "@/lib/vertalCodeAi/loop";
 import { VERTAL_CODE_AI_NAME } from "@/lib/vertalCodeAi/flags";
 import { VertalCodeAiDiffReview } from "./VertalCodeAiDiffReview";
 import { VertalCodeAiProvidersDialog } from "./VertalCodeAiProvidersDialog";
+import { VertalCodeAiKeysDialog } from "./VertalCodeAiKeysDialog";
+import { VertalCodeAiOpsPanel } from "./VertalCodeAiOpsPanel";
 
 type Mode = "plan" | "build";
 
@@ -66,6 +68,8 @@ export function VertalCodeAiApp({ api = vcaiApi }: { api?: VcaiApi }) {
   const [applying, setApplying] = useState(false);
   const [providers, setProviders] = useState<CustomProvider[]>(() => (typeof localStorage !== "undefined" ? loadCustomProviders() : []));
   const [providersOpen, setProvidersOpen] = useState(false);
+  const [keysOpen, setKeysOpen] = useState(false);
+  const [view, setView] = useState<"code" | "ops">("code");
   const [lastPlan, setLastPlan] = useState<{ plan: VcaiPlan; prompt: string } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -298,11 +302,25 @@ export function VertalCodeAiApp({ api = vcaiApi }: { api?: VcaiApi }) {
             {status?.freeRequestsLeft != null ? ` · ${status.freeRequestsLeft} pedidos grátis hoje` : ""}
           </p>
         </div>
+        {status?.operator && (
+          <Button variant={view === "ops" ? "secondary" : "ghost"} size="icon" aria-label="Modo Operação" onClick={() => setView(view === "ops" ? "code" : "ops")}>
+            <ShieldCheck className="h-5 w-5" />
+          </Button>
+        )}
+        <Button variant="ghost" size="icon" aria-label="Chaves da API" onClick={() => setKeysOpen(true)} disabled={disabled}>
+          <KeyRound className="h-5 w-5" />
+        </Button>
         <Button variant="ghost" size="icon" aria-label="Provedores próprios" onClick={() => setProvidersOpen(true)} disabled={disabled}>
           <Settings2 className="h-5 w-5" />
         </Button>
       </header>
 
+      {view === "ops" && status?.operator ? (
+        <main className="mx-auto w-full max-w-3xl flex-1 px-3 py-3">
+          <VertalCodeAiOpsPanel />
+        </main>
+      ) : (
+      <>
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-3 px-3 py-3 pb-56">
         {statusError && (
           <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200" role="alert">
@@ -408,11 +426,14 @@ export function VertalCodeAiApp({ api = vcaiApi }: { api?: VcaiApi }) {
           <section className="rounded-xl border border-primary/30 bg-card/60 p-3" aria-label="Revisão das mudanças">
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="text-sm font-medium">Revisar mudanças ({proposal.length})</p>
-              <Button size="sm" onClick={apply} disabled={!selected.size || applying || running} className="gap-2">
+              <Button size="sm" onClick={apply} disabled={!selected.size || applying || running || status?.canApply === false} className="gap-2">
                 {applying && <Loader2 className="h-4 w-4 animate-spin" />}
                 Aplicar {selected.size ? `(${selected.size})` : ""}
               </Button>
             </div>
+            {status?.canApply === false && (
+              <p className="mb-2 text-xs text-amber-300">Neste servidor, aplicar no projeto ainda não está liberado para a sua conta. Copie as mudanças pelo diff.</p>
+            )}
             <VertalCodeAiDiffReview files={proposal} selected={selected} onToggle={toggle} />
             <button type="button" className="mt-2 text-xs text-muted-foreground underline" onClick={() => setProposal([])}>
               Descartar todas
@@ -521,6 +542,10 @@ export function VertalCodeAiApp({ api = vcaiApi }: { api?: VcaiApi }) {
         </div>
       </div>
 
+      </>
+      )}
+
+      <VertalCodeAiKeysDialog open={keysOpen} onOpenChange={setKeysOpen} />
       <VertalCodeAiProvidersDialog
         open={providersOpen}
         onOpenChange={setProvidersOpen}

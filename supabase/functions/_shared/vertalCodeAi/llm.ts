@@ -51,6 +51,14 @@ export function textOnly(messages: ChatMessage[]): ChatMessage[] {
   );
 }
 
+/** AbortSignal.timeout com reserva para ambientes que não têm (jsdom). */
+function timeoutSignal(ms: number): AbortSignal {
+  if (typeof AbortSignal.timeout === "function") return AbortSignal.timeout(ms);
+  const c = new AbortController();
+  setTimeout(() => c.abort(new DOMException("timeout", "TimeoutError")), ms);
+  return c.signal;
+}
+
 export function estimateTokens(text: string): number {
   return Math.max(1, Math.ceil(text.length / 4));
 }
@@ -95,7 +103,7 @@ export async function callChain<T>(o: ChainOptions<T>): Promise<ChainResult<T>> 
         method: "POST",
         headers,
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(Math.min(o.perBackendTimeoutMs ?? 90_000, left - 5000)),
+        signal: timeoutSignal(Math.min(o.perBackendTimeoutMs ?? 90_000, left - 5000)),
       });
       if (!r.ok) {
         errors.push(`${b.name}:${r.status}`);
