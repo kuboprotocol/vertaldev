@@ -48,18 +48,19 @@ export function useGitHubConnection() {
   }, [user])
 
   const connect = async () => {
-    // OAuth 2.0 com o GitHub: a edge function `github-auth` gera a URL de
-    // autorização (com state anti-CSRF gravado no servidor) e o usuário é
-    // levado ao GitHub. O callback grava o token cifrado e volta para cá.
+    // GitHub App da Vertal: a edge function `github-app-install` gera a URL de
+    // instalação (state anti-CSRF gravado no servidor). O cliente escolhe os
+    // repositórios ("Only select repositories") e volta por github-app-callback,
+    // que grava o token de usuário (limitado a esses repositórios) e a instalação.
     // returnUrl precisa ser absoluta: o callback redireciona para ela.
     setConnecting(true)
     try {
       const returnUrl = `${window.location.origin}/connectors/github`
-      const { data, error } = await supabase.functions.invoke('github-auth', {
+      const { data, error } = await supabase.functions.invoke('github-app-install', {
         body: { returnUrl },
       })
       if (error || !data?.url) {
-        throw new Error(error?.message || data?.error || 'github_auth_unavailable')
+        throw new Error(error?.message || data?.error || 'github_app_unavailable')
       }
       window.location.href = data.url
     } catch (err) {

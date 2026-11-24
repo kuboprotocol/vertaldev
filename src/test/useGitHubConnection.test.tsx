@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
 
 /**
- * useGitHubConnection: o GitHub conecta via OAuth 2.0 — `connect()` chama a
- * edge function `github-auth` e redireciona para a URL devolvida.
+ * useGitHubConnection: o GitHub conecta pelo GitHub App — `connect()` chama a
+ * edge function `github-app-install` e redireciona para a URL devolvida.
  * `disconnect()` apaga a conexão e a credencial.
  */
 
@@ -66,8 +66,8 @@ describe('useGitHubConnection', () => {
     expect(result.current.connection?.github_username).toBe('kubo')
   })
 
-  it('connect() asks github-auth for the authorize URL and redirects to it', async () => {
-    h.invokeMock.mockResolvedValue({ data: { url: 'https://github.com/login/oauth/authorize?state=abc' }, error: null })
+  it('connect() asks github-app-install for the install URL and redirects to it', async () => {
+    h.invokeMock.mockResolvedValue({ data: { url: 'https://github.com/apps/vertal/installations/new?state=abc' }, error: null })
     const { result } = renderHook(() => useGitHubConnection())
     await waitFor(() => expect(result.current.loading).toBe(false))
 
@@ -75,13 +75,13 @@ describe('useGitHubConnection', () => {
       await result.current.connect()
     })
 
-    expect(h.invokeMock).toHaveBeenCalledWith('github-auth', {
+    expect(h.invokeMock).toHaveBeenCalledWith('github-app-install', {
       body: { returnUrl: 'http://localhost/connectors/github' },
     })
-    expect(window.location.href).toBe('https://github.com/login/oauth/authorize?state=abc')
+    expect(window.location.href).toBe('https://github.com/apps/vertal/installations/new?state=abc')
   })
 
-  it('connect() shows an error and resets the button when github-auth fails', async () => {
+  it('connect() shows an error and resets the button when github-app-install fails', async () => {
     h.invokeMock.mockResolvedValue({ data: null, error: { message: 'rate_limited' } })
     const { result } = renderHook(() => useGitHubConnection())
     await waitFor(() => expect(result.current.loading).toBe(false))
