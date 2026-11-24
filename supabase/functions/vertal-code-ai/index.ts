@@ -35,16 +35,15 @@ import {
   paidEnabled,
   type ProfileId,
   type ReasoningEffort,
-  reasoningParams,
-  type ResolvedBackend,
-  shouldFallback,
   validateCustomProvider,
   type VcaiMode,
 } from "../_shared/vertalCodeAi/models.ts";
+import { callChain as runChain, ChainError } from "../_shared/vertalCodeAi/llm.ts";
+import { inAppCredits, loadPricing } from "../_shared/vertalCodeAi/pricing.ts";
+import { canApplyChanges, isOperator, projectSourceFor } from "../_shared/vertalCodeAi/admin.ts";
 import {
   type Attachment,
   buildMessages,
-  type ChatMessage,
   parseBuild,
   parsePlan,
   pickContextFiles,
@@ -71,6 +70,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 /** Orçamento de tempo de uma chamada (o limite da edge function é maior; sobra para responder). */
 const CALL_BUDGET_MS = Number(env("VERTAL_CODE_AI_BUDGET_MS")) || 130_000;
 const PER_BACKEND_TIMEOUT_MS = 90_000;
+const { pricing: PRICING, errors: PRICING_ERRORS } = loadPricing(env("VERTAL_CODE_AI_PRICING"));
+if (PRICING_ERRORS.length) console.warn("[vertal-code-ai] tabela de preços ignorada:", PRICING_ERRORS.join("; "));
 const HANDLE_TTL_MS = 25 * 60 * 1000;
 const BLOCKED_WRITE = /(^|\/)(\.env(\..*)?|package-lock\.json|bun\.lockb?|pnpm-lock\.yaml|yarn\.lock)$|(^|\/)(dist|build|node_modules|\.git)\//;
 
@@ -108,8 +109,8 @@ function b64decode(s: string): string {
   return new TextDecoder().decode(bytes);
 }
 
-function makeReader(admin: any, userId: string, projectId: string | null): Reader {
-  const gh = githubConfig();
+function makeReader(admin: any, userId: string, projectId: string | null, source: "github" | "vault"): Reader {
+  const gh = source === "github" ? githubConfig() : null;
   if (gh) {
     const ghFetch = async (path: string) => {
       const r = await fetch(`https://api.github.com${path}`, {
@@ -183,89 +184,14 @@ async function liveOpenRouterIds(): Promise<Set<string> | null> {
   }
 }
 
-function textOnly(messages: ChatMessage[]): ChatMessage[] {
-  return messages.map((m) =>
-    typeof m.content === "string" ? m : { role: m.role, content: m.content.filter((p) => p.type === "text").map((p: any) => p.text).join("\n") },
-  );
-}
-
-interface CallResult<T> {
-  value: T;
-  backend: ResolvedBackend;
-  attempts: number;
-}
-
-/**
- * Tenta a cadeia em ordem. Passa para o próximo em erro HTTP, timeout, resposta
- * vazia ou JSON inválido. Pago só cobra créditos depois de responder.
- */
-async function callChain<T>(
-  chain: ResolvedBackend[],
-  messages: ChatMessage[],
-  effort: ReasoningEffort,
-  parse: (raw: string) => T,
-  onPaid: (b: Backend) => Promise<void>,
-): Promise<CallResult<T>> {
-  const deadline = Date.now() + CALL_BUDGET_MS;
-  let attempts = 0;
-  const errors: string[] = [];
-  for (const b of chain) {
-    const left = deadline - Date.now();
-    if (left < 10_000) break;
-    attempts++;
-    const body: Record<string, unknown> = {
-      model: b.model,
-      messages: b.vision ? messages : textOnly(messages),
-      temperature: 0.2,
-      max_tokens: b.maxTokens,
-      ...reasoningParams(b, effort),
-    };
-    const headers: Record<string, string> = { "Content-Type": "application/json", ...(b.headers ?? {}) };
-    if (b.key) headers.Authorization = `Bearer ${b.key}`;
-    try {
-      const r = await fetch(b.url, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(Math.min(PER_BACKEND_TIMEOUT_MS, left - 5000)),
-      });
-      if (!r.ok) {
-        const text = await r.text().catch(() => "");
-        errors.push(`${b.name}:${r.status}`);
-        console.warn(`[vertal-code-ai] ${b.name} HTTP ${r.status}: ${text.slice(0, 200)}`);
-        if (shouldFallback(r.status)) continue;
-        break;
-      }
-      const data = await r.json();
-      const content = data?.choices?.[0]?.message?.content;
-      const raw = typeof content === "string" ? content : Array.isArray(content) ? content.map((c: any) => c?.text ?? "").join("") : "";
-      if (!raw.trim()) {
-        errors.push(`${b.name}:vazio`);
-        continue;
-      }
-      let value: T;
-      try {
-        value = parse(raw);
-      } catch (e) {
-        errors.push(`${b.name}:json`);
-        console.warn(`[vertal-code-ai] ${b.name} resposta inválida: ${e instanceof Error ? e.message : e}`);
-        continue;
-      }
-      if (b.cost === "paid") await onPaid(b);
-      console.log(`[vertal-code-ai] ok via ${b.name} (tentativa ${attempts}; antes: ${errors.join(", ") || "-"})`);
-      return { value, backend: b, attempts };
-    } catch (e) {
-      errors.push(`${b.name}:${e instanceof Error && e.name === "TimeoutError" ? "timeout" : "rede"}`);
-    }
+/** Cadeia de modelos com o orçamento de tempo desta função. Erros viram mensagem para o usuário. */
+async function callChain<T>(chain: Parameters<typeof runChain>[0]["chain"], messages: Parameters<typeof runChain>[0]["messages"], effort: ReasoningEffort, parse: (raw: string) => T) {
+  try {
+    return await runChain({ chain, messages, effort, parse, budgetMs: CALL_BUDGET_MS, perBackendTimeoutMs: PER_BACKEND_TIMEOUT_MS });
+  } catch (e) {
+    if (e instanceof ChainError) throw new UserError(e.message, e.status);
+    throw e;
   }
-  console.warn(`[vertal-code-ai] cadeia esgotada: ${errors.join(", ")}`);
-  if (!chain.length) {
-    throw new UserError("Nenhum modelo do VERTAL Code AI está configurado neste servidor. Peça ao administrador para ligar uma camada gratuita.", 503);
-  }
-  throw new UserError(
-    "Os modelos gratuitos estão ocupados ou no limite de hoje. Tente de novo em alguns minutos, escolha outro perfil ou o Servidor próprio.",
-    503,
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -343,6 +269,17 @@ Deno.serve(async (req) => {
 
   const admin: any = createClient(env("SUPABASE_URL")!, env("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
+  // Operador (Laércio): papel admin + lista VERTAL_ADMIN_USER_IDS. Só ele lê/clona o repo da plataforma.
+  let hasAdminRole = false;
+  try {
+    const { data } = await userClient.rpc("has_role", { _role: "admin" });
+    hasAdminRole = data === true;
+  } catch {
+    hasAdminRole = false;
+  }
+  const operator = isOperator({ userId, hasAdminRole }, (env("VERTAL_ADMIN_USER_IDS") ?? "").split(","));
+  const source = projectSourceFor(operator, !!githubConfig());
+
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -360,7 +297,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  const chargeCredits = async (amount: number, reason: string, metadata: Record<string, unknown>) => {
+  const chargeCredits = async (amount: number, reason: string, metadata: Record<string, unknown>, idempotencyKey?: string) => {
     if (amount <= 0) return;
     const { error } = await admin.rpc("execute_atomic_credit_deduction", {
       _user_id: userId,
@@ -368,9 +305,9 @@ Deno.serve(async (req) => {
       _reason: reason,
       _category: "vertal_code_ai",
       _metadata: metadata,
-      _idempotency_key: `vcai-${userId}-${crypto.randomUUID()}`,
+      _idempotency_key: idempotencyKey ?? `vcai-${userId}-${crypto.randomUUID()}`,
     });
-    if (error) throw new UserError("Créditos insuficientes para o perfil Pro.", 402);
+    if (error) throw new UserError(String(error.message ?? "").includes("insufficient") ? "Créditos insuficientes." : "Não consegui cobrar os créditos desta ação.", 402);
   };
 
   try {
@@ -398,7 +335,10 @@ Deno.serve(async (req) => {
         enabled: true,
         profiles: availableProfiles(env).map(({ id, label, description, cost }) => ({ id, label, description, cost })),
         sandbox: orchestratorDriver() !== null && encryptionReady(),
-        projectSource: githubConfig() ? "github" : "vault",
+        projectSource: source,
+        canApply: canApplyChanges(operator, !!githubConfig()),
+        operator,
+        pricing: { plan: PRICING.inApp.plan, build: PRICING.inApp.build, fixRound: PRICING.inApp.fixRound, sandboxRun: PRICING.inApp.sandboxRun },
         paid: paidEnabled(env),
         selfHosted: !!ollamaBackend(env),
         customProviders: true,
@@ -443,7 +383,7 @@ Deno.serve(async (req) => {
       const chain = buildChain({ profile, mode, needsVision, env, liveOpenRouterIds: await liveOpenRouterIds(), custom }, customKey);
       const withImages = needsVision && chain.some((b) => b.vision);
 
-      const reader = makeReader(admin, userId, projectId);
+      const reader = makeReader(admin, userId, projectId, source);
       const tree = await reader.list().catch(() => [] as string[]);
       const plan = (body.plan && typeof body.plan === "object" ? (body.plan as VcaiPlan) : null) ?? null;
       const mentioned = [
@@ -462,11 +402,15 @@ Deno.serve(async (req) => {
       const failureLog = typeof fix?.log === "string" ? summarizeFailure(fix.log) : undefined;
       const editFailures = Array.isArray(fix?.failures) ? (fix!.failures as any[]).slice(0, 10).map((f) => ({ path: String(f?.path ?? ""), error: String(f?.error ?? "") })) : undefined;
       const messages = buildMessages({ mode, prompt, tree, files, plan, attachments, history, failureLog, editFailures }, withImages);
-      const paidCredits = Number(env("VERTAL_CODE_AI_PAID_CREDITS") ?? 3);
-      const onPaid = (b: Backend) => chargeCredits(paidCredits, "vertal_code_ai:paid", { mode, backend: b.name });
+      const requestId = typeof body.requestId === "string" && /^[\w-]{8,64}$/.test(body.requestId) ? body.requestId : crypto.randomUUID();
+      const charge = (cls: Backend["cost"]) => {
+        const amount = inAppCredits(PRICING, mode === "plan" ? "plan" : mode === "fix" ? "fixRound" : "build", cls);
+        return chargeCredits(amount, `vertal_code_ai:${mode}`, { mode, cost_class: cls, request_id: requestId }, `vcai-${userId}-${mode}-${requestId}`);
+      };
 
       if (mode === "plan") {
-        const res = await callChain(chain, messages, effort, parsePlan, onPaid);
+        const res = await callChain(chain, messages, effort, parsePlan);
+        await charge(res.backend.cost);
         return json(200, {
           mode,
           plan: res.value,
@@ -474,7 +418,8 @@ Deno.serve(async (req) => {
         });
       }
 
-      const res = await callChain(chain, messages, effort, parseBuild, onPaid);
+      const res = await callChain(chain, messages, effort, parseBuild);
+      await charge(res.backend.cost);
       const build = res.value;
       const rejected: Array<{ path: string; error: string }> = [];
       const edits: FileEdit[] = [];
@@ -520,18 +465,18 @@ Deno.serve(async (req) => {
       if (!encryptionReady()) throw new UserError("O sandbox de testes precisa da chave de cifra do servidor.", 503);
       const files = sanitizeFiles(body.files);
       const testCommand = sanitizeTestCommand(typeof body.testCommand === "string" ? body.testCommand : undefined);
-      await chargeCredits(Number(env("VERTAL_CODE_AI_SANDBOX_CREDITS") ?? 0), "vertal_code_ai:sandbox", { files: files.length });
+      await chargeCredits(PRICING.inApp.sandboxRun, "vertal_code_ai:sandbox", { files: files.length });
 
       const sessionId = crypto.randomUUID();
       const prov = await provisionContainer(sessionId, projectId ?? "vertal-code-ai", userId, 1500, env("VERTAL_CODE_AI_SANDBOX_TEMPLATE"));
       const ref = prov.container_ref;
       try {
-        const gh = githubConfig();
+        const gh = source === "github" ? githubConfig() : null;
         if (gh) {
           await execOk(ref, cloneCommand(gh.repo, gh.branch, gh.token), "clone", 115_000);
         } else {
           await execOk(ref, emptyProjectCommand(), "init");
-          const reader = makeReader(admin, userId, projectId);
+          const reader = makeReader(admin, userId, projectId, source);
           const paths = (await reader.list()).slice(0, MAX_SANDBOX_FILES);
           const projectFiles = await readMany(reader, paths);
           const list = Object.entries(projectFiles).map(([path, content]) => ({ path, content })).filter((f) => isSafePath(f.path));
