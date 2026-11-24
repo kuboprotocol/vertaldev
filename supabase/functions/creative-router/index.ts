@@ -29,6 +29,7 @@ import {
 } from "../_shared/officeEmail.ts";
 import { getFreshAccessToken, loadAccount } from "../_shared/gmailToken.ts";
 import { decryptSecret as decryptConnectorSecret } from "../_shared/connectorCrypto.ts";
+import { handleFluxosApps } from "../_shared/fluxosAppsHandler.ts";
 import { brokerToken, isFluxosSharedApp, makeFluxosKey, verifyFluxosKey } from "../_shared/fluxosBroker.ts";
 import { handleChatBrainOp, loadChatBrain, saveChatBrain } from "../_shared/chatBrain.ts";
 import { callWithTierFallback, chooseAgentTier, ORCHESTRATOR_LIMITS, type AgentTier } from "../_shared/chatOrchestrator.ts";
@@ -45,6 +46,7 @@ import {
   fallbackReplyFromResults,
   plainReplyPrompt,
   cleanPlainReply,
+  fluxosAppsInConversation,
 } from "../_shared/chatAgent.ts";
 import { wantsBrowserForm } from "../_shared/browserForm.ts";
 import { wantsNavigator } from "../_shared/navigatorCore.ts";
@@ -152,6 +154,8 @@ Deno.serve(withRefundOnFailure(async (req) => {
     // Vertal Chat: busca/leitura na web e memória. Grátis (sem créditos), com
     // limite próprio por usuário; fica aqui porque o projeto está no teto de edge functions.
     if (body?.tool === "agent_op") return jsonResponse(...(await handleChatBrainOp(user, body?.op_input ?? {})));
+    // Vertal Fluxos: conectar apps do catálogo por usuário e rodar ações/buscas (chat cobra por ação).
+    if (body?.tool === "fluxos_apps") return await handleFluxosApps(user, body?.fluxos ?? {});
     const parsed = InputSchema.safeParse(body);
     if (!parsed.success) {
       return new Response(JSON.stringify({ error: "invalid_input", details: parsed.error.flatten() }), {
@@ -687,6 +691,18 @@ async function handleAgentChat(
   const huginnOn = !delegated && wantsHuginn([...all.slice(-8), ...results.slice(-6)]);
   // Login com Google gerenciado pelo Vertal: a oferta só entra quando o Dev fala de login.
   const authKitOn = !delegated && wantsAuthKit(all.filter((m) => m.role === "user").slice(-6));
+  // Apps do Vertal Fluxos conectados pelo usuário: a ferramenta fluxos entra quando a conversa cita algum.
+  let fluxosApps: Array<{ key: string; name: string }> = [];
+  if (!delegated) {
+    const { data: fx } = await supaAdmin().from("fluxos_connections").select("app_key")
+      .eq("user_id", user.id).eq("status", "connected");
+    if (fx?.length) {
+      fluxosApps = fluxosAppsInConversation(
+        fx.map((r: { app_key: string }) => r.app_key),
+        [...all.slice(-8).map((m) => m.content), ...results.slice(-6).map((r) => JSON.stringify(r))],
+      );
+    }
+  }
   const system = buildAgentSystemPrompt({
     secretNames,
     today: new Date().toISOString().slice(0, 10),
@@ -706,6 +722,7 @@ async function handleAgentChat(
     automatisch: automatischOn,
     huginn: huginnOn,
     authKit: authKitOn,
+    fluxosApps,
   }) + (delegated ? DELEGATED_CHAT_PROMPT : "");
   const final = agent.data.final === true || brain.planPhase === "final";
   const convo = results.length

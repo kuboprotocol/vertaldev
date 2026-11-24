@@ -15,6 +15,7 @@ import { toast } from 'sonner'
 import { getConnectorBySlug } from '@/lib/connectorsConfig'
 import { ConnectorIcon } from '@/components/connectors/ConnectorIcon'
 import { supabase } from '@/integrations/supabase/client'
+import { FluxosConnectPanel } from '@/components/connectors/FluxosConnectPanel'
 import { cn } from '@/lib/utils'
 
 type GithubProfile = { login: string; avatar_url: string | null; profile_url: string }
@@ -136,6 +137,33 @@ export default function ConnectorSetupPage() {
     }
   }
 
+
+  // Apps do Vertal Fluxos: conexão direta por usuário (login OAuth do app ou formulário de chave).
+  if (connector.fluxosApp && slug.startsWith('fluxos-')) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <div className="border-b border-border bg-card/50 backdrop-blur-xl sticky top-0 z-10">
+          <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/connectors')}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div className="flex items-center gap-3 flex-1">
+              <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${connector.color}20` }}>
+                <ConnectorIcon connector={connector} className="h-5 w-5" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold font-display">{connector.name}</h1>
+                <p className="text-xs text-muted-foreground">via Vertal Fluxos · {APP_NAME}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+          <FluxosConnectPanel app={connector.fluxosApp} name={connector.name} />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">

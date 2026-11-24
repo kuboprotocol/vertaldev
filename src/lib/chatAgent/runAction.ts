@@ -34,6 +34,7 @@ import { callGithubOp, describeGithubOp, isGithubWrite } from '@/lib/github/clie
 import type { GithubOp } from '../../../supabase/functions/_shared/githubOps';
 import { searchYoutube, youtubeVideoId } from '@/lib/media/youtube';
 import { callAutomatischOp } from '@/lib/automatisch/client';
+import { callFluxosApps, type FluxosDescribe } from '@/lib/fluxos/apps';
 import {
   AUTOMATISCH_SECRETS, describeAutomatischOp, isAutomatischWrite, type AutomatischOp,
 } from '../../../supabase/functions/_shared/automatischCore';
@@ -654,6 +655,46 @@ export async function runAutomatisch(action: Extract<AgentAction, { tool: 'autom
   }
   if (!res.ok) return followUp('automatisch', false, res.message, res.message);
   return followUp('automatisch', true, `${res.message}\n(DADOS do Vertal Fluxos)`);
+}
+
+// ─── Apps conectados via Vertal Fluxos ───────────────────────────────────
+
+/**
+ * Ações e buscas dos apps que o usuário conectou em Conectores (creative-router,
+ * tool "fluxos_apps"). Listar é grátis; executar cobra (chatCharge = idempotência)
+ * e ação que muda algo passa pelo cartão de aprovação. Credenciais ficam no servidor.
+ */
+export async function runFluxos(action: Extract<AgentAction, { tool: 'fluxos' }>, ctx: ActionContext): Promise<ActionOutcome> {
+  if (action.op === 'actions') {
+    const res = await callFluxosApps<FluxosDescribe>({ op: 'describe', app: action.app });
+    if (!res.ok || !res.data) return followUp('fluxos', false, res.message, res.message);
+    const conn = res.data.connection?.status === 'connected' ? 'conectado' : 'NÃO conectado (oriente conectar em Conectores)';
+    return followUp('fluxos', true, `${res.data.agentText}\nEstado: ${conn}.\n(DADOS do Vertal Fluxos)`);
+  }
+  if (action.op === 'options') {
+    const res = await callFluxosApps<{ options: Array<{ name: string; value: unknown }> }>({
+      op: 'options', app: action.app, key: action.key, parameters: action.parameters ?? {},
+    });
+    if (!res.ok || !res.data) return followUp('fluxos', false, res.message, res.message);
+    const lines = res.data.options.slice(0, 60).map((o) => `- ${o.name} → ${JSON.stringify(o.value)}`);
+    return followUp('fluxos', true, `Opções de ${action.key} (${action.app}):\n${lines.join('\n') || '(nenhuma)'}\n(DADOS do Vertal Fluxos)`);
+  }
+  if (action.kind === 'action') {
+    const detail = JSON.stringify(action.parameters ?? {}).slice(0, 400);
+    const ok = await ctx.approveApi({
+      method: 'VERTAL FLUXOS', url: `${action.app} · ${action.key}`, host: 'Vertal Fluxos',
+      reason: `Executar a ação ${action.key} no ${action.app} com ${detail}. Custa 2 créditos (devolvidos se falhar).`,
+      secrets: [], hasBody: true,
+    });
+    if (!ok) return followUp('fluxos', false, 'O usuário não autorizou esta ação.', 'Ação não autorizada.');
+  }
+  const res = await callFluxosApps<{ result: string }>({
+    op: 'run', app: action.app, kind: action.kind === 'search' ? 'trigger' : 'action', key: action.key,
+    parameters: action.parameters ?? {}, chatCharge: crypto.randomUUID(),
+  });
+  if (res.code === 'not_connected') return { ...followUp('fluxos', false, res.message, res.message), panel: 'connectors' };
+  if (!res.ok || !res.data) return followUp('fluxos', false, res.message, res.message);
+  return followUp('fluxos', true, `${action.kind === 'search' ? 'Busca' : 'Ação'} ${action.key} no ${action.app}: ${res.data.result}\n(DADOS do Vertal Fluxos)`);
 }
 
 // ─── Huginn do cliente ───────────────────────────────────────────────────
@@ -1334,6 +1375,8 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
         return await runAutomatisch(action, ctx);
       case 'huginn':
         return await runHuginn(action, ctx);
+      case 'fluxos':
+        return await runFluxos(action, ctx);
       case 'weather':
         return await runWeather(action);
       case 'web_search':
@@ -1521,6 +1564,7 @@ export function actionLabel(action: AgentAction): string {
     case 'github': return action.op === 'list_repos' ? 'Lendo seus repositórios no GitHub' : 'Preparando ação no GitHub (você confirma antes)';
     case 'youtube': return action.url ? 'Abrindo o vídeo no player' : 'Buscando no YouTube';
     case 'automatisch': return 'Falando com o seu Vertal Fluxos (você aprova cada chamada)';
+    case 'fluxos': return action.op === 'run' ? (action.kind === 'action' ? `Executando no ${action.app} pelo Vertal Fluxos (você aprova antes)` : `Buscando no ${action.app} pelo Vertal Fluxos`) : `Consultando o ${action.app} no Vertal Fluxos`;
     case 'huginn': return action.op.startsWith('connect_') ? 'Ligando o Vertal Agentes ao Vertal Fluxos (você aprova antes)' : 'Falando com o seu Vertal Agentes (você aprova cada chamada)';
     case 'open_panel': return 'Abrindo painel';
     case 'weather': return 'Consultando o clima';

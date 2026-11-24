@@ -44,6 +44,7 @@ const ConnectorsHubPage = lazy(() => import("./pages/ConnectorsHubPage"));
 const ConnectorDetailPage = lazy(() => import("./pages/ConnectorDetailPage"));
 const ConnectorAboutPage = lazy(() => import("./pages/ConnectorAboutPage"));
 const ConnectorSetupPage = lazy(() => import("./pages/ConnectorSetupPage"));
+const FluxosOAuthCallbackPage = lazy(() => import("./pages/FluxosOAuthCallbackPage"));
 const ConnectorWeb3Page = lazy(() => import("./pages/ConnectorWeb3Page"));
 const ConnectorWeb3HubPage = lazy(() => import("./pages/ConnectorWeb3HubPage"));
 const ConnectorGmailPage = lazy(() => import("./pages/ConnectorGmailPage"));
@@ -264,6 +265,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/connectors/render" element={<ProtectedRoute><ConnectorRenderPage /></ProtectedRoute>} />
                 <Route path="/connectors/ecosystem/:product" element={<ProtectedRoute><ConnectorEcosystemPage /></ProtectedRoute>} />
                 <Route path="/connectors/:slug/setup" element={<ProtectedRoute><ConnectorSetupPage /></ProtectedRoute>} />
+                <Route path="/fluxos/oauth/:app" element={<ProtectedRoute><FluxosOAuthCallbackPage /></ProtectedRoute>} />
                 <Route path="/connectors/:slug/about" element={<ProtectedRoute><ConnectorAboutPage /></ProtectedRoute>} />
                 <Route path="/connectors/:slug" element={<ProtectedRoute><ConnectorDetailPage /></ProtectedRoute>} />
                 

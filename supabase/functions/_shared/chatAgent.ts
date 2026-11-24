@@ -177,7 +177,12 @@ export type AgentAction =
   // Automatisch do cliente (fluxos de automação): login pelo Cofre, só no servidor; o usuário aprova cada chamada.
   | ({ tool: "automatisch" } & AutomatischOp)
   // Huginn do cliente (agentes que vigiam a web e reagem a eventos): login pelo Cofre, só no servidor; o usuário aprova cada chamada.
-  | ({ tool: "huginn" } & HuginnOp);
+  | ({ tool: "huginn" } & HuginnOp)
+  // Apps do Vertal Fluxos que o próprio usuário conectou em Conectores (Notion, Airbrake…).
+  // actions: lista ações/buscas e campos (grátis); options: opções de um campo; run: executa (cobra; ação pede aprovação).
+  | { tool: "fluxos"; op: "actions"; app: string }
+  | { tool: "fluxos"; op: "options"; app: string; key: string; parameters?: Record<string, unknown> }
+  | { tool: "fluxos"; op: "run"; app: string; kind: "action" | "search"; key: string; parameters?: Record<string, unknown> };
 
 /** Conexão que o próprio cliente adicionou (API ou servidor MCP). Só nome, endereço e NOME do segredo. */
 export interface UserConnection {
@@ -267,6 +272,7 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   youtube: "grátis",
   automatisch: "grátis (você aprova cada chamada)",
   huginn: "grátis (você aprova cada chamada)",
+  fluxos: "2 créditos por ação ou busca executada (devolvidos se falhar); listar ações e opções é grátis",
 };
 
 export interface AgentPromptContext {
@@ -299,6 +305,8 @@ export interface AgentPromptContext {
   media?: boolean;
   /** A conversa fala de Automatisch/automação/fluxos: inclui a ferramenta automatisch (ver wantsAutomatisch). */
   automatisch?: boolean;
+  /** Apps do Vertal Fluxos conectados que a conversa cita (ver fluxosAppsInConversation). Vazio = ferramenta fora do prompt. */
+  fluxosApps?: Array<{ key: string; name: string }>;
   /** A conversa fala de login/cadastro: inclui a oferta do Login com Google gerenciado pelo Vertal (ver wantsAuthKit). */
   authKit?: boolean;
   /** A conversa fala de Huginn: inclui a ferramenta huginn (ver wantsHuginn). */
@@ -372,6 +380,25 @@ const YOUTUBE_TOOL =
 const AUTOMATISCH_TOOL =
   `- {"tool":"automatisch","op":"list_flows|get_flow|create_flow|add_step|update_step|test_step|set_flow_status|list_executions|get_execution|list_apps|app_steps|app_fields|list_connections"} + flow_id/step_id/execution_id/previous_step_id/name/active/app_key/kind("triggers|actions")/key/connection_id/parameters{}/page/status → fluxos no Vertal Fluxos do cliente (${TOOL_COSTS.automatisch}). Login só no servidor com ${AUTOMATISCH_SECRETS.join(", ")} do Cofre: nunca peça e-mail, senha ou token no chat.`;
 
+/** Apps conectados via Vertal Fluxos: só entra no prompt quando a conversa cita algum deles. */
+export function fluxosTool(apps: Array<{ key: string; name: string }>): string {
+  const list = apps.slice(0, 12).map((a) => `${a.name} (${a.key})`).join(", ");
+  return `- {"tool":"fluxos","op":"actions|options|run","app":"chave","kind":"action|search","key":"chave","parameters":{}} → apps conectados via Vertal Fluxos: ${list}. "actions" (grátis) mostra ações, buscas e campos; "options" (grátis, key = campo com "opções:") lista valores; "run" executa (${TOOL_COSTS.fluxos}; ação que muda algo pede aprovação). Nunca invente chaves nem ids.`;
+}
+
+/** Nome legível de um app do Vertal Fluxos a partir da chave ("google-sheets" → "Google Sheets"). */
+export function fluxosAppName(key: string): string {
+  return key.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
+/** Apps conectados que a conversa cita pelo nome/chave; "fluxos"/"conectores" na conversa inclui todos. */
+export function fluxosAppsInConversation(keys: string[], texts: string[]): Array<{ key: string; name: string }> {
+  const text = texts.join("\n").toLowerCase();
+  const all = keys.map((key) => ({ key, name: fluxosAppName(key) }));
+  if (/vertal fluxos|conector|conectad/.test(text)) return all;
+  return all.filter((a) => text.includes(a.key) || text.includes(a.name.toLowerCase()) || text.includes(a.key.replace(/-/g, " ")));
+}
+
 /** Huginn do cliente: só entra no prompt quando a conversa fala de Huginn (wantsHuginn). */
 const HUGINN_TOOL =
   `- {"tool":"huginn","op":"status|list_agents|get_agent|list_events|list_scenarios|create_agent|import_scenario|run_agent|set_agent_enabled|send_webhook_event|connect_to_automatisch|connect_from_automatisch"} + agent_id/page/scenario_id/type("WebsiteAgent"…)/name/options{}/schedule/source_ids[]/receiver_ids[]/scenario{}/enabled/payload{}/source_agent_id/flow_id/step_id/webhook_agent_id/data → agentes no Vertal Agentes do cliente (${TOOL_COSTS.huginn}). Login só no servidor com ${HUGINN_SECRETS.join(", ")} do Cofre: nunca peça usuário ou senha no chat.`;
@@ -411,7 +438,7 @@ const MEMORY_UNAVAILABLE = "Memória: indisponível neste momento. Não prometa 
 
 export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
   const full = buildPrompt(ctx);
-  if (full.length <= AGENT_PROMPT_BUDGET || (!ctx.github && !ctx.media && !ctx.automatisch && !ctx.huginn)) return full;
+  if (full.length <= AGENT_PROMPT_BUDGET || (!ctx.github && !ctx.media && !ctx.automatisch && !ctx.huginn && !ctx.fluxosApps?.length)) return full;
   // Prioridade ao cortar: automatisch/huginn (pedido explícito) > github (Vibe Code) > youtube (mídia).
   if (ctx.media) {
     const noMedia = buildPrompt({ ...ctx, media: false });
@@ -426,7 +453,9 @@ export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
       if (onlyHuginn.length <= AGENT_PROMPT_BUDGET) return onlyHuginn;
     }
   }
-  return buildPrompt({ ...ctx, github: false, media: false, automatisch: false, huginn: false });
+  const noOptional = buildPrompt({ ...ctx, github: false, media: false, automatisch: false, huginn: false });
+  if (noOptional.length <= AGENT_PROMPT_BUDGET || !ctx.fluxosApps?.length) return noOptional;
+  return buildPrompt({ ...ctx, github: false, media: false, automatisch: false, huginn: false, fluxosApps: [] });
 }
 
 function buildPrompt(ctx: AgentPromptContext): string {
@@ -470,6 +499,7 @@ function buildPrompt(ctx: AgentPromptContext): string {
     ctx.media ? YOUTUBE_TOOL : "",
     ctx.automatisch ? AUTOMATISCH_TOOL : "",
     ctx.huginn ? HUGINN_TOOL : "",
+    ctx.fluxosApps?.length ? fluxosTool(ctx.fluxosApps) : "",
     `- {"tool":"api_request","method":"GET|POST|PUT|PATCH|DELETE","url":"https://...","headers":{},"body":"texto ou JSON em string","reason":"por que esta chamada"} → chama uma API externa quando nenhuma ferramenta acima resolve. O usuário aprova cada chamada. Para autenticar, escreva {{NOME_DO_SEGREDO}} no valor do cabeçalho, na query ou no corpo; o servidor troca pelo valor do cofre. Nunca peça para o usuário colar chaves no chat. Segredos disponíveis: ${secrets}. Se faltar um segredo, explique qual nome criar e use {"tool":"open_panel","panel":"secrets"}.`,
     `- {"tool":"open_panel","panel":"${PANELS.filter((p) => p !== "navigator").join("|")}"} → abre um painel dentro do chat para o usuário trabalhar à mão. Use quando o pedido precisa de arquivos do usuário (video_studio: fotos viram vídeo; clips: cortes de vídeo longo; avatar: avatar falante; emo: animar foto; notebook: conversar com PDFs e links; office/design/canvas: edição manual).`,
     `- {"tool":"weather","place":"bairro ou cidade"} → clima atual e previsão de 3 dias. Sem "place", usa a localização do aparelho do usuário (ele autoriza). Nunca invente o clima: use sempre esta ferramenta.`,
@@ -936,6 +966,8 @@ export function parseAgentAction(raw: unknown): AgentAction | null {
       const op = parseHuginnOp(a);
       return op ? ({ tool: "huginn", ...op } as AgentAction) : null;
     }
+    case "fluxos":
+      return parseFluxosAgentAction(a);
     case "world_time": {
       const list = Array.isArray(a.places) ? a.places : typeof a.places === "string" ? a.places.split(",") : typeof a.place === "string" ? [a.place] : [];
       const places = list.map((p) => str(p, 80)).filter(Boolean).slice(0, 8);
@@ -1253,4 +1285,21 @@ export function formatToolResults(results: ToolResult[], opts: { final?: boolean
       ? 'Alguma ferramenta falhou. Se der para corrigir (outro termo de busca, outra URL, parâmetro ajustado), peça a ação corrigida UMA vez; se a falha não depende de você (créditos, conexão, autorização), explique ao usuário e diga o próximo passo. Nunca repita a mesma ação com os mesmos parâmetros.'
       : "",
   ].filter(Boolean).join("\n\n");
+}
+
+/** {"tool":"fluxos",...} do modelo → ação validada (chaves simples; parâmetros só objeto pequeno). */
+export function parseFluxosAgentAction(a: Record<string, unknown>): AgentAction | null {
+  const app = typeof a.app === "string" ? a.app.trim().replace(/^fluxos-/, "").toLowerCase() : "";
+  if (!/^[a-z0-9-]{1,64}$/.test(app)) return null;
+  const key = typeof a.key === "string" ? a.key.trim() : typeof a.action === "string" ? a.action.trim() : typeof a.search === "string" ? a.search.trim() : "";
+  const params = a.parameters && typeof a.parameters === "object" && !Array.isArray(a.parameters) && JSON.stringify(a.parameters).length <= 20_000
+    ? a.parameters as Record<string, unknown> : undefined;
+  if (a.op === "actions" || a.op === "describe") return { tool: "fluxos", op: "actions", app };
+  if (!/^[A-Za-z0-9_-]{1,80}$/.test(key)) return null;
+  if (a.op === "options") return { tool: "fluxos", op: "options", app, key, ...(params ? { parameters: params } : {}) };
+  if (a.op === "run") {
+    const kind = a.kind === "search" || a.kind === "trigger" || (typeof a.search === "string" && !a.action) ? "search" : "action";
+    return { tool: "fluxos", op: "run", app, kind, key, ...(params ? { parameters: params } : {}) };
+  }
+  return null;
 }
