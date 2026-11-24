@@ -48,10 +48,25 @@ export function useGitHubConnection() {
   }, [user])
 
   const connect = async () => {
-    // GitHub now connects via PAT inside KUBO (no external OAuth).
-    // Redirects the user to the internal setup subpage.
+    // GitHub App da Vertal: a edge function `github-app-install` gera a URL de
+    // instalação (state anti-CSRF gravado no servidor). O cliente escolhe os
+    // repositórios ("Only select repositories") e volta por github-app-callback,
+    // que grava o token de usuário (limitado a esses repositórios) e a instalação.
+    // returnUrl precisa ser absoluta: o callback redireciona para ela.
     setConnecting(true)
-    window.location.href = '/connectors/github/setup'
+    try {
+      const returnUrl = `${window.location.origin}/connectors/github`
+      const { data, error } = await supabase.functions.invoke('github-app-install', {
+        body: { returnUrl },
+      })
+      if (error || !data?.url) {
+        throw new Error(error?.message || data?.error || 'github_app_unavailable')
+      }
+      window.location.href = data.url
+    } catch (err) {
+      setConnecting(false)
+      toast.error(`Não foi possível iniciar a conexão com o GitHub: ${err instanceof Error ? err.message : 'erro desconhecido'}`)
+    }
   }
 
   const disconnect = async () => {
