@@ -15,6 +15,7 @@ import {
   isUsableBlueprint,
   mergeBlueprintIntoConfig,
 } from './gameBlueprint'
+import { validateBlueprint } from './blueprintQuality'
 
 type GameType = '2d' | '3d' | 'retro' | 'realistic' | 'metaverse' | '4d'
 
@@ -136,6 +137,7 @@ export default function GameBuilder() {
         blueprint: data.blueprint,
         designDoc: data.designDoc,
         model: data.model,
+        quality: validateBlueprint(data.blueprint),
       })
       const { data: updated, error: updateError } = await supabase
         .from('games')
