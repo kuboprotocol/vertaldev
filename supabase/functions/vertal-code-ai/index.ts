@@ -1,10 +1,12 @@
 // VERTAL Code AI · edge function (nuvem). Modo NOVO, ao lado do Vibe Code — não substitui nada.
 //
+//   POST {action:"status"}                       → {enabled, allowed} (200 só para quem está liberado)
 //   POST {action:"models"}                       → modelos disponíveis (só nomes Vertal)
 //   POST {action:"run", mode, effort, prompt...}  → SSE: status/read/model/verify/diff/plan/reply/done
 //   POST {action:"apply", projectId, changes}     → grava versões novas no cofre de código do projeto
 //
 // Liga só com VERTAL_CODE_AI_ENABLED=true (padrão: desligado → 404).
+// Com VERTAL_CODE_AI_USER_IDS (lista de ids separada por vírgula), só esses usuários; os demais recebem 404.
 // Não escreve em ai_gateway_runs (para não mexer na saúde/roteamento do Vibe Code) e
 // não cobra créditos na v1 (modelos grátis). Chaves só por variável de ambiente.
 
@@ -12,6 +14,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import {
   buildChain,
   isVcaEnabled,
+  isVcaUserAllowed,
   publicModelInfo,
   requestBody,
   shouldFallback,
@@ -144,6 +147,8 @@ Deno.serve(async (req) => {
   const { data: userRes, error: userErr } = await userClient.auth.getUser(token);
   if (userErr || !userRes?.user) return json(401, { error: "invalid_token" });
   const userId: string = userRes.user.id;
+  // Lista de liberação: quem não está nela não vê nada (mesma resposta de "desligado").
+  if (!isVcaUserAllowed(env(), userId)) return json(404, { error: "vertal_code_ai_disabled" });
   const admin: Loose = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
     auth: { persistSession: false },
   });
@@ -155,6 +160,7 @@ Deno.serve(async (req) => {
     return json(400, { error: "invalid_json_body" });
   }
   const action = body.action ?? "run";
+  if (action === "status") return json(200, { enabled: true, allowed: true });
   const origin = ORIGINS.includes(body.origin) ? body.origin : "vertal_code_ai";
 
   // Projeto do usuário (RLS decide se ele pode ver). Sem projeto = cofre pessoal (project_id nulo).
