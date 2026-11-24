@@ -10,6 +10,11 @@ import GameRetroBuilder from './GameRetroBuilder'
 import GameRealisticBuilder from './GameRealisticBuilder'
 import GameMetaverseBuilder from './GameMetaverseBuilder'
 import Game4DBuilder from './Game4DBuilder'
+import {
+  buildBlueprintPrompt,
+  isUsableBlueprint,
+  mergeBlueprintIntoConfig,
+} from './gameBlueprint'
 
 type GameType = '2d' | '3d' | 'retro' | 'realistic' | 'metaverse' | '4d'
 
@@ -102,12 +107,49 @@ export default function GameBuilder() {
 
       if (response.ok) {
         const result = await response.json()
-        setGames([result.game, ...games])
+        setGames(prev => [result.game, ...prev])
         setShowCreateModal(false)
         setEditingGame(result.game)
+        // Blueprint em segundo plano: o jogo já abriu; se a geração falhar, nada se perde.
+        void generateBlueprintForGame(result.game, gameData)
       }
     } catch (err) {
       console.error('Error creating game:', err)
+    }
+  }
+
+  // Chama o game-ai-architect e grava o blueprint no config do jogo.
+  // Falhas são só registradas: o jogo criado continua válido sem blueprint.
+  const generateBlueprintForGame = async (
+    game: { id: string; config?: unknown },
+    gameData: { title: string; description?: string; game_type: string; engine: string },
+  ) => {
+    const prompt = buildBlueprintPrompt(gameData)
+    if (!prompt) return
+    try {
+      const { data, error } = await supabase.functions.invoke('game-ai-architect', {
+        body: { prompt },
+      })
+      if (error || !data || !isUsableBlueprint(data.blueprint)) return
+
+      const config = mergeBlueprintIntoConfig(game.config, {
+        blueprint: data.blueprint,
+        designDoc: data.designDoc,
+        model: data.model,
+      })
+      const { data: updated, error: updateError } = await supabase
+        .from('games')
+        .update({ config: config as never })
+        .eq('id', game.id)
+        .select('*')
+        .single()
+      if (updateError || !updated) return
+
+      const fresh = updated as unknown as Game
+      setGames(prev => prev.map(g => (g.id === game.id ? fresh : g)))
+      setEditingGame(prev => (prev && prev.id === game.id ? fresh : prev))
+    } catch (err) {
+      console.error('Error generating game blueprint:', err)
     }
   }
 
