@@ -1,0 +1,38 @@
+# VERTAL Code AI — servidor de modelo próprio (CPU). NÃO é criado por este PR:
+# rode manualmente numa VM (ver README.md). Ollama fica só em 127.0.0.1;
+# a internet fala com o Caddy (HTTPS + token Bearer).
+services:
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11434:11434"
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_NUM_PARALLEL: "1"          # CPU: um pedido por vez rende mais por pedido
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_KEEP_ALIVE: "24h"          # evita recarregar o modelo (10–40 s em CPU)
+      OLLAMA_CONTEXT_LENGTH: "${VERTAL_OLLAMA_CTX:-8192}"
+    volumes:
+      - ollama:/root/.ollama
+    deploy:
+      resources:
+        limits:
+          memory: "${VERTAL_OLLAMA_MEM_LIMIT:-10g}"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [ollama]
+    # network_mode host: o Caddy escuta 80/443 direto na VM e alcança 127.0.0.1:11434.
+    environment:
+      VERTAL_OLLAMA_DOMAIN: "${VERTAL_OLLAMA_DOMAIN}"
+      VERTAL_OLLAMA_TOKEN: "${VERTAL_OLLAMA_TOKEN}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    network_mode: host
+
+volumes:
+  ollama:
+  caddy_data:

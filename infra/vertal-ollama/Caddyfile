@@ -1,0 +1,13 @@
+# HTTPS automático (Let's Encrypt) + só aceita quem manda o token.
+{$VERTAL_OLLAMA_DOMAIN} {
+	@authorized header Authorization "Bearer {$VERTAL_OLLAMA_TOKEN}"
+	handle @authorized {
+		# Só a API compatível com OpenAI; /api/pull, /api/delete etc. ficam fechados.
+		@openai path /v1/chat/completions /v1/models
+		handle @openai {
+			reverse_proxy 127.0.0.1:11434
+		}
+		respond 404
+	}
+	respond 401
+}
