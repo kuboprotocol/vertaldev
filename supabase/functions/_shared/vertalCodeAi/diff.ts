@@ -56,7 +56,11 @@ export function replaceOnce(source: string, search: string, replace: string): { 
   if (hits.length === 0) return { ok: false, error: "trecho de busca não encontrado no arquivo atual" };
   if (hits.length > 1) return { ok: false, error: "o trecho aparece mais de uma vez; inclua mais contexto" };
   const start = hits[0];
-  const out = [...srcLines.slice(0, start), ...replace.replace(/\n$/, "").split("\n"), ...srcLines.slice(start + needle.length)];
+  // Reindenta a troca com a indentação real do arquivo.
+  const realIndent = srcLines[start].match(/^\s*/)?.[0] ?? "";
+  const searchIndent = search.split("\n")[0].match(/^\s*/)?.[0] ?? "";
+  const replLines = replace.replace(/\n$/, "").split("\n").map((l) => (l.startsWith(searchIndent) ? realIndent + l.slice(searchIndent.length) : realIndent + l));
+  const out = [...srcLines.slice(0, start), ...replLines, ...srcLines.slice(start + needle.length)];
   return { ok: true, text: out.join("\n") };
 }
 
