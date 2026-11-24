@@ -59,7 +59,7 @@ const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: strin
   { key: "nano_banana", title: "Imagens Premium", desc: "Criação de imagens de alta qualidade", icon: ImageIcon, cost: "1 crédito" },
   { key: "video_studio", title: "Vertal Video Studio", desc: "1 a 10 fotos viram clipe, meme ou anúncio com IA", icon: Video, cost: "A partir de 2 créditos" },
   { key: "image_editor", title: "Editor de Imagens", desc: "Edite, corte e redimensione suas imagens perfeitamente", icon: Sliders, cost: "Grátis" },
-  { key: "downloader", title: "Downloader Universal", desc: "YouTube, Instagram, TikTok, Facebook", icon: Download, cost: "2 créditos" },
+  { key: "downloader", title: "Downloader Universal", desc: "TikTok, Kwai, Instagram e X · YouTube em breve", icon: Download, cost: "2 créditos" },
   { key: "clips", title: "Vertal Clips", desc: "Cortes virais automáticos", icon: Scissors, cost: "1 crédito" },
   { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes realistas", icon: User2, cost: "4 créditos/s de vídeo" },
   { key: "shorts", title: "Vertal Shorts", desc: "Vídeos curtos a partir de texto", icon: Video, cost: "3 créditos" },
@@ -110,10 +110,10 @@ const TOOL_CONFIGS: Record<ToolKey, {
   },
   downloader: { 
     title: "Downloader Universal", 
-    description: "Baixe vídeos de qualquer rede social (YouTube, TikTok, Instagram).", 
+    description: "Baixe vídeos do TikTok, Kwai, Instagram e X. YouTube em breve.", 
     cost: 2,
     promptLabel: "URL do vídeo",
-    placeholder: "https://www.youtube.com/watch?v=...",
+    placeholder: "https://www.tiktok.com/@usuario/video/...",
     options: [
       { key: "format", label: "Formato", type: "select", options: ["mp4", "mp3"], default: "mp4" }
     ]

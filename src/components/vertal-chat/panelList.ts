@@ -52,7 +52,7 @@ export const PANEL_LIST: PanelInfo[] = [
   { key: 'shorts', label: 'Shorts', hint: 'Vídeos curtos a partir de texto', icon: Video, group: 'midia' },
   { key: 'music', label: 'Música IA', hint: 'Música original', icon: Music, group: 'midia' },
   { key: 'emo', label: 'EMO', hint: 'Anima uma foto a partir de um vídeo', icon: Sparkles, group: 'midia' },
-  { key: 'downloader', label: 'Downloader', hint: 'YouTube, Instagram, TikTok…', icon: Download, group: 'midia' },
+  { key: 'downloader', label: 'Downloader', hint: 'TikTok, Kwai, Instagram e X (YouTube em breve)', icon: Download, group: 'midia' },
   { key: 'navigator', label: 'Vertal Navigator', hint: 'Navegador na nuvem que entra em sites por você (login salvo)', icon: Compass, group: 'conectar' },
   { key: 'connectors', label: 'Conectores', hint: 'Gmail, Slack, GitHub, Web3…', icon: Plug, group: 'conectar', route: '/connectors' },
   { key: 'secrets', label: 'Cofre de segredos', hint: 'Chaves de API para o chat usar', icon: KeyRound, group: 'conectar', route: '/secrets' },

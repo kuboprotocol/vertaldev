@@ -4,6 +4,7 @@
 import { corsHeaders } from "../_shared/cors.ts";
 import { getUser, deductCredits, recordAsset, sanitizeError, withRefundOnFailure } from "../_shared/creative.ts";
 import { validatePublicUrl } from "../_shared/security.ts";
+import { checkDownloaderHost } from "../_shared/downloaderPlatforms.ts";
 
 const COST = 2;
 const COBALT = Deno.env.get("COBALT_API_URL") ?? "https://api.cobalt.tools/";
@@ -37,6 +38,9 @@ Deno.serve(withRefundOnFailure(async (req) => {
     const { url: rawUrl, format = "mp4" } = await req.json();
     if (!rawUrl) return j(400, { error: "url required" });
     const url = validatePublicUrl(rawUrl).toString();
+    // Antes de cobrar: só plataformas ligadas (YouTube chega em breve).
+    const check = checkDownloaderHost(url);
+    if (!check.ok) return j(422, { error: check.code, message: check.message });
     const isAudio = format === "mp3";
 
     const ded = await deductCredits(user.id, COST, "creative_download", { url, format }, user.email, idempotencyKey);
