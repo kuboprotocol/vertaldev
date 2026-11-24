@@ -1,0 +1,15 @@
+# HTTPS automático (Let's Encrypt) + token obrigatório. Só a API compatível com OpenAI sai para fora.
+{$VERTAL_OLLAMA_DOMAIN} {
+	@unauthorized not header Authorization "Bearer {$VERTAL_OLLAMA_TOKEN}"
+	respond @unauthorized "unauthorized" 401
+
+	@allowed path /v1/chat/completions /v1/models
+	handle @allowed {
+		reverse_proxy ollama:11434 {
+			transport http {
+				read_timeout 300s
+			}
+		}
+	}
+	respond 404
+}
