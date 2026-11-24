@@ -13,6 +13,7 @@ const CreativeSheets = lazy(() => import('@/components/CreativeSheets').then((m)
 const FigcraftEditor = lazy(() => import('@/components/creative/FigcraftEditor').then((m) => ({ default: m.FigcraftEditor })));
 const CadStudio = lazy(() => import('@/components/creative/CadStudio').then((m) => ({ default: m.CadStudio })));
 const NavigatorPanel = lazy(() => import('./NavigatorPanel').then((m) => ({ default: m.NavigatorPanel })));
+const DocumentScanner = lazy(() => import('@/components/scanner/DocumentScanner').then((m) => ({ default: m.DocumentScanner })));
 const CreativeToolInterface = lazy(() =>
   import('@/components/creative/CreativeToolInterface').then((m) => ({ default: m.CreativeToolInterface })),
 );
@@ -66,6 +67,13 @@ export function PanelHost({ request, credits, userId }: { request: PanelRequest;
     return (
       <Suspense fallback={null}>
         <NavigatorPanel />
+      </Suspense>
+    );
+  }
+  if (key === 'scanner') {
+    return (
+      <Suspense fallback={null}>
+        <div className="mx-auto max-w-4xl p-3 sm:p-4"><DocumentScanner /></div>
       </Suspense>
     );
   }

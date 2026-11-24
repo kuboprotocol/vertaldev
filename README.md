@@ -71,6 +71,7 @@ O **Vertal VibeDev** é uma plataforma SaaS com inteligência artificial que per
 - Integra sistemas de pagamento e blockchain
 - Cria jogos 2D/3D, metaversos e MMOs via **Quantum Game Engine**
 - Produz vídeos motion graphics, mockups de produto e assets de IA
+- Digitaliza documentos em PDF: scanner de documentos no navegador, sem enviar a foto para a nuvem ([guia](docs/SCANNER_DE_DOCUMENTOS.md))
 
 **URL de Produção:** https://kubovibe.dev  
 **Preview:** https://id-preview--5ce8b966-167f-4e5a-be1c-165ac92bd64e.lovable.app
