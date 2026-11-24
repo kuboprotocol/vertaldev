@@ -93,7 +93,7 @@ export function diffLines(a: string[], b: string[]): Op[] {
     return [...a.map((line) => ({ t: "-" as const, line })), ...b.map((line) => ({ t: "+" as const, line }))];
   }
   const offset = max;
-  let v = new Int32Array(2 * max + 2);
+  let v: Int32Array = new Int32Array(2 * max + 2);
   const trace: Int32Array[] = [];
   let found = false;
   for (let d = 0; d <= max && !found; d++) {
