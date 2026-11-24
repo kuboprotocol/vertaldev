@@ -18,6 +18,7 @@ import { VibePayDevGate } from "@/components/vibepay/VibePayDevGate";
 // Lazy loading all pages
 const Index = lazy(() => import("./pages/Index"));
 const AuthPage = lazy(() => import("./pages/AuthPage"));
+const ScannerPage = lazy(() => import("./pages/ScannerPage"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
@@ -301,6 +302,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/affiliate-program" element={<ProtectedRoute><AffiliateProgramPage /></ProtectedRoute>} />
                 <Route path="/docs/mcp" element={<DocsMcpPage />} />
                 <Route path="/mcp" element={<ProtectedRoute><McpAccessPage /></ProtectedRoute>} />
+                <Route path="/scanner" element={<ScannerPage />} />
                 <Route path="/secrets" element={<ProtectedRoute><SecretsVaultPage /></ProtectedRoute>} />
                 
                 <Route path="/creative" element={<ProtectedRoute><CreativeEconomyGate><CreativePage /></CreativeEconomyGate></ProtectedRoute>} />

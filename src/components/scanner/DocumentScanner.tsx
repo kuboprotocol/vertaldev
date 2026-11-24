@@ -1,10 +1,11 @@
 // Scanner de documentos do Vertal Chat (painel criativo). Fotografe ou envie uma foto, ajuste os cantos,
 // escolha o filtro e exporte um PDF. O processamento roda no seu navegador: a imagem não é enviada a servidores.
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { Check, Download, FileText, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { Camera, Check, Download, FileText, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { buildScanPdf } from '@/lib/scanner/pdf';
+import { deliverPdf, isNativeApp, takeNativePhoto } from '@/lib/scanner/platform';
 import { enhance, insetQuad, outputSize, warpPerspective, type Pt, type Quad, type ScanMode } from '@/lib/scanner/geometry';
 import { cn } from '@/lib/utils';
 
@@ -89,12 +90,12 @@ export function DocumentScanner() {
     canvas.getContext('2d')?.drawImage(active.source, 0, 0);
   }, [active]);
 
-  async function addPhotos(files: FileList | null) {
-    if (!files || files.length === 0) return;
+  async function addPhotos(input: FileList | File[] | null) {
+    if (!input || input.length === 0) return;
     setBusy(true);
     try {
       const added: ScanPage[] = [];
-      for (const file of Array.from(files)) {
+      for (const file of Array.from(input)) {
         if (!file.type.startsWith('image/')) {
           toast.error(`"${file.name}" não é uma imagem.`);
           continue;
@@ -111,6 +112,15 @@ export function DocumentScanner() {
     } finally {
       setBusy(false);
       if (fileRef.current) fileRef.current.value = '';
+    }
+  }
+
+  async function takePhoto() {
+    try {
+      const file = await takeNativePhoto();
+      if (file) await addPhotos([file]);
+    } catch {
+      toast.error('Não consegui abrir a câmera. Confira a permissão de câmera do aparelho.');
     }
   }
 
@@ -164,13 +174,8 @@ export function DocumentScanner() {
         jpegs.push({ jpeg: await canvasToJpeg(out), width: out.width, height: out.height });
       }
       const bytes = await buildScanPdf(jpegs);
-      const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'application/pdf' }));
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `documento-escaneado-${new Date().toISOString().slice(0, 10)}.pdf`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
-      toast.success(`PDF com ${pages.length} página(s) criado.`);
+      const result = await deliverPdf(bytes, `documento-escaneado-${new Date().toISOString().slice(0, 10)}.pdf`);
+      toast.success(result === 'shared' ? `PDF com ${pages.length} página(s) pronto para salvar ou enviar.` : `PDF com ${pages.length} página(s) baixado.`);
     } catch {
       toast.error('Não consegui gerar o PDF. Revise os cantos das páginas.');
     } finally {
@@ -188,8 +193,13 @@ export function DocumentScanner() {
       </header>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button onClick={() => fileRef.current?.click()} disabled={busy}>
-          <Plus className="mr-2 h-4 w-4" /> Adicionar foto
+        {isNativeApp() ? (
+          <Button onClick={() => void takePhoto()} disabled={busy}>
+            <Camera className="mr-2 h-4 w-4" /> Fotografar
+          </Button>
+        ) : null}
+        <Button onClick={() => fileRef.current?.click()} disabled={busy} variant={isNativeApp() ? 'outline' : 'default'}>
+          <Plus className="mr-2 h-4 w-4" /> {isNativeApp() ? 'Galeria' : 'Adicionar foto'}
         </Button>
         <input
           ref={fileRef}
@@ -202,7 +212,7 @@ export function DocumentScanner() {
           aria-label="Escolher fotos do documento"
         />
         <Button variant="secondary" onClick={() => void exportPdf()} disabled={busy || pages.length === 0}>
-          <Download className="mr-2 h-4 w-4" /> Exportar PDF
+          <Download className="mr-2 h-4 w-4" /> {isNativeApp() ? 'Salvar PDF' : 'Exportar PDF'}
         </Button>
       </div>
 

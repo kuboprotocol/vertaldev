@@ -28,6 +28,43 @@ Ele vive no **Painel Criativo** do Vertal Chat. Você pode abri-lo pelo menu de 
 5. Toque em **Confirmar página**. Repita para as demais páginas.
 6. Toque em **Exportar PDF**. O arquivo `documento-escaneado-AAAA-MM-DD.pdf` é baixado.
 
+## Android, iPhone, iPad e Mac
+
+O mesmo scanner roda em todas as plataformas. A diferença está em como a foto entra e como o PDF sai.
+
+| Plataforma | Como entra a foto | Como sai o PDF | Como acessar |
+|---|---|---|---|
+| **Android** | Câmera ou galeria, pelo seletor do sistema | Painel "Compartilhar" (Arquivos, Drive, e-mail, impressão) | App nativo Vertal (Capacitor) ou `/scanner` no navegador |
+| **iPhone e iPad** | Câmera ou galeria, pelo seletor do sistema | Painel "Compartilhar" (Arquivos, iCloud Drive, Mail, impressão) | App nativo Vertal (Capacitor) ou `/scanner` no Safari |
+| **Mac** | Arquivo de imagem (ou câmera do Mac, se o navegador permitir) | Download pelo navegador | `/scanner` no Safari ou Chrome, ou instalado como app pela opção de PWA |
+| **Windows e Linux** | Arquivo de imagem | Download pelo navegador | `/scanner` no navegador |
+
+Na web, o botão de adicionar foto abre o seletor de arquivos. No app nativo aparecem dois botões: **Fotografar** (câmera) e **Galeria**.
+
+### Gerar os apps nativos
+
+O projeto usa Capacitor. As pastas `android/` e `ios/` são geradas e não ficam versionadas:
+
+```bash
+npm install
+npm run build
+npx cap add android   # uma vez
+npx cap add ios       # uma vez (requer macOS e Xcode)
+npx cap sync
+npx cap run android   # ou: npx cap open ios
+```
+
+Plugins usados pelo scanner: `@capacitor/camera`, `@capacitor/filesystem` e `@capacitor/share`.
+
+### Permissões
+
+- **iOS:** o `Info.plist` precisa de `NSCameraUsageDescription` (texto mostrado ao pedir a câmera) e de `NSPhotoLibraryUsageDescription` (galeria). Sem eles, o iOS fecha o app ao tocar em Fotografar.
+- **Android:** nenhuma permissão extra. A câmera abre pelo app do sistema e a galeria pelo seletor de fotos.
+
+### Mac: por que não há app nativo
+
+O Capacitor gera apps para Android e iOS, não para Mac. Hoje o caminho é o navegador ou o app instalado como PWA. Um app do Mac pela tecnologia do iPad (Mac Catalyst, via Xcode) é possível a partir do projeto iOS, mas não está configurado nem testado.
+
 ## Privacidade: o documento não sai do aparelho
 
 - O recorte em perspectiva, o filtro e a montagem do PDF rodam **no seu navegador**.
@@ -49,7 +86,7 @@ Sim. Digitalizar e exportar PDF não consome créditos do Vertal.
 A digitalização e a exportação dependem do navegador já carregado. Depois que o painel abre, o processamento não precisa de conexão com servidores do Vertal.
 
 **Serve para escanear no celular?**
-Sim. No celular, o botão de foto abre a câmera traseira. No computador, ele abre o seletor de arquivos.
+Sim. No Android e no iPhone, o app nativo abre a câmera ou a galeria. No navegador do celular, o botão de foto abre a câmera traseira.
 
 **Qual a diferença para o Microsoft Lens?**
 O Lens usa a nuvem da Microsoft para parte do processamento. Aqui a imagem fica no seu aparelho, e o código é de um projeto open source auditável.
