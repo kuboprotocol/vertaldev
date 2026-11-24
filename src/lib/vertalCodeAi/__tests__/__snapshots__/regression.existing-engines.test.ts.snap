@@ -1,0 +1,181 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Vertal Design Intelligence (inalterado) > auditoria de código gerado 1`] = `
+{
+  "blockers": 2,
+  "checkedFiles": 1,
+  "findings": [
+    {
+      "fix": "Adicione alt descritivo (ou alt="" se for puramente decorativa).",
+      "line": 1,
+      "message": "Imagem sem texto alternativo.",
+      "path": "src/App.tsx",
+      "rule": "img-alt",
+      "severity": "blocker",
+    },
+    {
+      "fix": "Troque por <button type="button"> ou <a href>; se não puder, adicione role, tabIndex={0} e onKeyDown.",
+      "line": 1,
+      "message": "Elemento não interativo (div/span) com onClick — inacessível por teclado e leitor de tela.",
+      "path": "src/App.tsx",
+      "rule": "clickable-div",
+      "severity": "blocker",
+    },
+  ],
+  "score": 76,
+  "warnings": 0,
+}
+`;
+
+exports[`Vertal Design Intelligence (inalterado) > auditoria de código gerado 2`] = `"b33e01fcfb54daa2"`;
+
+exports[`Vertal Design Intelligence (inalterado) > auditoria de código gerado 3`] = `"257cdeaff11f895b"`;
+
+exports[`Vertal Design Intelligence (inalterado) > detecção de superfície e config 1`] = `
+[
+  "saas_dashboard",
+  "mobile_app",
+  "landing_page",
+  "web_app",
+]
+`;
+
+exports[`Vertal Design Intelligence (inalterado) > detecção de superfície e config 2`] = `
+{
+  "enabled": false,
+  "surface": "landing_page",
+  "surfaceSource": "detected",
+}
+`;
+
+exports[`Vertal Design Intelligence (inalterado) > prompt de design por superfície (hash do texto) 1`] = `
+{
+  "landing_page:html": "e7f8a498dad5ab13",
+  "landing_page:react": "6288320a19e690ba",
+  "mobile_app:html": "51fd46ea1f20b1b3",
+  "mobile_app:react": "d06e98adda93b5c0",
+  "saas_dashboard:html": "3f6381f11edf0ed6",
+  "saas_dashboard:react": "7874ec184ffe8c26",
+  "web_app:html": "a0065df68dde3daa",
+  "web_app:react": "bb95c391098a8adf",
+}
+`;
+
+exports[`motor de código do Vibe Code (inalterado) > caminhos seguros e lint 1`] = `
+[
+  true,
+  false,
+  false,
+  false,
+  false,
+]
+`;
+
+exports[`motor de código do Vibe Code (inalterado) > caminhos seguros e lint 2`] = `
+[
+  "contém placeholder/TODO ou trecho omitido; entregue o arquivo COMPLETO",
+  "parece conter um segredo escrito no código; use variável de ambiente",
+]
+`;
+
+exports[`motor de código do Vibe Code (inalterado) > leitura do turno do agente e resposta composta 1`] = `
+{
+  "actions": [
+    {
+      "type": "message",
+    },
+  ],
+  "conversationSummary": undefined,
+  "final": true,
+  "memories": undefined,
+  "parse": "ok",
+  "requirements": undefined,
+  "retry": false,
+  "summary": "",
+  "thought": "x",
+  "title": undefined,
+}
+`;
+
+exports[`motor de código do Vibe Code (inalterado) > leitura do turno do agente e resposta composta 2`] = `
+"nota
+
+Commitei 1 arquivo(s): \`src/a.ts\`. Toque numa caixinha de código para ver onde ficou."
+`;
+
+exports[`motor de código do Vibe Code (inalterado) > origem e árvore 1`] = `
+[
+  "src/a.ts",
+  "README.md",
+]
+`;
+
+exports[`motor de código do Vibe Code (inalterado) > origem e árvore 2`] = `"ii3623"`;
+
+exports[`motor de jogos (inalterado) > checagem de qualidade do blueprint 1`] = `
+{
+  "issues": [
+    {
+      "message": "gênero ausente",
+      "path": "genre",
+      "severity": "error",
+    },
+    {
+      "message": "nenhum pilar definido; sem critério para cortar features",
+      "path": "pillars",
+      "severity": "warning",
+    },
+    {
+      "message": "loop de gameplay ausente",
+      "path": "gameplay_loop",
+      "severity": "error",
+    },
+    {
+      "message": "roadmap ausente",
+      "path": "roadmap",
+      "severity": "warning",
+    },
+    {
+      "message": "cena ausente",
+      "path": "scene",
+      "severity": "error",
+    },
+  ],
+  "ok": false,
+}
+`;
+
+exports[`motor de jogos (inalterado) > checagem de qualidade do blueprint 2`] = `
+{
+  "issues": [
+    {
+      "message": "o blueprint não é um objeto",
+      "path": "blueprint",
+      "severity": "error",
+    },
+  ],
+  "ok": false,
+}
+`;
+
+exports[`motor de jogos (inalterado) > merge do blueprint no config preserva as chaves do builder 1`] = `
+{
+  "blueprint": {
+    "title": "X",
+  },
+  "blueprintAt": "2026-01-01T00:00:00.000Z",
+  "blueprintModel": "m",
+  "blueprintQuality": null,
+  "designDoc": "doc",
+  "keep": 1,
+}
+`;
+
+exports[`motor de jogos (inalterado) > merge do blueprint no config preserva as chaves do builder 2`] = `true`;
+
+exports[`motor de jogos (inalterado) > prompt do blueprint 1`] = `
+"Título: Dragão
+Descrição: Voa e cospe fogo
+Tipo: 3d
+Engine: babylon"
+`;

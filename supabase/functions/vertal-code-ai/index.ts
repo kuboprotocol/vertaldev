@@ -105,6 +105,7 @@ import {
   VcaDataLibrarySender,
   VcaRunTracker,
 } from "../_shared/vertalCodeAi/dataLibrary.ts";
+import { type CostClass, inAppChargeKey, inAppCredits, loadPricing, worstClass } from "../_shared/vertalCodeAi/pricing.ts";
 
 // Cliente do Supabase e módulo TypeScript sem tipos gerados (mesmo padrão do vibe-code-agent).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1131,6 +1132,22 @@ Deno.serve(async (req) => {
     )
     : null;
   vcaDlRun?.started();
+  // Varejo em créditos (desligado por padrão: VERTAL_CODE_AI_CHARGE_ENABLED=true). Preço da tabela
+  // (VERTAL_CODE_AI_PRICING); checa o saldo para o pior caso da cadeia ANTES e cobra uma vez DEPOIS,
+  // pelo modelo mais caro que respondeu, com idempotência por pedido.
+  const chargeOn = /^(1|true|yes|on|sim)$/i.test(Deno.env.get("VERTAL_CODE_AI_CHARGE_ENABLED") ?? "");
+  const pricing = loadPricing(Deno.env.get("VERTAL_CODE_AI_PRICING")).pricing;
+  const priceAction = mode === "plan" ? "plan" : "build";
+  const requestId = typeof body.requestId === "string" && /^[\w-]{8,64}$/.test(body.requestId) ? body.requestId : crypto.randomUUID();
+  if (chargeOn) {
+    const worst = inAppCredits(pricing, priceAction, worstClass(chain.map((m) => m.cost)));
+    if (worst > 0) {
+      const { data: sub } = await admin.from("subscriptions").select("edits_limit, edits_used").eq("user_id", userId).eq("is_active", true).maybeSingle();
+      const balance = sub ? (sub.edits_limit ?? 0) - (sub.edits_used ?? 0) : 0;
+      if (balance < worst) return json(402, { error: "insufficient_credits", needed: worst, balance });
+    }
+  }
+  const usedCosts: CostClass[] = [];
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -1158,7 +1175,12 @@ Deno.serve(async (req) => {
             persona: vertalPersonaEnabled(Deno.env.get("VERTAL_PERSONA_ENABLED")),
           },
           {
-            callModel: (messages, o) => callChain(chain, messages, { ...o, effort, deadline }).then((r) => (vcaDlRun?.modelCall(r), r)),
+            callModel: async (messages, o) => {
+              const reply = await callChain(chain, messages, { ...o, effort, deadline });
+              vcaDlRun?.modelCall(reply);
+              usedCosts.push(reply.cost as CostClass);
+              return reply;
+            },
             listPaths: async () => [...(await getFiles()).keys()],
             readFile: async (p) => (await getFiles()).get(p),
             indexSource: async () => [...(await getFiles())].filter(([, c]) => c.length < 60_000).map(([path, content]) => ({ path, content })),
@@ -1167,6 +1189,20 @@ Deno.serve(async (req) => {
           },
         );
         vcaDlRun?.finished({ ok: true, filesChanged: result.changes.length, verified: result.verified, codeExcerpt: result.changes.find((c) => c.after)?.after ?? null });
+        if (chargeOn && usedCosts.length) {
+          const credits = inAppCredits(pricing, priceAction, worstClass(usedCosts));
+          if (credits > 0) {
+            const { error: chErr } = await admin.rpc("execute_atomic_credit_deduction", {
+              _user_id: userId,
+              _amount: credits,
+              _reason: `vertal_code_ai:${mode}`,
+              _category: "vertal_code_ai",
+              _metadata: { mode, origin, cost_class: worstClass(usedCosts), request_id: requestId },
+              _idempotency_key: inAppChargeKey(userId, mode, requestId),
+            });
+            send(chErr ? { kind: "charge", status: "failed", credits } : { kind: "charge", status: "ok", credits });
+          }
+        }
         // Hash do "antes" de cada arquivo: o apply recusa se o arquivo mudou no meio do caminho.
         send({
           kind: "base_hashes",
