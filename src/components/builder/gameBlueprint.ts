@@ -30,6 +30,8 @@ export interface BlueprintResult {
   blueprint: Record<string, unknown>;
   designDoc?: string;
   model?: string;
+  /** Resultado de validateBlueprint: salvo junto para o usuário ver os avisos. */
+  quality?: unknown;
 }
 
 /** Acrescenta o blueprint ao config existente, preservando as chaves do builder. */
@@ -46,6 +48,7 @@ export function mergeBlueprintIntoConfig(
     blueprint: result.blueprint,
     designDoc: result.designDoc ?? '',
     blueprintModel: result.model ?? null,
+    blueprintQuality: result.quality ?? null,
     blueprintAt: now.toISOString(),
   };
 }
