@@ -2,7 +2,7 @@
 import type { ComponentType } from 'react';
 import {
   BookOpen, Clapperboard, Clock, Code2, Compass, Download, FileText, History, KeyRound, Layout, LayoutTemplate, Music, NotebookPen,
-  Palette, Plug, Puzzle, Ruler, Scissors, Sparkles, Table2, User2, Video,
+  Palette, Plug, Puzzle, Ruler, ScanLine, Scissors, Sparkles, Table2, User2, Video,
 } from 'lucide-react';
 import type { PanelKey } from '@/lib/chatAgent/contract';
 import type { DesignCopy } from '@/components/creative/DesignGallery';
@@ -38,6 +38,7 @@ export const PANEL_LIST: PanelInfo[] = [
   { key: 'history', label: 'Histórico', hint: 'Tudo que você criou em todas as conversas', icon: History, group: 'criar' },
   { key: 'office', label: 'Vertal Office', hint: 'Documentos, planilhas, slides e PDF', icon: FileText, group: 'criar' },
   { key: 'design', label: 'Design Premium', hint: 'Artes com IA, slides, estúdio e avatares', icon: Palette, group: 'criar' },
+  { key: 'scanner', label: 'Scanner de documentos', hint: 'Foto de papel vira PDF limpo e nítido, no seu navegador', icon: ScanLine, group: 'criar' },
   { key: 'figcraft', label: 'figCraft', hint: 'Telas, componentes e protótipos salvos na sua conta', icon: Layout, group: 'criar' },
   { key: 'cad', label: 'Auto Cadê', hint: 'Plantas e desenhos técnicos, à mão ou com IA; exporta DXF para AutoCAD', icon: Ruler, group: 'criar' },
   { key: 'canvas', label: 'Canvas', hint: 'Canvas infinito para montar artes', icon: LayoutTemplate, group: 'criar' },

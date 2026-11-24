@@ -72,7 +72,7 @@ export interface CanvasSpec {
 /** Painéis que o chat abre dentro do próprio layout. */
 export const PANELS = [
   "history", "office", "design", "figcraft", "cad", "canvas", "notebook", "video_studio", "clips", "avatar",
-  "shorts", "emo", "sheet", "ebook", "music", "downloader", "builder", "clock", "voice",
+  "shorts", "emo", "sheet", "ebook", "music", "downloader", "builder", "clock", "voice", "scanner",
   "connectors", "secrets", "agents", "navigator",
 ] as const;
 export type PanelKey = (typeof PANELS)[number];
@@ -471,7 +471,7 @@ function buildPrompt(ctx: AgentPromptContext): string {
     ctx.automatisch ? AUTOMATISCH_TOOL : "",
     ctx.huginn ? HUGINN_TOOL : "",
     `- {"tool":"api_request","method":"GET|POST|PUT|PATCH|DELETE","url":"https://...","headers":{},"body":"texto ou JSON em string","reason":"por que esta chamada"} → chama uma API externa quando nenhuma ferramenta acima resolve. O usuário aprova cada chamada. Para autenticar, escreva {{NOME_DO_SEGREDO}} no valor do cabeçalho, na query ou no corpo; o servidor troca pelo valor do cofre. Nunca peça para o usuário colar chaves no chat. Segredos disponíveis: ${secrets}. Se faltar um segredo, explique qual nome criar e use {"tool":"open_panel","panel":"secrets"}.`,
-    `- {"tool":"open_panel","panel":"${PANELS.filter((p) => p !== "navigator").join("|")}"} → abre um painel dentro do chat para o usuário trabalhar à mão. Use quando o pedido precisa de arquivos do usuário (video_studio: fotos viram vídeo; clips: cortes de vídeo longo; avatar: avatar falante; emo: animar foto; notebook: conversar com PDFs e links; office/design/canvas: edição manual).`,
+    `- {"tool":"open_panel","panel":"${PANELS.filter((p) => p !== "navigator").join("|")}"} → abre um painel dentro do chat para o usuário trabalhar à mão. Use quando precisa de arquivos do usuário (video_studio: fotos viram vídeo; clips: cortes de vídeo longo; avatar: avatar falante; emo: animar foto; notebook: conversar com PDFs e links; office/design/canvas: edição manual).`,
     `- {"tool":"weather","place":"bairro ou cidade"} → clima atual e previsão de 3 dias. Sem "place", usa a localização do aparelho do usuário (ele autoriza). Nunca invente o clima: use sempre esta ferramenta.`,
     `- {"tool":"web_search","query":"o que procurar","max":5} → busca na web por informações atuais. Retorna títulos, URLs e resumos (quando usar: veja "Busca na web" abaixo). "max" é opcional (padrão 5 resultados).`,
     mailOn ? "" : `- {"tool":"gmail_search","query":"busca no formato do Gmail","max":10} → lê os e-mails da conta Gmail conectada.`,
