@@ -1,8 +1,10 @@
 // Botão de entrada do VERTAL Code AI (Vertal Chat e Vibe Code).
 // Com VITE_VERTAL_CODE_AI desligado (padrão) não renderiza NADA: a tela existente fica idêntica.
+// Com ele ligado, só aparece se o servidor liberar este usuário (VERTAL_CODE_AI_USER_IDS).
 import { useNavigate } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
-import { isVertalCodeAiEnabled, vertalCodeAiHref, type VcaFrom } from '@/lib/vertalCodeAi/client';
+import { vertalCodeAiHref, type VcaFrom } from '@/lib/vertalCodeAi/client';
+import { useVertalCodeAiAccess } from '@/lib/vertalCodeAi/access';
 
 interface Props {
   from: Exclude<VcaFrom, 'direct'>;
@@ -14,8 +16,8 @@ interface Props {
 
 export function VertalCodeAiEntryButton({ from, prompt, enabledOverride }: Props) {
   const navigate = useNavigate();
-  const enabled = enabledOverride ?? isVertalCodeAiEnabled();
-  if (!enabled) return null;
+  const access = useVertalCodeAiAccess(enabledOverride);
+  if (access !== 'allowed') return null;
   return (
     <button
       type="button"

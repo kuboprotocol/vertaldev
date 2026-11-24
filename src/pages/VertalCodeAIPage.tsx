@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check, FileCode2, Hammer, ImagePlus, ListChecks, Loader2, Paperclip, Send, Sparkles, Square, Trash2, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { VertalCodeAiGate } from '@/components/vertal-code-ai/VertalCodeAiGate';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -62,7 +63,7 @@ function DiffView({ diff }: { diff: string }) {
   );
 }
 
-export default function VertalCodeAIPage() {
+function VertalCodeAIScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const handoff = useMemo(() => readHandoff(location.search), [location.search]);
@@ -409,5 +410,14 @@ export default function VertalCodeAIPage() {
         </div>
       </footer>
     </div>
+  );
+}
+
+/** Rota: só usuários liberados pelo servidor (VERTAL_CODE_AI_USER_IDS) veem a tela; os demais, "não encontrada". */
+export default function VertalCodeAIPage() {
+  return (
+    <VertalCodeAiGate>
+      <VertalCodeAIScreen />
+    </VertalCodeAiGate>
   );
 }

@@ -104,3 +104,27 @@ describe('VERTAL Code AI · roteador grátis primeiro', () => {
     }
   });
 });
+
+import { isVcaUserAllowed, vcaAllowedUserIds } from '../../../supabase/functions/_shared/vertalCodeAi/router';
+
+describe('VERTAL Code AI · lista de liberação por usuário', () => {
+  const A = '11111111-1111-4111-8111-111111111111';
+  const B = '22222222-2222-4222-8222-222222222222';
+  it('desligado: ninguém passa, nem quem está na lista', () => {
+    expect(isVcaUserAllowed({ VERTAL_CODE_AI_USER_IDS: A }, A)).toBe(false);
+  });
+  it('ligado sem lista: comportamento antigo (todos)', () => {
+    expect(vcaAllowedUserIds({ VERTAL_CODE_AI_ENABLED: 'true' })).toBeNull();
+    expect(isVcaUserAllowed({ VERTAL_CODE_AI_ENABLED: 'true' }, B)).toBe(true);
+    expect(isVcaUserAllowed({ VERTAL_CODE_AI_ENABLED: 'true', VERTAL_CODE_AI_USER_IDS: ' ' }, B)).toBe(true);
+  });
+  it('ligado com lista: só quem está nela', () => {
+    const env = { VERTAL_CODE_AI_ENABLED: 'true', VERTAL_CODE_AI_USER_IDS: ` ${A.toUpperCase()} ,, ` };
+    expect(vcaAllowedUserIds(env)).toEqual([A]);
+    expect(isVcaUserAllowed(env, A)).toBe(true);
+    expect(isVcaUserAllowed(env, B)).toBe(false);
+    expect(isVcaUserAllowed(env, '')).toBe(false);
+    expect(isVcaUserAllowed(env, null)).toBe(false);
+    expect(isVcaUserAllowed({ ...env, VERTAL_CODE_AI_USER_IDS: `${B},${A}` }, A)).toBe(true);
+  });
+});

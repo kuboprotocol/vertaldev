@@ -194,6 +194,23 @@ export function isVcaEnabled(env: VcaEnv): boolean {
   return truthy(env.VERTAL_CODE_AI_ENABLED);
 }
 
+/** Lista de liberação: VERTAL_CODE_AI_USER_IDS="uuid1,uuid2". Vazia/ausente = sem restrição. */
+export function vcaAllowedUserIds(env: VcaEnv): string[] | null {
+  const ids = (env.VERTAL_CODE_AI_USER_IDS ?? "")
+    .split(/[\s,;]+/)
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  return ids.length ? ids : null;
+}
+
+/** Este usuário pode usar o VERTAL Code AI? (exige ligado + estar na lista, quando houver lista) */
+export function isVcaUserAllowed(env: VcaEnv, userId: string | null | undefined): boolean {
+  if (!isVcaEnabled(env)) return false;
+  const ids = vcaAllowedUserIds(env);
+  if (!ids) return true;
+  return !!userId && ids.includes(userId.trim().toLowerCase());
+}
+
 /** Servidor próprio (Ollama na nuvem), se configurado. URL base sem /v1. */
 export function selfHostedModel(env: VcaEnv): VcaModel | null {
   const raw = (env.VERTAL_OLLAMA_URL ?? "").trim().replace(/\/+$/, "");
