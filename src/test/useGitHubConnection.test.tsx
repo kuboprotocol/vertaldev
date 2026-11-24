@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
 
 /**
- * useGitHubConnection: o GitHub conecta via token pessoal (PAT) dentro do
- * KUBO — `connect()` leva à subpágina de setup, sem OAuth externo nem
- * chamada de edge function. `disconnect()` apaga a conexão e a credencial.
+ * useGitHubConnection: o GitHub conecta via OAuth 2.0 — `connect()` chama a
+ * edge function `github-auth` e redireciona para a URL devolvida.
+ * `disconnect()` apaga a conexão e a credencial.
  */
 
 const h = vi.hoisted(() => {
@@ -46,9 +46,11 @@ beforeEach(() => {
   h.invokeMock.mockClear(); h.fromMock.mockClear(); Object.values(h.toastMock).forEach((m) => m.mockClear())
   ;(window as unknown as { location: unknown }).location = {
     href: 'http://localhost/connectors/github',
+    origin: 'http://localhost',
     pathname: '/connectors/github',
     search: '',
   }
+  h.invokeMock.mockReset()
 })
 
 afterEach(() => {
@@ -64,7 +66,8 @@ describe('useGitHubConnection', () => {
     expect(result.current.connection?.github_username).toBe('kubo')
   })
 
-  it('connect() navigates to the internal PAT setup page without calling an edge function', async () => {
+  it('connect() asks github-auth for the authorize URL and redirects to it', async () => {
+    h.invokeMock.mockResolvedValue({ data: { url: 'https://github.com/login/oauth/authorize?state=abc' }, error: null })
     const { result } = renderHook(() => useGitHubConnection())
     await waitFor(() => expect(result.current.loading).toBe(false))
 
@@ -72,9 +75,24 @@ describe('useGitHubConnection', () => {
       await result.current.connect()
     })
 
-    expect(window.location.href).toBe('/connectors/github/setup')
-    expect(result.current.connecting).toBe(true)
-    expect(h.invokeMock).not.toHaveBeenCalled()
+    expect(h.invokeMock).toHaveBeenCalledWith('github-auth', {
+      body: { returnUrl: 'http://localhost/connectors/github' },
+    })
+    expect(window.location.href).toBe('https://github.com/login/oauth/authorize?state=abc')
+  })
+
+  it('connect() shows an error and resets the button when github-auth fails', async () => {
+    h.invokeMock.mockResolvedValue({ data: null, error: { message: 'rate_limited' } })
+    const { result } = renderHook(() => useGitHubConnection())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    await act(async () => {
+      await result.current.connect()
+    })
+
+    expect(h.toastMock.error).toHaveBeenCalled()
+    expect(result.current.connecting).toBe(false)
+    expect(window.location.href).toBe('http://localhost/connectors/github')
   })
 
   it('disconnect() removes the connection and the stored credential', async () => {
