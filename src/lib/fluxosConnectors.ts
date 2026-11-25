@@ -120,6 +120,7 @@ const FLUXOS_APP_LOGOS: Record<string, string> = {
   airtable: '/connectors/airtable.png',
   'better-stack': '/connectors/better-stack.webp',
   asana: '/connectors/asana.png',
+  facebook: '/connectors/facebook.png',
   eventbrite: '/connectors/eventbrite.png',
   ebay: '/connectors/ebay.png',
   dropbox: '/connectors/dropbox.png',
