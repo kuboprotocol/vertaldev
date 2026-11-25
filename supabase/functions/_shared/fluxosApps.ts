@@ -17,7 +17,8 @@ export type FluxosOp =
   | { op: "complete"; app: string; params: Record<string, string> }
   | { op: "disconnect"; app: string }
   | { op: "run"; app: string; kind: "action" | "trigger"; key: string; parameters: Record<string, unknown>; chatCharge?: string }
-  | { op: "options"; app: string; key: string; parameters: Record<string, unknown> };
+  | { op: "options"; app: string; key: string; parameters: Record<string, unknown> }
+  | { op: "test"; app: string; fields: Record<string, string> };
 
 const APP_RE = /^[a-z0-9-]{1,64}$/;
 const KEY_RE = /^[A-Za-z0-9_-]{1,80}$/;
@@ -79,8 +80,91 @@ export function parseFluxosOp(raw: unknown): FluxosOp | null {
       const key = str(a.key, 80);
       return needApp() && KEY_RE.test(key) ? { op: "options", app, key, parameters: jsonParams(a.parameters) } : null;
     }
+    case "test": {
+      // Testar conexão sem salvar nada (hoje só WhatsApp por token).
+      const fields = plainRecord(a.fields, 10, 4000);
+      return needApp() && fields && TESTABLE_APPS.has(app) ? { op: "test", app, fields } : null;
+    }
     default:
       return null;
+  }
+}
+
+/** Apps com "Testar conexão" antes de salvar. */
+export const TESTABLE_APPS = new Set(["whatsapp-cloud"]);
+
+/** WhatsApp Cloud API (Graph da Meta): mesma versão do motor. */
+export const WHATSAPP_GRAPH_BASE = "https://graph.facebook.com/v23.0";
+
+export type WhatsAppTestResult =
+  | { ok: true; id: string; displayPhoneNumber: string | null; verifiedName: string | null; qualityRating: string | null; wabaName: string | null }
+  | { ok: false; error: "missing_fields" | "invalid_id" | "graph_error" | "unreachable"; fields?: string[]; code?: number; message?: string };
+
+interface GraphBody {
+  id?: string; name?: string; display_phone_number?: string; verified_name?: string; quality_rating?: string;
+  error?: { code?: number; message?: string };
+}
+
+/** Dicas para os erros mais comuns do Graph ao testar o token. */
+export function whatsappErrorHint(code: number | undefined): string | null {
+  switch (code) {
+    case 190: return "token_invalid";
+    case 10:
+    case 200: return "permission";
+    case 100: return "bad_id";
+    case 4:
+    case 80007: return "rate_limited";
+    default: return null;
+  }
+}
+
+/**
+ * "Testar conexão" do WhatsApp por token: GET /{phone-number-id} (e /{waba-id}, se veio).
+ * Nada é salvo; o token só vai para a Meta.
+ */
+export async function whatsappTest(fields: Record<string, string>, fetchImpl: typeof fetch = fetch): Promise<WhatsAppTestResult> {
+  const token = (fields.accessToken ?? "").trim();
+  const phoneId = (fields.phoneNumberId ?? "").trim();
+  const waba = (fields.wabaId ?? "").trim();
+  const missing = [!token && "accessToken", !phoneId && "phoneNumberId"].filter(Boolean) as string[];
+  if (missing.length) return { ok: false, error: "missing_fields", fields: missing };
+  const idRe = /^\d{5,25}$/;
+  const bad = [!idRe.test(phoneId) && "phoneNumberId", waba && !idRe.test(waba) && "wabaId"].filter(Boolean) as string[];
+  if (bad.length) return { ok: false, error: "invalid_id", fields: bad };
+
+  const get = async (path: string, params: string) => {
+    const res = await fetchImpl(`${WHATSAPP_GRAPH_BASE}/${path}?${params}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      ...(typeof AbortSignal.timeout === "function" ? { signal: AbortSignal.timeout(15_000) } : {}),
+    });
+    const data = await res.json().catch(() => null) as GraphBody | null;
+    return { ok: res.ok, data };
+  };
+  try {
+    const phone = await get(phoneId, "fields=id,display_phone_number,verified_name,quality_rating");
+    if (!phone.ok || !phone.data?.id) {
+      const e = phone.data?.error;
+      return { ok: false, error: "graph_error", code: typeof e?.code === "number" ? e.code : undefined, message: String(e?.message ?? "").slice(0, 300) };
+    }
+    let wabaName: string | null = null;
+    if (waba) {
+      const w = await get(waba, "fields=id,name");
+      if (!w.ok || !w.data?.id) {
+        const e = w.data?.error;
+        return { ok: false, error: "graph_error", fields: ["wabaId"], code: typeof e?.code === "number" ? e.code : undefined, message: String(e?.message ?? "").slice(0, 300) };
+      }
+      wabaName = typeof w.data.name === "string" ? w.data.name : null;
+    }
+    return {
+      ok: true,
+      id: String(phone.data.id),
+      displayPhoneNumber: phone.data.display_phone_number ?? null,
+      verifiedName: phone.data.verified_name ?? null,
+      qualityRating: phone.data.quality_rating ?? null,
+      wabaName,
+    };
+  } catch {
+    return { ok: false, error: "unreachable" };
   }
 }
 
@@ -206,9 +290,12 @@ export function describeForAgent(def: FluxosAppDef): string {
   return lines.join("\n").slice(0, 6000);
 }
 
+const ANSI_COLORS = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+
 /** Tira o nome do motor de mensagens que vão para o usuário (white-label). */
 export function whiteLabel(text: string): string {
-  return text.replace(/automatisch/gi, "Vertal Fluxos").replace(/huginn/gi, "Vertal Agentes");
+  // O log do motor colore a mensagem do erro (códigos ANSI); tira antes de mostrar.
+  return text.replace(ANSI_COLORS, "").replace(/automatisch/gi, "Vertal Fluxos").replace(/huginn/gi, "Vertal Agentes");
 }
 
 /** Resultado de ação/busca enxuto para o chat (DADOS). */

@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
 import { ArrowLeft, Copy, Inbox, RefreshCw, Send } from 'lucide-react'
 import { functionErrorCode } from '@/lib/functionError'
+import { WhatsAppConnectPanel } from '@/components/connectors/WhatsAppConnectPanel'
 
 export type ChannelId = 'instagram' | 'whatsapp'
 
@@ -139,6 +140,14 @@ export default function ConnectorChannelPage({ channel }: { channel: ChannelId }
           </div>
         </div>
       </div>
+
+      {channel === 'whatsapp' && (
+        <div className="max-w-5xl mx-auto px-4 pt-6">
+          {/* Conexão do próprio cliente (token da Cloud API); a caixa abaixo é a do número do operador. */}
+          <WhatsAppConnectPanel />
+          <h2 className="mt-8 text-sm font-semibold text-muted-foreground">Caixa de entrada do número do Vertal (operador)</h2>
+        </div>
+      )}
 
       <div className="max-w-5xl mx-auto px-4 py-6 grid gap-4 lg:grid-cols-[1fr_1fr]">
         <Card className="bg-card/30">

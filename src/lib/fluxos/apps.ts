@@ -32,6 +32,8 @@ export interface FluxosCallResult<T = Record<string, unknown>> {
   message: string
   data?: T
   fields?: string[]
+  /** Dica do servidor para o erro (ex.: "token_invalid" no teste do WhatsApp). */
+  hint?: string
 }
 
 const MESSAGES: Record<string, string> = {
@@ -50,7 +52,7 @@ export const PENDING_APP_KEY = 'vertal:fluxos:pendingApp'
 export async function callFluxosApps<T = Record<string, unknown>>(op: Record<string, unknown>): Promise<FluxosCallResult<T>> {
   const { data, error } = await supabase.functions.invoke('creative-router', { body: { tool: 'fluxos_apps', fluxos: op } })
   if (error) {
-    let body: { error?: string; message?: string; fields?: string[] } | null = null
+    let body: { error?: string; message?: string; fields?: string[]; hint?: string | null } | null = null
     const ctx = (error as { context?: unknown }).context
     if (ctx && typeof (ctx as Response).json === 'function') body = await (ctx as Response).clone().json().catch(() => null)
     const code = body?.error ?? 'fluxos_error'
@@ -60,6 +62,7 @@ export async function callFluxosApps<T = Record<string, unknown>>(op: Record<str
       code: key,
       message: body?.message || MESSAGES[key] || 'Não foi possível falar com o Vertal Fluxos agora.',
       ...(Array.isArray(body?.fields) ? { fields: body!.fields } : {}),
+      ...(typeof body?.hint === 'string' ? { hint: body.hint } : {}),
     }
   }
   return { ok: true, message: 'ok', data: data as T }

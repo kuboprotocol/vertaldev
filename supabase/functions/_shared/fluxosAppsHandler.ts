@@ -13,6 +13,8 @@ import {
   parseFluxosOp,
   platformOAuthData,
   userAuthFields,
+  whatsappErrorHint,
+  whatsappTest,
   whiteLabel,
 } from "./fluxosApps.ts";
 
@@ -76,6 +78,14 @@ export async function handleFluxosApps(
       .select("app_key, status, screen_name, updated_at").eq("user_id", user.id);
     if (error) return json(500, { error: "status_failed" });
     return json(200, { ok: true, connections: data ?? [] });
+  }
+
+  if (op.op === "test") {
+    // Só testa (nada é salvo): hoje, WhatsApp por token → Graph da Meta.
+    const r = await whatsappTest(op.fields);
+    if (r.ok) return json(200, { ok: true, result: r });
+    const status = r.error === "graph_error" ? 400 : r.error === "unreachable" ? 502 : 400;
+    return json(status, { error: r.error === "missing_fields" ? "missing_fields" : `test_${r.error}`, fields: r.fields, code: r.code, hint: whatsappErrorHint(r.code), message: r.message ? whiteLabel(r.message) : undefined });
   }
 
   const url = envGet("FLUXOS_INTERNAL_URL");
@@ -149,7 +159,11 @@ export async function handleFluxosApps(
 
     const v = await engine.call("POST", `/connections/${connId}/verify`);
     if (v.status === 200 && v.data?.verified) {
-      await admin.from("fluxos_connections").update({ status: "connected", updated_at: new Date().toISOString() })
+      await admin.from("fluxos_connections").update({
+        status: "connected", updated_at: new Date().toISOString(),
+        // Nome que o app descobriu na verificação (ex.: "WhatsApp · Loja · +55 11 …").
+        ...(typeof v.data.screenName === "string" && v.data.screenName && !op.fields?.screenName ? { screen_name: v.data.screenName.slice(0, 200) } : {}),
+      })
         .eq("user_id", user.id).eq("app_key", op.app);
       log(user, op.app, "connect", true, `${def.name} conectado`);
       return json(200, { ok: true, mode: "connected" });

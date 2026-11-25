@@ -397,7 +397,9 @@ export function fluxosTool(apps: Array<{ key: string; name: string }>): string {
 }
 
 /** Nome legível de um app do Vertal Fluxos a partir da chave ("google-sheets" → "Google Sheets"). */
+const FLUXOS_APP_NAMES: Record<string, string> = { "whatsapp-cloud": "WhatsApp" };
 export function fluxosAppName(key: string): string {
+  if (FLUXOS_APP_NAMES[key]) return FLUXOS_APP_NAMES[key];
   return key.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }
 
