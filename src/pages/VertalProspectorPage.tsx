@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import {
-  callProspector, downloadCsv, prospectorErrorText, PROSPECTOR_NAME, readProspectorHandoff, searchCompaniesInBrowser, useVertalProspectorAccess,
+  callProspector, downloadCsv, prospectorErrorText, PROSPECTOR_NAME, readProspectorHandoff, searchCompaniesInBrowser, useVertalProspectorAccess, withDeadline,
 } from '@/lib/vertalProspector/client';
 import {
   EMAIL_STATUS_LABEL, leadsToCsv, textProblems, type CsvLead, type EmailStatus, type Icp,
@@ -108,6 +108,7 @@ export function VertalProspectorScreen() {
   const [dnc, setDnc] = useState<Array<{ id: string; kind: string; value: string; reason: string | null }>>([]);
   const [dncInput, setDncInput] = useState({ kind: 'email', value: '' });
   const [limit, setLimit] = useState(25);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   const run = useCallback(async <T,>(label: string, fn: () => Promise<T>): Promise<T | null> => {
     setBusy(label);
@@ -216,13 +217,24 @@ export function VertalProspectorScreen() {
     const r = await run('Buscando empresas no mapa aberto', async () => {
       // O mapa público recusa o servidor (403/406): o navegador do usuário consulta, com prazo e espelhos,
       // e o servidor só filtra e grava. Sem prazo a tela girava para sempre.
-      const { elements, via } = await searchCompaniesInBrowser(campaign.icp);
-      const res = await callProspector<{ added: number; found: number; findings: string[] }>('find_leads', { campaignId: campaign.id, limit, elements });
-      return { ...res, via };
+      // Rede de segurança: busca no mapa (~55 s) + gravação (30 s) nunca passam de 90 s — sempre resultado ou erro claro.
+      setSearchError(null);
+      try {
+        return await withDeadline((async () => {
+          const { elements, via } = await searchCompaniesInBrowser(campaign.icp);
+          const res = await callProspector<{ added: number; found: number; findings: string[] }>('find_leads', { campaignId: campaign.id, limit, elements }, { timeoutMs: 30_000 });
+          return { ...res, via };
+        })(), 90_000);
+      } catch (e) {
+        // Erro fica escrito na tela (o aviso flutuante some em segundos).
+        setSearchError(prospectorErrorText(e));
+        throw e;
+      }
     });
     if (!r) return;
     setFindings(r.findings ?? []);
     toast.success(`${r.added} empresa(s) nova(s) na lista.`);
+    if (!r.added) setSearchError(r.found ? 'Nenhuma empresa nova: as encontradas já estão na lista ou bloqueadas.' : 'O mapa respondeu, mas não há empresas dessas categorias nessa cidade. Revise as categorias ou a cidade do cliente ideal.');
     await refresh();
   };
 
@@ -458,6 +470,7 @@ export function VertalProspectorScreen() {
               </Button>
             </div>
             {campaign.status !== 'icp_confirmed' && <p className="text-xs text-amber-300">Confirme o ICP para buscar empresas.</p>}
+            {searchError && !busy && <p role="alert" className="text-sm text-destructive">{searchError}</p>}
             {leads.length === 0 && !busy && <p className="text-sm text-muted-foreground">Nenhuma empresa ainda.</p>}
             <ul className="space-y-2">
               {leads.map((l) => (
