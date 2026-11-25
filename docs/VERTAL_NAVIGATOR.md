@@ -31,6 +31,7 @@ E2B self-hosted (VM Oracle vertal-e2b-vm, api.vertalrun.com, portas em https://<
        Chromium     CDP só em 127.0.0.1:9222, perfil em /home/user/.vertal-profile
        Xvfb :99 → x11vnc (127.0.0.1:5900, senha de ver ≠ senha de controlar) → websockify/noVNC :6080
        PulseAudio, sink "vertal" (null-sink) ← Chromium toca aqui; navd GET /audio = ffmpeg no monitor → MP3 stream
+       navd POST /media {action:"pause"} = script fixo que pausa <video>/<audio> da aba ("Tocar no meu aparelho")
 ```
 
 ### Rotas do Worker
@@ -51,12 +52,41 @@ Todas `POST`, `Authorization: Bearer <JWT do Supabase>`, resposta `{ok, status, 
 | `/api/navigator/activity` | `{}` | **Fase 2.** Últimas 20 sessões + 150 linhas de auditoria do usuário (aba Atividade). |
 | `/api/navigator/audio-ticket` | `{sessionId}` | **Áudio.** Devolve `ticket` (HMAC de sessão + validade de 10 min, `worker/navigatorAudio.ts`). O botão "Ouvir no celular" monta `…/audio?ticket=…`. |
 | `GET /api/navigator/audio?ticket=…` | — | **Áudio.** Não usa JWT (o `<audio>` não envia cabeçalhos): valida o ticket, abre `GET /audio` do navd com o token da sessão guardado cifrado e repassa o MP3 (`audio/mpeg`, sem cache). Um ouvinte por sessão; sessão encerrada → 410. |
+| `/api/navigator/media` | `{sessionId, action:"pause"}` | **Som — "Tocar no meu aparelho".** Pausa o vídeo/áudio da aba na nuvem (navd `POST /media`, script fixo; só ações da lista `NAVIGATOR_MEDIA_ACTIONS`). Devolve `{paused, currentTime}` para o player oficial continuar do mesmo ponto. Template antigo sem `/media` → `not_configured` + `detail:"media_unsupported"` (o painel avisa e toca mesmo assim). |
 
-**Áudio do navegador (no celular):** o Chromium roda com `--autoplay-policy=no-user-gesture-required` e
-toca no sink do PulseAudio; o navd captura o monitor com ffmpeg (MP3 128 kb/s, estéreo, 44,1 kHz). O
-usuário toca em "Ouvir no celular" (o toque é obrigatório em iOS/Android). Limite conhecido: ao
-bloquear a tela ou trocar de app, o navegador do celular pode pausar o `<audio>`; o botão avisa e
-reconecta com um toque. Exige rebuild do template `vertal-browser` (novos pacotes: pulseaudio, ffmpeg).
+### Som do navegador (escolha do usuário)
+
+Embaixo da tela ao vivo há o controle **Som:** com três opções, lembradas por usuário neste aparelho
+(`localStorage`, chave `vertal.navigator.sound.<userId>`; padrão **Sem som**). Código:
+`src/components/navigator/NavigatorSound.tsx` (UI) e `src/lib/navigator/sound.ts` (preferência, detecção de
+mídia, correção de atraso — puro e testado).
+
+| Opção | O que faz |
+|---|---|
+| **Som da nuvem** | O Chromium roda com `--autoplay-policy=no-user-gesture-required` e toca no sink nulo do PulseAudio. Só quando o usuário toca em "Ouvir som da nuvem" o Worker pede `GET /audio` ao navd, que sobe um ffmpeg no monitor do sink (MP3 128 kb/s, estéreo, 44,1 kHz, `-fragment_size 4096` ≈ 23 ms de buffer do Pulse). Parou de ouvir / trocou de opção / saiu da tela → a conexão fecha e o ffmpeg morre. Botões **Mudo** e **volume**; se o buffer do `<audio>` passar de ~2,5 s, o player pula para perto da ponta (`catchUpTarget`). O toque é obrigatório em iOS/Android (o ticket é buscado antes, para o `play()` rodar dentro do gesto). |
+| **Tocar no meu aparelho** | Se a aba na nuvem está em **YouTube, YouTube Music, Spotify, SoundCloud ou Vimeo**, mostra "Tocar aqui (serviço)": pausa a mídia da aba na nuvem (`/media`) e abre o **player oficial de embed** dentro do painel, do mesmo segundo (YouTube via `youtube-nocookie.com`, Vimeo com `dnt=1`). Também há "Abrir no app do …" (link oficial, `noopener noreferrer`). Outras páginas: o painel explica e sugere "Som da nuvem". Só players oficiais: nada de baixar mídia nem contornar DRM. |
+| **Sem som** | Nenhum stream nem player. |
+
+Privacidade: nenhuma telemetria nova. "Som da nuvem" só fala com as rotas do Navigator. "Tocar no meu
+aparelho" carrega o player do serviço escolhido **no aparelho do usuário, só depois do toque dele** (o
+serviço vê o IP/conta do usuário, como em qualquer embed; usamos os domínios sem cookie quando existem).
+
+Limites conhecidos:
+- **Atraso** do Som da nuvem: ~0,5–1,5 s em relação à tela (MP3 progressivo no `<audio>`; o Safari às vezes não deixa pular dentro do stream, aí o atraso pode crescer até reconectar).
+- **iOS**: o volume do `<audio>` é só leitura (vale o Mudo e os botões do aparelho); bloquear a tela ou trocar de app pode pausar o stream — o botão avisa e reconecta com um toque. O player do YouTube embutido no iOS pode pedir um toque no próprio player para começar com som.
+- **Android/Chrome**: aba em segundo plano costuma seguir tocando; economia de bateria pode cortar.
+- **Spotify**: o embed toca prévia de 30 s para quem não está logado no Spotify naquele navegador; faixa completa precisa de login/Premium do próprio usuário. **YouTube Music** toca pelo player do YouTube (não existe embed oficial do YT Music); conteúdo exclusivo Premium pode não tocar. Vídeos com incorporação desativada pelo dono mostram erro no player — use "Abrir no app".
+- Um ouvinte do Som da nuvem por sessão (um novo derruba o anterior).
+
+Deploy (nada disso é feito pelo PR):
+1. **Rebuild do template `vertal-browser`** (`infra/vertal-browser/build-template.mjs`): leva o `navd.py` novo (`/media`, `-fragment_size`). Os pacotes `pulseaudio pulseaudio-utils ffmpeg` já estão no Dockerfile desde o #208 — se o template em produção é anterior ao #208, o Som da nuvem só funciona depois deste rebuild.
+2. **Deploy do Worker** (rota `media`). Sem segredos novos, sem portas novas (o áudio passa pelo navd :8787, com o mesmo token da sessão), sem migração.
+3. Front-end sobe com o deploy normal.
+
+Custo estimado por sessão na VM (1 OCPU, ~4 sessões): PulseAudio ocioso ~0 %; com Som da nuvem ligado,
+ffmpeg + LAME 128 kb/s ≈ 2–4 % de 1 OCPU (+ a decodificação do vídeo no Chromium, que já existia). Banda:
+128 kb/s ≈ **16 KB/s ≈ 58 MB por hora** por ouvinte (saída da VM → Worker → usuário). "Tocar no meu
+aparelho" custa ~0 na VM (a aba é pausada; o vídeo vem do serviço direto para o aparelho).
 
 `status` pode ser `ok`, `blocked_url`, `busy`, `capacity`, `no_session`, `session_ended`, `not_pending`,
 `rate_limited`, `insufficient_credits`, `not_configured`, `unauthorized`, `bad_request`, `sandbox_error`, `error`.
@@ -74,6 +104,8 @@ reconecta com um toque. Exige rebuild do template `vertal-browser` (novos pacote
 | `src/components/vertal-chat/NavigatorPanel.tsx` | Painel no Vertal Chat. |
 | `src/components/vertal-chat/NavigatorApprovalDialog.tsx` | Cartão de aprovação de pagamento (e de código 2FA quando o painel está fechado). |
 | `src/lib/chatAgent/vibeBridge.ts` | `/navegar <tarefa>` no Vibe Code → `delegateToNavigator`. |
+| `src/components/navigator/NavigatorSound.tsx`, `src/lib/navigator/sound.ts` | Controle de som (Som da nuvem / Tocar no meu aparelho / Sem som), player oficial de embed, preferência por usuário. |
+| `worker/navigatorAudio.ts` | Ticket do stream de áudio e validação da rota `media`. |
 | `infra/vertal-browser/` | Template E2B: `e2b.Dockerfile`, `navd.py`, `start.sh`, `chromium-policy.json`, `build-template.mjs`. |
 | `scripts/navigator-smoke.ts` | Teste de ponta a ponta contra o E2B usando o mesmo código do Worker (sem Supabase). |
 

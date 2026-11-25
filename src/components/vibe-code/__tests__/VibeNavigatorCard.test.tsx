@@ -6,6 +6,8 @@ vi.mock("@/lib/navigator/client", () => ({
   callNavigator,
   // Áudio do navegador (ticket): no teste o prefetch falha em silêncio, o botão fica desligado.
   navigatorAudioUrl: vi.fn(async () => ({ ok: false, message: "sem áudio no teste" })),
+  pauseNavigatorMedia: vi.fn(async () => ({ ok: false, message: "sem mídia no teste" })),
+  navigatorUserId: vi.fn(async () => null),
 }));
 
 import { VibeNavigatorCard } from "@/components/vibe-code/VibeNavigatorCard";

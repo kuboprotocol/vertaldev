@@ -55,3 +55,23 @@ export async function verifyAudioTicket(secret: string, ticket: string, now = Da
   const ok = await crypto.subtle.verify('HMAC', await hmacKey(secret, ['verify']), sig, enc.encode(`${sessionId}.${expRaw}`));
   return ok ? sessionId : null;
 }
+
+// ─── Opção "Tocar no meu aparelho" ──────────────────────────────────────────
+// POST /media {sessionId, action:"pause"} pausa o vídeo/áudio da aba na nuvem
+// quando o usuário passa a ouvir pelo player oficial no próprio aparelho. Só ações
+// desta lista chegam ao navd (que roda um script fixo para cada uma).
+export const NAVIGATOR_MEDIA_ACTIONS = ['pause'] as const;
+export type NavigatorMediaAction = (typeof NAVIGATOR_MEDIA_ACTIONS)[number];
+
+export function parseMediaAction(body: Record<string, unknown>): NavigatorMediaAction | null {
+  const a = body.action;
+  return typeof a === 'string' && (NAVIGATOR_MEDIA_ACTIONS as readonly string[]).includes(a) ? (a as NavigatorMediaAction) : null;
+}
+
+/** Normaliza a resposta do navd (template antigo sem /media → null). */
+export function mediaResult(status: number, data: unknown): { paused: number; currentTime: number } | null {
+  if (status !== 200 || !data || typeof data !== 'object' || (data as { ok?: unknown }).ok !== true) return null;
+  const d = data as { paused?: unknown; currentTime?: unknown };
+  const n = (v: unknown, max: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(Math.floor(v), max)) : 0);
+  return { paused: n(d.paused, 1000), currentTime: n(d.currentTime, 24 * 3600) };
+}

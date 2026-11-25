@@ -42,3 +42,19 @@ describe('ticket do áudio do Navigator', () => {
     }
   });
 });
+
+describe('mídia da aba (Tocar no meu aparelho)', () => {
+  it('só aceita ações da lista', async () => {
+    const { parseMediaAction } = await import('./navigatorAudio');
+    expect(parseMediaAction({ action: 'pause' })).toBe('pause');
+    for (const action of ['play', 'eval', '', null, 1, 'pause;x']) expect(parseMediaAction({ action })).toBeNull();
+  });
+
+  it('normaliza a resposta do navd e trata template antigo (404) como sem suporte', async () => {
+    const { mediaResult } = await import('./navigatorAudio');
+    expect(mediaResult(200, { ok: true, paused: 1, currentTime: 42.7 })).toEqual({ paused: 1, currentTime: 42 });
+    expect(mediaResult(200, { ok: true, paused: -3, currentTime: 'x' })).toEqual({ paused: 0, currentTime: 0 });
+    expect(mediaResult(404, { error: 'not found' })).toBeNull();
+    expect(mediaResult(200, { ok: false })).toBeNull();
+  });
+});
