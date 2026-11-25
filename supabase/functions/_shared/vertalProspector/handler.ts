@@ -7,10 +7,10 @@
 
 import {
   ANALYZE_SYSTEM, ENRICH_SYSTEM, FOLLOWUP_DAYS, OPT_OUT_WHATSAPP, REPLY_SYSTEM, WRITE_SYSTEM,
-  buildOverpassQuery, candidateEmails, classifyEmail, classifyInbound, dailyCap, describeSignals, detectSignals,
+  buildOverpassQuery, buildOverpassQueryByName, candidateEmails, classifyEmail, classifyInbound, dailyCap, describeSignals, detectSignals,
   domainOf, extractCnpjs, extractEmails, extractJson, extractPhones, hasMxAnswer, htmlToText, icpMissing, inferPattern,
   isBlocked, isEmail, isPublicHost, isRoleAddress, isValidCnpj, meetingSlots, meetingText, normalizeDnc, normalizeWebsite,
-  onlyDigits, optOutFooter, overpassAreaId, parseCompanyProfile, parseIcp, parseOverpassElements, parseSequence,
+  onlyDigits, optOutFooter, overpassAreaId, parseArea, parseCompanyProfile, parseIcp, parseOverpassElements, parseSequence,
   pickInternalLinks, sendGate, slugName, textProblems, waLink,
   type DncKind, type EmailPattern, type Icp, type MessageKind, type ProspectorEnv, type Sender,
 } from "./core.ts";
@@ -50,6 +50,8 @@ const err = (status: number, error: string, extra: Record<string, unknown> = {})
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid = (v: unknown): v is string => typeof v === "string" && UUID_RE.test(v);
 const UA = "VertalProspector/1.0 (+https://vertal.dev)";
+/** Consulta do mapa aberto: servidor principal + espelho público. */
+export const OVERPASS_ENDPOINTS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter"];
 
 export const PROSPECTOR_OPS = [
   "status", "list_campaigns", "get_campaign", "create_campaign", "update_icp", "update_settings", "find_leads",
@@ -338,18 +340,30 @@ export async function handleProspector(body: Record<string, Loose>, deps: Prospe
       const places = Array.isArray(geo.data) ? (geo.data as Array<{ osm_type?: string; osm_id?: number; display_name?: string }>) : [];
       const place = places.find((p) => p.osm_type === "relation") ?? places.find((p) => p.osm_type === "way");
       const areaId = place ? overpassAreaId(String(place.osm_type), Number(place.osm_id)) : null;
-      if (!areaId) return err(400, "area_not_found", { finding: `Não achei a região "${icp.area}" no mapa. Ajuste a região do ICP (ex.: "Campinas, SP").` });
-      const q = buildOverpassQuery(icp.osmTags, areaId, 200);
-      const over = await fetchJson(deps.fetch, "https://overpass-api.de/api/interpreter", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": UA },
-        body: `data=${encodeURIComponent(q)}`,
-      }, 35_000);
+      // Geocodificador fora (recusa/limite): procura o município pelo nome no próprio mapa.
+      const byName = areaId ? null : parseArea(icp.area);
+      if (!areaId && !byName) return err(400, "area_not_found", { finding: `Não achei a região "${icp.area}" no mapa. Use "Cidade, UF" (ex.: "Campinas, SP").` });
+      if (!areaId) log(`[vertal-prospector] geocodificador status=${geo.status}; usando busca do município pelo nome`);
+      const q = areaId ? buildOverpassQuery(icp.osmTags, areaId, 200) : buildOverpassQueryByName(icp.osmTags, byName!.city, byName!.uf, 200);
+      // Servidor público principal do mapa e, se ocupado/fora, um espelho (mesmos dados, mesma licença).
+      let over: { status: number; data: unknown } = { status: 0, data: null };
+      for (const endpoint of OVERPASS_ENDPOINTS) {
+        over = await fetchJson(deps.fetch, endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": UA },
+          body: `data=${encodeURIComponent(q)}`,
+        }, 30_000);
+        if (over.status === 200) break;
+        log(`[vertal-prospector] mapa ${new URL(endpoint).hostname} status=${over.status}`);
+      }
       if (over.status === 429 || over.status === 504 || over.status === 0) {
         return err(503, "map_busy", { finding: "O serviço de mapa aberto está ocupado agora (limite de uso). Tente de novo em 1 a 2 minutos." });
       }
       if (over.status !== 200) return err(502, "map_failed");
       const found = parseOverpassElements(over.data, icp.osmTags);
+      if (!areaId && !found.length) {
+        return err(400, "area_not_found", { finding: `Não achei empresas em "${icp.area}". Confira o nome da cidade (com acento) e a UF, ex.: "São Paulo, SP".` });
+      }
       const dnc = await loadDnc(deps);
       // Sem repetir empresas que já estão em qualquer campanha do usuário (mesmo domínio ou mesmo ponto no mapa).
       const { data: existing } = await deps.admin.from(T.l).select("domain, osm_id").eq("user_id", deps.userId).limit(5000);
@@ -382,7 +396,7 @@ export async function handleProspector(body: Record<string, Loose>, deps: Prospe
       if (!found.length) findings.push("O mapa não trouxe empresas com essas categorias nessa região. Tente outras categorias ou uma região maior.");
       if (skippedDup) findings.push(`${skippedDup} já estavam em campanhas suas.`);
       if (skippedDnc) findings.push(`${skippedDnc} estão na lista de não contatar.`);
-      return ok({ added: rows.length, found: found.length, findings, area: place?.display_name ?? icp.area });
+      return ok({ added: rows.length, found: found.length, findings, area: place?.display_name ?? icp.area, via: areaId ? "geocodificador" : "nome do município" });
     }
 
     case "enrich_lead": {

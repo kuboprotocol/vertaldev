@@ -136,6 +136,28 @@ describe('Vertal Prospector · respostas e LGPD', () => {
     expect((await handleProspector({ op: 'drop_table' }, deps)).status).toBe(400);
   });
 
+  it('geocodificador recusou: busca o município pelo nome no mapa e não repete empresas', async () => {
+    const { db, deps } = setup();
+    const bodies: string[] = [];
+    deps.fetch = (async (url: string, init?: RequestInit) => {
+      if (url.includes('nominatim')) return new Response('blocked', { status: 403 });
+      if (url.includes('interpreter')) {
+        bodies.push(decodeURIComponent(String(init?.body ?? '')));
+        return new Response(JSON.stringify({ elements: [
+          { type: 'node', id: 7, tags: { name: 'Odonto Campinas', amenity: 'dentist', website: 'https://odontocampinas.com.br' } },
+          { type: 'node', id: 8, tags: { name: 'Sorriso Filial', amenity: 'dentist', website: 'https://sorriso.com.br' } },
+        ] }), { status: 200 });
+      }
+      return new Response('{}', { status: 404 });
+    }) as unknown as typeof fetch;
+    const r = await handleProspector({ op: 'find_leads', campaignId: C, limit: 5 }, deps);
+    expect(r.status).toBe(200);
+    expect(r.body.added).toBe(1); // sorriso.com.br já existe
+    expect(bodies[0]).toContain('area["ISO3166-2"="BR-SP"]');
+    expect(bodies[0]).toContain('"name"="Campinas"');
+    expect(db.tables.prospector_leads.map((l) => l.name)).toContain('Odonto Campinas');
+  });
+
   it('não lê campanha de outro usuário', async () => {
     const { deps } = setup();
     const r = await handleProspector({ op: 'get_campaign', campaignId: C }, { ...deps, userId: '99999999-0000-4000-8000-000000000000' });

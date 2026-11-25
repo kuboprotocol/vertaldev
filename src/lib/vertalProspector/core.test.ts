@@ -201,3 +201,20 @@ describe('prompts próprios', () => {
     expect(ENRICH_SYSTEM).toMatch(/Nunca invente nome/);
   });
 });
+
+import { buildOverpassQueryByName, parseArea } from '../../../supabase/functions/_shared/vertalProspector/core';
+describe('região sem geocodificador', () => {
+  it('lê "Cidade, UF" em vários formatos e recusa lixo', () => {
+    expect(parseArea('São Paulo, SP')).toEqual({ city: 'São Paulo', uf: 'SP' });
+    expect(parseArea('Campinas - sp')).toEqual({ city: 'Campinas', uf: 'SP' });
+    expect(parseArea('Belo Horizonte/MG')).toEqual({ city: 'Belo Horizonte', uf: 'MG' });
+    expect(parseArea('Curitiba')).toEqual({ city: 'Curitiba', uf: null });
+    expect(parseArea('x"]; out;')).toBeNull();
+  });
+  it('monta a consulta pelo nome do município dentro da UF', () => {
+    const q = buildOverpassQueryByName([{ key: 'shop', value: 'bakery' }], 'Campinas', 'SP', 10);
+    expect(q).toContain('area["ISO3166-2"="BR-SP"]->.s;');
+    expect(q).toContain('["admin_level"="8"]["name"="Campinas"]');
+    expect(q).toContain('map_to_area->.a;');
+  });
+});

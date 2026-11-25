@@ -208,6 +208,29 @@ export function buildOverpassQuery(tags: OsmTag[], areaId: number, limit = 120):
   return `[out:json][timeout:25];\narea(id:${areaId})->.a;\n(\n${lines.join("\n")}\n);\nout center tags ${Math.max(1, Math.min(limit, 300))};`;
 }
 
+const UFS = new Set(["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"]);
+
+/** "Campinas, SP" → { city: "Campinas", uf: "SP" }. Só letras, espaço, hífen, ponto e apóstrofo no nome. */
+export function parseArea(area: string): { city: string; uf: string | null } | null {
+  const a = (area ?? "").replace(/\s+/g, " ").trim();
+  const m = a.match(/^(.*?)[\s,/–-]+([A-Za-z]{2})$/);
+  const uf = m && UFS.has(m[2].toUpperCase()) ? m[2].toUpperCase() : null;
+  const city = (uf && m ? m[1] : a.split(",")[0]).replace(/[\s,/–-]+$/, "").trim();
+  if (!city || city.length > 80 || !/^[\p{L}\s.'-]+$/u.test(city)) return null;
+  return { city, uf };
+}
+
+/**
+ * Plano B sem geocodificador: acha o município pelo nome dentro da UF (ou do Brasil) no próprio mapa.
+ * Usado quando o geocodificador público recusa o servidor.
+ */
+export function buildOverpassQueryByName(tags: OsmTag[], city: string, uf: string | null, limit = 120): string {
+  const name = city.replace(/["\\]/g, "");
+  const scope = uf ? `area["ISO3166-2"="BR-${uf}"]->.s;` : `area["ISO3166-1"="BR"]["admin_level"="2"]->.s;`;
+  const lines = tags.slice(0, 6).map((t) => `  nwr["${t.key}"="${t.value}"]["name"](area.a);`);
+  return `[out:json][timeout:25];\n${scope}\nrel(area.s)["boundary"="administrative"]["admin_level"="8"]["name"="${name}"];\nmap_to_area->.a;\n(\n${lines.join("\n")}\n);\nout center tags ${Math.max(1, Math.min(limit, 300))};`;
+}
+
 export interface LeadDraft {
   osmId: string;
   name: string;
