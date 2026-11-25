@@ -53,3 +53,21 @@ Apps novos no motor (fork): `facebook`, `instagram`, `whatsapp`, `meta-ads`, `ti
 - Liberação pública depende das revisões dos provedores (App Review/Business Verification da Meta,
   revisão de desenvolvedor do TikTok, acesso à Amazon Ads API, aprovação da conta eBay Developers,
   acesso de desenvolvedor no Kwai Business Center).
+
+## Microsoft: Outlook, Microsoft 365 e Teams (nov/2026)
+Apps no motor (fork): `microsoft-outlook`, `microsoft-365`, `microsoft-teams` (helper
+`helpers/microsoft-graph.js`). Um app só no Microsoft Entra ("Vertal Dev", contas de qualquer
+organização + contas Microsoft pessoais), segredos `FLUXOS_OAUTH_MICROSOFT_ID` / `_SECRET`.
+Retornos (Web): `https://vertal.dev/fluxos/oauth/microsoft-outlook`, `/microsoft-365`, `/microsoft-teams`.
+
+| Conector | Login | Escopos (delegados, sem consentimento de admin) | Ações (aprovação, 2 créditos) | Buscas |
+| --- | --- | --- | --- | --- |
+| Outlook | `common` (pessoal + trabalho) | Mail.ReadWrite, Mail.Send, Calendars.ReadWrite | enviar e-mail, criar rascunho, responder, criar evento | e-mails (lista/busca), ler e-mail, eventos dos próximos dias, pastas, calendários |
+| Microsoft 365 | `common` | Files.ReadWrite, Tasks.ReadWrite | enviar arquivo ao OneDrive (até 4 MB, texto ou URL), criar pasta, criar tarefa no To Do, concluir tarefa | arquivos (pasta), busca no OneDrive, listas e tarefas do To Do |
+| Microsoft Teams | `organizations` (só trabalho/escola) | Team.ReadBasic.All, Channel.ReadBasic.All, ChannelMessage.Send, Chat.ReadWrite | mensagem em canal, mensagem em chat | equipes, canais, chats |
+
+Todos pedem também `openid profile email offline_access User.Read` e ganham a ação "API request".
+- Sem verificação de editor (Microsoft Partner Network), a tela de consentimento mostra o app como
+  "não verificado"; em muitas organizações o usuário comum não consegue consentir apps multilocatário
+  não verificados (o admin precisa aprovar). Contas pessoais conseguem.
+- Teams não funciona com conta Microsoft pessoal (a API do Teams é só de trabalho/escola).

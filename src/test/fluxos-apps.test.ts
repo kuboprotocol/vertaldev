@@ -127,3 +127,12 @@ describe('clientes OAuth de anúncios, redes e marketplaces', () => {
     }))).toEqual({ clientId: 'p', clientSecret: 's', ruName: 'ru', environment: 'production' })
   })
 })
+
+describe('cliente OAuth da Microsoft', () => {
+  it('Outlook, Microsoft 365 e Teams usam o mesmo app do Microsoft Entra', () => {
+    for (const app of ['microsoft-outlook', 'microsoft-365', 'microsoft-teams']) expect(oauthSecretGroup(app)).toBe('MICROSOFT')
+    const e = env({ FLUXOS_OAUTH_MICROSOFT_ID: 'cid', FLUXOS_OAUTH_MICROSOFT_SECRET: 'sec' })
+    expect(platformOAuthData('microsoft-outlook', e)).toEqual({ clientId: 'cid', clientSecret: 'sec' })
+    expect(platformOAuthData('microsoft-365', env({ FLUXOS_OAUTH_MICROSOFT_ID: 'cid' }))).toBeNull()
+  })
+})
