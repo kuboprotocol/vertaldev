@@ -7,6 +7,7 @@ import { ArrowLeft, Check, FileCode2, Hammer, ImagePlus, ListChecks, Loader2, Pa
 import { supabase } from '@/integrations/supabase/client';
 import { VertalCodeAiGate } from '@/components/vertal-code-ai/VertalCodeAiGate';
 import { VertalProspectorEntryButton } from '@/components/vertal-prospector/VertalProspectorEntryButton';
+import { VertalGrowthEntryButton } from '@/components/vertal-growth/VertalGrowthEntryButton';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -294,6 +295,7 @@ function VertalCodeAIScreen() {
         <Sparkles className="h-5 w-5 text-primary" aria-hidden />
         <h1 className="flex-1 truncate text-sm font-semibold">{VERTAL_CODE_AI_NAME}</h1>
         <VertalProspectorEntryButton from="code" />
+        <VertalGrowthEntryButton from="code" projectId={projectId || null} />
         <select
           aria-label="Projeto"
           value={projectId}

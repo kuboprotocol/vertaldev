@@ -36,9 +36,12 @@ export function vertalProspectorHrefFromChat(text: string): string {
   return vertalProspectorHref({ ...parseProspectCommand(text), from: 'chat' });
 }
 
-export function readProspectorHandoff(search: string): { companyName: string; cnpj: string; website: string; from: string } {
+export function readProspectorHandoff(search: string): { companyName: string; cnpj: string; website: string; from: string; campaignId: string } {
   const q = new URLSearchParams(search);
+  const campaignId = q.get('campanha') ?? '';
   return {
+    // Vertal Growth Team abre a captação direto na campanha dele.
+    campaignId: /^[0-9a-f-]{36}$/i.test(campaignId) ? campaignId : '',
     companyName: (q.get('empresa') ?? '').slice(0, 120),
     cnpj: (q.get('cnpj') ?? '').replace(/[^\d./-]/g, '').slice(0, 20),
     website: (q.get('site') ?? '').slice(0, 300),
@@ -135,6 +138,7 @@ export const PROSPECTOR_ERROR_TEXT: Record<string, string> = {
   icp_incomplete: 'Falta informação no cliente ideal para buscar empresas.',
   icp_not_confirmed: 'Confirme o cliente ideal antes de buscar empresas.',
   area_not_found: 'Não achei essa região no mapa.',
+  lead_cap_reached: 'Esta campanha já tem o máximo de leads.',
   map_busy: 'O mapa aberto não respondeu agora. Tente em 1 ou 2 minutos.',
   map_failed: 'A busca no mapa falhou. Tente de novo.',
   no_channel: 'Sem e-mail utilizável nem telefone para este lead.',

@@ -202,7 +202,16 @@ export function startOfDaySp(now: Date): string {
 async function sentTodayCount(deps: ProspectorDeps, now: Date): Promise<number> {
   const { data } = await deps.admin.from(T.m).select("id").eq("user_id", deps.userId).eq("direction", "out").eq("channel", "email")
     .eq("status", "sent").gte("sent_at", startOfDaySp(now)).limit(500);
-  return (data ?? []).length;
+  // Vertal Growth Team: os e-mails da equipe (conversão/retenção) contam no MESMO limite diário.
+  let growth = 0;
+  try {
+    const g = await deps.admin.from("growth_messages").select("id").eq("user_id", deps.userId).eq("channel", "email")
+      .eq("status", "sent").gte("sent_at", startOfDaySp(now)).limit(500);
+    growth = (g?.data ?? []).length;
+  } catch {
+    /* tabela ausente: só o Prospector conta */
+  }
+  return (data ?? []).length + growth;
 }
 
 const senderOf = (c: Loose): Sender => {
@@ -333,7 +342,15 @@ export async function handleProspector(body: Record<string, Loose>, deps: Prospe
       if (!c) return err(404, "campaign_not_found");
       if (c.status !== "icp_confirmed") return err(400, "icp_not_confirmed");
       const icp = parseIcp(c.icp) as Icp;
-      const limit = Math.max(1, Math.min(Number(body.limit) || 25, 60));
+      let limit = Math.max(1, Math.min(Number(body.limit) || 25, 60));
+      // Campanha do Vertal Growth Team: teto de leads por campanha (anti-abuso).
+      const maxLeads = Number(c.settings?.maxLeads);
+      if (Number.isFinite(maxLeads) && maxLeads > 0) {
+        const { data: have } = await deps.admin.from(T.l).select("id").eq("campaign_id", c.id).eq("user_id", deps.userId).limit(1000);
+        const room = maxLeads - (have ?? []).length;
+        if (room <= 0) return err(400, "lead_cap_reached", { finding: `Esta campanha já tem o máximo de ${maxLeads} leads.` });
+        limit = Math.min(limit, room);
+      }
       // O navegador do usuário pode trazer a resposta do mapa (quando o servidor não alcança o mapa público).
       // Os elementos passam pelo mesmo filtro (parseOverpassElements): só nome, site, telefone, e-mail e endereço.
       const fromBrowser = Array.isArray(body.elements);
