@@ -36,7 +36,7 @@ import {
   authPendingView, parseAuthInput, pickLoginForHost, pickPhoneForHost, siteSecretNames, siteSlugForHost,
 } from '../supabase/functions/_shared/navigatorAuthForms.ts';
 import { createSandbox, e2bDomain, E2BError, killSandbox, navd, navdStream, setSandboxTimeout, waitNavd, type E2BEnv, type NavdTarget } from './e2bClient';
-import { signAudioTicket, verifyAudioTicket } from './navigatorAudio';
+import { mediaResult, parseMediaAction, signAudioTicket, verifyAudioTicket } from './navigatorAudio';
 import { decryptWithConnectorKey, encryptWithConnectorKey, EncKeyMissingError, randomPassword, randomToken } from './navigatorCrypto';
 import { isAllowedOrigin } from './spotifyRoutes';
 import { auditWriteKey, openAuditDetail, sealAuditDetail } from '../supabase/functions/_shared/navigatorAuditVault.ts';
@@ -747,7 +747,7 @@ export async function handleNavigator(request: Request, env: NavigatorEnv, url: 
   // Áudio: GET com ticket na URL (o <audio> não envia JWT). Antes da checagem de POST/JWT.
   if (request.method === 'GET' && route === 'audio') return handleAudio(env, url);
   if (request.method !== 'POST') return fail(request, 'bad_request', {}, 405);
-  if (!['start', 'task', 'status', 'input', 'takeover', 'release', 'stop', 'forget', 'settings', 'activity', 'audio-ticket'].includes(route)) return fail(request, 'bad_request', {}, 404);
+  if (!['start', 'task', 'status', 'input', 'takeover', 'release', 'stop', 'forget', 'settings', 'activity', 'audio-ticket', 'media'].includes(route)) return fail(request, 'bad_request', {}, 404);
 
   let userId: string | null;
   try {
@@ -1111,6 +1111,20 @@ async function withSession(request: Request, env: NavigatorEnv, userId: string, 
       if (d.kind === 'approval') await recordAudit(env, userId, row.id, d.approve ? 'approval_granted' : 'approval_denied', summaryAudit(asked));
       else if (d.kind === 'code') await recordAudit(env, userId, row.id, 'code_entered', { host: typeof asked?.host === 'string' ? asked.host : undefined });
       return json(request, { ok: true, status: 'ok' });
+    }
+    case 'media': {
+      // "Tocar no meu aparelho": pausa a mídia da aba na nuvem (script fixo no navd).
+      const action = parseMediaAction(body);
+      if (!action) return fail(request, 'bad_request', { detail: 'media_action' }, 400);
+      // navd antigo responde 404 em texto (sem JSON) e o navd() lança E2BError(…, 404).
+      const res = await navd(env, target, 'POST', '/media', { action }, 10_000).catch((e: unknown) => {
+        if (e instanceof E2BError && e.status === 404) return { status: 404, data: null };
+        throw e;
+      });
+      const r = mediaResult(res.status, res.data);
+      // Template antigo (sem /media): o painel avisa que a aba na nuvem segue tocando.
+      if (!r) return fail(request, 'not_configured', { detail: 'media_unsupported' });
+      return json(request, { ok: true, status: 'ok', ...r });
     }
     case 'takeover': {
       // Senha de controle nova a cada tomada de controle: a URL anterior não vale mais.
