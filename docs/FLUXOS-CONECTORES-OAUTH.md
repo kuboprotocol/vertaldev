@@ -71,3 +71,22 @@ Todos pedem também `openid profile email offline_access User.Read` e ganham a a
   "não verificado"; em muitas organizações o usuário comum não consegue consentir apps multilocatário
   não verificados (o admin precisa aprovar). Contas pessoais conseguem.
 - Teams não funciona com conta Microsoft pessoal (a API do Teams é só de trabalho/escola).
+
+## Google Ads, AdMob e AdSense (nov/2026)
+Apps no motor (fork): `google-ads`, `google-admob`, `google-adsense` (helper `helpers/google-oauth.js`).
+Mesmo cliente OAuth dos apps Google ("Vertal Fluxos", projeto Cloud `parabolic-eon-462823-g2`), segredos
+`FLUXOS_OAUTH_GOOGLE_ID` / `_SECRET`. Retornos: `https://vertal.dev/fluxos/oauth/google-ads`, `/google-admob`, `/google-adsense`.
+APIs ativadas no projeto: Google Ads API, AdMob API, AdSense Management API.
+
+| Conector | Escopos | Ações (aprovação, 2 créditos) | Buscas |
+| --- | --- | --- | --- |
+| Google Ads (API v26) | `adwords` (sensível) | pausar/ativar campanha | contas acessíveis, campanhas, desempenho por campanha, consulta GAQL (só SELECT) |
+| Google AdMob (v1) | `admob.readonly`, `admob.report` | — (só leitura) | contas, apps, blocos de anúncio, relatório de rede, relatório de mediação |
+| Google AdSense (v2) | `adsense.readonly` | — (só leitura) | contas, sites, unidades de anúncio, pagamentos, relatório de ganhos |
+
+- Google Ads: o Google aposentou o developer token em 09/09/2026; o nível de acesso agora é do projeto do Google
+  Cloud dono do cliente OAuth (Console → Google Ads API → Visão geral). Nível **Teste** só alcança contas de teste;
+  contas reais dão `CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION` até o projeto ter acesso **Explorer** (ou Basic).
+  `FLUXOS_OAUTH_GOOGLE_ADS_DEVELOPER_TOKEN` e `FLUXOS_OAUTH_GOOGLE_ADS_LOGIN_CUSTOMER_ID` são opcionais.
+- Enquanto a tela de consentimento estiver em "Teste", só os usuários de teste conseguem conectar (limite de 100);
+  `adwords` é escopo sensível e pede verificação do app para publicar.
