@@ -17,6 +17,7 @@ import { ConnectorIcon } from '@/components/connectors/ConnectorIcon'
 import { supabase } from '@/integrations/supabase/client'
 import { FluxosConnectPanel } from '@/components/connectors/FluxosConnectPanel'
 import { cn } from '@/lib/utils'
+import { getGitHubOAuthUrl, GITHUB_TOKEN_STEPS } from '@/lib/github/oauth'
 
 type GithubProfile = { login: string; avatar_url: string | null; profile_url: string }
 
@@ -34,6 +35,18 @@ export default function ConnectorSetupPage() {
   const [testResult, setTestResult] = useState<{ ok: boolean; status: number; account?: string | null; detail?: string | null } | null>(null)
 
   const [githubProfile, setGithubProfile] = useState<GithubProfile | null>(null)
+  // GitHub: "Entrar com GitHub" (OAuth) é o caminho principal; o token (PAT) fica em "Avançado".
+  const [showToken, setShowToken] = useState(false)
+  const [oauthStarting, setOauthStarting] = useState(false)
+  const startGithubOAuth = async () => {
+    setOauthStarting(true)
+    try {
+      window.location.href = await getGitHubOAuthUrl()
+    } catch {
+      setOauthStarting(false)
+      toast.error('Não foi possível abrir o login do GitHub. Tente de novo ou use um token abaixo.')
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -210,14 +223,34 @@ export default function ConnectorSetupPage() {
         </Card>
 
         {slug === 'github' && (
-          <Card className="p-4 border-primary/40 bg-primary/5 flex gap-3 items-start">
-            <KeyRound className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-            <div className="text-sm space-y-1">
-              <p className="font-semibold text-foreground">GitHub Login via PAT</p>
-              <p className="text-muted-foreground text-xs">
-                Sem OAuth externo. A Vertal valida seu Personal Access Token na API do GitHub e
-                vincula sua conta automaticamente — só então você é levado ao painel do conector.
-              </p>
+          <Card className="p-5 border-primary/40 bg-primary/5 space-y-3" data-testid="github-oauth-card">
+            <div className="flex gap-3 items-start">
+              <Github className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+              <div className="text-sm space-y-1">
+                <p className="font-semibold text-foreground">Entrar com GitHub</p>
+                <p className="text-muted-foreground text-xs">
+                  Você faz login no GitHub e autoriza a Vertal (repositórios, perfil e e-mail). O acesso fica
+                  cifrado no servidor e pode ser revogado a qualquer momento no GitHub ou aqui em Desconectar.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={startGithubOAuth} disabled={oauthStarting} data-testid="github-oauth-start">
+                {oauthStarting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Github className="h-4 w-4 mr-2" />}
+                Entrar com GitHub
+              </Button>
+              {!existing && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowToken((v) => !v)}
+                  aria-expanded={showToken}
+                  data-testid="github-token-toggle"
+                >
+                  <KeyRound className="h-4 w-4 mr-2" />
+                  {showToken ? 'Ocultar token' : 'Avançado: usar token'}
+                </Button>
+              )}
             </div>
           </Card>
         )}
@@ -301,12 +334,13 @@ export default function ConnectorSetupPage() {
           </Card>
         )}
 
+        {(slug !== 'github' || showToken || Boolean(existing)) && (<>
         {/* Steps */}
         <div className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             How to get your {connector.apiKeyLabel}
           </h2>
-          {connector.setupSteps.map((step, i) => (
+          {(slug === 'github' ? GITHUB_TOKEN_STEPS : connector.setupSteps).map((step, i) => (
             <Card key={i} className="p-4 flex gap-4">
               <div className="h-7 w-7 rounded-full bg-primary/15 text-primary flex items-center justify-center text-sm font-bold flex-shrink-0">
                 {i + 1}
@@ -340,7 +374,7 @@ export default function ConnectorSetupPage() {
             </div>
             {connector.slug === 'github' && (
               <Badge variant="outline" className="text-[10px] uppercase font-bold text-primary border-primary/40">
-                PAT Token Required
+                Avançado · token pessoal
               </Badge>
             )}
           </div>
@@ -400,6 +434,7 @@ export default function ConnectorSetupPage() {
             </Button>
           </div>
         </Card>
+        </>)}
       </motion.div>
     </div>
   )

@@ -19,6 +19,9 @@ project_id = "sccizjlpwezsgaxkclot"
     verify_jwt = false
   [functions.github-signin-initiate]
     verify_jwt = false
+  # Conector GitHub (OAuth): o GitHub redireciona o navegador sem JWT; a função valida o state (nonce no banco).
+  [functions.github-callback]
+    verify_jwt = false
   [functions.gmail-oauth-callback]
     verify_jwt = false
   # Vertal Chat · Agendador: pg_cron chama sem JWT (chave própria no cabeçalho); usuários são validados na função.

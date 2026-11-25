@@ -63,7 +63,9 @@ Deno.serve(async (req) => {
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: `${Deno.env.get('SUPABASE_URL')}/functions/v1/github-callback`,
-      scope: 'repo user read:org',
+      // Conector GitHub (OAuth por usuário): repositórios + perfil + e-mail. Sem escopo de CI
+      // (o agente nunca edita a pasta de CI do repo) e sem escrita no perfil.
+      scope: 'repo read:user user:email',
       state,
       allow_signup: 'true',
     })

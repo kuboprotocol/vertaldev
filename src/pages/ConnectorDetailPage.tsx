@@ -866,12 +866,28 @@ export default function ConnectorDetailPage() {
         <Card>
           <CardHeader><CardTitle className="text-lg">Conexão</CardTitle></CardHeader>
           <CardContent className="space-y-4">
+            {!isConnected && isGitHub && (
+              <p className="text-xs text-muted-foreground">
+                Você entra com sua conta do GitHub e autoriza a Vertal a ler e criar repositórios em seu nome.
+                Prefere colar um token?{' '}
+                <button
+                  type="button"
+                  className="text-primary hover:underline"
+                  onClick={() => navigate('/connectors/github/setup')}
+                  data-testid="github-use-token"
+                >
+                  Avançado: usar token
+                </button>
+              </p>
+            )}
             {!isConnected ? (
               <Button variant="hero" size="lg" onClick={handleConnect} disabled={connecting} className="w-full sm:w-auto">
                 {connecting ? (
                   <><Loader2 className="h-4 w-4 animate-spin" /> Conectando...</>
                 ) : connector.status === 'coming_soon' ? (
                   <><Clock className="h-4 w-4" /> Em breve</>
+                ) : isGitHub ? (
+                  <>Entrar com GitHub</>
                 ) : (
                   <>Conectar com {connector.name}</>
                 )}
@@ -893,7 +909,7 @@ export default function ConnectorDetailPage() {
                           Conectado em {new Date(github.connection.connected_at).toLocaleDateString('pt-BR')}
                         </p>
                       </div>
-                      <Badge variant="secondary" className="text-[10px]">OAuth</Badge>
+                      <Badge variant="secondary" className="text-[10px]">{github.connection.scope === 'pat' ? 'Token' : 'OAuth'}</Badge>
                     </div>
                     {githubProfileUrl && (
                       <div className="flex items-center gap-2">
