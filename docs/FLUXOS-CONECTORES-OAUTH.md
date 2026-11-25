@@ -90,3 +90,27 @@ APIs ativadas no projeto: Google Ads API, AdMob API, AdSense Management API.
   `FLUXOS_OAUTH_GOOGLE_ADS_DEVELOPER_TOKEN` e `FLUXOS_OAUTH_GOOGLE_ADS_LOGIN_CUSTOMER_ID` são opcionais.
 - Enquanto a tela de consentimento estiver em "Teste", só os usuários de teste conseguem conectar (limite de 100);
   `adwords` é escopo sensível e pede verificação do app para publicar.
+
+## WhatsApp por token (nov/2026) — caminho fácil até o OAuth da Meta
+App no motor (fork PR #10): `whatsapp-cloud` (WhatsApp Business Cloud API oficial, Graph v23.0), sem OAuth.
+O app `whatsapp` (login pelo Facebook / Embedded Signup) continua no motor, mas a aba "Entrar com Facebook"
+fica desabilitada com "Em breve" até existirem `FLUXOS_OAUTH_META_ID/_SECRET` (describe → `platformClient`).
+
+- Tela: `/connectors/fluxos-whatsapp/setup` e topo de `/connectors/whatsapp` (`WhatsAppConnectPanel`),
+  textos em pt-BR/en/es (Ajustes → idioma, ou `?lang=`). Campos: token de acesso (token permanente do
+  usuário do sistema), ID do número, ID da conta WhatsApp Business (opcional, para listar templates/números).
+- "Testar conexão": op `test` do `fluxos_apps` → `GET https://graph.facebook.com/v23.0/{phone-number-id}`
+  (e `/{waba-id}`), nada é salvo; mostra nome verificado e número. Erros 190/10/200/100 viram dica.
+- "Salvar e conectar": op `start` (app `whatsapp-cloud`); o motor guarda o token criptografado e o
+  `verifyCredentials` confere o número; `screen_name` = "WhatsApp · <nome> · <número>".
+- Chat: aparece como "WhatsApp"; ações `sendText` (janela de 24 h) e `sendTemplate` (nome + idioma +
+  variáveis) passam pelo cartão de aprovação (2 créditos). Buscas: número, números e templates da conta.
+- Número de teste grátis da Meta: só envia para até 5 destinatários cadastrados em "To" até a empresa ser
+  verificada / um número próprio ser adicionado (erro 131030 explica isso).
+- Próximo passo (não feito): gatilho "nova mensagem recebida" por cliente. O webhook existente
+  (`virtual-chat-webhook`) é do número do operador (segredos `WHATSAPP_*`), não por cliente. Precisa:
+  rotear por `metadata.phone_number_id` → usuário, guardar o App Secret de cada cliente para a assinatura
+  HMAC (ou usar o app da Meta do Vertal depois do OAuth) e expor um gatilho webhook no motor.
+- OAuth real (Embedded Signup): app da Meta do Vertal + verificação da empresa + App Review de
+  `whatsapp_business_management`/`whatsapp_business_messaging` + configuração do Facebook Login for
+  Business (`FLUXOS_OAUTH_WHATSAPP_CONFIG`). Com os segredos salvos, a aba "Entrar com Facebook" liga sozinha.

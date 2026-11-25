@@ -16,6 +16,7 @@ import { getConnectorBySlug } from '@/lib/connectorsConfig'
 import { ConnectorIcon } from '@/components/connectors/ConnectorIcon'
 import { supabase } from '@/integrations/supabase/client'
 import { FluxosConnectPanel } from '@/components/connectors/FluxosConnectPanel'
+import { WhatsAppConnectPanel } from '@/components/connectors/WhatsAppConnectPanel'
 import { cn } from '@/lib/utils'
 import { getGitHubOAuthUrl, GITHUB_TOKEN_STEPS } from '@/lib/github/oauth'
 
@@ -172,7 +173,9 @@ export default function ConnectorSetupPage() {
           </div>
         </div>
         <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
-          <FluxosConnectPanel app={connector.fluxosApp} name={connector.name} />
+          {connector.fluxosApp === 'whatsapp'
+            ? <WhatsAppConnectPanel />
+            : <FluxosConnectPanel app={connector.fluxosApp} name={connector.name} />}
         </div>
       </div>
     )
