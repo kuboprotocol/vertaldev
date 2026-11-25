@@ -174,3 +174,61 @@ describe('flag e intenção', () => {
     expect(hasCalendarScope('https://www.googleapis.com/auth/gmail.readonly')).toBe(false);
   });
 });
+
+describe('idioma (responder na língua do usuário)', () => {
+  it('detecta o idioma do pedido', async () => {
+    const { detectLang } = await import('../../../supabase/functions/_shared/chatScheduler');
+    expect(detectLang('Remind me in 2 minutes to drink water')).toBe('en');
+    expect(detectLang('Recuérdame en 2 minutos tomar agua')).toBe('es');
+    expect(detectLang('me lembre daqui 2 minutos de beber água')).toBe('pt-BR');
+    expect(detectLang('ok')).toBeNull();
+  });
+  it('ordem: ajuste → pedido → navegador → perfil → pt-BR', async () => {
+    const { resolveLang, normLang } = await import('../../../supabase/functions/_shared/chatScheduler');
+    expect(resolveLang({ setting: 'es', spec: { lang: 'en' } })).toBe('es');
+    expect(resolveLang({ setting: 'auto', spec: { lang: 'en', locale: 'es-ES' } })).toBe('en');
+    expect(resolveLang({ spec: { locale: 'es-419' }, profile: 'en' })).toBe('es');
+    expect(resolveLang({ profile: 'en-US' })).toBe('en');
+    expect(resolveLang({})).toBe('pt-BR');
+    expect(normLang('pt_BR')).toBe('pt-BR');
+    expect(normLang('English')).toBe('en');
+    expect(normLang('auto')).toBeNull();
+  });
+  it('lê "quando" em inglês e espanhol', async () => {
+    const { parseWhen } = await import('../../../supabase/functions/_shared/chatScheduler');
+    const at = (t: string) => { const r = parseWhen(t, NOW, TZ); expect(r?.schedule.type).toBe('once'); return local(Date.parse((r!.schedule as { at: string }).at)); };
+    expect(at('in 2 minutes')).toBe('2026-11-25 04:57');
+    expect(at('tomorrow at 9am')).toBe('2026-11-26 09:00');
+    expect(at('en 2 minutos')).toBe('2026-11-25 04:57');
+    expect(at('mañana a las 3 de la tarde')).toBe('2026-11-26 15:00');
+    expect(at('in 1 hour')).toBe('2026-11-25 05:55');
+    expect(parseWhen('every Monday at 8am', NOW, TZ)?.schedule).toEqual({ type: 'weekly', time: '08:00', days: [1] });
+    expect(parseWhen('cada 10 minutos', NOW, TZ)?.schedule).toEqual({ type: 'interval', minutes: 10 });
+    // português continua igual
+    expect(at('daqui a 2 minutos')).toBe('2026-11-25 04:57');
+    expect(parseWhen('a cada 10 minutos', NOW, TZ)?.schedule).toEqual({ type: 'interval', minutes: 10 });
+  });
+  it('cartão e textos no idioma da tarefa', async () => {
+    const { normalizeSpec, summaryLines, describeSchedule, formatLocal, schedText, templatesFor, classifyPrompt } = await import('../../../supabase/functions/_shared/chatScheduler');
+    const en = normalizeSpec({ kind: 'reminder', title: 'Drink water', when: 'in 2 minutes', lang: 'en' }, NOW, TZ, 'en');
+    expect(en.ok).toBe(true);
+    const lines = summaryLines((en as { task: Parameters<typeof summaryLines>[0] }).task, { lang: 'en' });
+    expect(lines[0]).toBe('Reminder: Drink water');
+    expect(lines.join('\n')).toContain('When: once, Wed 11/25 at 04:57');
+    expect(lines).toContain('Language: English');
+    const es = normalizeSpec({ kind: 'task', prompt: 'precio del dólar', when: 'cada 10 minutos' }, NOW, TZ, 'es');
+    expect(summaryLines((es as { task: Parameters<typeof summaryLines>[0] }).task, { lang: 'es' })[0]).toBe('Tarea programada: precio del dólar');
+    expect(describeSchedule({ type: 'daily', time: '08:00' }, TZ, 'es')).toBe('todos los días a las 08:00');
+    expect(formatLocal(NOW, TZ)).toBe('qua. 25/11 às 04:55');
+    expect(schedText('en').reminder).toBe('Reminder');
+    expect(schedText('fr').reminder).toBe('Reminder');
+    expect(templatesFor('es')[0].label).toBe('Recordatorio');
+    expect(normalizeSpec({ kind: 'reminder', title: 'x', when: 'blah' }, NOW, TZ, 'en')).toEqual({ ok: false, error: schedText('en').errWhen });
+    expect(classifyPrompt({ from: 'a', subject: 'b', text: 'c' }, undefined, 'en')).toContain('motivo curto em inglês');
+  });
+  it('intenção de agendar em inglês/espanhol liga a ferramenta', () => {
+    expect(wantsScheduler(['Remind me in 2 minutes to drink water'])).toBe(true);
+    expect(wantsScheduler(['Recuérdame en 2 minutos tomar agua'])).toBe(true);
+    expect(wantsScheduler(['what is the capital of France'])).toBe(false);
+  });
+});

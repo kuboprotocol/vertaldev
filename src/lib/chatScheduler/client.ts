@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { functionErrorCode } from '@/lib/functionError';
+import { browserLocale, schedUi, schedulerUiLang } from './i18n';
 
 export const SCHEDULER_FUNCTION = 'vertal-chat-scheduler';
 export const SCHEDULER_NAME = 'Tarefas agendadas';
@@ -50,26 +51,32 @@ export interface SchedulerRun {
   est_cost_usd: number | null;
 }
 
-export interface SchedulerSettings { timezone: string; quiet: { start: string; end: string } | null; notify_email: boolean }
+/** lang: "auto" (padrão: idioma do pedido / navegador) ou o idioma fixo escolhido em Ajustes. */
+export interface SchedulerSettings { timezone: string; quiet: { start: string; end: string } | null; notify_email: boolean; lang?: string }
 
 export type SchedulerResult<T> = { ok: true; data: T; message?: string; code?: string } | { ok: false; data?: undefined; message: string; code?: string };
 
-const MESSAGES: Record<string, string> = {
-  not_found: 'As tarefas agendadas ainda não estão liberadas para a sua conta.',
-  task_not_found: 'Não achei essa tarefa.',
-  Unauthorized: 'Sua sessão expirou. Entre novamente.',
-  save_failed: 'Não consegui salvar agora. Tente de novo em instantes.',
-};
+/** Idioma escolhido em Ajustes (o painel atualiza ao carregar/salvar), para as mensagens de erro locais. */
+let savedLangSetting: string | null = null;
+export function setSchedulerLangSetting(lang: string | null | undefined): void {
+  savedLangSetting = lang ?? null;
+}
+export function getSchedulerLangSetting(): string | null {
+  return savedLangSetting;
+}
 
 export async function callScheduler<T = Record<string, unknown>>(action: string, payload: Record<string, unknown> = {}): Promise<SchedulerResult<T>> {
-  const { data, error } = await supabase.functions.invoke(SCHEDULER_FUNCTION, { body: { action, ...payload } });
+  // O servidor usa o idioma do navegador quando não há outro (Ajustes / idioma do pedido).
+  const locale = browserLocale();
+  const { data, error } = await supabase.functions.invoke(SCHEDULER_FUNCTION, { body: { action, ...(locale ? { locale } : {}), ...payload } });
+  const E = schedUi(schedulerUiLang(savedLangSetting)).errors;
   if (error) {
     const code = (await functionErrorCode(error)) ?? 'error';
-    if (code.startsWith('rate_limit_exceeded')) return { ok: false, code, message: 'Muitos pedidos em pouco tempo. Aguarde um minuto.' };
-    return { ok: false, code, message: MESSAGES[code] ?? 'Não consegui falar com as tarefas agendadas agora.' };
+    if (code.startsWith('rate_limit_exceeded')) return { ok: false, code, message: E.rate };
+    return { ok: false, code, message: E[code] ?? E.generic };
   }
   const d = (data ?? {}) as Record<string, unknown>;
-  if (d.ok === false) return { ok: false, message: String(d.error ?? 'Não deu certo.') };
+  if (d.ok === false) return { ok: false, message: String(d.error ?? E.notOk) };
   return { ok: true, data: d as T };
 }
 

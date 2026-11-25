@@ -13,8 +13,9 @@ import { handleFluxosApps } from "../_shared/fluxosAppsHandler.ts";
 import { sanitizeError, supaAdmin, withRefundOnFailure } from "../_shared/creative.ts";
 import { repairAgentJson } from "../_shared/chatOrchestrator.ts";
 import {
-  SCHEDULER_LIMITS, SENTIMENT_PT, backoffMs, branchFor, buildGmailQuery, classifyPrompt, describeSchedule, formatLocal,
-  googleCalendarLink, hasCalendarScope, inQuietHours, nextRun, parseSentiment, quietApplies, quietEnd,
+  SCHEDULER_LIMITS, backoffMs, branchFor, buildGmailQuery, classifyPrompt, describeSchedule, formatLocal,
+  googleCalendarLink, hasCalendarScope, inQuietHours, intlLocale, langName, nextRun, normLang, parseSentiment, quietApplies, quietEnd,
+  resolveLang, schedText, type SchedulerSpec,
   type Branches, type EmailTrigger, type NormalizedAppointment, type QuietHours, type Schedule, type SchedulerKind,
 } from "../_shared/chatScheduler.ts";
 
@@ -43,11 +44,27 @@ export interface TaskRow {
   run_count: number;
   email_checked_at: string | null;
   created_at: string;
+  spec?: SchedulerSpec | null;
 }
 
-export interface Settings { timezone: string; quiet: QuietHours | null; notify_email: boolean }
+/** lang: "auto" (padrão) ou o idioma escolhido em Ajustes → Idioma. */
+export interface Settings { timezone: string; quiet: QuietHours | null; notify_email: boolean; lang: string }
 
-export interface UserRef { id: string; email?: string | null }
+/** locale: idioma do perfil (user_metadata.locale/language), quando houver. */
+export interface UserRef { id: string; email?: string | null; locale?: string | null }
+
+/** Idioma de tudo o que a tarefa produz: Ajustes → mensagem da criação → navegador → perfil → pt-BR. */
+export function taskLang(task: Pick<TaskRow, "spec">, settings: Pick<Settings, "lang">, user?: Pick<UserRef, "locale"> | null): string {
+  const spec = task.spec ?? null;
+  return resolveLang({
+    setting: settings.lang, spec, text: spec ? [spec.when, spec.prompt, spec.title].filter(Boolean).join(" ") : null, profile: user?.locale ?? null,
+  });
+}
+
+export function profileLocale(u: { user_metadata?: Record<string, unknown> | null } | null | undefined): string | null {
+  const m = u?.user_metadata ?? {};
+  return normLang(m.locale ?? m.language ?? m.lang ?? null);
+}
 
 export interface ExecResult { ok: boolean; reply: string; error?: string; costUsd: number; credits: number; tools: string[] }
 
@@ -56,7 +73,7 @@ const CHAT_CONVERSATION_TITLE = "Tarefas agendadas";
 export async function loadSettings(admin: Admin, userId: string): Promise<Settings> {
   const { data } = await admin.from("chat_scheduler_settings").select("*").eq("user_id", userId).maybeSingle();
   const quiet = data?.quiet_start && data?.quiet_end ? { start: data.quiet_start, end: data.quiet_end } : null;
-  return { timezone: data?.timezone || "America/Sao_Paulo", quiet, notify_email: data?.notify_email === true };
+  return { timezone: data?.timezone || "America/Sao_Paulo", quiet, notify_email: data?.notify_email === true, lang: normLang(data?.lang) ?? "auto" };
 }
 
 // ─── Gmail e Google Agenda (conta Gmail já conectada pelo usuário) ───────
@@ -211,13 +228,13 @@ export async function postToChat(admin: Admin, task: Pick<TaskRow, "user_id" | "
   return msg.id;
 }
 
-async function notifyByEmail(admin: Admin, user: UserRef, subject: string, body: string): Promise<void> {
+async function notifyByEmail(admin: Admin, user: UserRef, subject: string, body: string, lang?: string): Promise<void> {
   const acc = await gmailAccount(admin, user.id);
   if (!acc?.email) return;
   try {
     const token = await getFreshAccessToken(admin, acc);
     // Só para o próprio usuário (a conta conectada): nunca para terceiros.
-    await gmailSend(token, acc.email, `[Vertal Chat] ${subject}`, `${body}\n\n— Tarefas agendadas do Vertal Chat`);
+    await gmailSend(token, acc.email, `[Vertal Chat] ${subject}`, `${body}\n\n${schedText(lang).emailFooter}`);
   } catch (e) {
     console.warn("[scheduler] aviso por e-mail falhou:", sanitizeError(e));
   }
@@ -225,7 +242,7 @@ async function notifyByEmail(admin: Admin, user: UserRef, subject: string, body:
 
 // ─── Executor (mini agente no servidor) ──────────────────────────────────
 
-function runnerSystem(task: TaskRow, apps: string[], ownEmail: string | null, nowText: string): string {
+function runnerSystem(task: TaskRow, apps: string[], ownEmail: string | null, nowText: string, lang: string): string {
   const send = task.send_to?.length
     ? `- {"tool":"gmail_send","to":"e-mail","subject":"…","body":"…"} → envia e-mail SÓ para: ${task.send_to.join(", ")}${ownEmail ? ` ou para o próprio usuário (${ownEmail})` : ""}.`
     : ownEmail ? `- {"tool":"gmail_send","to":"${ownEmail}","subject":"…","body":"…"} → só para o próprio usuário (não há permissão para terceiros).` : "";
@@ -244,6 +261,7 @@ function runnerSystem(task: TaskRow, apps: string[], ownEmail: string | null, no
     "Se a tarefa pedir algo que só dá para fazer com o usuário presente (criar imagem, app, pagar), diga no reply o que preparou e o que ele precisa abrir.",
     "Para o usuário, os apps conectados são do Vertal Fluxos; nunca cite nomes de motores ou provedores.",
     `Agora: ${nowText} (${task.timezone}).`,
+    `IDIOMA: escreva o reply (e qualquer e-mail que enviar) SEMPRE em ${langName(lang)} (código ${lang}), o idioma do usuário, mesmo que a tarefa, as instruções acima ou os resultados das ferramentas estejam em outra língua. Buscas na web podem ser no idioma que der melhores resultados.`,
   ].filter(Boolean).join("\n");
 }
 
@@ -253,7 +271,7 @@ function asList(v: unknown): Record<string, unknown>[] {
 
 /** Roda a instrução com as ferramentas do servidor. Nunca lança. */
 export async function executeInstruction(
-  admin: Admin, user: UserRef, task: TaskRow, instruction: string, context = "",
+  admin: Admin, user: UserRef, task: TaskRow, instruction: string, context = "", lang = "pt-BR",
 ): Promise<ExecResult> {
   let costUsd = 0;
   let credits = 0;
@@ -262,8 +280,8 @@ export async function executeInstruction(
     const acc = await gmailAccount(admin, user.id);
     const { data: fx } = await admin.from("fluxos_connections").select("app_key").eq("user_id", user.id).eq("status", "connected");
     const apps: string[] = (fx ?? []).map((r: { app_key: string }) => r.app_key);
-    const nowText = new Intl.DateTimeFormat("pt-BR", { timeZone: task.timezone, dateStyle: "full", timeStyle: "short" }).format(new Date());
-    const system = runnerSystem(task, apps, acc?.email ?? null, nowText);
+    const nowText = new Intl.DateTimeFormat(intlLocale(lang), { timeZone: task.timezone, dateStyle: "full", timeStyle: "short" }).format(new Date());
+    const system = runnerSystem(task, apps, acc?.email ?? null, nowText, lang);
     const convo: Array<{ role: "user" | "assistant"; content: string }> = [{
       role: "user",
       content: `Tarefa "${task.title}": ${instruction}${context ? `\n\nCONTEXTO (DADOS):\n${context}` : ""}`,
@@ -282,7 +300,7 @@ export async function executeInstruction(
       const actions = last ? [] : asList(value.actions);
       if (!actions.length) {
         // Rede de segurança: 1ª rodada sem ferramenta mas a resposta fala em busca/ferramenta → pede para usar de verdade, uma vez.
-        if (round === 0 && !tools.length && /\b(busc|pesquis|ferrament|web_search|n[aã]o consegui)/i.test(reply)) {
+        if (round === 0 && !tools.length && /\b(busc|pesquis|ferrament|web_search|n[aã]o consegui|search|look(ing)? up|tool|couldn'?t|could not|unable|herramienta|no pude)/i.test(reply)) {
           convo.push({ role: "assistant", content: JSON.stringify(value).slice(0, 4_000) });
           convo.push({ role: "user", content: "Você não chamou nenhuma ferramenta. Chame agora as ferramentas necessárias em \"actions\" (ex.: web_search) em vez de responder sem dados." });
           continue;
@@ -299,7 +317,7 @@ export async function executeInstruction(
       }
       convo.push({ role: "user", content: `RESULTADOS DAS FERRAMENTAS (DADOS):\n${results.join("\n\n")}` });
     }
-    if (!reply) return { ok: false, reply: "", error: "A IA não devolveu resultado.", costUsd, credits, tools };
+    if (!reply) return { ok: false, reply: "", error: schedText(lang).noResult, costUsd, credits, tools };
     return { ok: true, reply, costUsd, credits, tools };
   } catch (e) {
     return { ok: false, reply: "", error: sanitizeError(e), costUsd, credits, tools };
@@ -366,34 +384,37 @@ async function finishRun(admin: Admin, runId: string, patch: Record<string, unkn
   await admin.from("chat_task_runs").update({ finished_at: new Date().toISOString(), ...patch }).eq("id", runId);
 }
 
-async function reminderText(admin: Admin, task: TaskRow): Promise<string> {
-  if (!task.appointment_id) return `⏰ **Lembrete:** ${task.title}`;
+async function reminderText(admin: Admin, task: TaskRow, lang: string): Promise<string> {
+  const L = schedText(lang);
+  if (!task.appointment_id) return `⏰ **${L.reminder}:** ${task.title}`;
   const { data: ev } = await admin.from("chat_agenda_events").select("*").eq("id", task.appointment_id).maybeSingle();
-  if (!ev) return `⏰ **Lembrete:** ${task.title}`;
-  const when = formatLocal(Date.parse(ev.starts_at), ev.timezone || task.timezone);
+  if (!ev) return `⏰ **${L.reminder}:** ${task.title}`;
+  const when = formatLocal(Date.parse(ev.starts_at), ev.timezone || task.timezone, lang);
   return [
-    `⏰ **Lembrete de compromisso:** ${ev.title}`,
-    `Quando: ${when}${ev.location ? ` · Local: ${ev.location}` : ""}`,
-    ev.provider === "google" ? "Está no seu Google Agenda." : `[Adicionar ao Google Agenda](${ev.add_to_google_url})`,
+    `⏰ **${L.apptReminder}:** ${ev.title}`,
+    `${L.when}: ${when}${ev.location ? ` · ${L.place}: ${ev.location}` : ""}`,
+    ev.provider === "google" ? L.inGoogle : `[${L.addGoogle}](${ev.add_to_google_url})`,
   ].join("\n");
 }
 
 /** Roda uma tarefa de horário (não e-mail). `manual` = "rodar agora". */
 export async function runScheduledTask(admin: Admin, user: UserRef, task: TaskRow, settings: Settings, manual = false): Promise<{ ok: boolean; text: string }> {
   const runId = await startRun(admin, task, manual ? "manual" : task.attempts > 0 ? "retry" : "schedule");
+  const lang = taskLang(task, settings, user);
+  const L = schedText(lang);
   const simple = task.kind === "reminder" || task.kind === "appointment";
   const res: ExecResult = simple
-    ? { ok: true, reply: await reminderText(admin, task), costUsd: 0, credits: 0, tools: [] }
-    : await executeInstruction(admin, user, task, task.prompt);
+    ? { ok: true, reply: await reminderText(admin, task, lang), costUsd: 0, credits: 0, tools: [] }
+    : await executeInstruction(admin, user, task, task.prompt, "", lang);
   const now = Date.now();
   if (res.ok) {
-    const text = simple ? res.reply : `🗓️ **Tarefa agendada: ${task.title}**\n\n${res.reply}`;
+    const text = simple ? res.reply : `🗓️ **${L.taskHeader}: ${task.title}**\n\n${res.reply}`;
     const messageId = await postToChat(admin, task, text);
     await finishRun(admin, runId, {
       status: "ok", output: res.reply.slice(0, 8_000), message_id: messageId, est_cost_usd: res.costUsd, est_credits: res.credits,
       tools: res.tools,
     });
-    if (task.notify_email || settings.notify_email) await notifyByEmail(admin, user, task.title, res.reply);
+    if (task.notify_email || settings.notify_email) await notifyByEmail(admin, user, task.title, res.reply, lang);
     if (!manual) {
       const next = task.schedule.type === "once" ? null : nextRun(task.schedule, task.timezone, now);
       await admin.from("chat_scheduled_tasks").update({
@@ -407,11 +428,12 @@ export async function runScheduledTask(admin: Admin, user: UserRef, task: TaskRo
   }
   await finishRun(admin, runId, { status: "error", error: (res.error ?? "falhou").slice(0, 2_000), est_cost_usd: res.costUsd, est_credits: res.credits });
   if (manual) return { ok: false, text: res.error ?? "falhou" };
-  await handleFailure(admin, user, task, res.error ?? "falhou", settings);
+  await handleFailure(admin, user, task, res.error ?? "falhou", settings, lang);
   return { ok: false, text: res.error ?? "falhou" };
 }
 
-async function handleFailure(admin: Admin, user: UserRef, task: TaskRow, error: string, settings: Settings) {
+async function handleFailure(admin: Admin, user: UserRef, task: TaskRow, error: string, settings: Settings, lang: string) {
+  const L = schedText(lang);
   const attempts = task.attempts + 1;
   const now = Date.now();
   if (attempts <= SCHEDULER_LIMITS.maxRetries) {
@@ -421,9 +443,9 @@ async function handleFailure(admin: Admin, user: UserRef, task: TaskRow, error: 
     }).eq("id", task.id);
     return;
   }
-  const text = `⚠️ **A tarefa "${task.title}" falhou** depois de ${SCHEDULER_LIMITS.maxRetries} novas tentativas.\nMotivo: ${error}\nVocê pode rodar de novo em Tarefas agendadas.`;
+  const text = L.failed(task.title, SCHEDULER_LIMITS.maxRetries, error);
   await postToChat(admin, task, text);
-  if (task.notify_email || settings.notify_email) await notifyByEmail(admin, user, `Falha: ${task.title}`, text);
+  if (task.notify_email || settings.notify_email) await notifyByEmail(admin, user, `${L.failSubject}: ${task.title}`, text, lang);
   const next = task.schedule.type === "once" || task.schedule.type === "email" ? null : nextRun(task.schedule, task.timezone, now);
   await admin.from("chat_scheduled_tasks").update({
     attempts: 0, last_status: "failed", last_error: error.slice(0, 500), locked_until: null, updated_at: new Date().toISOString(),
@@ -443,9 +465,11 @@ export async function pollEmailTask(admin: Admin, user: UserRef, task: TaskRow, 
       next_run_at: new Date(now + every * 60_000).toISOString(), locked_until: null, updated_at: new Date().toISOString(), ...patch,
     }).eq("id", task.id);
   };
+  const lang = taskLang(task, settings, user);
+  const L = schedText(lang);
   const acc = await gmailAccount(admin, user.id);
   if (!acc) {
-    await postToChat(admin, task, `⚠️ O gatilho "${task.title}" precisa do Gmail conectado. Conecte em Conectores → Gmail e retome a tarefa em Tarefas agendadas.`);
+    await postToChat(admin, task, L.needsGmail(task.title));
     await admin.from("chat_scheduled_tasks").update({ status: "paused", last_status: "needs_gmail", locked_until: null, updated_at: new Date().toISOString() }).eq("id", task.id);
     return { ok: false, handled: 0, text: "Gmail não conectado." };
   }
@@ -477,7 +501,7 @@ export async function pollEmailTask(admin: Admin, user: UserRef, task: TaskRow, 
     let sentiment: ReturnType<typeof parseSentiment> = { sentiment: "neutral", reason: "" };
     try {
       const gw = await runGateway({
-        messages: [{ role: "user", content: classifyPrompt(mail, task.trigger?.criteria) }],
+        messages: [{ role: "user", content: classifyPrompt(mail, task.trigger?.criteria, lang) }],
         kind: "chat", tier: "flash", json: true, temperature: 0, maxTokens: 200, contextChars: 8_000, noCache: true,
       });
       costUsd += gw.costUsd ?? 0;
@@ -487,34 +511,34 @@ export async function pollEmailTask(admin: Admin, user: UserRef, task: TaskRow, 
     }
     const instruction = branchFor({ branches: task.branches ?? undefined, prompt: task.prompt }, sentiment.sentiment);
     const head = [
-      `📧 **Gatilho: ${task.title}**`,
-      `Chegou e-mail de ${mail.from} — "${mail.subject}".`,
-      `Classificado como **${SENTIMENT_PT[sentiment.sentiment]}**${sentiment.reason ? ` (${sentiment.reason})` : ""}.`,
+      `📧 **${L.trig}: ${task.title}**`,
+      L.mailArrived(mail.from, mail.subject),
+      `${L.classified} **${L.sentiment[sentiment.sentiment]}**${sentiment.reason ? ` (${sentiment.reason})` : ""}.`,
     ].join("\n");
     if (!instruction) {
-      const text = `${head}\nNenhuma ação definida para esse caso.`;
+      const text = `${head}\n${L.noAction}`;
       const messageId = await postToChat(admin, task, text);
       await finishRun(admin, runId, { status: "ok", sentiment: sentiment.sentiment, output: "sem ação para este caso", message_id: messageId, est_cost_usd: costUsd });
       texts.push(text);
       continue;
     }
-    const context = `E-mail recebido (classificado como ${SENTIMENT_PT[sentiment.sentiment]}):\nDe: ${mail.from}\nAssunto: ${mail.subject}\nData: ${mail.date}\nTexto: ${mail.text.slice(0, 2_500)}`;
-    const res = await executeInstruction(admin, user, task, instruction, context);
+    const context = `E-mail recebido (classificado como ${sentiment.sentiment}):\nDe: ${mail.from}\nAssunto: ${mail.subject}\nData: ${mail.date}\nTexto: ${mail.text.slice(0, 2_500)}`;
+    const res = await executeInstruction(admin, user, task, instruction, context, lang);
     costUsd += res.costUsd;
-    const text = res.ok ? `${head}\n\n${res.reply}` : `${head}\n\n⚠️ A ação "${instruction}" falhou: ${res.error}`;
+    const text = res.ok ? `${head}\n\n${res.reply}` : `${head}\n\n${L.actionFailed(instruction, res.error ?? "")}`;
     const messageId = await postToChat(admin, task, text);
     await finishRun(admin, runId, {
       status: res.ok ? "ok" : "error", sentiment: sentiment.sentiment, output: (res.reply || "").slice(0, 8_000), error: res.error ?? null,
       message_id: messageId, est_cost_usd: costUsd, est_credits: res.credits, tools: res.tools,
     });
-    if (task.notify_email || settings.notify_email) await notifyByEmail(admin, user, `${task.title}: ${SENTIMENT_PT[sentiment.sentiment]}`, text);
+    if (task.notify_email || settings.notify_email) await notifyByEmail(admin, user, `${task.title}: ${L.sentiment[sentiment.sentiment]}`, text, lang);
     texts.push(text);
   }
   await reschedule({
     email_checked_at: new Date(now).toISOString(), last_status: "ok", last_error: null,
     ...(handled ? { run_count: task.run_count + handled, last_run_at: new Date(now).toISOString() } : {}),
   });
-  return { ok: true, handled, text: texts.join("\n\n") || (manual ? "Nenhum e-mail novo que combine com o gatilho." : "") };
+  return { ok: true, handled, text: texts.join("\n\n") || (manual ? L.noNewMail : "") };
 }
 
 // ─── Tick (pg_cron a cada minuto) ────────────────────────────────────────
@@ -539,7 +563,7 @@ export async function tick(allowedUserIds: string[], budgetMs = 110_000): Promis
       let user = users.get(task.user_id);
       if (!user) {
         const { data } = await admin.auth.admin.getUserById(task.user_id);
-        user = { id: task.user_id, email: data?.user?.email ?? null };
+        user = { id: task.user_id, email: data?.user?.email ?? null, locale: profileLocale(data?.user) };
         users.set(task.user_id, user);
       }
       let settings = settingsCache.get(task.user_id);
@@ -562,6 +586,6 @@ export async function tick(allowedUserIds: string[], budgetMs = 110_000): Promis
   return { claimed: (tasks ?? []).length, ran, skipped };
 }
 
-export function whenText(t: { schedule: Schedule; timezone: string }): string {
-  return describeSchedule(t.schedule, t.timezone);
+export function whenText(t: { schedule: Schedule; timezone: string }, lang?: string): string {
+  return describeSchedule(t.schedule, t.timezone, lang);
 }
