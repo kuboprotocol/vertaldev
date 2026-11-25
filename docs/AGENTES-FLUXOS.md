@@ -63,3 +63,9 @@ Nenhuma Edge Function nova: tudo passa pelo `creative-router`.
   quando também conectados pelo fluxo de conectores do Vertal Fluxos (linha em `fluxos_connections`).
 - Gatilho “Novo evento” é por consulta (15 min), não instantâneo; para instantâneo use
   `connect_to_automatisch` (webhook).
+
+## Vertal CRM no app “Vertal”
+
+O app **Vertal** do motor também tem gatilhos e ações do **Vertal CRM** (grátis; ver [VERTAL-CRM.md](./VERTAL-CRM.md)):
+**Novo contato no Vertal CRM**, **Etapa de negócio mudou no Vertal CRM** (consulta a cada 15 min), **Criar/Atualizar contato**,
+**Criar/Atualizar negócio** e **Criar tarefa**. As chamadas vão para `vertal-code-ai?app=crm` com a mesma chave `vfk1` do usuário.

@@ -11,6 +11,9 @@ import { cn } from '@/lib/utils'
 import { GlobalActivityPanel } from '@/components/connectors/GlobalActivityPanel'
 import { EcosystemActions, ProductLogo, useEcosystemDialogs } from '@/components/ecosystem/EcosystemShowcase'
 import { getEcosystemProduct, siblingsOf } from '@/lib/ecosystem'
+// Vertal CRM: entra na lista (fixado no topo) só com VITE_VERTAL_CRM ligado e o usuário liberado no servidor.
+import { useVertalCrmAccess } from '@/lib/vertalCrm/client'
+import { VERTAL_CRM_CONNECTOR } from '@/lib/vertalCrm/connector'
 
 type Availability = 'all' | 'available' | 'coming_soon'
 
@@ -29,6 +32,11 @@ export default function ConnectorsHubPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { openEmbed, openMcp, dialogs } = useEcosystemDialogs()
+  const vertalCrmAccess = useVertalCrmAccess()
+  const allConnectors = useMemo(
+    () => (vertalCrmAccess === 'allowed' ? [VERTAL_CRM_CONNECTOR, ...connectors] : connectors),
+    [vertalCrmAccess],
+  )
 
   const search = searchParams.get('q') ?? ''
   const activeCategory = searchParams.get('cat') ?? 'all'
@@ -64,7 +72,7 @@ export default function ConnectorsHubPage() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
-    return connectors
+    return allConnectors
       .filter(c => {
         const matchesSearch = !q ||
           c.name.toLowerCase().includes(q) ||
@@ -74,13 +82,15 @@ export default function ConnectorsHubPage() {
         return matchesSearch && matchesCategory && matchesAvailability
       })
       .sort((a, b) => {
+        const byPinned = Number(Boolean(b.pinned)) - Number(Boolean(a.pinned))
+        if (byPinned !== 0) return byPinned
         const byFeatured = Number(Boolean(b.featured)) - Number(Boolean(a.featured))
         if (byFeatured !== 0) return byFeatured
         const byStatus = STATUS_RANK[a.status] - STATUS_RANK[b.status]
         if (byStatus !== 0) return byStatus
         return a.name.localeCompare(b.name)
       })
-  }, [search, activeCategory, availability])
+  }, [search, activeCategory, availability, allConnectors])
 
   const handleConnectorClick = (connector: ConnectorConfig) => {
     if (connector.internalRoute) {
@@ -237,7 +247,7 @@ export default function ConnectorsHubPage() {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            {filtered.length} de {connectors.length} conectores
+            {filtered.length} de {allConnectors.length} conectores
             {hasActiveFilters && ' · filtros ativos compartilháveis via URL'}
           </p>
         </div>
@@ -281,6 +291,9 @@ export default function ConnectorsHubPage() {
                     <h3 className="font-semibold text-foreground">{connector.name}</h3>
                     {connector.featured && (
                       <Badge className="text-[10px] px-1.5 py-0">Ecossistema</Badge>
+                    )}
+                    {connector.badge && (
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{connector.badge}</Badge>
                     )}
                     {connector.status === 'coming_soon' && (
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0">

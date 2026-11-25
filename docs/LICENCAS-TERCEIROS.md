@@ -81,3 +81,8 @@ A AGPL estende a obrigação de fornecer o código-fonte a quem usa o programa
 "Huginn" e "Automatisch" são nomes dos respectivos projetos. Na interface do
 Vertal eles não aparecem (regra de marca branca); nesta documentação, aparecem
 apenas para cumprir as licenças e orientar a equipe.
+
+## Vertal CRM → Atomic CRM (MIT)
+
+O Vertal CRM adapta código do Atomic CRM (Marmelab, MIT): modelo de dados, Kanban, CSV e organização das telas.
+Aviso completo em `src/components/vertal-crm/LICENSE.atomic-crm.md` e em `THIRD_PARTY_NOTICES.md`. Na interface: só “Vertal CRM”.

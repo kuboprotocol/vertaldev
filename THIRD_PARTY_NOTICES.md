@@ -84,3 +84,37 @@ O grafo de tarefas (`supabase/functions/_shared/vibeTaskGraph.ts`, prompts do pl
 dependências, subtarefas e "próxima tarefa". Não contém código, prompts nem texto do Task Master. Nada
 dele foi copiado porque a licença do Task Master é MIT acrescida da Commons Clause, que proíbe vender o
 software ou um serviço cujo valor venha substancialmente dele.
+
+## Atomic CRM (base do Vertal CRM)
+
+- Projeto: Atomic CRM (Marmelab) — https://github.com/marmelab/atomic-crm
+- Versão de referência: commit `bfcb138bd549b03fa7c4a8c03c8212b6fd08b8bf` (novembro de 2026)
+- Licença: MIT (texto completo também em `src/components/vertal-crm/LICENSE.atomic-crm.md`)
+- O que foi adaptado: modelo de dados (contatos, empresas, negócios, notas, tarefas, etiquetas), status de contato,
+  tipos de tarefa, agrupamento/reordenação do Kanban, formato CSV e organização das telas →
+  `supabase/functions/_shared/vertalCrm/core.ts`, `supabase/migrations/20261125160000_vertal_crm.sql`, `src/components/vertal-crm/*`.
+  Na interface o produto aparece só como “Vertal CRM”.
+
+```
+The MIT License (MIT)
+
+Copyright (c) 2024-present, Francois Zaninotto, Marmelab
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NON INFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

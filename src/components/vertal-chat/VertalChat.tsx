@@ -37,6 +37,9 @@ import { isProspectCommand as isVertalProspectorCommand, useVertalProspectorAcce
 // VertalGrowth Team: botão e comando "buscar clientes para meu app X" (não renderiza/age com VITE_VERTAL_GROWTH_TEAM desligado).
 import { VertalGrowthEntryButton } from '@/components/vertal-growth/VertalGrowthEntryButton';
 import { isGrowthCommand as isVertalGrowthCommand, useVertalGrowthAccess, vertalGrowthHrefFromChat } from '@/lib/vertalGrowth/client';
+// VertalCrm: botão "CRM" no topo e comando "/crm" / "abrir o crm" (não renderiza/age com VITE_VERTAL_CRM desligado).
+import { VertalCrmEntryButton } from '@/components/vertal-crm/VertalCrmEntryButton';
+import { useVertalCrmAccess, VERTAL_CRM_ROUTE } from '@/lib/vertalCrm/client';
 
 const SIDEBAR_KEY = 'vertal-chat-sidebar';
 const CHAT_ONLY_KEY = 'vertal-chat-only';
@@ -83,6 +86,7 @@ export function VertalChat() {
   const { user } = useAuth();
   const vertalProspectorAccess = useVertalProspectorAccess(); // Vertal Prospector (desligado por padrão)
   const vertalGrowthAccess = useVertalGrowthAccess(); // Vertal Growth Team (desligado por padrão)
+  const vertalCrmAccess = useVertalCrmAccess(); // VertalCrm (desligado por padrão)
 
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     try {
@@ -209,6 +213,7 @@ export function VertalChat() {
     if (!input.trim() || chat.busy) return;
     if (dictation.listening) dictation.stop();
     if (vertalGrowthAccess === 'allowed' && isVertalGrowthCommand(input)) return navigate(vertalGrowthHrefFromChat(input)); // Vertal Growth Team: "buscar clientes para meu app X" abre a equipe (só liberado)
+    if (vertalCrmAccess === 'allowed' && /^(\/crm|(abrir|abra|abre|open)( o| el| the| my| meu| mi)? (vertal )?crm)\s*$/i.test(input.trim())) return navigate(VERTAL_CRM_ROUTE); // VertalCrm: abre o CRM (só liberado)
     if (vertalProspectorAccess === 'allowed' && isVertalProspectorCommand(input)) return navigate(vertalProspectorHrefFromChat(input)); // Vertal Prospector: comando abre o pipeline (só liberado)
     const text = input;
     setInput('');
@@ -379,6 +384,7 @@ export function VertalChat() {
           <SchedulerEntryButton />
           <VertalProspectorEntryButton from="chat" />
           <VertalGrowthEntryButton from="chat" />
+          <VertalCrmEntryButton />
           <button
             type="button"
             onClick={() => setChatOnly(!chatOnly)}
