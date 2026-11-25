@@ -11,7 +11,8 @@ native/node-sdks/
 │   ├── adapters/        # index.js (registro + interface), honeygain.js, cashraven.js, disabled.js (stubs)
 │   ├── config.js        # NODE_SDK_PROVIDER, chave do provedor, VERTAL_SUPABASE_URL/ANON_KEY
 │   ├── main.js          # setupVertalNode({ app, ipcMain, getWindow }) — um provedor só + heartbeat
-│   ├── preload.js       # window.vertalNode (ativar, opt-out, status, token)
+│   ├── deeplink.js      # setupDeepLink({ app, ipcMain, getWindow }) — vertalnode://open
+│   ├── preload.js       # window.vertalNode (ativar, opt-out, status, token, onDeepLink)
 │   ├── renderer/vertalNodePanel.js
 │   └── vendor/          # SDKs baixados (gitignored)
 ├── android/
@@ -54,3 +55,31 @@ native/node-sdks/
 - **Consentimento primeiro**: a tela de consentimento é a do SDK; nada inicia sem aceite.
 - **Opt-out fácil**: interruptor "Compartilhar internet" sempre visível → `optOut()`.
 - **Marca Vertal** em toda a UI; o fornecedor só aparece na tela de consentimento do SDK.
+
+## Deep link `vertalnode://open` (site → app)
+
+O loader `vertal.js` (repo vertal-ai-grid, `Vertal.node.openApp()`) abre o app com
+`vertalnode://open?appId=…&source=vertal-js[&ref=…]`. O link **só abre/foca a tela**; nunca liga o
+compartilhamento (continua exigindo "Ativar" + consentimento do parceiro). Parâmetros: lista branca
+`appId`/`app_id`, `ref`, `source`, valores `[A-Za-z0-9._-]{1,64}`.
+
+- **Android**: intent-filter na `MainActivity` (`DeepLink.kt`).
+- **Desktop (Electron)**: no `main`, antes de `ready`:
+  ```js
+  const { setupDeepLink } = require("./node-sdks/electron/deeplink");
+  if (!setupDeepLink({ app, ipcMain, getWindow: () => mainWindow }).primary) return;
+  ```
+  Usa `requestSingleInstanceLock`, `setAsDefaultProtocolClient("vertalnode")`, `second-instance`
+  (Windows/Linux) e `open-url` (macOS). O renderer recebe `window.vertalNode.onDeepLink(cb)` e
+  `window.vertalNode.pendingDeepLink()` (link que chegou antes da janela).
+- **Registro no sistema** (instalador). electron-builder:
+  ```json
+  "protocols": [{ "name": "Vertal Node", "schemes": ["vertalnode"] }]
+  ```
+  - Windows: NSIS grava `HKCU\Software\Classes\vertalnode` (`URL Protocol` = "", `shell\open\command`
+    = `"…\Vertal Node.exe" "%1"`); `setAsDefaultProtocolClient` também grava em tempo de execução.
+  - macOS: vira `CFBundleURLTypes` → `CFBundleURLSchemes = ["vertalnode"]` no `Info.plist`; só vale
+    com o app em /Applications (empacotado).
+  - Linux: `.desktop` com `MimeType=x-scheme-handler/vertalnode;` e `Exec=… %u` (deb/rpm); AppImage
+    precisa de integração com o desktop (ex.: AppImageLauncher) ou `xdg-mime default`.
+- **iOS**: não existe app; o vertal.js manda o iPhone/iPad para `ios_url`.
