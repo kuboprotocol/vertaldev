@@ -89,6 +89,7 @@ import {
 } from "../_shared/vibePlandexEngine.ts";
 import { type PlanActionName, PlanError, parsePlanRequest, READ_ONLY_PLAN_ACTIONS, runPlanAction } from "./plan.ts";
 import { type ChatDelegateResult, formatChatAnswerForAgent, type RouterCall, runChatDelegation } from "../_shared/chatDelegate.ts";
+import { vertalPersonaEnabled, withVertalPersona } from "../_shared/vertalPersona.ts";
 import {
   AUTH_KIT_OFFER_PROMPT,
   buildAuthKitFiles,
@@ -1189,8 +1190,10 @@ Deno.serve(async (req) => {
           for (const w of authKit.warnings) send({ kind: "auth_kit", status: "skipped", title: "Login Vertal", detail: w });
         }
 
+        // Atitude Vertal: soma a personalidade ao protocolo (JSON e regras intactos).
+        // Ligada para todos por padrão; VERTAL_PERSONA_ENABLED=off desliga sem deploy.
         const system =
-          SYSTEM +
+          withVertalPersona(SYSTEM, "vibe", vertalPersonaEnabled(Deno.env.get("VERTAL_PERSONA_ENABLED"))) +
           (authKit.enabled ? formatAuthKitForPrompt(authKit.options) : authOffer ? AUTH_KIT_OFFER_PROMPT : "") +
           (design.enabled ? buildDesignPrompt(design.surface, { target: "react" }) : "") +
           formatMemoriesForPrompt(memories) +

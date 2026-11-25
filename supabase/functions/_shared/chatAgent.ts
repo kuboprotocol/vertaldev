@@ -16,6 +16,7 @@ import {
 } from "./figcraft.ts";
 import { parseMemoryOps, type MemoryOps } from "./chatMemory.ts";
 import { CAD_LIMITS } from "./cad.ts";
+import { VERTAL_PERSONA_MARKER, vertalPersonaBlock } from "./vertalPersona.ts";
 import { PLAN_LIMITS, parsePlanAction, type ChatPlanTask } from "./chatPlan.ts";
 import { normalizeWebUrl } from "./chatWeb.ts";
 import { budgetToolResults, looksLikeJson, repairAgentJson, salvageReply, type JsonRepair } from "./chatOrchestrator.ts";
@@ -320,6 +321,8 @@ export interface AgentPromptContext {
   email?: EmailRoute | null;
   /** Agendador (tarefas agendadas): só com a flag ligada para o usuário E a conversa pedindo (ver wantsScheduler). */
   scheduler?: boolean;
+  /** Atitude Vertal (flag VERTAL_PERSONA_ENABLED, ligada por padrão): soma a camada de personalidade após a PERSONA. */
+  persona?: boolean;
 }
 
 // ─── Personalidade e regras de conversa ──────────────────────────────────
@@ -444,6 +447,16 @@ const MEMORY_OFF = "Memória: o usuário DESLIGOU a memória. Não use memórias
 const MEMORY_UNAVAILABLE = "Memória: indisponível neste momento. Não prometa lembrar de nada entre conversas e não inclua o campo \"memory\".";
 
 export function buildAgentSystemPrompt(ctx: AgentPromptContext): string {
+  const base = buildBudgetedPrompt(ctx);
+  if (!ctx.persona) return base;
+  // Atitude Vertal entra logo depois da PERSONA, só se couber no orçamento:
+  // nunca derruba ferramentas para caber (a PERSONA base já cobre o essencial).
+  const block = vertalPersonaBlock("chat");
+  if (base.includes(VERTAL_PERSONA_MARKER) || base.length + block.length + 2 > AGENT_PROMPT_BUDGET) return base;
+  return base.replace(PERSONA, `${PERSONA}\n\n${block}`);
+}
+
+function buildBudgetedPrompt(ctx: AgentPromptContext): string {
   const full = buildPrompt(ctx);
   if (full.length <= AGENT_PROMPT_BUDGET || (!ctx.github && !ctx.media && !ctx.automatisch && !ctx.huginn && !ctx.fluxosApps?.length)) return full;
   // Prioridade ao cortar: automatisch/huginn (pedido explícito) > github (Vibe Code) > youtube (mídia).
