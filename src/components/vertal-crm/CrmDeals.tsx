@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { crmDb } from '@/lib/vertalCrm/client';
+import { crmDate, type CrmLang } from '@/lib/vertalCrm/i18n';
 import { getDealsByStage, moveDeal, type DealsByStage, type KanbanDeal } from '../../../supabase/functions/_shared/vertalCrm/core';
 import { useCrm } from './crmState';
 import { CrmRecordPanel } from './CrmRecordPanel';
@@ -15,7 +16,7 @@ import { CrmRecordPanel } from './CrmRecordPanel';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Deal = KanbanDeal & Record<string, any>;
 
-function DealCard({ deal, onOpen, money, disabled }: { deal: Deal; onOpen: () => void; money: (n: unknown) => string; disabled: boolean }) {
+function DealCard({ deal, onOpen, money, disabled, lang }: { deal: Deal; onOpen: () => void; money: (n: unknown) => string; disabled: boolean; lang: CrmLang }) {
   const drag = useDraggable({ id: `deal:${deal.id}`, disabled });
   const drop = useDroppable({ id: `deal:${deal.id}` });
   const style = drag.transform ? { transform: `translate3d(${drag.transform.x}px, ${drag.transform.y}px, 0)`, zIndex: 50 } : undefined;
@@ -25,7 +26,7 @@ function DealCard({ deal, onOpen, money, disabled }: { deal: Deal; onOpen: () =>
         className="cursor-grab touch-none rounded-lg border bg-card p-2.5 text-sm shadow-sm active:cursor-grabbing" data-testid="crm-deal-card"
         onClick={onOpen} onKeyDown={(e) => e.key === 'Enter' && onOpen()}>
         <p className="font-medium leading-tight">{deal.name}</p>
-        <p className="mt-1 text-xs text-muted-foreground">{money(deal.amount)}{deal.expected_closing_date ? ` · ${deal.expected_closing_date}` : ''}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{money(deal.amount)}{deal.expected_closing_date ? ` · ${crmDate(deal.expected_closing_date, lang)}` : ''}</p>
       </div>
     </div>
   );
@@ -36,7 +37,7 @@ function Column({ id, label, children, total, count }: { id: string; label: stri
   return (
     <div ref={setNodeRef} className={`flex w-64 shrink-0 flex-col rounded-xl border bg-muted/30 p-2 ${isOver ? 'border-primary/50' : ''}`}>
       <div className="mb-2 flex items-baseline justify-between px-1">
-        <p className="text-sm font-semibold">{label} <span className="text-xs font-normal text-muted-foreground">{count}</span></p>
+        <p className="text-sm font-semibold">{label} <span className="text-xs font-normal text-muted-foreground">({count})</span></p>{' '}
         <p className="text-xs text-muted-foreground">{total}</p>
       </div>
       <div className="flex min-h-16 flex-col gap-2">{children}</div>
@@ -45,7 +46,7 @@ function Column({ id, label, children, total, count }: { id: string; label: stri
 }
 
 export function CrmDeals() {
-  const { t, workspace, pipelines, canWrite, money, userId } = useCrm();
+  const { t, workspace, pipelines, canWrite, money, userId, lang } = useCrm();
   const [pipelineId, setPipelineId] = useState('');
   const [by, setBy] = useState<DealsByStage<Deal>>({});
   const [open, setOpen] = useState<string | null>(null);
@@ -104,6 +105,25 @@ export function CrmDeals() {
     setOpen(data.id);
   };
 
+  // Leitor de tela: nomes do negócio e da etapa no idioma do usuário (antes lia IDs internos "deal:… col:…").
+  const dealName = (rawId: unknown) => {
+    const did = String(rawId ?? '').replace(/^deal:/, '');
+    return Object.values(by).flat().find((d) => d.id === did)?.name ?? '';
+  };
+  const overName = (rawId: unknown) => {
+    const oid = String(rawId ?? '');
+    if (oid.startsWith('col:')) return pipeline?.stages.find((s) => s.id === oid.slice(4))?.label ?? '';
+    const did = oid.replace(/^deal:/, '');
+    const stage = Object.keys(by).find((k) => by[k].some((d) => d.id === did));
+    return pipeline?.stages.find((s) => s.id === stage)?.label ?? '';
+  };
+  const announcements = {
+    onDragStart: ({ active }: { active: { id: unknown } }) => t.dnd.start(dealName(active.id)),
+    onDragOver: ({ active, over }: { active: { id: unknown }; over: { id: unknown } | null }) => (over ? t.dnd.over(dealName(active.id), overName(over.id)) : undefined),
+    onDragEnd: ({ active, over }: { active: { id: unknown }; over: { id: unknown } | null }) => (over ? t.dnd.end(dealName(active.id), overName(over.id)) : t.dnd.cancel(dealName(active.id))),
+    onDragCancel: ({ active }: { active: { id: unknown } }) => t.dnd.cancel(dealName(active.id)),
+  };
+
   if (!pipeline) return <p className="py-10 text-center text-sm text-muted-foreground">{t.empty}</p>;
   return (
     <div className="space-y-3">
@@ -122,19 +142,20 @@ export function CrmDeals() {
           </div>
         )}
       </div>
-      <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+      <DndContext sensors={sensors} onDragEnd={onDragEnd} accessibility={{ announcements, screenReaderInstructions: { draggable: t.dnd.instructions } }}>
         <div className="flex gap-3 overflow-x-auto pb-4" data-testid="crm-kanban">
           {pipeline.stages.map((s) => {
             const list = by[s.id] ?? [];
             return (
               <Column key={s.id} id={s.id} label={s.label} count={list.length} total={money(list.reduce((a, d) => a + Number(d.amount ?? 0), 0))}>
-                {list.map((d) => <DealCard key={d.id} deal={d} money={money} disabled={!canWrite} onOpen={() => setOpen(d.id)} />)}
+                {list.map((d) => <DealCard key={d.id} deal={d} money={money} lang={lang} disabled={!canWrite} onOpen={() => setOpen(d.id)} />)}
               </Column>
             );
           })}
         </div>
       </DndContext>
-      <CrmRecordPanel type="deal" id={open} onClose={() => setOpen(null)} onChanged={load} />
+      <CrmRecordPanel type="deal" id={open} onClose={() => setOpen(null)} onChanged={load}
+        onDeleted={(id) => setBy((cur) => Object.fromEntries(Object.entries(cur).map(([k, v]) => [k, v.filter((d) => d.id !== id)])) as DealsByStage<Deal>)} />
     </div>
   );
 }

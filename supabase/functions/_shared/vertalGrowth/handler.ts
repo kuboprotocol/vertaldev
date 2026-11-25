@@ -108,6 +108,61 @@ export async function sentTodayAll(deps: GrowthDeps, now: Date): Promise<number>
 
 const settingsOf = (g: Loose) => (g?.settings ?? {}) as Record<string, Loose>;
 const langOf = (g: Loose): GrowthLang => growthLang(g?.lang);
+
+/** Idioma nativo salvo do usuário: idioma do workspace do Vertal CRM (o mesmo das etapas do funil). */
+async function userUiLang(deps: GrowthDeps): Promise<string | null> {
+  try {
+    const { data } = await deps.admin.from("crm_workspaces").select("lang").eq("owner_id", deps.userId).limit(1);
+    const l = (data ?? [])[0]?.lang;
+    return typeof l === "string" && l ? l : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Minutos sem campanha depois de um débito de lançamento para considerá-lo órfão (a montagem passa de 1 min). */
+export const ORPHAN_LAUNCH_MINUTES = 10;
+
+/**
+ * Devolve débitos de lançamento que ficaram sem campanha (ex.: a função caiu no meio da montagem e não chegou a
+ * devolver). Idempotente: a devolução usa a chave "refund:<chave do débito>", então rodar de novo não paga duas vezes.
+ * Pula campanhas apagadas pelo próprio dev (evento "deleted" com a chave da cobrança).
+ */
+export async function reconcileOrphanLaunches(deps: GrowthDeps, now: Date): Promise<number> {
+  try {
+    const since = new Date(now.getTime() - 7 * 86_400_000).toISOString();
+    const cutoff = now.getTime() - ORPHAN_LAUNCH_MINUTES * 60_000;
+    const { data: tx } = await deps.admin.from("credit_transactions").select("idempotency_key, delta, created_at")
+      .eq("user_id", deps.userId).eq("reason", GROWTH_CHARGE_REASON).gte("created_at", since).limit(200);
+    const charges = ((tx ?? []) as Loose[]).filter((t) => typeof t.idempotency_key === "string" && t.idempotency_key.startsWith("growth:")
+      && Number(t.delta) < 0 && new Date(t.created_at).getTime() <= cutoff);
+    if (!charges.length) return 0;
+    const [{ data: refunds }, { data: camps }, { data: deleted }] = await Promise.all([
+      deps.admin.from("credit_transactions").select("idempotency_key").eq("user_id", deps.userId).eq("reason", `refund:${GROWTH_CHARGE_REASON}`).gte("created_at", since).limit(500),
+      deps.admin.from(T.g).select("charge, charge_key").eq("user_id", deps.userId).limit(500),
+      deps.admin.from(T.e).select("detail").eq("user_id", deps.userId).eq("kind", "deleted").limit(500),
+    ]);
+    const done = new Set<string>();
+    for (const r of (refunds ?? []) as Loose[]) if (typeof r.idempotency_key === "string") done.add(r.idempotency_key.replace(/^refund:/, ""));
+    for (const c of (camps ?? []) as Loose[]) {
+      if (c.charge?.key) done.add(String(c.charge.key));
+      if (c.charge_key) done.add(`growth:${c.charge_key}`);
+    }
+    for (const d of (deleted ?? []) as Loose[]) if (d.detail?.key) done.add(String(d.detail.key));
+    let n = 0;
+    for (const t of charges) {
+      if (done.has(t.idempotency_key)) continue;
+      const credits = Math.abs(Number(t.delta));
+      const back = await deps.credits.refund(credits, t.idempotency_key, { source: GROWTH_CHARGE_REASON, why: "orphan_launch_no_campaign" });
+      await logEvent(deps, null, back ? "refund" : "refund_failed", { key: t.idempotency_key, credits, why: "orphan_launch_no_campaign" });
+      if (back) n++;
+    }
+    return n;
+  } catch {
+    return 0;
+  }
+}
+
 const productOf = (g: Loose) => String(g?.project_name ?? "").slice(0, 120);
 
 async function model(deps: GrowthDeps, system: string, user: string, maxTokens: number): Promise<Record<string, unknown> | null> {
@@ -214,7 +269,9 @@ export async function handleGrowth(body: Record<string, Loose>, deps: GrowthDeps
       const { data: accounts } = await deps.admin.from("gmail_accounts").select("id, email").eq("user_id", deps.userId);
       const { data: conns } = await deps.admin.from("fluxos_connections").select("app_key, status").eq("user_id", deps.userId);
       const apps = ((conns ?? []) as Loose[]).filter((c) => c.status === "connected").map((c) => c.app_key);
+      const [uiLang, reconciled] = await Promise.all([userUiLang(deps), reconcileOrphanLaunches(deps, now)]);
       return ok({
+        uiLang, reconciled,
         enabled: true, chargeOn: growthChargeOn(deps.env), launchCost: GROWTH_LAUNCH_COST, runCost: GROWTH_AGENT_RUN_COST,
         maxLeads: maxLeadsPerCampaign(deps.env), cap: dailyCap(deps.env), sentToday: await sentTodayAll(deps, now),
         gmailAccounts: accounts ?? [], fluxosApps: apps, stripe: await deps.hasSecrets(["STRIPE_SECRET_KEY"]).catch(() => false),
@@ -776,6 +833,8 @@ export async function handleGrowth(body: Record<string, Loose>, deps: GrowthDeps
     case "delete": {
       const g = await loadGrowth(deps, body.growthId);
       if (!g) return err(404, "growth_not_found");
+      // Marca a cobrança desta campanha como usada (o acerto de débitos órfãos não devolve campanhas apagadas pelo dev).
+      if (g.charge?.key) await logEvent(deps, null, "deleted", { key: g.charge.key, growthId: g.id });
       await deps.admin.from(T.m).delete().eq("growth_id", g.id).eq("user_id", deps.userId);
       await deps.admin.from(T.c).delete().eq("growth_id", g.id).eq("user_id", deps.userId);
       await deps.admin.from(T.e).delete().eq("growth_id", g.id).eq("user_id", deps.userId);

@@ -60,6 +60,8 @@ const pt = {
     copy: 'Copiar', copied: 'Copiado.', createTask: 'Criar a tarefa sugerida', saveAsNote: 'Salvar como nota',
     charged: (n: number) => (n ? `${n} crédito usado.` : 'Sem custo nesta conta.'), refunded: 'A IA falhou e o crédito foi devolvido.',
     noCredits: 'Créditos insuficientes.',
+    slow: 'A IA ainda está trabalhando… (pode levar até 2 minutos)',
+    slowGaveUp: 'A IA está demorando demais. Se o resultado não vier, o crédito volta sozinho em até 10 minutos.',
     planRequired: 'A IA do CRM faz parte de qualquer plano pago do Vertal Dev. O resto do CRM continua grátis. Veja os planos em vertal.dev/pricing.',
   },
   emailCapture: 'Trazer e-mails do Gmail', emailCaptured: (n: number) => `${n} e-mail(s) virou(aram) nota(s).`, gmailMissing: 'Conecte o Gmail em Conectores para trazer e-mails.',
@@ -83,6 +85,27 @@ const pt = {
     dangerZone: 'Zona de perigo',
   },
   pinnedConnector: 'Grátis · IA 1 crédito',
+  docTitle: 'Vertal CRM — CRM grátis | Vertal Dev',
+  connectorsTitle: 'Conectores | Vertal Dev',
+  you: 'você',
+  openDealsN: (n: number) => `${n} ${n === 1 ? 'negócio aberto' : 'negócios abertos'}`,
+  exported: (n: number) => `CSV baixado: ${n} contato(s).`,
+  languageNames: { pt: 'Português (Brasil)', en: 'English', es: 'Español' } as Record<string, string>,
+  activity: {
+    'contact.created': 'Contato criado', 'contact.updated': 'Contato atualizado', 'contact.deleted': 'Contato apagado',
+    'company.created': 'Empresa criada', 'company.updated': 'Empresa atualizada', 'company.deleted': 'Empresa apagada',
+    'deal.created': 'Negócio criado', 'deal.updated': 'Negócio atualizado', 'deal.stage_changed': 'Negócio mudou de etapa', 'deal.won': 'Negócio ganho', 'deal.lost': 'Negócio perdido', 'deal.deleted': 'Negócio apagado',
+    'task.created': 'Tarefa criada', 'task.updated': 'Tarefa atualizada', 'task.completed': 'Tarefa concluída', 'task.deleted': 'Tarefa apagada',
+    'note.created': 'Nota adicionada', 'note.updated': 'Nota editada', 'note.deleted': 'Nota apagada',
+  } as Record<string, string>,
+  sources: { manual: 'manual', ai: 'IA', csv: 'CSV', prospector: 'Vertal Prospector', growth: 'Vertal Growth', gmail: 'Gmail', api: 'API', fluxos: 'Vertal Fluxos', email: 'e-mail' } as Record<string, string>,
+  dnd: {
+    instructions: 'Para mover um negócio: pressione espaço ou Enter para pegar, use as setas para mudar de etapa e espaço ou Enter para soltar. Esc cancela.',
+    start: (deal: string) => `Pegou o negócio ${deal}.`,
+    over: (deal: string, stage: string) => `Negócio ${deal} sobre a etapa ${stage}.`,
+    end: (deal: string, stage: string) => `Negócio ${deal} solto na etapa ${stage}.`,
+    cancel: (deal: string) => `Movimento do negócio ${deal} cancelado.`,
+  },
 };
 
 export type CrmUi = typeof pt;
@@ -110,6 +133,7 @@ const en: CrmUi = {
     goal: 'Email goal (optional)', draftOnly: 'Draft only: copy it and send it yourself. The CRM sends nothing.', copy: 'Copy', copied: 'Copied.',
     createTask: 'Create the suggested task', saveAsNote: 'Save as note', charged: (n: number) => (n ? `${n} credit used.` : 'No charge on this account.'),
     refunded: 'AI failed and the credit was refunded.', noCredits: 'Not enough credits.',
+    slow: 'The AI is still working… (can take up to 2 minutes)', slowGaveUp: 'The AI is taking too long. If no result arrives, the credit comes back automatically within 10 minutes.',
     planRequired: 'CRM AI is included in any paid Vertal Dev plan. The rest of the CRM stays free. See plans at vertal.dev/pricing.',
   },
   emailCapture: 'Pull emails from Gmail', emailCaptured: (n: number) => `${n} email(s) saved as notes.`, gmailMissing: 'Connect Gmail in Connectors to pull emails.',
@@ -128,6 +152,26 @@ const en: CrmUi = {
     imported: (n: number) => `${n} new contact(s) in the CRM.`, fluxos: 'In Vertal Fluxos, use the “Vertal” app (Vertal CRM triggers and actions).', dangerZone: 'Danger zone',
   },
   pinnedConnector: 'Free · AI 1 credit',
+  docTitle: 'Vertal CRM — Free CRM | Vertal Dev',
+  connectorsTitle: 'Connectors | Vertal Dev',
+  you: 'you',
+  openDealsN: (n: number) => `${n} open ${n === 1 ? 'deal' : 'deals'}`,
+  exported: (n: number) => `CSV downloaded: ${n} contact(s).`,
+  activity: {
+    'contact.created': 'Contact created', 'contact.updated': 'Contact updated', 'contact.deleted': 'Contact deleted',
+    'company.created': 'Company created', 'company.updated': 'Company updated', 'company.deleted': 'Company deleted',
+    'deal.created': 'Deal created', 'deal.updated': 'Deal updated', 'deal.stage_changed': 'Deal changed stage', 'deal.won': 'Deal won', 'deal.lost': 'Deal lost', 'deal.deleted': 'Deal deleted',
+    'task.created': 'Task created', 'task.updated': 'Task updated', 'task.completed': 'Task completed', 'task.deleted': 'Task deleted',
+    'note.created': 'Note added', 'note.updated': 'Note edited', 'note.deleted': 'Note deleted',
+  },
+  sources: { manual: 'manual', ai: 'AI', csv: 'CSV', prospector: 'Vertal Prospector', growth: 'Vertal Growth', gmail: 'Gmail', api: 'API', fluxos: 'Vertal Fluxos', email: 'email' },
+  dnd: {
+    instructions: 'To move a deal: press space or Enter to pick it up, use the arrow keys to change stage, and space or Enter to drop it. Esc cancels.',
+    start: (deal: string) => `Picked up deal ${deal}.`,
+    over: (deal: string, stage: string) => `Deal ${deal} is over stage ${stage}.`,
+    end: (deal: string, stage: string) => `Deal ${deal} dropped in stage ${stage}.`,
+    cancel: (deal: string) => `Moving deal ${deal} was cancelled.`,
+  },
 };
 
 const es: CrmUi = {
@@ -153,6 +197,7 @@ const es: CrmUi = {
     goal: 'Objetivo del correo (opcional)', draftOnly: 'Es solo un borrador: cópialo y envíalo tú. El CRM no envía nada.', copy: 'Copiar', copied: 'Copiado.',
     createTask: 'Crear la tarea sugerida', saveAsNote: 'Guardar como nota', charged: (n: number) => (n ? `${n} crédito usado.` : 'Sin costo en esta cuenta.'),
     refunded: 'La IA falló y el crédito fue devuelto.', noCredits: 'Créditos insuficientes.',
+    slow: 'La IA sigue trabajando… (puede tardar hasta 2 minutos)', slowGaveUp: 'La IA está tardando demasiado. Si no llega el resultado, el crédito vuelve solo en hasta 10 minutos.',
     planRequired: 'La IA del CRM está incluida en cualquier plan de pago de Vertal Dev. El resto del CRM sigue siendo gratis. Mira los planes en vertal.dev/pricing.',
   },
   emailCapture: 'Traer correos de Gmail', emailCaptured: (n: number) => `${n} correo(s) guardado(s) como nota.`, gmailMissing: 'Conecta Gmail en Conectores para traer correos.',
@@ -171,10 +216,54 @@ const es: CrmUi = {
     imported: (n: number) => `${n} contacto(s) nuevo(s) en el CRM.`, fluxos: 'En Vertal Fluxos, usa la app “Vertal” (disparadores y acciones de Vertal CRM).', dangerZone: 'Zona de peligro',
   },
   pinnedConnector: 'Gratis · IA 1 crédito',
+  docTitle: 'Vertal CRM — CRM gratis | Vertal Dev',
+  connectorsTitle: 'Conectores | Vertal Dev',
+  you: 'tú',
+  openDealsN: (n: number) => `${n} ${n === 1 ? 'negocio abierto' : 'negocios abiertos'}`,
+  exported: (n: number) => `CSV descargado: ${n} contacto(s).`,
+  activity: {
+    'contact.created': 'Contacto creado', 'contact.updated': 'Contacto actualizado', 'contact.deleted': 'Contacto borrado',
+    'company.created': 'Empresa creada', 'company.updated': 'Empresa actualizada', 'company.deleted': 'Empresa borrada',
+    'deal.created': 'Negocio creado', 'deal.updated': 'Negocio actualizado', 'deal.stage_changed': 'Negocio cambió de etapa', 'deal.won': 'Negocio ganado', 'deal.lost': 'Negocio perdido', 'deal.deleted': 'Negocio borrado',
+    'task.created': 'Tarea creada', 'task.updated': 'Tarea actualizada', 'task.completed': 'Tarea completada', 'task.deleted': 'Tarea borrada',
+    'note.created': 'Nota agregada', 'note.updated': 'Nota editada', 'note.deleted': 'Nota borrada',
+  },
+  sources: { manual: 'manual', ai: 'IA', csv: 'CSV', prospector: 'Vertal Prospector', growth: 'Vertal Growth', gmail: 'Gmail', api: 'API', fluxos: 'Vertal Fluxos', email: 'correo' },
+  dnd: {
+    instructions: 'Para mover un negocio: pulse espacio o Enter para tomarlo, use las flechas para cambiar de etapa y espacio o Enter para soltarlo. Esc cancela.',
+    start: (deal: string) => `Tomó el negocio ${deal}.`,
+    over: (deal: string, stage: string) => `Negocio ${deal} sobre la etapa ${stage}.`,
+    end: (deal: string, stage: string) => `Negocio ${deal} soltado en la etapa ${stage}.`,
+    cancel: (deal: string) => `Se canceló el movimiento del negocio ${deal}.`,
+  },
 };
 
 export const CRM_UI: Record<CrmLang, CrmUi> = { pt, en, es };
 export const crmUi = (lang: CrmLang = browserLang()) => CRM_UI[lang] ?? pt;
+
+/** Locale de datas/números: pt → pt-BR (dd/mm/aaaa, 24 h), es → es-ES, en → en-US. */
+export const crmLocale = (lang: CrmLang): string => (lang === 'pt' ? 'pt-BR' : lang === 'es' ? 'es-ES' : 'en-US');
+export function crmDateTime(iso: string | null | undefined, lang: CrmLang): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString(crmLocale(lang), { dateStyle: 'short', timeStyle: 'short', hour12: lang === 'en' });
+}
+/** Data sem hora (ex.: previsão de fechamento "2026-12-01" → "01/12/2026" em pt-BR), sem deslocar o dia pelo fuso. */
+export function crmDate(isoDate: string | null | undefined, lang: CrmLang): string {
+  if (!isoDate) return '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate);
+  const d = m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12)) : new Date(isoDate);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString(crmLocale(lang), { timeZone: m ? 'UTC' : undefined });
+}
+/** Texto legível de um evento técnico (deal.stage_changed → "Negócio mudou de etapa"). */
+export function crmActivityText(kind: string, t: CrmUi): string {
+  return t.activity[kind] ?? String(kind ?? '').replace(/[._]/g, ' ');
+}
+export const crmSourceText = (src: string | null | undefined, t: CrmUi): string => (src ? t.sources[src] ?? src : '—');
+/** Corta com reticências (antes o texto da nota sumia no meio da palavra). */
+export const ellipsis = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 
 /** Mensagem amigável para códigos de erro do servidor. */
 export function crmErrorText(code: string, t: CrmUi): string {

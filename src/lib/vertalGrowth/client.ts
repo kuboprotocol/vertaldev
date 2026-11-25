@@ -59,7 +59,7 @@ export class GrowthError extends Error {
 export async function callGrowth<T = Record<string, unknown>>(
   op: string,
   payload: Record<string, unknown> = {},
-  opts: { token?: string; fetchImpl?: typeof fetch; url?: string } = {},
+  opts: { token?: string; fetchImpl?: typeof fetch; url?: string; timeoutMs?: number } = {},
 ): Promise<T> {
   let token = opts.token;
   if (!token) {
@@ -67,14 +67,65 @@ export async function callGrowth<T = Record<string, unknown>>(
     token = data.session?.access_token ?? '';
   }
   if (!token) throw new GrowthError('not_signed_in');
-  const r = await (opts.fetchImpl ?? fetch)(opts.url ?? functionUrl(), {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'growth', op, ...payload }),
-  });
+  // Prazo opcional: sem ele, uma conexão que cai no meio deixava a tela esperando sem resposta.
+  const ctrl = opts.timeoutMs && typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), opts.timeoutMs) : undefined;
+  let r: Response;
+  try {
+    r = await (opts.fetchImpl ?? fetch)(opts.url ?? functionUrl(), {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'growth', op, ...payload }),
+      signal: ctrl?.signal,
+    });
+  } catch (e) {
+    throw new GrowthError(ctrl?.signal.aborted ? 'timeout' : 'network', { message: e instanceof Error ? e.message : String(e) });
+  } finally {
+    clearTimeout(timer);
+  }
   const data = (await r.json().catch(() => ({}))) as Record<string, unknown>;
   if (!r.ok) throw new GrowthError(String(data.error ?? `http_${r.status}`), data);
   return data as T;
+}
+
+/** Montar a equipe (perfil + cliente ideal com IA) pode passar de 1 minuto. */
+export const LAUNCH_ATTEMPT_MS = 45_000;
+export const LAUNCH_TOTAL_MS = 180_000;
+export const LAUNCH_POLL_MS = 5_000;
+
+/**
+ * Lança a equipe sem depender de uma única conexão longa: se a resposta não chega (prazo, rede) ou o servidor
+ * avisa que o mesmo pedido ainda está rodando (duplicate_request), repete com a MESMA chave idempotente —
+ * o servidor devolve a campanha criada sem cobrar de novo (replayed). Outros erros sobem na hora.
+ */
+export async function launchGrowth<T = Record<string, unknown>>(
+  payload: Record<string, unknown>,
+  opts: {
+    call?: (op: string, payload: Record<string, unknown>, o: { timeoutMs: number }) => Promise<T>;
+    sleep?: (ms: number) => Promise<void>;
+    now?: () => number;
+    totalMs?: number;
+    onWaiting?: (attempt: number) => void;
+  } = {},
+): Promise<T> {
+  const call = opts.call ?? ((op, p, o) => callGrowth<T>(op, p, o));
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((res) => setTimeout(res, ms)));
+  const now = opts.now ?? Date.now;
+  const deadline = now() + (opts.totalMs ?? LAUNCH_TOTAL_MS);
+  let attempt = 0;
+  for (;;) {
+    attempt++;
+    try {
+      return await call('launch', payload, { timeoutMs: LAUNCH_ATTEMPT_MS });
+    } catch (e) {
+      const code = e instanceof GrowthError ? e.code : '';
+      const retryable = code === 'timeout' || code === 'network' || code === 'duplicate_request' || /^http_5(02|03|04|46)$/.test(code);
+      if (!retryable) throw e;
+      if (now() + LAUNCH_POLL_MS >= deadline) throw new GrowthError('launch_slow', { attempts: attempt });
+      opts.onWaiting?.(attempt);
+      await sleep(LAUNCH_POLL_MS);
+    }
+  }
 }
 
 export type GrowthAccess = 'checking' | 'allowed' | 'denied';

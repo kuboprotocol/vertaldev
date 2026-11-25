@@ -122,6 +122,7 @@ export function CrmContacts() {
       phone_work: byType(c.phones, 'Work', 'number') || c.phones?.[0]?.number || '', phone_home: byType(c.phones, 'Home', 'number'), phone_other: byType(c.phones, 'Other', 'number'),
     }));
     downloadText(`vertal-crm-contatos-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(CONTACT_EXPORT_HEADERS, rowsOut));
+    toast.success(t.exported(rowsOut.length));
   };
 
   return (
@@ -186,7 +187,7 @@ export function CrmContacts() {
           ))}
         </ul>
       )}
-      <CrmRecordPanel type="contact" id={open} onClose={() => setOpen(null)} onChanged={load} />
+      <CrmRecordPanel type="contact" id={open} onClose={() => setOpen(null)} onChanged={load} onDeleted={(id) => setRows((rs) => rs.filter((r) => r.id !== id))} />
       <CrmAiDialog kind="search" query={aiQuery} open={aiOpen} onOpenChange={setAiOpen}
         onDone={(r) => {
           const f = r.filter as { entity?: string } | undefined;
@@ -253,7 +254,7 @@ export function CrmCompanies() {
           ))}
         </ul>
       )}
-      <CrmRecordPanel type="company" id={open} onClose={() => setOpen(null)} onChanged={load} />
+      <CrmRecordPanel type="company" id={open} onClose={() => setOpen(null)} onChanged={load} onDeleted={(id) => setRows((rs) => rs.filter((r) => r.id !== id))} />
     </div>
   );
 }

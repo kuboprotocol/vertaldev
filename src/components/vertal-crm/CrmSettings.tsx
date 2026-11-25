@@ -75,6 +75,7 @@ export function CrmSettings() {
   const ws = workspace?.id ?? '';
   const [wsName, setWsName] = useState(workspace?.name ?? '');
   const [currency, setCurrency] = useState(workspace?.currency ?? 'BRL');
+  const [uiLang, setUiLang] = useState<string>(ctx.lang);
   const [autoImport, setAutoImport] = useState(workspace?.settings?.autoImport !== false);
   const [newPipe, setNewPipe] = useState(false);
   const [tagName, setTagName] = useState('');
@@ -122,7 +123,7 @@ export function CrmSettings() {
   };
 
   const saveWorkspace = () => run(async () => {
-    const { error } = await db.from('crm_workspaces').update({ name: wsName.trim() || workspace?.name, currency, settings: { ...(workspace?.settings ?? {}), autoImport } }).eq('id', ws);
+    const { error } = await db.from('crm_workspaces').update({ name: wsName.trim() || workspace?.name, currency, settings: { ...(workspace?.settings ?? {}), autoImport, uiLang } }).eq('id', ws);
     if (error) throw new CrmError('save_failed');
     await reload();
   }, t.saved);
@@ -212,9 +213,13 @@ export function CrmSettings() {
       )}
 
       <Section title={t.settings.workspace}>
-        <div className="grid gap-2 sm:grid-cols-[1fr_8rem_auto]">
+        <div className="grid gap-2 sm:grid-cols-[1fr_8rem_12rem_auto]">
           <Input value={wsName} onChange={(e) => setWsName(e.target.value)} disabled={!isAdmin} aria-label={t.settings.name} />
           <Input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase().slice(0, 3))} disabled={!isAdmin} aria-label={t.settings.currency} />
+          <select className="h-10 rounded-md border bg-background px-2 text-sm" value={uiLang} disabled={!isAdmin} aria-label={t.settings.language}
+            onChange={(e) => setUiLang(e.target.value)} onInput={(e) => setUiLang((e.target as HTMLSelectElement).value)}>
+            {Object.entries(t.languageNames).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
           {isAdmin && <Button onClick={saveWorkspace} disabled={busy}>{t.save}</Button>}
         </div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={autoImport} disabled={!isAdmin} onChange={(e) => setAutoImport(e.target.checked)} />{t.settings.autoImport}</label>
@@ -270,7 +275,7 @@ export function CrmSettings() {
         <ul className="space-y-1 text-sm">
           {members.map((m) => (
             <li key={m.user_id} className="flex items-center gap-2">
-              <span className="flex-1 truncate">{m.email ?? m.user_id}{m.user_id === userId ? ' (você)' : ''}</span>
+              <span className="flex-1 truncate">{m.email ?? m.user_id}{m.user_id === userId ? ` (${t.you})` : ''}</span>
               {isAdmin && m.role !== 'owner' ? (
                 <select className="h-8 rounded border bg-background px-1 text-xs" value={m.role} onChange={(e) => run(async () => { await callCrm('set_member_role', { workspaceId: ws, userId: m.user_id, role: e.target.value }); await reload(); })}>
                   {['admin', 'member', 'viewer'].map((r) => <option key={r} value={r}>{t.settings.roles[r]}</option>)}

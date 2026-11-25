@@ -92,8 +92,14 @@ function VertalCodeAIScreen() {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const imageRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => saveSession(items), [items]);
-  useEffect(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), [items]);
+  // Corpo em bloco: o efeito NÃO pode devolver valor. No Chrome novo scrollIntoView() devolve uma Promise,
+  // e o React chamava essa Promise como "limpeza" ao sair da tela → crash "n is not a function" no "Buscar clientes".
+  useEffect(() => {
+    saveSession(items);
+  }, [items]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [items]);
   useEffect(() => {
     // Lista própria de projetos (não mexe no projeto ativo do Vibe Code).
     supabase

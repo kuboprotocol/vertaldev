@@ -298,6 +298,35 @@ async function runSearch(deps: CrmDeps, ws: string, f: SearchFilter) {
   return data ?? [];
 }
 
+
+/** Minutos que um pedido de IA pode ficar "rodando" antes de ser considerado perdido (a função caiu no meio). */
+export const STUCK_AI_MINUTES = 10;
+
+/**
+ * Pedidos de IA que ficaram "rodando" (a função parou antes de terminar ou de devolver): devolve o crédito
+ * (chave idempotente "refund:<chave>") e marca como devolvido. Roda no "status" (abrir o CRM).
+ */
+export async function reconcileStuckAiRuns(deps: CrmDeps, now: Date = new Date()): Promise<number> {
+  try {
+    const cutoff = now.getTime() - STUCK_AI_MINUTES * 60_000;
+    const { data } = await deps.admin.from("crm_ai_runs").select("idempotency_key, created_at, status").eq("user_id", deps.userId).eq("status", "running").limit(50);
+    let n = 0;
+    for (const r of (data ?? []) as Loose[]) {
+      if (new Date(r.created_at).getTime() > cutoff) continue;
+      // Só devolve o que foi de fato debitado (conta sem cobrança/admin não tem débito).
+      const { data: tx } = await deps.admin.from("credit_transactions").select("delta").eq("user_id", deps.userId).eq("idempotency_key", r.idempotency_key).limit(1);
+      const debited = Math.abs(Math.min(0, Number((tx ?? [])[0]?.delta ?? 0)));
+      const refunded = debited > 0 ? await deps.credits.refund(debited, r.idempotency_key, { source: "vertal_crm", reason: "stuck_run" }) : false;
+      await deps.admin.from("crm_ai_runs").update({ status: refunded ? "refunded" : "failed", error: "stuck_run", finished_at: now.toISOString() })
+        .eq("user_id", deps.userId).eq("idempotency_key", r.idempotency_key).eq("status", "running");
+      if (refunded) n++;
+    }
+    return n;
+  } catch {
+    return 0;
+  }
+}
+
 // ─── IA: 1 crédito, idempotente, devolve se falhar ────────────────────────
 async function runAi(deps: CrmDeps, ws: string, body: Loose): Promise<Res> {
   const kind = body.kind;
@@ -314,7 +343,7 @@ async function runAi(deps: CrmDeps, ws: string, body: Loose): Promise<Res> {
   if (prev) {
     if (prev.status === "ok") return ok({ replayed: true, kind, result: prev.result, credits: 0 });
     if (prev.status === "running") return fail(409, "in_progress");
-    return fail(409, "previous_attempt_failed", { hint: "use_new_idempotency_key" });
+    return fail(409, "previous_attempt_failed", { hint: "use_new_idempotency_key", refunded: prev.status === "refunded" });
   }
 
   let ctx: unknown;
@@ -759,6 +788,7 @@ export async function handleCrm(body: Loose, deps: CrmDeps): Promise<Res> {
   } catch { /* limite indisponível não bloqueia o CRM */ }
 
   if (op === "status" || op === "whoami") {
+    if (deps.via === "user" && op === "status") await reconcileStuckAiRuns(deps);
     const workspaces = await listWorkspaces(deps);
     return ok({
       enabled: true, via: deps.via, workspaces,
