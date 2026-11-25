@@ -1,18 +1,22 @@
 // Trecho para app/build.gradle.kts do app Android Vertal Node.
 //
 // Um flavor por provedor: cada APK leva UM SDK de compartilhamento de banda só (sem conflito nem
-// problema de exclusividade). Escolha com -PNODE_SDK_PROVIDER=honeygain|cashraven (ou a env
-// NODE_SDK_PROVIDER) ou rode a task do flavor: assembleHoneygainRelease / assembleCashravenRelease.
-// pawns / bright / infatica / earnfm: aguardando aprovação dos parceiros (sem flavor ainda).
+// problema de exclusividade). Escolha com -PNODE_SDK_PROVIDER=cashraven|honeygain|bright (ou a env
+// NODE_SDK_PROVIDER; padrão cashraven) ou rode a task do flavor: assembleCashravenRelease /
+// assembleHoneygainRelease / assembleBrightRelease.
+//   honeygain: aguardando aprovação do Honeygain (código intacto, só não é o padrão).
+//   bright: adapter pronto, desligado até a Bright aprovar (-PNODE_SDK_BRIGHT_APPROVED=1 liga).
+//   pawns / infatica / earnfm: aguardando aprovação dos parceiros (sem flavor ainda).
 //
-// Chaves: uma por provedor, do app ANDROID (diferente da desktop), em ~/.gradle/gradle.properties
+// Chaves/IDs: um por provedor, do app ANDROID (diferente da desktop), em ~/.gradle/gradle.properties
 // ou variável de ambiente — nunca no repositório:
-//   HONEYGAIN_API_KEY_ANDROID (ou HONEYGAIN_API_KEY, legado), CASHRAVEN_API_KEY_ANDROID
+//   CASHRAVEN_API_KEY_ANDROID, HONEYGAIN_API_KEY_ANDROID (ou HONEYGAIN_API_KEY, legado),
+//   BRIGHT_SDK_APP_ID_ANDROID (App ID do painel Bright; no Android é o packageName do app),
 //   VERTAL_SUPABASE_URL, VERTAL_SUPABASE_ANON_KEY
 
 fun prop(name: String): String = (project.findProperty(name) ?: System.getenv(name) ?: "").toString()
 
-val nodeSdkProvider = prop("NODE_SDK_PROVIDER").ifBlank { "honeygain" }.lowercase()
+val nodeSdkProvider = prop("NODE_SDK_PROVIDER").ifBlank { "cashraven" }.lowercase()
 
 android {
     compileSdk = 34 // Cash Raven exige compile/targetSdk 34
@@ -34,6 +38,13 @@ android {
             dimension = "nodeSdk"
             minSdk = 24 // mínimo do Cash Raven SDK 4.1.4
             buildConfigField("String", "NODE_SDK_API_KEY", "\"${prop("CASHRAVEN_API_KEY_ANDROID")}\"")
+        }
+        create("bright") {
+            dimension = "nodeSdk"
+            // O guia da Bright não fixa minSdk (só Java 8+); fica o do app.
+            buildConfigField("String", "NODE_SDK_API_KEY", "\"${prop("BRIGHT_SDK_APP_ID_ANDROID")}\"")
+            // Desligado até a Bright aprovar o app (status Implementation no painel).
+            buildConfigField("boolean", "NODE_SDK_BRIGHT_APPROVED", (prop("NODE_SDK_BRIGHT_APPROVED") == "1").toString())
         }
     }
     compileOptions {
@@ -70,4 +81,11 @@ dependencies {
         "cashravenImplementation"("io.cashraven:cr-sdk:4.1.4")
     }
     "cashravenImplementation"("net.java.dev.jna:jna:5.14.0@aar")
+
+    // Bright SDK: bright_sdk.aar (Bright SDK Downloader ou plugin Gradle com SDK_API_KEY) em
+    // libs/bright/ via scripts/fetch-sdk.sh bright android <arquivo>; NÃO commitado.
+    // ProGuard (proguard-rules.pro do flavor): -dontnote brdat.sdk.**
+    "brightImplementation"(fileTree("libs/bright") { include("*.aar") })
+    "brightImplementation"("androidx.core:core:1.9.0")
+    "brightImplementation"("androidx.constraintlayout:constraintlayout:2.1.4")
 }

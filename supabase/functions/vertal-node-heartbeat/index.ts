@@ -1,8 +1,9 @@
 // Heartbeat do Vertal Node (apps desktop Electron e Android), independente do SDK de banda usado.
 //
 // POST (padrão) -> { device_id, platform: "desktop"|"android", provider?, app_version?, opted_in, running }
-//   provider: "honeygain" | "cashraven" (| "pawns" | "bright" | "infatica" | "earnfm" quando
-//   liberados em VERTAL_NODE_PROVIDERS). Ausente = "honeygain" (apps antigos).
+//   provider: "cashraven" (padrão de VERTAL_NODE_PROVIDERS) | "honeygain" (aguardando aprovação;
+//   religar com VERTAL_NODE_PROVIDERS=cashraven,honeygain) | "pawns" | "bright" | "infatica" |
+//   "earnfm" (quando liberados em VERTAL_NODE_PROVIDERS). Ausente = "honeygain" (apps antigos).
 //   Atualiza o dispositivo (um provedor por dispositivo). Credita VERTAL_NODE_DAILY_CREDITS
 //   (padrão 2) uma vez por usuário por dia (America/Sao_Paulo), só quando opted_in E running.
 //   Vários dispositivos ou provedores no mesmo dia NÃO multiplicam o crédito, a não ser que

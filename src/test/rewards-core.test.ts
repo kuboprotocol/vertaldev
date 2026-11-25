@@ -31,13 +31,16 @@ describe('rewardsCore — config', () => {
   })
 
   it('Vertal Node: padrões, nome antigo do env e provedores liberados', () => {
-    expect(nodeConfig(env({}))).toEqual({ dailyAmount: 2, creditPerProvider: false, enabledProviders: ['honeygain', 'cashraven'] })
+    expect(nodeConfig(env({}))).toEqual({ dailyAmount: 2, creditPerProvider: false, enabledProviders: ['cashraven'] })
     expect(nodeConfig(env({ HONEYGAIN_NODE_DAILY_CREDITS: '3' })).dailyAmount).toBe(3)
     expect(nodeConfig(env({ HONEYGAIN_NODE_DAILY_CREDITS: '3', VERTAL_NODE_DAILY_CREDITS: '5' })).dailyAmount).toBe(5)
     expect(nodeConfig(env({ VERTAL_NODE_CREDIT_PER_PROVIDER: 'true' })).creditPerProvider).toBe(true)
     expect(nodeConfig(env({ VERTAL_NODE_CREDIT_PER_PROVIDER: 'talvez' })).creditPerProvider).toBe(false)
     expect(nodeConfig(env({ VERTAL_NODE_PROVIDERS: ' CashRaven, foo ,cashraven' })).enabledProviders).toEqual(['cashraven'])
-    expect(nodeConfig(env({ VERTAL_NODE_PROVIDERS: 'foo' })).enabledProviders).toEqual(['honeygain', 'cashraven'])
+    expect(nodeConfig(env({ VERTAL_NODE_PROVIDERS: 'foo' })).enabledProviders).toEqual(['cashraven'])
+    // Honeygain: desligado por padrão (aguardando aprovação), religável por config.
+    expect(nodeConfig(env({})).enabledProviders).not.toContain('honeygain')
+    expect(nodeConfig(env({ VERTAL_NODE_PROVIDERS: 'cashraven,honeygain' })).enabledProviders).toEqual(['cashraven', 'honeygain'])
   })
 })
 
@@ -99,8 +102,10 @@ describe('rewardsCore — heartbeat', () => {
     })
   })
 
-  it('sem provider = honeygain (apps antigos)', () => {
-    const r = parseHeartbeat({ device_id: 'andr-1234abcd', platform: 'android', opted_in: true, running: true })
+  it('sem provider = honeygain (apps antigos): recusado por padrão, aceito se o Honeygain for religado', () => {
+    const legacy = { device_id: 'andr-1234abcd', platform: 'android', opted_in: true, running: true }
+    expect(parseHeartbeat(legacy)).toEqual({ ok: false, error: 'provider_disabled' })
+    const r = parseHeartbeat(legacy, ['cashraven', 'honeygain'])
     expect(r.ok && r.value.provider).toBe('honeygain')
   })
 
@@ -116,7 +121,7 @@ describe('rewardsCore — heartbeat', () => {
     expect(parseHeartbeat(null)).toEqual({ ok: false, error: 'invalid_body' })
     expect(parseHeartbeat({ device_id: 'x', platform: 'desktop', opted_in: true, running: true })).toEqual({ ok: false, error: 'invalid_device_id' })
     expect(parseHeartbeat({ device_id: 'desk-1234abcd', platform: 'ios', opted_in: true, running: true })).toEqual({ ok: false, error: 'invalid_platform' })
-    expect(parseHeartbeat({ device_id: 'desk-1234abcd', platform: 'android', opted_in: 'yes', running: true })).toEqual({ ok: false, error: 'invalid_state' })
+    expect(parseHeartbeat({ device_id: 'desk-1234abcd', platform: 'android', provider: 'cashraven', opted_in: 'yes', running: true })).toEqual({ ok: false, error: 'invalid_state' })
   })
 
   it('chave do crédito: 1x por dia para todos os provedores, ou 1x por provedor se configurado', () => {

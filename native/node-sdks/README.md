@@ -16,12 +16,13 @@ native/node-sdks/
 │   └── vendor/          # SDKs baixados (gitignored)
 ├── android/
 │   └── app/
-│       ├── build.gradle.kts.snippet           # um flavor por provedor (honeygain | cashraven)
+│       ├── build.gradle.kts.snippet           # um flavor por provedor (cashraven | honeygain | bright)
 │       ├── libs/                              # .aar baixados (gitignored)
 │       └── src/
 │           ├── main/…/dev/vertal/node/        # VertalNodeApp, VertalNodeManager, sdk/NodeSdk (interface)
-│           ├── honeygain/…/sdk/               # HoneygainNodeSdk + NodeSdkFactory
-│           └── cashraven/…/sdk/               # CashRavenNodeSdk + NodeSdkFactory
+│           ├── cashraven/…/sdk/               # CashRavenNodeSdk + NodeSdkFactory (padrão)
+│           ├── honeygain/…/sdk/               # HoneygainNodeSdk + NodeSdkFactory (aguardando aprovação)
+│           └── bright/…/sdk/                  # BrightNodeSdk + NodeSdkFactory (desligado até a aprovação)
 └── scripts/fetch-sdk.sh # coloca os SDKs baixados dos portais no lugar (gitignored)
 ```
 
@@ -29,15 +30,17 @@ native/node-sdks/
 
 `init(apiKey)` · `requestConsent()` · `isOptedIn()` · `start()` · `stop()` · `optOut()` · `isRunning()`
 
-**Um provedor ativo por dispositivo**: `NODE_SDK_PROVIDER=honeygain|cashraven` (desktop carrega só
-esse pacote; Android monta só esse flavor). `pawns`, `bright`, `infatica`, `earnfm` são stubs
-desligados até a aprovação dos parceiros.
+**Um provedor ativo por dispositivo**: `NODE_SDK_PROVIDER=cashraven` (padrão) | `honeygain`
+(aguardando aprovação, religável por config) | `bright` (só Android; adapter desligado até
+`NODE_SDK_BRIGHT_APPROVED=1`). Desktop carrega só esse pacote; Android monta só esse flavor.
+`pawns`, `infatica`, `earnfm` (e `bright` no desktop, que não tem SDK Electron) são stubs desligados.
 
 ## Passos
 
 1. Pegue a chave do app (desktop ≠ Android) no portal do provedor e exporte no ambiente /
    `~/.gradle/gradle.properties` (ver `.env.example`). Nunca commitar chaves nem SDKs.
-2. `bash scripts/fetch-sdk.sh <honeygain|cashraven> <electron|android> <arquivo-baixado>`.
+2. `bash scripts/fetch-sdk.sh <cashraven|honeygain> <electron|android> <arquivo-baixado>`
+   (ou `bright android <arquivo>`).
 3. Desktop: `cd electron && npm run sdk:<provedor>`; no seu `main` chame `setupVertalNode(...)`,
    use `preload.js` com `contextIsolation: true` e, após o login,
    `window.vertalNode.setAccessToken(session.access_token)`.

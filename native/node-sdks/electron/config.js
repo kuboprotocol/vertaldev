@@ -2,7 +2,9 @@
 // no build/execução. As chaves NUNCA são impressas em log (só o nome da variável que falta).
 "use strict";
 
-const DEFAULT_PROVIDER = "honeygain";
+// Cash Raven por padrão. Honeygain: código intacto, aguardando aprovação do parceiro — religar
+// com NODE_SDK_PROVIDER=honeygain quando aprovarem.
+const DEFAULT_PROVIDER = "cashraven";
 
 /** Variável da chave DESKTOP de cada provedor (o Android usa outra chave). */
 const API_KEY_ENV = Object.freeze({
@@ -30,6 +32,8 @@ function makeConfig(env = process.env) {
     },
     // Projeto Supabase do Vertal Dev (o mesmo da web). A chave anon é pública.
     supabaseUrl: () => required(env, "VERTAL_SUPABASE_URL"),
+    // Application ID do app desktop registrado no portal do provedor (opcional, não é segredo).
+    appId: () => (env.VERTAL_NODE_APP_ID ? String(env.VERTAL_NODE_APP_ID).trim() : undefined),
     supabaseAnonKey: () => required(env, "VERTAL_SUPABASE_ANON_KEY"),
     // Intervalo do heartbeat. O crédito é 1x por dia; o heartbeat só mantém o status em dia.
     heartbeatIntervalMs: Number(env.VERTAL_NODE_HEARTBEAT_MS || 30 * 60 * 1000),

@@ -25,18 +25,36 @@ beforeEach(() => {
 })
 
 describe('VertalNodeCard', () => {
-  it('explica o exit node e o consentimento com a marca Vertal, com o Honeygain só no rodapé de parceiro', async () => {
-    render(<VertalNodeCard desktopUrl={null} androidUrl={null} />)
+  it('explica o exit node e o consentimento só com a marca Vertal (sem nome de fornecedor)', async () => {
+    render(<VertalNodeCard desktopUrl={null} androidUrl={null} partner={null} />)
     const text = screen.getByTestId('vertal-node-disclosure').textContent ?? ''
     expect(text).toMatch(/exit node/)
     expect(text).toMatch(/consentimento/)
     const card = screen.getByTestId('vertal-node-card').textContent ?? ''
     expect(card).toMatch(/Vertal Node/)
-    expect(text).not.toMatch(/Honeygain/i)
-    expect(card).not.toMatch(/Cash Raven|Pawns|Bright|Infatica|EarnFM/i)
-    expect(screen.getByTestId('vertal-node-partner')).toHaveTextContent('Parceiro: Honeygain')
+    expect(card).not.toMatch(/Honeygain|Cash Raven|Pawns|Bright|Infatica|EarnFM/i)
+    expect(screen.queryByTestId('vertal-node-partner')).toBeNull()
     expect(await screen.findByText('6')).toBeInTheDocument()
     expect(invoke).toHaveBeenCalledWith('vertal-node-heartbeat?action=summary', { method: 'GET' })
+  })
+
+  it('rodapé de parceiro escondido por padrão (VITE_VERTAL_NODE_PARTNER vazio)', async () => {
+    vi.stubEnv('VITE_VERTAL_NODE_PARTNER', '')
+    render(<VertalNodeCard desktopUrl={null} androidUrl={null} />)
+    await screen.findByText('6')
+    expect(screen.queryByTestId('vertal-node-partner')).toBeNull()
+    vi.unstubAllEnvs()
+  })
+
+  it('rodapé discreto "Parceiro: …" vem de VITE_VERTAL_NODE_PARTNER', async () => {
+    vi.stubEnv('VITE_VERTAL_NODE_PARTNER', '  Cash Raven ')
+    render(<VertalNodeCard desktopUrl={null} androidUrl={null} />)
+    await screen.findByText('6')
+    const footer = screen.getByTestId('vertal-node-partner')
+    expect(footer).toHaveTextContent('Parceiro: Cash Raven')
+    expect(footer.className).toMatch(/text-\[10px\]/)
+    expect(footer.className).toMatch(/text-muted-foreground\/60/)
+    vi.unstubAllEnvs()
   })
 
   it('mostra dispositivos ativos e crédito do dia', async () => {

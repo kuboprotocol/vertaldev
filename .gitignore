@@ -24,7 +24,9 @@ dist-ssr
 *.sw?
 
 # Local security verification reports
-reports/
+# (o schema do env-check é versionado: o workflow env-check exige o arquivo)
+reports/*
+!reports/env-check.schema.json
 
 
 # Rerun concurrency CI — local secrets

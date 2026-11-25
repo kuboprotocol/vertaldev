@@ -6,16 +6,20 @@
 #   bash native/node-sdks/scripts/fetch-sdk.sh honeygain android  ~/Downloads/hgsdk.aar
 #   bash native/node-sdks/scripts/fetch-sdk.sh cashraven electron ~/Downloads/cr-sdk-electron.zip
 #   bash native/node-sdks/scripts/fetch-sdk.sh cashraven android  [~/Downloads/cr-sdk-android.zip]
+#   bash native/node-sdks/scripts/fetch-sdk.sh bright    android  ~/Downloads/bright_sdk.aar   (ou o .zip do downloader)
+#
+# Cash Raven é o provedor padrão. Honeygain: aguardando aprovação (continua suportado aqui).
+# Bright: só Android (o adapter fica desligado até a aprovação); não existe SDK Electron da Bright.
 #
 # Cash Raven Android vem do Maven deles (io.cashraven:cr-sdk:4.1.4) e não precisa de arquivo;
 # o .zip só é usado para build offline (o .aar vai para app/libs/, gitignored).
 #
 # CI: em vez do arquivo, defina uma URL privada (bucket com URL assinada) por SDK:
 #   HONEYGAIN_ELECTRON_SDK_URL, HONEYGAIN_ANDROID_SDK_URL,
-#   CASHRAVEN_ELECTRON_SDK_URL, CASHRAVEN_ANDROID_SDK_URL
+#   CASHRAVEN_ELECTRON_SDK_URL, CASHRAVEN_ANDROID_SDK_URL, BRIGHT_ANDROID_SDK_URL
 # Opcional: *_SHA256 para conferir o arquivo (Cash Raven 4.1.4 já tem o hash oficial como padrão).
 #
-# pawns | bright | infatica | earnfm: aguardando aprovação dos parceiros (stubs desligados).
+# pawns | infatica | earnfm: aguardando aprovação dos parceiros (stubs desligados).
 # Este script nunca lê nem imprime API keys.
 set -euo pipefail
 
@@ -29,7 +33,7 @@ CASHRAVEN_ELECTRON_SHA256_DEFAULT="96037001afd1599585e0cb3eef51fbef895c40597001e
 CASHRAVEN_ANDROID_SHA256_DEFAULT="310347bce5015137dad8ae36662e9b97330d7162b3a608256dd5fa292a74ce73"
 
 usage() {
-  echo "uso: $0 honeygain|cashraven electron|android [arquivo-baixado]" >&2
+  echo "uso: $0 cashraven|honeygain electron|android [arquivo-baixado]  |  $0 bright android <arquivo>" >&2
   exit 2
 }
 
@@ -100,7 +104,26 @@ case "$provider:$platform" in
     unzip -qo "$zip" '*.aar' -d "$here/android/app/libs/cashraven" || true
     echo "OK: $here/android/app/libs/cashraven (offline; build com -PCASHRAVEN_OFFLINE=1)"
     ;;
-  pawns:*|bright:*|infatica:*|earnfm:*)
+  bright:android)
+    out="$here/android/app/libs/bright"
+    mkdir -p "$out"
+    tmpf="$(mktemp)"
+    # obtain() grava num destino fixo; aqui decide depois se é .aar direto ou .zip do downloader.
+    dest="$tmpf"; obtain "$dest" BRIGHT_ANDROID_SDK_URL
+    verify "$dest" "${BRIGHT_ANDROID_SHA256:-}"
+    if unzip -tq "$dest" >/dev/null 2>&1 && unzip -l "$dest" | grep -q 'bright_sdk\.aar'; then
+      unzip -qoj "$dest" '*bright_sdk.aar' -d "$out"
+    else
+      cp "$dest" "$out/bright_sdk.aar"
+    fi
+    rm -f "$tmpf"
+    echo "OK: $out/bright_sdk.aar  (build com -PNODE_SDK_PROVIDER=bright; adapter desligado até -PNODE_SDK_BRIGHT_APPROVED=1)"
+    ;;
+  bright:electron)
+    echo "Bright SDK não tem SDK Electron/Node (só Windows .NET / C/C++). O desktop fica com o stub desligado." >&2
+    exit 1
+    ;;
+  pawns:*|infatica:*|earnfm:*)
     echo "Provedor \"$provider\" ainda desativado (aguardando aprovação do parceiro). Ver docs/NODE-SDKS.md." >&2
     exit 1
     ;;

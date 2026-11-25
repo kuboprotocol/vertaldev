@@ -13,6 +13,8 @@ on:
       - "supabase/functions/.env.example"
       - "scripts/setup-env.sh"
       - "scripts/setup-env.test.sh"
+      - "scripts/validate-env-report.mjs"
+      - "reports/env-check.schema.json"
       - ".github/workflows/env-check.yml"
   pull_request:
     paths:
@@ -20,6 +22,8 @@ on:
       - "supabase/functions/.env.example"
       - "scripts/setup-env.sh"
       - "scripts/setup-env.test.sh"
+      - "scripts/validate-env-report.mjs"
+      - "reports/env-check.schema.json"
       - ".github/workflows/env-check.yml"
   workflow_dispatch:
 

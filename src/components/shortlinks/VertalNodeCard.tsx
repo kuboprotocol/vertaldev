@@ -30,17 +30,25 @@ function envUrl(v: unknown): string | null {
   return typeof v === "string" && /^https:\/\//.test(v.trim()) ? v.trim() : null;
 }
 
+/** Nome do parceiro no rodapé (VITE_VERTAL_NODE_PARTNER). Vazio = rodapé escondido. */
+function envText(v: unknown): string | null {
+  return typeof v === "string" && v.trim() ? v.trim().slice(0, 60) : null;
+}
+
 /**
  * "Ganhe compartilhando internet": marca Vertal Node, independente do SDK de banda usado no app.
  * O nome do fornecedor do SDK aparece só na tela de consentimento do próprio SDK, dentro do app
  * (exigência dos termos de cada parceiro). Links de download vêm do env e somem quando não configurados.
+ * O rodapé discreto "Parceiro: …" só aparece quando VITE_VERTAL_NODE_PARTNER está definido.
  */
 export default function VertalNodeCard({
   desktopUrl = envUrl(import.meta.env.VITE_VERTAL_NODE_DESKTOP_URL),
   androidUrl = envUrl(import.meta.env.VITE_VERTAL_NODE_ANDROID_URL),
+  partner = envText(import.meta.env.VITE_VERTAL_NODE_PARTNER),
 }: {
   desktopUrl?: string | null;
   androidUrl?: string | null;
+  partner?: string | null;
 }) {
   const [summary, setSummary] = useState<NodeSummary | null>(null);
 
@@ -121,12 +129,14 @@ export default function VertalNodeCard({
           </div>
         )}
 
-        <p
-          className="pt-1 text-center text-[10px] leading-tight text-muted-foreground/60"
-          data-testid="vertal-node-partner"
-        >
-          Parceiro: Honeygain
-        </p>
+        {partner ? (
+          <p
+            className="pt-1 text-center text-[10px] leading-tight text-muted-foreground/60"
+            data-testid="vertal-node-partner"
+          >
+            Parceiro: {partner}
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   );

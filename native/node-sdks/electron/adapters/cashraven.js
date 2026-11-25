@@ -1,57 +1,55 @@
 // Adapter Cash Raven SDK 4.1.4 (Electron / Node.js). Docs: https://cashraven.io/docs
-//   Pacote @cashraven/electron — vem no cr-sdk-electron.zip do portal (com o core nativo) e é
-//   instalado por scripts/fetch-sdk.sh. NUNCA commitar o zip nem a developer key.
+//   Pacote @cashraven/electron 4.1.4 — vem no cr-sdk-electron.zip do portal (com o core nativo
+//   para Windows x64 / macOS universal / Linux x64, via koffi) e é instalado por
+//   scripts/fetch-sdk.sh. NUNCA commitar o zip nem a developer key.
 //
-// API pública documentada (cashraven.io/docs, aba Electron / Node):
+// API conferida no index.d.ts / AGENTS.md / src/client.js do cr-sdk-electron.zip 4.1.4
+// (SHA-256 96037001…f028), em 2026-11-24:
 //   const { CashRaven, showConsent } = require("@cashraven/electron");
-//   const cr = new CashRaven({ developerKey, uid });
-//   if (await showConsent(cr, { parent: mainWindow })) cr.start();   // só depois de aceitar
-//   cr.optOut()  // OBRIGATÓRIO: controle de opt-out visível (checado na revisão de compliance)
+//   const cr = new CashRaven({ developerKey, uid, appId?, dataDir? });   // começa OPTED-OUT
+//   await showConsent(cr, { parent })  // tela DO SDK; no aceite ela mesma chama cr.optIn()
+//   cr.start() / cr.stop()             // idempotentes, síncronos (o core roda no runtime dele)
+//   cr.optOut()                        // OBRIGATÓRIO: controle de opt-out visível
+//   cr.consentStatus()                 // "not_responded" | "accepted" | "declined" | "revoked"
+//   cr.isOptedIn() / cr.isRunning() / cr.status() / cr.authStatus() / cr.onEvent(cb) / cr.dispose()
 //
-// Regras: a tela de consentimento é a DO SDK (texto e links fixos da Cash Raven; dá para mudar só
-// cores/parágrafos extras no portal). O SDK também faz opt-out sozinho quando bate limite de
-// proteção (dados/CPU) — por isso o estado é sempre relido do SDK quando ele expõe getters.
-//
-// TODO(cashraven): a doc pública não lista getters de estado nem stop(). O código abaixo usa
-// cr.isOptedIn / cr.isRunning / cr.stop() quando existem (função ou propriedade) e, se não,
-// um estado local persistido. Conferir no README.md / AGENTS.md do cr-sdk-electron.zip.
+// Regras do SDK (compliance da Cash Raven):
+//   * consentimento só pela tela do SDK; nunca chamar optIn() fora do aceite;
+//   * o estado de consentimento é do SDK (persistido em dataDir) — não guardar cópia própria;
+//   * isOptedIn() fica false enquanto pausado; para "o usuário aceitou" vale consentStatus();
+//   * status "ERROR" = só chave recusada pelo backend (authStatus().code: unknown_key,
+//     key_disabled, device_cap, not_consented, app_identity) — erro de configuração, não de rede;
+//   * dispose() ao sair do app.
 "use strict";
-
-const STORE_KEY = "cashraven.optedIn";
-
-function readFlag(target, name) {
-  if (!target) return undefined;
-  const v = target[name];
-  if (typeof v === "function") return v.call(target);
-  if (typeof v === "boolean") return v;
-  return undefined;
-}
 
 function createCashRavenAdapter({ loadModule = require } = {}) {
   let cr = null;
   let showConsent = null;
-  let store = null;
-  let localRunning = false;
+  let stopEvents = null;
   const listeners = new Set();
 
   const need = () => {
     if (!cr) throw new Error("[vertal-node] cashraven: chame init() antes");
     return cr;
   };
-  const localOptedIn = () => Boolean(store && store.get(STORE_KEY));
-  const setLocalOptedIn = (v) => store && store.set(STORE_KEY, Boolean(v));
 
-  async function optedIn() {
-    const v = await readFlag(need(), "isOptedIn");
-    return typeof v === "boolean" ? v : localOptedIn();
+  /** "O usuário aceitou" (inclui pausado). Fonte da verdade: consentStatus() do SDK. */
+  function optedIn() {
+    const c = need();
+    if (typeof c.consentStatus === "function") return c.consentStatus() === "accepted";
+    return Boolean(c.isOptedIn());
   }
-  async function running() {
-    const v = await readFlag(need(), "isRunning");
-    return typeof v === "boolean" ? v : localRunning;
+  function running() {
+    return Boolean(need().isRunning());
   }
-  async function emit() {
+  function emit() {
     if (!cr) return;
-    const state = { optedIn: await optedIn(), running: await running() };
+    let state;
+    try {
+      state = { optedIn: optedIn(), running: running() };
+    } catch {
+      return; // cliente já liberado (dispose)
+    }
     for (const cb of listeners) cb(state);
   }
 
@@ -60,56 +58,64 @@ function createCashRavenAdapter({ loadModule = require } = {}) {
     vendor: "Cash Raven",
     enabled: true,
 
-    async init({ apiKey, uid, store: kv }) {
+    async init({ apiKey, uid, appId, dataDir }) {
       if (!apiKey) throw new Error("[vertal-node] cashraven: developer key ausente");
       if (!uid) throw new Error("[vertal-node] cashraven: uid ausente");
       const mod = loadModule("@cashraven/electron");
       showConsent = mod.showConsent;
-      store = kv || null;
       // uid = id pseudônimo do dispositivo Vertal (nunca e-mail ou dado pessoal).
-      cr = new mod.CashRaven({ developerKey: apiKey, uid });
-      if (typeof cr.on === "function") {
-        // Eventos opcionais (ex.: opt-out automático por proteção). Nomes a confirmar no AGENTS.md.
-        for (const ev of ["opted-out", "optout", "state", "status"]) {
-          try {
-            cr.on(ev, () => {
-              void emit();
-            });
-          } catch {
-            /* evento não suportado */
-          }
-        }
-      }
+      // appId (opcional) = Application ID registrado no portal: chave copiada para outro app para de funcionar.
+      // dataDir: padrão do SDK é userData/cashraven (onde ficam device id e consentimento).
+      const opts = { developerKey: apiKey, uid };
+      if (appId) opts.appId = appId;
+      if (dataDir) opts.dataDir = dataDir;
+      cr = new mod.CashRaven(opts);
+      // Eventos (conectou, opt-out automático por proteção, chave recusada…): o SDK faz polling do
+      // log do core; nunca registrar callback nativo via koffi (thread fora do V8).
+      if (typeof cr.onEvent === "function") stopEvents = cr.onEvent(() => emit());
     },
     async requestConsent({ parent } = {}) {
-      need();
-      if (await optedIn()) return true;
-      const accepted = Boolean(await showConsent(cr, parent ? { parent } : {}));
-      setLocalOptedIn(accepted);
-      void emit();
+      const c = need();
+      if (optedIn()) return true;
+      // showConsent chama optIn() no aceite; recusar/fechar/Esc = false e continua opted-out.
+      const accepted = Boolean(await showConsent(c, parent ? { parent } : {}));
+      emit();
       return accepted;
     },
-    isOptedIn: optedIn,
-    isRunning: running,
+    async isOptedIn() {
+      return optedIn();
+    },
+    async isRunning() {
+      return running();
+    },
+    /** Diagnóstico: status do SDK e, se a chave foi recusada, o motivo (para o desenvolvedor). */
+    async status() {
+      const c = need();
+      const status = typeof c.status === "function" ? c.status() : null;
+      const auth = typeof c.authStatus === "function" ? c.authStatus() : null;
+      return { status, authCode: auth && auth.state === "rejected" ? auth.code : null };
+    },
     async start() {
       const c = need();
-      if (!(await optedIn())) throw new Error("[vertal-node] sem consentimento: não é permitido iniciar");
-      if (await running()) return;
-      await c.start();
-      localRunning = true;
-      void emit();
+      if (!optedIn()) throw new Error("[vertal-node] sem consentimento: não é permitido iniciar");
+      c.start(); // idempotente
+      emit();
     },
     async stop() {
-      const c = need();
-      if (typeof c.stop === "function") await c.stop();
-      localRunning = false;
-      void emit();
+      need().stop(); // idempotente; consentimento e device id continuam
+      emit();
     },
     async optOut() {
-      await need().optOut();
-      localRunning = false;
-      setLocalOptedIn(false);
-      void emit();
+      const c = need();
+      c.optOut(); // retira o consentimento e para de compartilhar
+      c.stop(); // libera o engine (o cliente continua reutilizável)
+      emit();
+    },
+    async dispose() {
+      if (stopEvents) stopEvents();
+      stopEvents = null;
+      if (cr && typeof cr.dispose === "function") cr.dispose();
+      cr = null;
     },
     onChange(cb) {
       listeners.add(cb);

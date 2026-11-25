@@ -1,8 +1,8 @@
 // Processo principal (Electron) — Vertal Node com a camada de provedores (adapters/).
 //
 // Só UM SDK de compartilhamento roda por dispositivo, escolhido por NODE_SDK_PROVIDER
-// (honeygain | cashraven; pawns/bright/infatica/earnfm são stubs desligados). O pacote dos outros
-// provedores nem é carregado.
+// (padrão cashraven; honeygain aguardando aprovação, religável por config; pawns/bright/infatica/
+// earnfm são stubs desligados). O pacote dos outros provedores nem é carregado.
 //
 // Regras comuns a todos os provedores:
 //   * consentimento primeiro: activate() abre a tela de consentimento DO SDK (que nomeia o
@@ -76,7 +76,13 @@ function setupVertalNode({ app, ipcMain, getWindow, config = defaultConfig, adap
   let accessToken = null;
   let timer = null;
   const ready = sdk.enabled
-    ? sdk.init({ apiKey: config.apiKey(provider), uid: deviceId, store: kv, enableLogging: config.enableLogging })
+    ? sdk.init({
+        apiKey: config.apiKey(provider),
+        uid: deviceId,
+        store: kv,
+        enableLogging: config.enableLogging,
+        appId: typeof config.appId === "function" ? config.appId() : undefined,
+      })
     : Promise.resolve();
 
   const send = (channel, value) => {
@@ -93,6 +99,8 @@ function setupVertalNode({ app, ipcMain, getWindow, config = defaultConfig, adap
       deviceId,
       optedIn: await sdk.isOptedIn(),
       running: await sdk.isRunning(),
+      // Diagnóstico opcional do adapter (ex.: Cash Raven: STOPPED|CONNECTING|SHARING|PAUSED|ERROR).
+      sdkStatus: sdk.enabled && typeof sdk.status === "function" ? await sdk.status().catch(() => null) : null,
       signedIn: Boolean(accessToken),
     };
   }
@@ -193,6 +201,8 @@ function setupVertalNode({ app, ipcMain, getWindow, config = defaultConfig, adap
 
   app.on("before-quit", () => {
     if (timer) clearInterval(timer);
+    // Cash Raven exige dispose() ao sair; os outros adapters não precisam.
+    if (typeof sdk.dispose === "function") void Promise.resolve(sdk.dispose()).catch(() => {});
   });
 
   return {

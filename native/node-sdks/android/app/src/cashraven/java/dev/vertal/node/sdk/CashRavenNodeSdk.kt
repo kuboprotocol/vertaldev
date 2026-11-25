@@ -4,21 +4,28 @@ import android.app.Activity
 import android.app.Application
 import android.content.Context
 import io.cashraven.sdk.CashRaven
+import io.cashraven.sdk.CashRavenService
+import io.cashraven.sdk.CrAuthState
+import io.cashraven.sdk.CrConsentListener
+import io.cashraven.sdk.CrConsentResult
 
 /**
  * Adapter Cash Raven SDK 4.1.4 (flavor `cashraven`). Docs: https://cashraven.io/docs
- * Dependência: io.cashraven:cr-sdk:4.1.4 (Maven da Cash Raven), minSdk 24, JDK 17, JNA 5.14.0@aar.
+ * Dependência: io.cashraven:cr-sdk:4.1.4 (Maven da Cash Raven, JNA 5.14.0 transitivo),
+ * minSdk 24, compile/targetSdk 34, JDK 17.
  *
- * Regras (termos da Cash Raven): a tela de consentimento é a DO SDK (texto e links fixos; cores e
- * parágrafos extras só pelo portal), compartilhamento só depois do aceite, e um controle de
- * opt-out VISÍVEL que chama optOut() — conferido na revisão de compliance antes de liberar mais
- * de 100 dispositivos. O SDK também faz opt-out sozinho ao bater limites de proteção, então o
- * estado é sempre relido do SDK.
- *
- * TODO(cashraven-android): a doc pública só mostra a fachada `io.cashraven.sdk.CashRaven`, `version()`
- * e `consentScreen()`. As assinaturas abaixo espelham a API Electron documentada
- * (new CashRaven({ developerKey, uid }), showConsent, start, optOut) e PRECISAM ser conferidas no
- * README.md / AGENTS.md do cr-sdk-android.zip antes do primeiro build deste flavor.
+ * API conferida em 2026-11-24 no cr-sdk-android.zip 4.1.4 (SHA-256 310347bc…ce73): AGENTS.md e as
+ * assinaturas públicas de io.cashraven.sdk.CashRaven / CashRavenService no classes.jar do AAR.
+ * Usa o modo SDK-managed (recomendado pela Cash Raven):
+ *   - Application.onCreate: CashRaven.createManaged(ctx, devKey, uid) + CashRavenService.configure(...)
+ *     (configure é estático: tem que ser na Application para o serviço existir depois de um boot);
+ *   - Activity: cr.requestConsent(activity) { GRANTED | DECLINED | DISMISSED } — a tela é do SDK, com o
+ *     texto da Cash Raven; no aceite o próprio SDK chama optIn() (nunca chamamos optIn()).
+ *     Não mostra nada se a decisão já foi gravada;
+ *   - compartilhar no serviço em primeiro plano do SDK: CashRavenService.start/stop(context);
+ *   - opt-out visível (OBRIGATÓRIO, conferido pela compliance): cr.optOut() + CashRavenService.stop().
+ * O estado de consentimento é do SDK (persistido por ele); isOptedIn() = consentiu E ligado.
+ * Status ERROR / authStatus REJECTED = developer key recusada (erro de configuração, não de rede).
  */
 class CashRavenNodeSdk : NodeSdk {
     override val id = "cashraven"
@@ -31,26 +38,55 @@ class CashRavenNodeSdk : NodeSdk {
     private fun need(): CashRaven = checkNotNull(cr) { "cashraven: chame init() antes" }
 
     override fun init(app: Application, apiKey: String, uid: String) {
-        appContext = app
-        cr = CashRaven(app, developerKey = apiKey, uid = uid)
+        appContext = app.applicationContext
+        // Começa OPTED-OUT. O SDK informa o packageName (Application ID) sozinho.
+        val client = CashRaven.createManaged(app, apiKey, uid)
+        // Ícone da notificação do serviço em primeiro plano. Troque por um ícone monocromático
+        // (R.drawable.ic_stat_vertal_node) no projeto do app.
+        CashRavenService.configure(client, CashRavenService.Config(app.applicationInfo.icon))
+        cr = client
     }
 
     override fun requestConsent(activity: Activity?, onConsentResult: (Boolean) -> Unit) {
         val c = need()
-        if (c.isOptedIn) return onConsentResult(true)
-        // Tela de consentimento embutida no SDK (com a marca configurada no portal).
-        CashRaven.showConsent(activity ?: appContext, c) { accepted -> onConsentResult(accepted) }
+        if (c.isOptedIn()) return onConsentResult(true)
+        // requestConsent precisa de uma Activity real (a tela é do SDK).
+        if (activity == null) return onConsentResult(false)
+        // Listener explícito (CrConsentListener.onConsent): funciona seja ou não `fun interface`.
+        c.requestConsent(
+            activity,
+            object : CrConsentListener {
+                override fun onConsent(result: CrConsentResult) = onConsentResult(result == CrConsentResult.GRANTED)
+            },
+        )
     }
 
-    override val isOptedIn: Boolean get() = cr?.isOptedIn ?: false
-    override val isRunning: Boolean get() = cr?.isRunning ?: false
+    override val isOptedIn: Boolean get() = cr?.isOptedIn() ?: false
+    override val isRunning: Boolean get() = cr?.isRunning() ?: false
+
+    /** Só para diagnóstico do desenvolvedor: developer key recusada pelo backend. */
+    override val lastError: Throwable?
+        get() {
+            val auth = cr?.authStatus() ?: return null
+            return if (auth.state == CrAuthState.REJECTED) {
+                IllegalStateException("cashraven auth_rejected: ${auth.code}")
+            } else {
+                null
+            }
+        }
 
     override fun start() {
-        val c = need()
-        check(c.isOptedIn) { "sem consentimento: não é permitido iniciar" }
-        if (!c.isRunning) c.start()
+        check(need().isOptedIn()) { "sem consentimento: não é permitido iniciar" }
+        CashRavenService.start(appContext) // idempotente; o serviço chama cr.start()
     }
 
-    override fun stop() = need().stop()
-    override fun optOut() = need().optOut()
+    override fun stop() {
+        need()
+        CashRavenService.stop(appContext) // consentimento e device id continuam
+    }
+
+    override fun optOut() {
+        need().optOut() // retira o consentimento
+        CashRavenService.stop(appContext)
+    }
 }

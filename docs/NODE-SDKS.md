@@ -51,16 +51,20 @@ O Vertal Node é **um app só** (desktop Electron e Android) com uma **camada de
 
 | Provedor | Estado | Desktop (Electron/Node) | Android |
 |---|---|---|---|
-| `honeygain` | ligado (padrão) | `@honeygain/electron-sdk` (.tgz do dashboard) | `hgsdk.aar` do dashboard |
-| `cashraven` | ligado | `@cashraven/electron` 4.1.4 (`cr-sdk-electron.zip`) | `io.cashraven:cr-sdk:4.1.4` (Maven Cash Raven) |
+| `cashraven` | **ligado (padrão)** | `@cashraven/electron` 4.1.4 (`cr-sdk-electron.zip`) | `io.cashraven:cr-sdk:4.1.4` (Maven Cash Raven) |
+| `honeygain` | **aguardando aprovação** — código intacto, fora do padrão; religar por config | `@honeygain/electron-sdk` (.tgz do dashboard) | `hgsdk.aar` do dashboard |
+| `bright` | Android implementado, **desligado até a aprovação** (status *Implementation*) | sem SDK Electron (a Bright só tem Windows .NET/C++) → stub desligado | `bright_sdk.aar` (flavor `bright`) |
 | `pawns` | stub desligado — aguardando aprovação | doc: https://business.pawns.app/sdk | — |
-| `bright` | stub desligado — aguardando aprovação | doc: https://bright-sdk.com | — |
 | `infatica` | stub desligado — aguardando aprovação | doc: https://infatica-sdk.io | — |
 | `earnfm` | stub desligado — aguardando aprovação | doc: https://earn.fm/en/business/apps | — |
 
 **Só um provedor ativo por dispositivo**, escolhido por configuração (`NODE_SDK_PROVIDER`):
 - desktop: o `main.js` carrega só o pacote do provedor escolhido; os outros nem são `require`-ados;
-- Android: um *product flavor* por provedor (`honeygain`, `cashraven`) — cada APK leva **um** SDK.
+- Android: um *product flavor* por provedor (`cashraven` padrão, `honeygain`, `bright`) — cada APK leva **um** SDK.
+
+**Religar o Honeygain quando aprovarem** (nada de código): desktop `NODE_SDK_PROVIDER=honeygain`,
+Android `-PNODE_SDK_PROVIDER=honeygain`, servidor `VERTAL_NODE_PROVIDERS=cashraven,honeygain` e, se
+quiser o rodapé, `VITE_VERTAL_NODE_PARTNER=Honeygain`.
 
 Isso evita dois SDKs disputando a mesma conexão e problemas de exclusividade com parceiros. No
 servidor, o dispositivo guarda o provedor atual (`vertal_nodes.provider`); trocar de provedor
@@ -69,13 +73,15 @@ sobrescreve, não soma.
 ### Marca e consentimento
 - Toda a UI do Vertal (card do site, painel do app) usa a **marca Vertal Node** e não nomeia o
   fornecedor. O fornecedor aparece **só na tela de consentimento do próprio SDK**, como exigem os termos.
+  Exceção opcional: rodapé discreto "Parceiro: …" no card, só se `VITE_VERTAL_NODE_PARTNER` estiver
+  definido (padrão vazio = sem rodapé).
 - **Consentimento primeiro** (todos): `activate()` abre a tela do SDK e só inicia se o usuário aceitar.
   Nunca abrimos o consentimento sem clique; se já aceitou antes, o app só retoma.
 - **Opt-out sempre visível** (todos): interruptor "Compartilhar internet" → `optOut()`.
 
 ### Avisos de fornecedor e licenças (só aqui)
 
-**Honeygain SDK** — termos: https://developers.honeygain.com/docs/legal
+**Honeygain SDK** (aguardando aprovação; fora do padrão) — termos: https://developers.honeygain.com/docs/legal
 - A tela de consentimento precisa nomear o **"Honeygain SDK"**, explicar que o aparelho vira **exit
   node** e ter **"I accept"**. Usamos a janela **nativa** `requestConsent()`; tela própria só com
   aprovação do Honeygain.
@@ -85,6 +91,21 @@ sobrescreve, não soma.
 
 **Cash Raven SDK 4.1.4** (Rayobyte) — docs: https://cashraven.io/docs · termos:
 https://cashraven.io/legal/terms-of-use · privacidade: https://cashraven.io/legal/privacy-policy
+- API conferida no SDK real 4.1.4 (zip do portal, SHA-256 oficial) em 2026-11-24:
+  - **Electron**: `new CashRaven({ developerKey, uid, appId? })` (começa opted-out) →
+    `await showConsent(cr, { parent })` (no aceite o SDK chama `optIn()`) → `start()`/`stop()`
+    (idempotentes) → `optOut()`; estado por `consentStatus()` (`accepted` vale mesmo pausado),
+    `isOptedIn()`, `isRunning()`, `status()` (`STOPPED|CONNECTING|SHARING|PAUSED|ERROR`),
+    `authStatus()` (ERROR = chave recusada: `unknown_key`, `key_disabled`, `device_cap`,
+    `not_consented`, `app_identity`), eventos por `onEvent()`, **`dispose()` ao sair**. Empacotar com
+    `asarUnpack: ["**/node_modules/@cashraven/electron/native/**"]`. Core nativo: Windows x64,
+    macOS universal, Linux x64 (glibc 2.36+), Node 18+.
+  - **Android**: modo *SDK-managed* — `CashRaven.createManaged(ctx, devKey, uid)` +
+    `CashRavenService.configure(cr, Config(ícone))` no `Application.onCreate`;
+    `cr.requestConsent(activity, listener)` (`GRANTED|DECLINED|DISMISSED`; não reabre se já decidiu);
+    `CashRavenService.start/stop(ctx)` (serviço em primeiro plano do SDK, `dataSync`); opt-out
+    `cr.optOut()` + `CashRavenService.stop()`. O app declara `FOREGROUND_SERVICE`,
+    `FOREGROUND_SERVICE_DATA_SYNC` e pede `POST_NOTIFICATIONS` (API 33+).
 - Consentimento **embutido no SDK** (`showConsent`); o texto do acordo e os links são da Cash Raven
   (só cores, nome do app, rótulos e parágrafos extras pelo painel *Consent screen* do portal, sem rebuild).
   Tela própria (JAR headless no Android) só com aprovação de compliance por app.
@@ -99,7 +120,27 @@ https://cashraven.io/legal/terms-of-use · privacidade: https://cashraven.io/leg
 - Uma developer key **por app** no portal (apps "Vertal Node Desktop" e "Vertal Android").
 - Requisitos Android: minSdk 24, compile/targetSdk 34, JDK 17, JNA 5.14.0@aar, AGP 8.2–8.6.
 
-**Pawns / Bright / Infatica / EarnFM** — aguardando aprovação; adicionar os avisos aqui quando
+**Bright SDK** (Bright Data) — guia: https://docs.bright-sdk.com/integration-guides/android-sdk ·
+EULA: https://bright-sdk.com/EULA · privacidade: https://bright-sdk.com/privacy-policy
+- Status no painel: *Implementation* → o adapter Android (`BrightNodeSdk`, flavor `bright`) só é criado
+  com `-PNODE_SDK_BRIGHT_APPROVED=1`; sem isso o flavor usa o stub desligado.
+- **Não publicar na Google Play** um APK com o SDK sem aprovação prévia da Bright.
+- API (V2): `Settings(ctx)` com `setSkipConsent(true)` (nunca abrir sem clique), `setLanguage`,
+  `setOnStatusChange` (`PEER`=1, `NOT_PEER`=4, `NONE`=0) → `BrightApi.init(ctx, settings)` uma vez;
+  `BrightApi.showConsent(activity)` (não existe opt-in direto), `BrightApi.optOut(ctx)`,
+  `BrightApi.getConsentChoice(ctx)`, `BrightApi.setTrackingId(uid)` antes do init. O SDK roda em
+  processo próprio: a `Application` sai cedo quando `BrightApi.isSvcProcess()`.
+- **App ID no Android = packageName** (`dev.vertal.node`); vem do build em `BRIGHT_SDK_APP_ID_ANDROID`
+  (nunca no código) e é só conferido contra o packageName. Não há chave no `init`.
+- Sem start/stop: com o usuário `PEER` o SDK compartilha sozinho; parar = `optOut()`.
+- UI de opt-out exigida: interruptor **"Web Indexing"** com o estado real, texto do benefício e link
+  "Learn more" → https://bright-sdk.com/users#learn-more-about-bright-sdk-web-indexing.
+- Termos de uso do Vertal precisam do parágrafo da Bright (passo 8 do guia). ProGuard: `-dontnote brdat.sdk.**`.
+- O import mostrado pelo guia é `com.android.eapx` (`BrightApi`, `Settings`); o AAR não é público —
+  conferir o pacote no primeiro build.
+- Desktop: a Bright não tem SDK Electron/Node (só Windows .NET e C/C++) → stub desligado.
+
+**Pawns / Infatica / EarnFM** — aguardando aprovação; adicionar os avisos aqui quando
 cada adapter for implementado.
 
 ### Chaves
@@ -111,7 +152,8 @@ nunca são impressas em log.
 Os apps chamam `POST /functions/v1/vertal-node-heartbeat` com o token do usuário
 (`Authorization: Bearer <access_token Supabase>`) e
 `{ device_id, platform: "desktop"|"android", provider, app_version, opted_in, running }`.
-- `provider` ausente = `honeygain` (apps antigos). Provedor fora de `VERTAL_NODE_PROVIDERS` → `403 provider_disabled`.
+- `provider` ausente = `honeygain` (apps antigos). Provedor fora de `VERTAL_NODE_PROVIDERS` → `403 provider_disabled`
+  (com o padrão `cashraven`, heartbeats Honeygain/sem provider são recusados até religar).
 - `record_vertal_node_heartbeat` atualiza `vertal_nodes` e, se `opted_in && running`, credita
   `VERTAL_NODE_DAILY_CREDITS` **uma vez por usuário por dia** (chave `vertal_node:<dia SP>`), não
   importa quantos dispositivos ou provedores. Com `VERTAL_NODE_CREDIT_PER_PROVIDER=true` vira 1x por
@@ -131,18 +173,22 @@ Os apps chamam `POST /functions/v1/vertal-node-heartbeat` com o token do usuári
 | `VITE_GAM_REWARDED_AD_UNIT` | build do site | vazio (botão "em breve") | ad unit GAM rewarded |
 | `VITE_VERTAL_NODE_DESKTOP_URL` | build do site | vazio (botão some) | download desktop (https) |
 | `VITE_VERTAL_NODE_ANDROID_URL` | build do site | vazio (botão some) | download APK (https) |
+| `VITE_VERTAL_NODE_PARTNER` | build do site | vazio (rodapé some) | rodapé discreto "Parceiro: …" no card |
 | `REWARDED_VIDEO_CREDITS` | secret Supabase | 1 | créditos por vídeo (inteiro) |
 | `REWARDED_VIDEO_COOLDOWN_SECONDS` | secret Supabase | 60 | espera entre vídeos |
 | `REWARDED_VIDEO_DAILY_CAP` | secret Supabase | 10 | vídeos por dia (SP) |
 | `REWARDED_VIDEO_NONCE_TTL_SECONDS` | secret Supabase | 1800 | validade do nonce |
 | `VERTAL_NODE_DAILY_CREDITS` | secret Supabase | 2 (ou `HONEYGAIN_NODE_DAILY_CREDITS`, nome antigo) | créditos por dia ativo (0 desliga) |
 | `VERTAL_NODE_CREDIT_PER_PROVIDER` | secret Supabase | `false` | `true` = 1 crédito/dia **por provedor** (padrão: 1/dia no total) |
-| `VERTAL_NODE_PROVIDERS` | secret Supabase | `honeygain,cashraven` | provedores aceitos no heartbeat |
-| `NODE_SDK_PROVIDER` | build/execução dos apps | `honeygain` | provedor ativo no dispositivo (desktop) / flavor (Android) |
-| `HONEYGAIN_API_KEY` / `HONEYGAIN_API_KEY_ANDROID` | apps (desktop / Android) | — | chave Honeygain de cada app |
+| `VERTAL_NODE_PROVIDERS` | secret Supabase | `cashraven` | provedores aceitos no heartbeat (Honeygain: aguardando aprovação) |
+| `NODE_SDK_PROVIDER` | build/execução dos apps | `cashraven` | provedor ativo no dispositivo (desktop) / flavor (Android) |
 | `CASHRAVEN_API_KEY_DESKTOP` / `CASHRAVEN_API_KEY_ANDROID` | apps (desktop / Android) | — | developer key Cash Raven de cada app |
+| `VERTAL_NODE_APP_ID` | app desktop (opcional) | — | Application ID registrado no portal (chave copiada para outro app para de funcionar) |
+| `HONEYGAIN_API_KEY` / `HONEYGAIN_API_KEY_ANDROID` | apps (desktop / Android) | — | chave Honeygain de cada app (aguardando aprovação) |
+| `BRIGHT_SDK_APP_ID_ANDROID` | app Android (flavor `bright`) | — | App ID do painel Bright (= packageName) |
+| `NODE_SDK_BRIGHT_APPROVED` | app Android (flavor `bright`) | `0` | `1` liga o adapter Bright depois da aprovação |
 | `VERTAL_SUPABASE_URL`, `VERTAL_SUPABASE_ANON_KEY` | apps nativos | — | chamar a Edge Function |
-| `HONEYGAIN_*_SDK_URL`, `CASHRAVEN_*_SDK_URL` (+ `*_SHA256`) | CI (opcional) | — | `native/node-sdks/scripts/fetch-sdk.sh` baixa o SDK de um link privado |
+| `HONEYGAIN_*_SDK_URL`, `CASHRAVEN_*_SDK_URL`, `BRIGHT_ANDROID_SDK_URL` (+ `*_SHA256`) | CI (opcional) | — | `native/node-sdks/scripts/fetch-sdk.sh` baixa o SDK de um link privado |
 
 ---
 
@@ -153,20 +199,28 @@ Os apps chamam `POST /functions/v1/vertal-node-heartbeat` com o token do usuári
 3. Definir as env vars do site e rebuild.
 
 ## Pendente
-- [ ] Honeygain: conta SDK aprovada (KYC) + 2 API keys (desktop, Android); baixar SDKs
-      (`native/node-sdks/scripts/fetch-sdk.sh honeygain electron|android <arquivo>`).
+- [ ] Honeygain (fora por enquanto, decisão de 2026-11-24): aguardando resposta/aprovação. Quando
+      aprovarem: 2 API keys (desktop, Android), baixar SDKs
+      (`native/node-sdks/scripts/fetch-sdk.sh honeygain electron|android <arquivo>`) e religar por config.
 - [x] Cash Raven: conta de desenvolvedor criada, apps "Vertal Node Desktop" e "Vertal Android" com
       developer keys (guardadas fora do repo).
-- [ ] Cash Raven: baixar `cr-sdk-electron.zip` (e, para build offline, `cr-sdk-android.zip`) do portal,
-      rodar `fetch-sdk.sh cashraven …` e **conferir as assinaturas** marcadas com `TODO(cashraven)` /
-      `TODO(cashraven-android)` contra o `README.md`/`AGENTS.md` do zip.
+- [x] Cash Raven: zips 4.1.4 baixados do portal (SHA-256 conferido) e adapters Electron/Android
+      ajustados à API real (AGENTS.md, index.d.ts, classes do AAR).
+- [ ] Cash Raven: rodar o adapter Electron com o core nativo real num x64 (o sandbox era arm64) e
+      compilar o flavor Android `cashraven`.
+- [ ] Cash Raven: registrar o Application ID (desktop `VERTAL_NODE_APP_ID`; Android = packageName) no portal.
 - [ ] Cash Raven: subir um build com dispositivo real (passo "Test connectivity" do portal) e enviar
       para compliance (opt-out visível) antes de passar de 100 dispositivos.
-- [ ] Pawns / Bright / Infatica / EarnFM: aprovação dos parceiros → implementar o adapter
+- [ ] Bright: aprovação (status *Implementation*) → baixar `bright_sdk.aar`
+      (`fetch-sdk.sh bright android <arquivo>`), conferir o pacote `com.android.eapx` no AAR, compilar
+      com `-PNODE_SDK_PROVIDER=bright -PNODE_SDK_BRIGHT_APPROVED=1`, fazer o self-check do painel com
+      aparelho real, interruptor "Web Indexing" no app e parágrafo da Bright nos termos.
+- [ ] Pawns / Infatica / EarnFM: aprovação dos parceiros → implementar o adapter
       (`native/node-sdks/electron/adapters/<id>.js`, flavor Android) e incluir em `VERTAL_NODE_PROVIDERS`.
 - [ ] Projeto Electron e projeto Android do Vertal Node (o código aqui é o módulo de integração) + login Supabase nos apps.
 - [ ] Assinatura/notarização do instalador desktop e hospedagem dos downloads → `VITE_VERTAL_NODE_*_URL`.
-- [ ] Acordo com o Honeygain antes de qualquer publicação na Google Play (Cash Raven: conferir política da Play).
+- [ ] Acordo com o Honeygain antes de qualquer publicação na Google Play; Bright também exige aprovação
+      antes da Play (Cash Raven: conferir política da Play).
 - [ ] Google Ad Manager: conta, aprovação de rewarded web, ad unit → `VITE_GAM_REWARDED_AD_UNIT`.
 - [ ] Rodar as migrações e publicar as 2 Edge Functions.
 - [ ] Atualizar a política de privacidade do Vertal mencionando os SDKs de banda usados e os anúncios do Google.

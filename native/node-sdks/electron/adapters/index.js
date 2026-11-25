@@ -25,18 +25,26 @@ const { createCashRavenAdapter } = require("./cashraven");
 const { createDisabledAdapter } = require("./disabled");
 
 /** Provedores conhecidos. `enabled: false` = aguardando aprovação/contrato do parceiro. */
+// `pending`: adapter implementado mas aguardando aprovação do parceiro — continua selecionável por
+// NODE_SDK_PROVIDER, só não é o padrão (config.js usa cashraven).
 const PROVIDERS = Object.freeze({
-  honeygain: { enabled: true, create: createHoneygainAdapter },
+  honeygain: { enabled: true, pending: "aguardando aprovação", create: createHoneygainAdapter },
   cashraven: { enabled: true, create: createCashRavenAdapter },
   // TODO(pawns): aguardando aprovação do parceiro. Docs: https://business.pawns.app/sdk
   pawns: {
     enabled: false,
     create: () => createDisabledAdapter({ id: "pawns", vendor: "Pawns.app", docsUrl: "https://business.pawns.app/sdk" }),
   },
-  // TODO(bright): aguardando aprovação do parceiro. Docs: https://bright-sdk.com
+  // Bright SDK: NÃO existe SDK Electron/Node (a Bright só tem Windows .NET / C/C++ no desktop).
+  // O adapter Android está em android/app/src/bright (desligado até a aprovação). Desktop = stub.
   bright: {
     enabled: false,
-    create: () => createDisabledAdapter({ id: "bright", vendor: "Bright SDK", docsUrl: "https://bright-sdk.com" }),
+    create: () =>
+      createDisabledAdapter({
+        id: "bright",
+        vendor: "Bright SDK",
+        docsUrl: "https://docs.bright-sdk.com (sem SDK Electron; só Windows .NET/C++)",
+      }),
   },
   // TODO(infatica): aguardando aprovação do parceiro. Docs: https://infatica-sdk.io
   infatica: {

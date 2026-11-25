@@ -6,8 +6,9 @@ import dev.vertal.node.sdk.DisabledNodeSdk
 import dev.vertal.node.sdk.NodeSdkFactory
 
 /**
- * Application do Vertal Node. O SDK do flavor (honeygain | cashraven) é inicializado aqui, no escopo
- * da Application, como os guias dos dois parceiros recomendam. Só um SDK existe em cada APK.
+ * Application do Vertal Node. O SDK do flavor (cashraven, padrão | honeygain, aguardando aprovação |
+ * bright, desligado até a aprovação) é inicializado aqui, no escopo da Application, como os guias dos
+ * parceiros recomendam. Só um SDK existe em cada APK.
  */
 class VertalNodeApp : Application() {
 
@@ -16,6 +17,8 @@ class VertalNodeApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // SDKs que rodam em processo próprio (Bright): nada do app roda nesse processo.
+        if (NodeSdkFactory.isSdkServiceProcess()) return
         val apiKey = BuildConfig.NODE_SDK_API_KEY // chave do app ANDROID do provedor do flavor; nunca logar
         val sdk = if (apiKey.isBlank()) {
             Log.w(TAG, "Chave do SDK ${NodeSdkFactory.PROVIDER} ausente: o Vertal Node fica desligado neste build.")

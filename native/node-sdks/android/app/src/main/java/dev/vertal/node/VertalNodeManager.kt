@@ -19,7 +19,7 @@ import org.json.JSONObject
 import java.util.UUID
 
 /**
- * Vertal Node (Android), independente do SDK: recebe o [NodeSdk] do flavor (honeygain | cashraven).
+ * Vertal Node (Android), independente do SDK: recebe o [NodeSdk] do flavor (cashraven | honeygain | bright).
  *  - consentimento primeiro: activate() abre a tela de consentimento DO SDK (que nomeia o fornecedor);
  *  - opt-out fácil: optOut() (ligue a um interruptor sempre visível na tela principal);
  *  - heartbeat para a Edge Function vertal-node-heartbeat com o `provider` (crédito 1x/dia, no servidor).

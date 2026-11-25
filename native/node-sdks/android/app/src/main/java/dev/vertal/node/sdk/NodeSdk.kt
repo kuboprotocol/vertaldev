@@ -6,7 +6,7 @@ import android.app.Application
 /**
  * Interface comum dos SDKs de compartilhamento de banda do Vertal Node (Android).
  *
- * Só UM provedor entra em cada APK: o flavor de build escolhe (honeygain | cashraven), via
+ * Só UM provedor entra em cada APK: o flavor de build escolhe (cashraven, padrão | honeygain | bright), via
  * `-PNODE_SDK_PROVIDER` ou `NODE_SDK_PROVIDER`. Assim dois SDKs nunca disputam a mesma conexão
  * e não há conflito de exclusividade com os parceiros. Cada flavor fornece `NodeSdkFactory.create()`
  * em `src/<flavor>/java/dev/vertal/node/sdk/`.
@@ -44,12 +44,13 @@ interface NodeSdk {
 
 /** Provedores conhecidos, com a URL da doc. `enabled = false` = aguardando aprovação do parceiro. */
 enum class NodeSdkProvider(val id: String, val enabled: Boolean, val docsUrl: String) {
-    HONEYGAIN("honeygain", true, "https://developers.honeygain.com/docs/"),
+    // Aguardando aprovação do Honeygain: código intacto, fora do padrão (religar por config).
+    HONEYGAIN("honeygain", false, "https://developers.honeygain.com/docs/"),
     CASHRAVEN("cashraven", true, "https://cashraven.io/docs"),
     // TODO(pawns): aguardando aprovação do parceiro.
     PAWNS("pawns", false, "https://business.pawns.app/sdk"),
-    // TODO(bright): aguardando aprovação do parceiro.
-    BRIGHT("bright", false, "https://bright-sdk.com"),
+    // Adapter pronto (flavor `bright`), desligado até a Bright aprovar (status Implementation).
+    BRIGHT("bright", false, "https://docs.bright-sdk.com/integration-guides/android-sdk"),
     // TODO(infatica): aguardando aprovação do parceiro.
     INFATICA("infatica", false, "https://infatica-sdk.io"),
     // TODO(earnfm): aguardando aprovação do parceiro.

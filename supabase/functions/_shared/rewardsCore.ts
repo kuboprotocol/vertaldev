@@ -20,9 +20,16 @@ export interface RewardedVideoConfig {
 /** Provedores de SDK de banda conhecidos. pawns/bright/infatica/earnfm aguardam aprovação dos parceiros. */
 export const NODE_PROVIDERS = ["honeygain", "cashraven", "pawns", "bright", "infatica", "earnfm"] as const;
 export type NodeProvider = (typeof NODE_PROVIDERS)[number];
-/** Ligados por padrão (os outros só com VERTAL_NODE_PROVIDERS, depois do acordo com o parceiro). */
-export const DEFAULT_ENABLED_NODE_PROVIDERS: readonly NodeProvider[] = ["honeygain", "cashraven"];
-/** Heartbeat sem `provider` (apps antigos) = Honeygain. */
+/**
+ * Ligados por padrão (os outros só com VERTAL_NODE_PROVIDERS, depois do acordo com o parceiro).
+ * Honeygain fica de fora até a aprovação deles (código intacto; religar com
+ * VERTAL_NODE_PROVIDERS=cashraven,honeygain).
+ */
+export const DEFAULT_ENABLED_NODE_PROVIDERS: readonly NodeProvider[] = ["cashraven"];
+/**
+ * Heartbeat sem `provider` (apps antigos, que só tinham Honeygain) = Honeygain. Com o Honeygain fora
+ * de VERTAL_NODE_PROVIDERS, esses heartbeats são recusados com `provider_disabled`.
+ */
 export const LEGACY_NODE_PROVIDER: NodeProvider = "honeygain";
 
 export interface NodeConfig {
