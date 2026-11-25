@@ -51,3 +51,13 @@ describe('GitHub OAuth connector', () => {
     expect(save).toContain("scope: 'pat'")
   })
 })
+
+describe('github_connections save (legacy NOT NULL access_token column)', () => {
+  it('OAuth callback and PAT save never write the token in plain text, but fill the legacy column', () => {
+    for (const p of ['supabase/functions/github-callback/index.ts', 'supabase/functions/connector-credentials-save/index.ts']) {
+      const src = read(p)
+      expect(src).toContain("access_token: '',")
+      expect(src).not.toMatch(/access_token:\s*(accessToken|api_key)\b/)
+    }
+  })
+})

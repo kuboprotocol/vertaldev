@@ -84,6 +84,8 @@ Deno.serve(async (req) => {
     // Substitui a conexão anterior do usuário (inclusive uma feita por token/PAT).
     const { error: upsertErr } = await admin.from('github_connections').upsert({
       user_id: uid,
+      // Coluna legada em texto puro (NOT NULL, ninguém lê): fica vazia; o token vai só cifrado.
+      access_token: '',
       access_token_ciphertext: enc.ciphertext,
       access_token_iv: enc.iv,
       access_token_tag: enc.tag,
