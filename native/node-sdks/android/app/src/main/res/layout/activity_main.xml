@@ -26,6 +26,16 @@
             android:textColor="#A78BFA"
             android:textSize="12sp" />
 
+        <!-- Aparece só quando o app é aberto pelo deep link (vertalnode://open) -->
+        <TextView
+            android:id="@+id/link_info"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="#71717A"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
         <TextView
             android:id="@+id/disclosure"
             android:layout_width="match_parent"

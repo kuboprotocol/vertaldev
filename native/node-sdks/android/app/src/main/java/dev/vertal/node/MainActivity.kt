@@ -2,9 +2,11 @@ package dev.vertal.node
 
 import android.Manifest
 import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
@@ -33,6 +35,8 @@ class MainActivity : Activity() {
 
         findViewById<EditText>(R.id.device_id).setText(node.deviceId)
 
+        showLink(intent)
+
         findViewById<Button>(R.id.activate).setOnClickListener {
             if (!node.sdk.enabled) {
                 Toast.makeText(this, statusText(), Toast.LENGTH_LONG).show()
@@ -51,6 +55,28 @@ class MainActivity : Activity() {
             if (node.sdk.enabled) node.optOut()
             refresh()
         }
+    }
+
+    // launchMode="singleTop": um link novo com a tela já aberta chega aqui, não em onCreate.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        showLink(intent)
+    }
+
+    /**
+     * Deep link do vertal.js (vertalnode://open). Só mostra uma linha discreta: NÃO chama
+     * node.activate(). Compartilhar continua exigindo o toque em "Ativar" e o consentimento do parceiro.
+     */
+    private fun showLink(intent: Intent?) {
+        val line = findViewById<TextView>(R.id.link_info)
+        val link = if (intent?.action == Intent.ACTION_VIEW) DeepLink.parse(intent.dataString) else null
+        if (link == null) {
+            line.visibility = View.GONE
+            return
+        }
+        line.text = link.statusLine() + " · nada é ligado sem tocar em Ativar"
+        line.visibility = View.VISIBLE
     }
 
     override fun onResume() {

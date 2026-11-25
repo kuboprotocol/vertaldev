@@ -83,6 +83,7 @@ dependencies {
     // Comuns (manager + heartbeat)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    testImplementation("junit:junit:4.13.2") // DeepLinkTest (JVM puro): ./gradlew testCashravenDebugUnitTest
 
     // Honeygain: hgsdk.aar do dashboard (scripts/fetch-sdk.sh honeygain android), NÃO commitado.
     "honeygainImplementation"(files("libs/hgsdk.aar"))
