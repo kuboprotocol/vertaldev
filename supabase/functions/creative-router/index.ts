@@ -92,6 +92,8 @@ import { validatePublicUrl } from "../_shared/security.ts";
 import { wantsAuthKit } from "../_shared/vertalAuthKit.ts";
 import { decodeImageDataUrl, generateChatImage } from "../_shared/chatImage.ts";
 import { GMAIL_SECRETARY_COST } from "../_shared/gmailBilling.ts";
+// Agendador do Vertal Chat: desligado por padrão (VERTAL_CHAT_SCHEDULER_ENABLED + VERTAL_CHAT_SCHEDULER_USER_IDS).
+import { schedulerAllowed, wantsScheduler } from "../_shared/chatScheduler.ts";
 
 const InputSchema = z.object({
   messages: z.array(z.object({
@@ -736,6 +738,10 @@ async function handleAgentChat(
     huginn: huginnOn,
     authKit: authKitOn,
     fluxosApps,
+    // Só com a flag ligada para este usuário E a conversa falando de agendar/lembrar/gatilho; senão o prompt é o mesmo de antes.
+    ...(!delegated && schedulerAllowed((k) => Deno.env.get(k), user.id) && wantsScheduler([...all.slice(-6), ...results.slice(-4)])
+      ? { scheduler: true }
+      : {}),
   }) + (delegated ? DELEGATED_CHAT_PROMPT : "");
   const final = agent.data.final === true || brain.planPhase === "final";
   const convo = results.length
