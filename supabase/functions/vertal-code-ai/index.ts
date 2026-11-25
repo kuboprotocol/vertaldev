@@ -8,6 +8,7 @@
 //   POST {action:"image", prompt, images?}        → {images:[dataUrl], text, model, estimate}  (só com VERTAL_CODE_AI_MEDIA_ENABLED)
 //   POST {action:"video", prompt}                 → {job, model, estimate}; depois {action:"video_status", job}
 //   POST {action:"video_content", job}            → bytes do vídeo (quando o provedor não devolve link assinado)
+//   POST {action:"prospector", op, ...}           → Vertal Prospector (só com VERTAL_PROSPECTOR_ENABLED e o usuário em VERTAL_PROSPECTOR_USER_IDS)
 //
 // Liga só com VERTAL_CODE_AI_ENABLED=true (padrão: desligado → 404).
 // Com VERTAL_CODE_AI_USER_IDS (lista de ids separada por vírgula), só esses usuários; os demais recebem 404.
@@ -45,6 +46,10 @@ import {
 } from "../_shared/vertalCodeAi/router.ts";
 import { isSafePath } from "../_shared/vibeAgentCore.ts";
 import { type ModelReply, parseVcaTurn, runVertalCodeAi, type VcaEvent, type VcaPlan } from "../_shared/vertalCodeAi/core.ts";
+// Vertal Prospector (aditivo, desligado por padrão: VERTAL_PROSPECTOR_ENABLED + VERTAL_PROSPECTOR_USER_IDS).
+import { isProspectorEnabled } from "../_shared/vertalProspector/core.ts";
+import { handleProspector } from "../_shared/vertalProspector/handler.ts";
+import { getFreshAccessToken, loadAccount } from "../_shared/gmailToken.ts";
 
 // Cliente do Supabase e módulo TypeScript sem tipos gerados (mesmo padrão do vibe-code-agent).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -291,6 +296,30 @@ Deno.serve(async (req) => {
   }
   const action = body.action ?? "run";
   if (action === "status") return json(200, { enabled: true, allowed: true });
+
+  // Vertal Prospector: desligado (404) se o interruptor/lista não liberar este usuário. Não muda nada do resto.
+  if (action === "prospector") {
+    if (!isProspectorEnabled(env(), userId)) return json(404, { error: "vertal_prospector_disabled" });
+    const chain = buildChain(env(), { effort: "low", liveFreeIds: await liveFreeIds() });
+    if (!chain.length) return json(503, { error: "no_model_configured" });
+    try {
+      const r = await handleProspector(body, {
+        admin,
+        userId,
+        env: env(),
+        fetch,
+        callModel: (messages, o) => callChain(chain, messages as VcaChatMessage[], { ...o, effort: "low", deadline: Date.now() + 100_000 }),
+        gmailToken: async (accountId) => {
+          const acct = await loadAccount(admin, userId, accountId);
+          return { token: await getFreshAccessToken(admin, acct), email: acct.email };
+        },
+      });
+      return json(r.status, r.body);
+    } catch (e) {
+      console.error("[vertal-prospector] falhou:", e instanceof Error ? e.message : e);
+      return json(500, { error: "prospector_failed" });
+    }
+  }
   const origin = ORIGINS.includes(body.origin) ? body.origin : "vertal_code_ai";
 
   // Projeto do usuário (RLS decide se ele pode ver). Sem projeto = cofre pessoal (project_id nulo).

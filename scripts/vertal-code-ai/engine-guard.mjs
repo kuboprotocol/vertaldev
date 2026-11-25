@@ -69,7 +69,8 @@ export const PROTECTED = [
 export const FLAGGED = ['src/App.tsx', 'src/components/vertal-chat/VertalChat.tsx', 'src/components/vibe-code/VibeTopBar.tsx'];
 
 /** Toda linha adicionada nos FLAGGED precisa ser do VERTAL Code AI. */
-export const VCA_LINE = /VertalCodeAi|VertalCodeAI|VERTAL_CODE_AI|VERTAL Code AI/;
+// Vertal Prospector (módulo do VERTAL Code AI) também pode entrar nos FLAGGED, só atrás do próprio interruptor.
+export const VCA_LINE = /VertalCodeAi|VertalCodeAI|VERTAL_CODE_AI|VERTAL Code AI|VertalProspector|vertalProspector|VERTAL_PROSPECTOR/;
 
 const git = (args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 

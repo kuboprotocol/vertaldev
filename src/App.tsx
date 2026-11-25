@@ -16,6 +16,8 @@ import { shouldRedirect, buildTarget } from "@/lib/canonicalRedirect";
 import { VibePayDevGate } from "@/components/vibepay/VibePayDevGate";
 // VERTAL Code AI (aditivo, desligado por padrão: VITE_VERTAL_CODE_AI=true liga a rota).
 import { isVertalCodeAiEnabled, VERTAL_CODE_AI_ROUTE } from "@/lib/vertalCodeAi/client";
+// Vertal Prospector (aditivo, desligado por padrão: VITE_VERTAL_PROSPECTOR=true liga a rota; o servidor libera por usuário).
+import { isVertalProspectorEnabled, VERTAL_PROSPECTOR_ROUTE } from "@/lib/vertalProspector/client";
 
 // Lazy loading all pages
 const Index = lazy(() => import("./pages/Index"));
@@ -110,6 +112,7 @@ const GameManagerPage = lazy(() => import("./pages/GameManagerPage"));
 const GameScenePage = lazy(() => import("./pages/GameScenePage"));
 const CreativeChatPage = lazy(() => import("./pages/CreativeChatPage"));
 const VertalCodeAIPage = lazy(() => import("./pages/VertalCodeAIPage"));
+const VertalProspectorPage = lazy(() => import("./pages/VertalProspectorPage"));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -304,6 +307,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/domains" element={<ProtectedRoute><DomainsPage /></ProtectedRoute>} />
                 <Route path="/vibe-code" element={<ProtectedRoute><VibeCodePage /></ProtectedRoute>} />
                 {isVertalCodeAiEnabled() && <Route path={VERTAL_CODE_AI_ROUTE} element={<ProtectedRoute><VertalCodeAIPage /></ProtectedRoute>} />}
+                {isVertalProspectorEnabled() && <Route path={VERTAL_PROSPECTOR_ROUTE} element={<ProtectedRoute><VertalProspectorPage /></ProtectedRoute>} />}
                 <Route path="/affiliate-program" element={<ProtectedRoute><AffiliateProgramPage /></ProtectedRoute>} />
                 <Route path="/docs/mcp" element={<DocsMcpPage />} />
                 <Route path="/mcp" element={<ProtectedRoute><McpAccessPage /></ProtectedRoute>} />
