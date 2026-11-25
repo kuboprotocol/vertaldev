@@ -5,6 +5,8 @@
 // conectado (gmailToken/gmailOps), apps do Vertal Fluxos (fluxosAppsHandler, com
 // a cobrança de sempre) e o gateway de IA (runGateway). Nada aqui muda essas
 // peças: só as chama.
+import { registerSchedulerLangs } from "../_shared/chatSchedulerI18n.ts";
+import { SCHEDULER_LANG_DATA } from "../_shared/chatSchedulerLangs/index.ts";
 import { handleChatBrainOp } from "../_shared/chatBrain.ts";
 import { runGateway } from "../_shared/aiGateway.ts";
 import { getFreshAccessToken } from "../_shared/gmailToken.ts";
@@ -18,6 +20,9 @@ import {
   resolveLang, schedText, type SchedulerSpec,
   type Branches, type EmailTrigger, type NormalizedAppointment, type QuietHours, type Schedule, type SchedulerKind,
 } from "../_shared/chatScheduler.ts";
+
+// Textos fixos em todos os idiomas do Agendador (pt/en/es já vêm no módulo compartilhado).
+registerSchedulerLangs(SCHEDULER_LANG_DATA);
 
 // deno-lint-ignore no-explicit-any
 type Admin = any;

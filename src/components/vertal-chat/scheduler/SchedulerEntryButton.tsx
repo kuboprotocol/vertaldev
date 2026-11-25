@@ -5,7 +5,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { CalendarClock } from 'lucide-react';
 import { toast } from 'sonner';
 import { SCHEDULER_OPEN_EVENT, callScheduler, getSchedulerLangSetting, useSchedulerAccess } from '@/lib/chatScheduler/client';
-import { schedUi, schedulerUiLang } from '@/lib/chatScheduler/i18n';
+import { schedUi, schedulerUiLang, useSchedulerLangs } from '@/lib/chatScheduler/i18n';
 
 const SchedulerPanel = lazy(() => import('./SchedulerPanel'));
 
@@ -15,6 +15,8 @@ interface UnseenRun { id: string; status: string; output: string | null; error: 
 
 export function SchedulerEntryButton({ enabledOverride }: { enabledOverride?: boolean }) {
   const access = useSchedulerAccess(enabledOverride);
+  // Idiomas além de pt/en/es: baixados só quando o Agendador está liberado.
+  useSchedulerLangs(access === 'allowed');
   const [open, setOpen] = useState(false);
   const [unseen, setUnseen] = useState(0);
   const shown = useRef(new Set<string>());
@@ -57,6 +59,7 @@ export function SchedulerEntryButton({ enabledOverride }: { enabledOverride?: bo
         data-testid="scheduler-entry"
         onClick={() => { setOpen(true); setUnseen(0); }}
         title={U.name}
+        dir={U.dir}
         className="relative inline-flex items-center gap-1.5 rounded-full border border-border/60 px-3 py-1.5 text-xs font-medium text-foreground/80 hover:border-primary/50"
       >
         <CalendarClock className="h-3.5 w-3.5" aria-hidden />

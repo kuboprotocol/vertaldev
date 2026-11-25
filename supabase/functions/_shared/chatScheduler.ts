@@ -6,6 +6,14 @@
 // datas em português, cálculo do próximo disparo por fuso, cron, horário de
 // silêncio, backoff, resumo do cartão de confirmação e classificação de e-mail.
 
+import {
+  SCHED_LANGS, detectLatinOther, detectScript, intlLocale, langMeta, normLang, schedLang, schedTemplates, schedText,
+} from "./chatSchedulerI18n.ts";
+export {
+  SCHED_LANGS, approvalLabels, intlLocale, isRtl, normLang, registerSchedulerLangs, schedLang, schedText, schedUiText,
+  type ApprovalLabels, type SchedText, type SchedUiText,
+} from "./chatSchedulerI18n.ts";
+
 export const SCHEDULER_TOOL_NAME = "agendador" as const;
 
 export const SCHEDULER_LIMITS = {
@@ -258,56 +266,38 @@ export function sanitizeChangesInput(raw: unknown): SchedulerSpec | null {
 //
 // Ordem: ajuste "Idioma" do usuário (≠ automático) → idioma da mensagem com que ele
 // criou a tarefa (spec.lang) → navegador na criação (spec.locale) → perfil → pt-BR.
-// Textos fixos existem em pt/en/es; a IA responde em qualquer idioma guardado.
+// Textos fixos: dicionário único em `chatSchedulerI18n.ts` (65 idiomas/variantes; pt/en/es
+// sempre carregados, os demais registrados pela edge function e, no navegador, sob demanda).
 
+/** Família do leitor de datas determinístico (pt/en/es); os demais idiomas mandam "at" em ISO. */
 export type UiLang = "pt" | "en" | "es";
 export const DEFAULT_LANG = "pt-BR";
-export const SCHEDULER_LANG_OPTIONS = ["auto", "pt-BR", "en", "es"] as const;
-
-const LANG_BY_NAME: Record<string, string> = {
-  portugues: "pt-BR", "português": "pt-BR", portuguese: "pt-BR", english: "en", ingles: "en", "inglês": "en", "inglés": "en",
-  spanish: "es", espanol: "es", "español": "es", espanhol: "es",
-};
-
-/** "pt", "pt_BR", "en-US", "es-419", "fr", "English" → "pt-BR" / "en" / "es" / "fr". "auto"/inválido → null. */
-export function normLang(v: unknown): string | null {
-  if (typeof v !== "string") return null;
-  const s = v.trim().replace(/_/g, "-").toLowerCase();
-  if (!s || s === "auto" || s === "automatico" || s === "automático") return null;
-  if (LANG_BY_NAME[s]) return LANG_BY_NAME[s];
-  const m = /^([a-z]{2,3})(?:-([a-z0-9]{2,8}))*$/.exec(s);
-  if (!m) return null;
-  const primary = m[1];
-  if (primary === "pt") return /^pt-pt\b/.test(s) ? "pt-PT" : "pt-BR";
-  return primary;
-}
+export const SCHEDULER_LANG_OPTIONS = ["auto", ...SCHED_LANGS.map((m) => m.code)] as const;
 
 export function uiLang(lang: string | null | undefined): UiLang {
   const l = (lang ?? DEFAULT_LANG).toLowerCase();
   return l.startsWith("pt") ? "pt" : l.startsWith("es") ? "es" : l.startsWith("en") ? "en" : lang ? "en" : "pt";
 }
 
-/** Locale do Intl para datas no idioma do usuário. */
-export function intlLocale(lang: string | null | undefined): string {
-  const l = lang ?? DEFAULT_LANG;
-  if (l.toLowerCase().startsWith("pt")) return l === "pt-PT" ? "pt-PT" : "pt-BR";
-  if (l === "en") return "en-US";
-  if (l === "es") return "es-ES";
-  return l;
+/** O leitor de datas em texto ("amanhã às 9h", "in 2 minutes", "mañana a las 9") cobre este idioma? */
+export function hasDeterministicDates(lang: string | null | undefined): boolean {
+  if (!lang) return true;
+  const l = lang.toLowerCase();
+  return l.startsWith("pt") || l.startsWith("en") || l.startsWith("es");
 }
 
-const LANG_NAMES: Record<string, string> = {
+const LEGACY_LANG_NAMES: Record<string, string> = {
   "pt-BR": "português do Brasil", "pt-PT": "português de Portugal", en: "inglês (English)", es: "espanhol (español)",
   fr: "francês (français)", de: "alemão (Deutsch)", it: "italiano", ja: "japonês (日本語)", zh: "chinês (中文)",
 };
-const NATIVE_NAMES: Record<string, string> = { "pt-BR": "Português (Brasil)", "pt-PT": "Português", en: "English", es: "Español", fr: "Français", de: "Deutsch", it: "Italiano" };
 export function nativeLangName(lang: string): string {
-  return NATIVE_NAMES[lang] ?? lang;
+  return langMeta(lang)?.native ?? lang;
 }
 
+/** Nome do idioma em português (vai no prompt do executor). */
 export function langName(lang: string | null | undefined): string {
   const l = lang ?? DEFAULT_LANG;
-  return LANG_NAMES[l] ?? l;
+  return LEGACY_LANG_NAMES[l] ?? langMeta(l)?.pt ?? l;
 }
 
 const LANG_WORDS: Record<UiLang, string[]> = {
@@ -317,10 +307,16 @@ const LANG_WORDS: Record<UiLang, string[]> = {
 };
 const LANG_SETS: Record<UiLang, Set<string>> = { pt: new Set(LANG_WORDS.pt), en: new Set(LANG_WORDS.en), es: new Set(LANG_WORDS.es) };
 
-/** Idioma provável de um texto curto (pt-BR / en / es) ou null se não der para dizer. */
+/**
+ * Idioma provável de um texto curto ou null se não der para dizer. Primeiro a escrita (cirílico,
+ * árabe, CJK, hebraico, devanágari…); depois pt/en/es como antes; outro idioma latino só quando as
+ * palavras dele pesam mais que as de pt/en/es. O modelo manda "lang" na ação; isto é só reserva.
+ */
 export function detectLang(text: string | null | undefined): string | null {
   const t = (text ?? "").toLowerCase();
   if (!t.trim()) return null;
+  const script = detectScript(t);
+  if (script) return script;
   const score: Record<UiLang, number> = { pt: 0, en: 0, es: 0 };
   if (/[ãõç]/.test(t)) score.pt += 2;
   if (/[ñ¿¡]/.test(t)) score.es += 2;
@@ -333,6 +329,8 @@ export function detectLang(text: string | null | undefined): string | null {
     }
   }
   const ranked = (Object.entries(score) as Array<[UiLang, number]>).sort((a, b) => b[1] - a[1]);
+  const other = detectLatinOther(t);
+  if (other && other.score >= 3 && other.score > ranked[0][1]) return other.lang;
   if (ranked[0][1] < 2 || ranked[0][1] === ranked[1][1]) return null;
   return ranked[0][0] === "pt" ? "pt-BR" : ranked[0][0];
 }
@@ -343,122 +341,6 @@ export function resolveLang(o: {
 }): string {
   return normLang(o.setting) ?? normLang(o.spec?.lang) ?? detectLang(o.text) ?? normLang(o.spec?.locale) ?? normLang(o.browser)
     ?? normLang(o.profile) ?? DEFAULT_LANG;
-}
-
-/** Textos fixos do Agendador (o que não passa pela IA). */
-export const SCHED_TEXT = {
-  pt: {
-    dow: ["dom.", "seg.", "ter.", "qua.", "qui.", "sex.", "sáb."],
-    at: "às",
-    once: "uma vez", daily: "todo dia às", weekdays: "dias úteis às", weeklyPrefix: "toda", monthly: (d: number, t: string) => `todo mês, dia ${d}, às ${t}`,
-    everyH: (n: number) => `a cada ${n} h`, everyMin: (n: number) => `a cada ${n} min`, cron: "regra", email: (n: number) => `ao chegar o e-mail (confere a cada ${n} min)`,
-    kind: { task: "Tarefa agendada", reminder: "Lembrete", appointment: "Consulta/compromisso", email_trigger: "Gatilho de e-mail" } as Record<SchedulerKind, string>,
-    when: "Quando", until: "até", place: "Local", agenda: "Agenda", agendaGoogle: "Google Agenda conectada",
-    agendaVertal: "Agenda do Vertal (com link para adicionar ao Google Agenda)", reminderBefore: (n: number) => `Lembrete: ${n} min antes`,
-    next: "próxima", from: "de", subject: "assunto", search: "busca",
-    trigger: (p: string) => `Gatilho: e-mail ${p} (só e-mails que chegarem a partir de agora; cada e-mail dispara uma vez)`,
-    criteria: "Critério", ifPos: "Se positivo", ifNeg: "Se negativo", ifNeu: "Se neutro", todo: "Fazer",
-    sendTo: "Pode enviar e-mail para", noSend: "Não envia e-mail a terceiros",
-    appActions: "Pode executar ações nos seus apps conectados (Vertal Fluxos; custo normal de cada ação)",
-    notifyEmail: "Também avisa você por e-mail", tz: "Fuso", language: "Idioma",
-    errFromSubject: "Diga de quem ou com que assunto é o e-mail que dispara a tarefa.",
-    errBranches: "Diga o que fazer quando o e-mail chegar (se positivo / se negativo).",
-    errApptTime: "Faltou o dia e a hora da consulta.", errPast: "Esse horário já passou.",
-    errCron: "Expressão cron inválida (use 5 campos: minuto hora dia mês dia-da-semana).",
-    errWhen: "Não entendi quando. Diga, por exemplo, \"amanhã às 9h\" ou \"toda segunda às 8h\".",
-    errNoNext: "Não há próximo horário para essa regra.",
-    noTime: (t: string) => `Sem hora: usei ${t}.`, remindSoon: "O lembrete ficou para daqui a 1 minuto (a consulta está perto).",
-    defaultTask: "Tarefa", defaultAppt: "Consulta",
-    reminder: "Lembrete", apptReminder: "Lembrete de compromisso", inGoogle: "Está no seu Google Agenda.", addGoogle: "Adicionar ao Google Agenda",
-    taskHeader: "Tarefa agendada",
-    failed: (title: string, n: number, err: string) => `⚠️ **A tarefa "${title}" falhou** depois de ${n} novas tentativas.\nMotivo: ${err}\nVocê pode rodar de novo em Tarefas agendadas.`,
-    failSubject: "Falha", noResult: "A IA não devolveu resultado.",
-    needsGmail: (title: string) => `⚠️ O gatilho "${title}" precisa do Gmail conectado. Conecte em Conectores → Gmail e retome a tarefa em Tarefas agendadas.`,
-    gmailMissing: "O Gmail não está conectado: conecte em Conectores → Gmail para o gatilho funcionar.",
-    trig: "Gatilho", mailArrived: (from: string, subj: string) => `Chegou e-mail de ${from} — "${subj}".`,
-    classified: "Classificado como", noAction: "Nenhuma ação definida para esse caso.",
-    actionFailed: (i: string, e: string) => `⚠️ A ação "${i}" falhou: ${e}`, noNewMail: "Nenhum e-mail novo que combine com o gatilho.",
-    sentiment: { positive: "positivo", negative: "negativo", neutral: "neutro" } as Record<Sentiment, string>,
-    emailFooter: "— Tarefas agendadas do Vertal Chat",
-    nothing: "Faltou dizer o que agendar.", tooMany: (n: number) => `Você já tem ${n} tarefas; apague alguma antes.`,
-    pastEdit: "Esse horário já passou. Edite a data para reativar.",
-  },
-  en: {
-    dow: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-    at: "at",
-    once: "once", daily: "every day at", weekdays: "weekdays at", weeklyPrefix: "every", monthly: (d: number, t: string) => `every month on day ${d} at ${t}`,
-    everyH: (n: number) => `every ${n} h`, everyMin: (n: number) => `every ${n} min`, cron: "rule", email: (n: number) => `when the email arrives (checks every ${n} min)`,
-    kind: { task: "Scheduled task", reminder: "Reminder", appointment: "Appointment", email_trigger: "Email trigger" } as Record<SchedulerKind, string>,
-    when: "When", until: "until", place: "Location", agenda: "Calendar", agendaGoogle: "Connected Google Calendar",
-    agendaVertal: "Vertal calendar (with a link to add it to Google Calendar)", reminderBefore: (n: number) => `Reminder: ${n} min before`,
-    next: "next", from: "from", subject: "subject", search: "search",
-    trigger: (p: string) => `Trigger: email ${p} (only emails arriving from now on; each email fires once)`,
-    criteria: "Criteria", ifPos: "If positive", ifNeg: "If negative", ifNeu: "If neutral", todo: "Do",
-    sendTo: "May send email to", noSend: "Does not email anyone else",
-    appActions: "May run actions in your connected apps (Vertal Fluxos; normal cost per action)",
-    notifyEmail: "Also notifies you by email", tz: "Time zone", language: "Language",
-    errFromSubject: "Say who the triggering email is from or what its subject is.",
-    errBranches: "Say what to do when the email arrives (if positive / if negative).",
-    errApptTime: "The appointment's date and time are missing.", errPast: "That time has already passed.",
-    errCron: "Invalid cron expression (use 5 fields: minute hour day month weekday).",
-    errWhen: "I didn't understand when. Say, for example, \"tomorrow at 9am\" or \"every Monday at 8am\".",
-    errNoNext: "There is no next time for that rule.",
-    noTime: (t: string) => `No time given: used ${t}.`, remindSoon: "The reminder was set for 1 minute from now (the appointment is close).",
-    defaultTask: "Task", defaultAppt: "Appointment",
-    reminder: "Reminder", apptReminder: "Appointment reminder", inGoogle: "It's in your Google Calendar.", addGoogle: "Add to Google Calendar",
-    taskHeader: "Scheduled task",
-    failed: (title: string, n: number, err: string) => `⚠️ **The task "${title}" failed** after ${n} retries.\nReason: ${err}\nYou can run it again in Scheduled tasks.`,
-    failSubject: "Failed", noResult: "The AI returned no result.",
-    needsGmail: (title: string) => `⚠️ The trigger "${title}" needs Gmail connected. Connect it in Connectors → Gmail and resume the task in Scheduled tasks.`,
-    gmailMissing: "Gmail is not connected: connect it in Connectors → Gmail for the trigger to work.",
-    trig: "Trigger", mailArrived: (from: string, subj: string) => `Email from ${from} arrived — "${subj}".`,
-    classified: "Classified as", noAction: "No action set for this case.",
-    actionFailed: (i: string, e: string) => `⚠️ The action "${i}" failed: ${e}`, noNewMail: "No new email matches the trigger.",
-    sentiment: { positive: "positive", negative: "negative", neutral: "neutral" } as Record<Sentiment, string>,
-    emailFooter: "— Vertal Chat scheduled tasks",
-    nothing: "You didn't say what to schedule.", tooMany: (n: number) => `You already have ${n} tasks; delete one first.`,
-    pastEdit: "That time has already passed. Edit the date to reactivate it.",
-  },
-  es: {
-    dow: ["dom.", "lun.", "mar.", "mié.", "jue.", "vie.", "sáb."],
-    at: "a las",
-    once: "una vez", daily: "todos los días a las", weekdays: "días laborables a las", weeklyPrefix: "cada", monthly: (d: number, t: string) => `cada mes, día ${d}, a las ${t}`,
-    everyH: (n: number) => `cada ${n} h`, everyMin: (n: number) => `cada ${n} min`, cron: "regla", email: (n: number) => `al llegar el correo (revisa cada ${n} min)`,
-    kind: { task: "Tarea programada", reminder: "Recordatorio", appointment: "Cita", email_trigger: "Disparador de correo" } as Record<SchedulerKind, string>,
-    when: "Cuándo", until: "hasta", place: "Lugar", agenda: "Agenda", agendaGoogle: "Google Calendar conectado",
-    agendaVertal: "Agenda de Vertal (con enlace para añadir a Google Calendar)", reminderBefore: (n: number) => `Recordatorio: ${n} min antes`,
-    next: "próxima", from: "de", subject: "asunto", search: "búsqueda",
-    trigger: (p: string) => `Disparador: correo ${p} (solo correos que lleguen desde ahora; cada correo dispara una vez)`,
-    criteria: "Criterio", ifPos: "Si es positivo", ifNeg: "Si es negativo", ifNeu: "Si es neutro", todo: "Hacer",
-    sendTo: "Puede enviar correo a", noSend: "No envía correos a terceros",
-    appActions: "Puede ejecutar acciones en tus apps conectadas (Vertal Fluxos; costo normal de cada acción)",
-    notifyEmail: "También te avisa por correo", tz: "Zona horaria", language: "Idioma",
-    errFromSubject: "Di de quién es o qué asunto tiene el correo que dispara la tarea.",
-    errBranches: "Di qué hacer cuando llegue el correo (si es positivo / si es negativo).",
-    errApptTime: "Falta el día y la hora de la cita.", errPast: "Esa hora ya pasó.",
-    errCron: "Expresión cron no válida (usa 5 campos: minuto hora día mes día-de-la-semana).",
-    errWhen: "No entendí cuándo. Di, por ejemplo, \"mañana a las 9\" o \"cada lunes a las 8\".",
-    errNoNext: "No hay próxima hora para esa regla.",
-    noTime: (t: string) => `Sin hora: usé ${t}.`, remindSoon: "El recordatorio quedó para dentro de 1 minuto (la cita está cerca).",
-    defaultTask: "Tarea", defaultAppt: "Cita",
-    reminder: "Recordatorio", apptReminder: "Recordatorio de cita", inGoogle: "Está en tu Google Calendar.", addGoogle: "Añadir a Google Calendar",
-    taskHeader: "Tarea programada",
-    failed: (title: string, n: number, err: string) => `⚠️ **La tarea "${title}" falló** después de ${n} reintentos.\nMotivo: ${err}\nPuedes ejecutarla de nuevo en Tareas programadas.`,
-    failSubject: "Falló", noResult: "La IA no devolvió resultado.",
-    needsGmail: (title: string) => `⚠️ El disparador "${title}" necesita Gmail conectado. Conéctalo en Conectores → Gmail y reanuda la tarea en Tareas programadas.`,
-    gmailMissing: "Gmail no está conectado: conéctalo en Conectores → Gmail para que el disparador funcione.",
-    trig: "Disparador", mailArrived: (from: string, subj: string) => `Llegó un correo de ${from} — "${subj}".`,
-    classified: "Clasificado como", noAction: "No hay acción definida para este caso.",
-    actionFailed: (i: string, e: string) => `⚠️ La acción "${i}" falló: ${e}`, noNewMail: "Ningún correo nuevo coincide con el disparador.",
-    sentiment: { positive: "positivo", negative: "negativo", neutral: "neutro" } as Record<Sentiment, string>,
-    emailFooter: "— Tareas programadas de Vertal Chat",
-    nothing: "Faltó decir qué programar.", tooMany: (n: number) => `Ya tienes ${n} tareas; borra alguna antes.`,
-    pastEdit: "Esa hora ya pasó. Edita la fecha para reactivarla.",
-  },
-} as const;
-
-export function schedText(lang: string | null | undefined) {
-  return SCHED_TEXT[uiLang(lang)];
 }
 
 // ─── Fuso horário (sem bibliotecas) ──────────────────────────────────────
@@ -533,6 +415,30 @@ export function parseLocalIso(s: string, tz: string): number | null {
   const [y, mo, d, h, mi] = [+m[1], +m[2], +m[3], m[4] ? +m[4] : 9, m[5] ? +m[5] : 0];
   if (mo < 1 || mo > 12 || d < 1 || d > 31 || h > 23 || mi > 59) return null;
   return zonedToUtc(y, mo, d, h, mi, tz);
+}
+
+export const SCHEDULER_MAX_AHEAD_MS = 5 * 366 * 86_400_000;
+const ISO_STRICT_RE = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,3})?)?)?(Z|[+-]\d{2}:?\d{2})?$/i;
+
+/**
+ * Horário explícito vindo do modelo (idiomas sem leitor de datas): ISO 8601 estrito, data real,
+ * fuso válido (offset ou o `tz` da tarefa) e até 5 anos à frente. Inválido → null.
+ */
+export function parseExplicitIso(s: string, tz: string, now: number): number | null {
+  const m = ISO_STRICT_RE.exec(s.trim());
+  if (!m) return null;
+  const [y, mo, d] = [+m[1], +m[2], +m[3]];
+  const h = m[4] ? +m[4] : 9, mi = m[5] ? +m[5] : 0;
+  if (mo < 1 || mo > 12 || d < 1 || h > 23 || mi > 59) return null;
+  const real = new Date(Date.UTC(y, mo - 1, d));
+  if (real.getUTCMonth() !== mo - 1 || real.getUTCDate() !== d) return null;
+  const ms = m[7] ? Date.parse(m[4] ? s.trim().replace(" ", "T") : `${m[1]}-${m[2]}-${m[3]}T09:00${m[7]}`) : zonedToUtc(y, mo, d, h, mi, tz);
+  if (!Number.isFinite(ms) || ms > now + SCHEDULER_MAX_AHEAD_MS) return null;
+  return ms;
+}
+
+export function isValidTimezone(tz: unknown): boolean {
+  return typeof tz === "string" && !!tz && validTimezone(tz) === tz;
 }
 
 // ─── Cron (5 campos: minuto hora dia mês dia-da-semana) ──────────────────
@@ -874,8 +780,13 @@ function repeatToSchedule(r: RepeatSpec, tz: string, now: number): Schedule | nu
 
 /** Converte o pedido do modelo numa tarefa pronta para salvar (ou explica o que faltou). */
 export function normalizeSpec(spec: SchedulerSpec, now: number, userTz?: string, lang?: string): NormalizeResult {
-  const tz = validTimezone(spec.timezone ?? userTz);
+  const tz = isValidTimezone(spec.timezone) ? spec.timezone! : validTimezone(userTz);
   const L = schedText(lang);
+  // Idiomas sem leitor de datas: o modelo manda "at" em ISO 8601 (de preferência com fuso).
+  // O texto de "when" só é lido se estiver em pt/en/es; senão, pede o horário explícito.
+  const strict = !hasDeterministicDates(lang);
+  const whenText = (w: string | undefined) => (w && (!strict || hasDeterministicDates(detectLang(w) ?? lang)) ? w : "");
+  const isoAt = (v: string) => (strict ? parseExplicitIso(v, tz, now) : parseLocalIso(v, tz));
   const noteL = (n: string) => n.replace(/^Sem hora: usei (\d\d:\d\d)\.$/, (_m, t: string) => L.noTime(t));
   const notes: string[] = [];
   const kind: SchedulerKind = spec.kind ?? (spec.trigger ? "email_trigger" : spec.appointment ? "appointment" : spec.prompt ? "task" : "reminder");
@@ -893,8 +804,8 @@ export function normalizeSpec(spec: SchedulerSpec, now: number, userTz?: string,
   } else if (kind === "appointment") {
     const ap = spec.appointment ?? {};
     const startText = ap.start ?? spec.at ?? spec.when ?? "";
-    let start = /^\d{4}-\d{2}-\d{2}/.test(startText) ? parseLocalIso(startText, tz) : null;
-    if (start === null) {
+    let start = /^\d{4}-\d{2}-\d{2}/.test(startText) ? isoAt(startText) : null;
+    if (start === null && whenText(startText)) {
       const w = parseWhen(startText, now, tz, lang);
       if (w?.schedule.type === "once") start = Date.parse(w.schedule.at);
       if (w?.note) notes.push(noteL(w.note));
@@ -925,11 +836,11 @@ export function normalizeSpec(spec: SchedulerSpec, now: number, userTz?: string,
       schedule = repeatToSchedule(spec.repeat, tz, now);
     }
     if (!schedule && spec.at) {
-      const at = parseLocalIso(spec.at, tz);
+      const at = isoAt(spec.at);
       if (at !== null) schedule = { type: "once", at: new Date(at).toISOString() };
     }
-    if (!schedule && spec.when) {
-      const w = parseWhen(spec.when, now, tz, lang);
+    if (!schedule && whenText(spec.when)) {
+      const w = parseWhen(spec.when!, now, tz, lang);
       if (w) {
         schedule = w.schedule;
         if (w.note) notes.push(noteL(w.note));
@@ -965,34 +876,72 @@ export function normalizeSpec(spec: SchedulerSpec, now: number, userTz?: string,
 
 const hhmm = (p: LocalParts) => `${String(p.h).padStart(2, "0")}:${String(p.mi).padStart(2, "0")}`;
 
-/** "qua. 25/11 às 09:00" (pt) · "Wed 11/25 at 09:00" (en) · "mié. 25/11 a las 09:00" (es). */
-export function formatLocal(ms: number, tz: string, lang?: string): string {
-  const p = localParts(ms, tz);
+const intlCache = new Map<string, Intl.DateTimeFormat>();
+function intlFmt(loc: string, tz: string, opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = `${loc}|${tz}|${JSON.stringify(opts)}`;
+  let f = intlCache.get(key);
+  if (!f) {
+    try {
+      f = new Intl.DateTimeFormat(loc, { timeZone: tz, ...opts });
+    } catch {
+      f = new Intl.DateTimeFormat("en-US", { timeZone: tz, ...opts });
+    }
+    intlCache.set(key, f);
+  }
+  return f;
+}
+
+/** Nome curto do dia da semana (0 = domingo) no idioma: fixo em pt/en/es, Intl nos demais. */
+export function weekdayName(dow: number, lang?: string): string {
   const L = schedText(lang);
-  const dd = String(p.d).padStart(2, "0"), mm = String(p.mo).padStart(2, "0");
-  const date = uiLang(lang) === "en" ? `${mm}/${dd}` : `${dd}/${mm}`;
-  return `${L.dow[p.dow]} ${date} ${L.at} ${hhmm(p)}`;
+  if (L.dow.length === 7) return L.dow[dow];
+  // 2023-01-01 foi um domingo.
+  return intlFmt(L.intl, "UTC", { weekday: "short" }).format(new Date(Date.UTC(2023, 0, 1 + dow, 12)));
+}
+
+/** "qua. 25/11 às 09:00" (pt) · "Wed 11/25 at 09:00" (en) · "mié. 25/11 a las 09:00" (es) · Intl nos demais idiomas. */
+export function formatLocal(ms: number, tz: string, lang?: string): string {
+  const L = schedText(lang);
+  if (L.dow.length === 7) {
+    const p = localParts(ms, tz);
+    const dd = String(p.d).padStart(2, "0"), mm = String(p.mo).padStart(2, "0");
+    const date = uiLang(lang) === "en" ? `${mm}/${dd}` : `${dd}/${mm}`;
+    return `${L.dow[p.dow]} ${date} ${L.at} ${hhmm(p)}`;
+  }
+  return intlFmt(L.intl, tz, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(ms));
 }
 
 export function formatLocalTime(ms: number, tz: string): string {
   return hhmm(localParts(ms, tz));
 }
 
+function joinList(items: string[], lang?: string): string {
+  const L = schedText(lang);
+  if (L.dow.length === 7) return items.join(", ");
+  try {
+    // Intl.ListFormat (ES2021) existe no Deno e nos navegadores atuais; o tipo pode faltar no lib do TS do app.
+    const LF = (Intl as unknown as { ListFormat?: new (l: string, o: Record<string, string>) => { format(x: string[]): string } }).ListFormat;
+    return LF ? new LF(L.intl, { style: "narrow", type: "unit" }).format(items) : items.join(", ");
+  } catch {
+    return items.join(", ");
+  }
+}
+
 export function describeSchedule(s: Schedule, tz: string, lang?: string): string {
   const L = schedText(lang);
   switch (s.type) {
-    case "once": return `${L.once}, ${formatLocal(Date.parse(s.at), tz, lang)}`;
-    case "daily": return `${L.daily} ${s.time}`;
+    case "once": return L.onceT(formatLocal(Date.parse(s.at), tz, lang));
+    case "daily": return L.dailyT(s.time);
     case "weekly":
-      return s.days.join(",") === "1,2,3,4,5" ? `${L.weekdays} ${s.time}` : `${L.weeklyPrefix} ${s.days.map((d) => L.dow[d]).join(", ")} ${L.at} ${s.time}`;
+      return s.days.join(",") === "1,2,3,4,5" ? L.weekdaysT(s.time) : L.weeklyT(joinList(s.days.map((d) => weekdayName(d, lang)), lang), s.time);
     case "monthly": return L.monthly(s.day, s.time);
     case "interval": return s.minutes % 60 === 0 ? L.everyH(s.minutes / 60) : L.everyMin(s.minutes);
-    case "cron": return `${L.cron} ${s.expr}`;
+    case "cron": return L.cronT(s.expr);
     case "email": return L.email(s.every_min);
   }
 }
 
-export const KIND_LABEL_PT: Record<SchedulerKind, string> = SCHED_TEXT.pt.kind;
+export const KIND_LABEL_PT: Record<SchedulerKind, string> = schedText("pt-BR").kind;
 
 /** Linhas do cartão de confirmação (o que, quando, gatilho, ramos, permissões), no idioma do usuário. */
 export function summaryLines(t: NormalizedTask, opts: { calendar?: "google" | "vertal"; lang?: string } = {}): string[] {
@@ -1137,43 +1086,16 @@ export function hasCalendarScope(scope: string | null | undefined): boolean {
 
 // ─── Modelos prontos ─────────────────────────────────────────────────────
 
-export const SCHEDULER_TEMPLATES: Array<{ id: string; label: string; example: string }> = [
-  { id: "reminder", label: "Lembrete", example: "Me lembre amanhã às 9h de pagar o boleto" },
-  { id: "daily_news", label: "Resumo diário", example: "Todo dia às 8h me mande as 5 principais notícias de tecnologia" },
-  { id: "weekly_report", label: "Relatório semanal", example: "Toda segunda às 9h pesquise o preço do dólar e me dê um resumo da semana" },
-  { id: "appointment", label: "Consulta", example: "Agende uma consulta no dentista sexta às 15h e me lembre 1 hora antes" },
-  { id: "email_approval", label: "E-mail de aprovação", example: "Quando eu receber um e-mail do RH com assunto proposta: se for aprovado, me avise e crie um lembrete para assinar; se for recusado, me avise" },
-  { id: "payment", label: "Pagamento", example: "Quando chegar e-mail do banco sobre pagamento: se confirmado, me avise; se falhou, me avise com urgência" },
-];
-
-const SCHEDULER_TEMPLATES_I18N: Record<Exclude<UiLang, "pt">, Array<{ id: string; label: string; example: string }>> = {
-  en: [
-    { id: "reminder", label: "Reminder", example: "Remind me tomorrow at 9am to pay the bill" },
-    { id: "daily_news", label: "Daily digest", example: "Every day at 8am send me the top 5 tech news stories" },
-    { id: "weekly_report", label: "Weekly report", example: "Every Monday at 9am check the dollar exchange rate and give me a weekly summary" },
-    { id: "appointment", label: "Appointment", example: "Schedule a dentist appointment on Friday at 3pm and remind me 1 hour before" },
-    { id: "email_approval", label: "Approval email", example: "When I get an email from HR with subject offer: if approved, tell me and create a reminder to sign; if rejected, tell me" },
-    { id: "payment", label: "Payment", example: "When the bank emails about a payment: if confirmed, tell me; if it failed, alert me urgently" },
-  ],
-  es: [
-    { id: "reminder", label: "Recordatorio", example: "Recuérdame mañana a las 9 pagar la factura" },
-    { id: "daily_news", label: "Resumen diario", example: "Todos los días a las 8 envíame las 5 noticias de tecnología más importantes" },
-    { id: "weekly_report", label: "Informe semanal", example: "Cada lunes a las 9 busca el precio del dólar y dame un resumen de la semana" },
-    { id: "appointment", label: "Cita", example: "Agenda una cita con el dentista el viernes a las 15 y recuérdame 1 hora antes" },
-    { id: "email_approval", label: "Correo de aprobación", example: "Cuando reciba un correo de RR. HH. con asunto propuesta: si es aprobada, avísame y crea un recordatorio para firmar; si es rechazada, avísame" },
-    { id: "payment", label: "Pago", example: "Cuando llegue un correo del banco sobre un pago: si se confirmó, avísame; si falló, avísame con urgencia" },
-  ],
-};
+export const SCHEDULER_TEMPLATES: Array<{ id: string; label: string; example: string }> = schedTemplates("pt-BR");
 
 export function templatesFor(lang?: string | null): Array<{ id: string; label: string; example: string }> {
-  const l = uiLang(lang);
-  return l === "pt" ? SCHEDULER_TEMPLATES : SCHEDULER_TEMPLATES_I18N[l];
+  return schedTemplates(lang ? schedLang(lang) : "pt-BR");
 }
 
 // ─── Prompt do Vertal Chat (só entra com a flag ligada) ──────────────────
 
 export const SCHEDULER_TOOL_PROMPT =
-  `- {"tool":"agendador","op":"create","kind":"task|reminder|appointment|email_trigger","title":"curto","prompt":"o que fazer quando disparar","when":"quando em português (\\"amanhã às 9h\\", \\"toda segunda às 8h\\", \\"daqui a 10 minutos\\")","at":"YYYY-MM-DDTHH:mm (opcional, local)","repeat":{"every":"day|week|weekdays|month|hour|minutes","interval":1,"days":[1],"time":"08:00"},"cron":"0 8 * * 1-5","appointment":{"title":"","start":"YYYY-MM-DDTHH:mm","duration_min":60,"location":"","remind_before_min":60},"trigger":{"from":"","subject":"","criteria":"o que é positivo/negativo"},"branches":{"positive":"","negative":""},"send_to":["e-mail"],"notify_email":false,"allow_app_actions":false,"lang":"pt-BR|en|es|… (idioma da mensagem do usuário)"} → Tarefas agendadas do Vertal Chat (grátis; o usuário confirma num cartão antes de criar). Outras ops: list | history | pause | resume | delete | run_now | update ("changes":{...}) | templates | agenda, com "id" ou "name".`;
+  `- {"tool":"agendador","op":"create","kind":"task|reminder|appointment|email_trigger","title":"curto","prompt":"o que fazer quando disparar","when":"quando em português (\\"amanhã às 9h\\", \\"toda segunda às 8h\\", \\"daqui a 10 minutos\\")","at":"YYYY-MM-DDTHH:mm (local) ou ISO 8601 com fuso, ex. 2026-11-26T09:00:00+01:00","timezone":"IANA, ex. Europe/Paris (opcional)","repeat":{"every":"day|week|weekdays|month|hour|minutes","interval":1,"days":[1],"time":"08:00"},"cron":"0 8 * * 1-5","appointment":{"title":"","start":"YYYY-MM-DDTHH:mm","duration_min":60,"location":"","remind_before_min":60},"trigger":{"from":"","subject":"","criteria":"o que é positivo/negativo"},"branches":{"positive":"","negative":""},"send_to":["e-mail"],"notify_email":false,"allow_app_actions":false,"lang":"pt-BR|en|es|fr|de|ru|ja|ar|zh-Hans|… (idioma da mensagem do usuário)"} → Tarefas agendadas do Vertal Chat (grátis; o usuário confirma num cartão antes de criar). Outras ops: list | history | pause | resume | delete | run_now | update ("changes":{...}) | templates | agenda, com "id" ou "name".`;
 
 export const SCHEDULER_RULES = [
   "Tarefas agendadas:",
@@ -1181,17 +1103,41 @@ export const SCHEDULER_RULES = [
   "- Use \"when\" com as palavras do usuário; preencha \"at\" só se tiver certeza da data. Faltando hora de consulta, pergunte. O cartão de confirmação mostra tudo; não diga que agendou antes do resultado.",
   "- Envio de e-mail a terceiros SÓ se o usuário pediu na criação: ponha os destinatários em send_to. Ações em apps conectados só com allow_app_actions:true quando ele pediu. Alarme que toca no aparelho continua sendo schedule_alarm.",
   "- Idioma: SEMPRE preencha \"lang\" com o idioma da mensagem do usuário (pt-BR, en, es…) e escreva title e prompt nesse idioma; tudo o que a tarefa produzir (lembrete, resultado, avisos) sai nele. \"when\" pode ir nas palavras do usuário.",
+  "- Pedido em idioma que NÃO seja português, inglês ou espanhol: o servidor não lê datas escritas nesse idioma. Calcule você a data e a hora a partir de agora e mande \"at\" em ISO 8601 COM fuso (ex.: 2026-11-26T09:00:00+01:00) e \"timezone\" (IANA do usuário); para repetição use \"repeat\" ou \"cron\"; consulta usa appointment.start no mesmo formato.",
 ].join("\n");
 
 const SCHEDULER_INTENT_RE =
   /\b(agend|lembr|me avis|tarefa|consulta|compromisso|reuni[aã]o|todo dia|todos os dias|toda (segunda|ter[cç]a|quarta|quinta|sexta|semana|manh[aã]|noite)|todo m[eê]s|a cada \d|daqui a|quando (eu )?receber|quando chegar|ao receber|recorrente|cron|diariamente|semanalmente|remind|reminder|schedule|every (day|week|month|morning|night|hour|weekday|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d)|in \d+ (minutes?|hours?|days?)|when i (get|receive)|recu[eé]rd|recordatorio|av[ií]same|progr[aá]mame|todos los d[ií]as|cada (d[ií]a|semana|mes|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|hora|\d)|en \d+ (minutos?|horas?|d[ií]as?)|dentro de \d+|cuando (reciba|llegue)|\bcita\b)/i;
+
+/** Pedidos de lembrete/agendamento em outros idiomas (escritas sem espaço não usam \\b). */
+const SCHEDULER_INTENT_INTL_RE = new RegExp([
+  // fr, de, it, nl, rm
+  "rappel", "programme", "planifie", "chaque (jour|semaine|lundi|matin)", "tous les jours", "dans \\d+ (minutes?|heures?)",
+  "erinner", "termin", "jeden (tag|morgen|montag)", "täglich", "in \\d+ (minuten|stunden)",
+  "ricord", "promemoria", "ogni (giorno|settimana|lunedì)", "tra \\d+ (minuti|ore)",
+  "herinner", "afspraak", "elke (dag|week|maandag)", "over \\d+ (minuten|uur)", "regorda",
+  // eslavas (latinas), bálticas, nórdicas, húngaro, romeno, turco, az/uz
+  "przypomn", "codziennie", "za \\d+ minut", "připomeň", "pripomeň", "připomen", "každý den", "podsjeti", "opomni", "podseti",
+  "primin", "atgādin", "tuleta meelde", "påminn", "påmind", "muistuta", "minntu", "emlékeztet", "aminte", "hatırlat",
+  "xatırlat", "eslat", "kujto", "lémbra", "recorda'm", "gogorarazi", "atgoffa", "cuir i gcuimhne",
+  // sudeste asiático, suaíli
+  "ingatkan", "nhắc", "paalala", "nikumbushe",
+  // cirílico, grego, árabe/persa/urdu, hebraico, índicas, tailandês, armênio, georgiano
+  "напомн", "нагадай", "нагадув", "потсети", "еске сал", "κάθε μέρα", "υπενθύμ", "θύμισέ",
+  "ذكرن", "ذكّرن", "تذكير", "كل يوم", "یادآوری", "یادم بنداز", "یاد دلا", "ہر روز", "תזכיר", "תזכורת", "כל יום",
+  "याद दिला", "रिमाइंड", "हर दिन", "মনে করিয়ে", "প্রতিদিন", "நினைவூட்ட", "தினமும்", "เตือน", "ทุกวัน",
+  "հիշեցր", "შემახსენ",
+  // CJK
+  "提醒", "每天", "每日", "分钟后", "分鐘後", "小时后", "小時後", "リマインド", "思い出させ", "知らせて", "毎日", "分後", "時間後",
+  "알려", "리마인드", "매일", "분 후", "시간 후", "예약",
+].join("|"), "i");
 
 /** A conversa fala de agendar/lembrar/gatilho? (a ferramenta só entra no prompt nesses casos) */
 export function wantsScheduler(texts: Array<string | { content?: unknown } | unknown>): boolean {
   return texts.some((t) => {
     const s = typeof t === "string" ? t : t && typeof t === "object" && "content" in (t as Record<string, unknown>)
       ? String((t as Record<string, unknown>).content ?? "") : JSON.stringify(t ?? "");
-    return SCHEDULER_INTENT_RE.test(s) || s.includes('"agendador"');
+    return SCHEDULER_INTENT_RE.test(s) || SCHEDULER_INTENT_INTL_RE.test(s) || s.includes('"agendador"');
   });
 }
 

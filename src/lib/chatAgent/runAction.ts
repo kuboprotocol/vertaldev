@@ -42,6 +42,7 @@ import { callHuginnOp, huginnSecretsFor } from '@/lib/huginn/client';
 import { describeHuginnOp, isHuginnWrite, type HuginnOp } from '../../../supabase/functions/_shared/huginnCore';
 // Agendador (tarefas agendadas): só chega aqui com a flag ligada no servidor para o usuário.
 import { runScheduler } from '@/lib/chatScheduler/runScheduler';
+import type { ApprovalLabels } from '../../../supabase/functions/_shared/chatSchedulerI18n';
 
 export interface ApiApprovalRequest {
   method: string;
@@ -50,6 +51,8 @@ export interface ApiApprovalRequest {
   reason: string;
   secrets: string[];
   hasBody: boolean;
+  /** Só o Agendador manda (flag ligada): rótulos do cartão no idioma do usuário. Sem isto, o cartão é o de sempre. */
+  labels?: ApprovalLabels;
 }
 
 /** Cartão de revisão antes de enviar um formulário de site. */

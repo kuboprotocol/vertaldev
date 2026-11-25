@@ -10,15 +10,20 @@
 //   - pg_cron (cabeçalho x-vertal-scheduler-key = VERTAL_CHAT_SCHEDULER_CRON_KEY): {"action":"tick"}
 // Créditos: nada novo é cobrado; o custo estimado da IA fica em chat_task_runs.est_cost_usd.
 // Ações que já custam (Vertal Fluxos, 2 créditos) seguem a regra de sempre.
+import { registerSchedulerLangs } from "../_shared/chatSchedulerI18n.ts";
+import { SCHEDULER_LANG_DATA } from "../_shared/chatSchedulerLangs/index.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { enforceRateLimit, getUser, sanitizeError, supaAdmin } from "../_shared/creative.ts";
 import {
   SCHEDULER_LIMITS, describeSchedule, detectLang, formatLocal, isUuid, nextRun, normLang, normTime, normalizeSpec, resolveLang, schedText, templatesFor,
-  hasCalendarScope, sanitizeChangesInput as sanitizeChanges, sanitizeSpecInput as sanitizeSpec, schedulerAllowed, summaryLines, validTimezone, type NormalizedTask, type SchedulerSpec,
+  hasCalendarScope, isValidTimezone, sanitizeChangesInput as sanitizeChanges, sanitizeSpecInput as sanitizeSpec, schedulerAllowed, summaryLines, validTimezone, type NormalizedTask, type SchedulerSpec,
 } from "../_shared/chatScheduler.ts";
 import {
   createAgendaEvent, deleteAgendaEvent, gmailAccount, loadSettings, pollEmailTask, profileLocale, runScheduledTask, taskLang, tick, type Settings, type TaskRow,
 } from "./engine.ts";
+
+// Textos fixos em todos os idiomas do Agendador (pt/en/es já vêm no módulo compartilhado).
+registerSchedulerLangs(SCHEDULER_LANG_DATA);
 
 const env = (k: string) => Deno.env.get(k);
 
@@ -195,7 +200,8 @@ async function previewOrCreate(admin: Admin, user: Me, body: Record<string, unkn
   const spec: SchedulerSpec = { ...raw, ...(msgLang ? { lang: msgLang } : {}), ...(normLang(browser) ? { locale: normLang(browser)! } : {}) };
   const lang = resolveLang({ setting: settings.lang, spec, profile: user.locale });
   const L = schedText(lang);
-  const tz = validTimezone(spec.timezone ?? (typeof body.timezone === "string" ? body.timezone : undefined) ?? settings.timezone);
+  // Fuso: o que o modelo mandou (se for válido) → navegador → Ajustes.
+  const tz = [spec.timezone, typeof body.timezone === "string" ? body.timezone : undefined, settings.timezone].find((z) => isValidTimezone(z)) ?? validTimezone(settings.timezone);
   const norm = normalizeSpec({ ...spec, timezone: tz }, Date.now(), tz, lang);
   if (!norm.ok) return json(200, { ok: false, error: norm.error, lang });
   const t: NormalizedTask = norm.task;

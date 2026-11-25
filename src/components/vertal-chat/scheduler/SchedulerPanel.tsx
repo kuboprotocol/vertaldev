@@ -11,7 +11,7 @@ import {
   SCHEDULER_CHANGED_EVENT, callScheduler, setSchedulerLangSetting,
   type SchedulerRun, type SchedulerSettings, type SchedulerTaskView,
 } from '@/lib/chatScheduler/client';
-import { LANG_CHOICES, dateLocale, schedUi, schedulerUiLang } from '@/lib/chatScheduler/i18n';
+import { LANG_CHOICES, dateLocale, schedUi, schedulerUiLang, useSchedulerLangs } from '@/lib/chatScheduler/i18n';
 
 interface AgendaEvent { id: string; title: string; starts_at: string; ends_at: string; location?: string | null; provider: string; add_to_google_url?: string | null }
 interface Template { id: string; label: string; example: string }
@@ -24,6 +24,7 @@ export function SchedulerPanel({ open, onOpenChange }: { open: boolean; onOpenCh
   const [settings, setSettings] = useState<SchedulerSettings | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [history, setHistory] = useState<Record<string, SchedulerRun[]>>({});
+  useSchedulerLangs(true);
   // Idioma da tela: Ajustes → Idioma (se não for automático) → navegador → pt-BR.
   const ui = schedulerUiLang(settings?.lang);
   const U = schedUi(ui);
@@ -79,12 +80,12 @@ export function SchedulerPanel({ open, onOpenChange }: { open: boolean; onOpenCh
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg" data-testid="scheduler-panel">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2"><CalendarClock className="h-5 w-5 text-primary" aria-hidden /> {U.name}</SheetTitle>
+      <SheetContent side="right" dir={U.dir} lang={dateLocale(ui)} className={cn('w-full overflow-y-auto sm:max-w-lg', U.dir === 'rtl' && 'text-right')} data-testid="scheduler-panel">
+        <SheetHeader className={cn(U.dir === 'rtl' && 'pr-8 sm:text-right')}>
+          <SheetTitle className="flex items-center gap-2" dir={U.dir}><CalendarClock className="h-5 w-5 text-primary" aria-hidden /> {U.name}</SheetTitle>
           <SheetDescription>{U.description}</SheetDescription>
         </SheetHeader>
-        <Tabs defaultValue="tasks" className="mt-4">
+        <Tabs defaultValue="tasks" className="mt-4" dir={U.dir}>
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="tasks">{U.tabTasks}</TabsTrigger>
             <TabsTrigger value="agenda">{U.tabAgenda}</TabsTrigger>
@@ -104,7 +105,7 @@ export function SchedulerPanel({ open, onOpenChange }: { open: boolean; onOpenCh
                 <ul className="space-y-1">
                   {templates.map((t) => (
                     <li key={t.id}>
-                      <button type="button" className="text-left text-primary hover:underline" onClick={() => { void navigator.clipboard?.writeText(t.example); toast.success(U.copied); }}>
+                      <button type="button" className="text-start text-primary hover:underline" onClick={() => { void navigator.clipboard?.writeText(t.example); toast.success(U.copied); }}>
                         {t.label}: "{t.example}"
                       </button>
                     </li>
@@ -117,7 +118,7 @@ export function SchedulerPanel({ open, onOpenChange }: { open: boolean; onOpenCh
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{U.kind[t.kind]} · {U.status[t.status]}</p>
-                    <p className="truncate font-medium">{t.title}</p>
+                    <p dir="auto" className="truncate font-medium">{t.title}</p>
                     <p className="text-xs text-muted-foreground">{t.when_text}</p>
                     {t.status === 'active' && t.next_run_text && <p className="text-xs">{U.next}: {t.next_run_text}</p>}
                     {t.last_run_at && <p className="text-xs text-muted-foreground">{U.last}: {fmt(t.last_run_at)} ({t.last_status ?? '—'}) · {U.runs(t.run_count)}</p>}
@@ -155,7 +156,7 @@ export function SchedulerPanel({ open, onOpenChange }: { open: boolean; onOpenCh
                     {history[t.id].map((r) => (
                       <li key={r.id} className={cn(r.status === 'error' && 'text-destructive')}>
                         {fmt(r.started_at)} · {U.runStatus[r.status] ?? r.status}{r.sentiment ? ` · ${r.sentiment}` : ''} · {U.runTrigger[r.trigger] ?? r.trigger}
-                        {(r.output || r.error) && <span className="block truncate text-muted-foreground">{(r.output ?? r.error ?? '').slice(0, 160)}</span>}
+                        {(r.output || r.error) && <span dir="auto" className="block truncate text-muted-foreground">{(r.output ?? r.error ?? '').slice(0, 160)}</span>}
                       </li>
                     ))}
                   </ul>

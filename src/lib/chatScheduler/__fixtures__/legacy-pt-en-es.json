@@ -1,0 +1,1211 @@
+{
+ "pt-BR": {
+  "text": {
+   "monthly": "todo mês, dia A1, às B2",
+   "everyH": "a cada A1 h",
+   "everyMin": "a cada A1 min",
+   "email": "ao chegar o e-mail (confere a cada A1 min)",
+   "when": "Quando",
+   "until": "até",
+   "place": "Local",
+   "agenda": "Agenda",
+   "agendaGoogle": "Google Agenda conectada",
+   "agendaVertal": "Agenda do Vertal (com link para adicionar ao Google Agenda)",
+   "reminderBefore": "Lembrete: A1 min antes",
+   "next": "próxima",
+   "from": "de",
+   "subject": "assunto",
+   "search": "busca",
+   "trigger": "Gatilho: e-mail A1 (só e-mails que chegarem a partir de agora; cada e-mail dispara uma vez)",
+   "criteria": "Critério",
+   "ifPos": "Se positivo",
+   "ifNeg": "Se negativo",
+   "ifNeu": "Se neutro",
+   "todo": "Fazer",
+   "sendTo": "Pode enviar e-mail para",
+   "noSend": "Não envia e-mail a terceiros",
+   "appActions": "Pode executar ações nos seus apps conectados (Vertal Fluxos; custo normal de cada ação)",
+   "notifyEmail": "Também avisa você por e-mail",
+   "tz": "Fuso",
+   "language": "Idioma",
+   "errFromSubject": "Diga de quem ou com que assunto é o e-mail que dispara a tarefa.",
+   "errBranches": "Diga o que fazer quando o e-mail chegar (se positivo / se negativo).",
+   "errApptTime": "Faltou o dia e a hora da consulta.",
+   "errPast": "Esse horário já passou.",
+   "errCron": "Expressão cron inválida (use 5 campos: minuto hora dia mês dia-da-semana).",
+   "errWhen": "Não entendi quando. Diga, por exemplo, \"amanhã às 9h\" ou \"toda segunda às 8h\".",
+   "errNoNext": "Não há próximo horário para essa regra.",
+   "noTime": "Sem hora: usei A1.",
+   "remindSoon": "O lembrete ficou para daqui a 1 minuto (a consulta está perto).",
+   "defaultTask": "Tarefa",
+   "defaultAppt": "Consulta",
+   "reminder": "Lembrete",
+   "apptReminder": "Lembrete de compromisso",
+   "inGoogle": "Está no seu Google Agenda.",
+   "addGoogle": "Adicionar ao Google Agenda",
+   "taskHeader": "Tarefa agendada",
+   "failed": "⚠️ **A tarefa \"A1\" falhou** depois de B2 novas tentativas.\nMotivo: C3\nVocê pode rodar de novo em Tarefas agendadas.",
+   "failSubject": "Falha",
+   "noResult": "A IA não devolveu resultado.",
+   "needsGmail": "⚠️ O gatilho \"A1\" precisa do Gmail conectado. Conecte em Conectores → Gmail e retome a tarefa em Tarefas agendadas.",
+   "gmailMissing": "O Gmail não está conectado: conecte em Conectores → Gmail para o gatilho funcionar.",
+   "trig": "Gatilho",
+   "mailArrived": "Chegou e-mail de A1 — \"B2\".",
+   "classified": "Classificado como",
+   "noAction": "Nenhuma ação definida para esse caso.",
+   "actionFailed": "⚠️ A ação \"A1\" falhou: B2",
+   "noNewMail": "Nenhum e-mail novo que combine com o gatilho.",
+   "sentiment": {
+    "positive": "positivo",
+    "negative": "negativo",
+    "neutral": "neutro"
+   },
+   "emailFooter": "— Tarefas agendadas do Vertal Chat",
+   "nothing": "Faltou dizer o que agendar.",
+   "tooMany": "Você já tem A1 tarefas; apague alguma antes.",
+   "pastEdit": "Esse horário já passou. Edite a data para reativar."
+  },
+  "kind": {
+   "task": "Tarefa agendada",
+   "reminder": "Lembrete",
+   "appointment": "Consulta/compromisso",
+   "email_trigger": "Gatilho de e-mail"
+  },
+  "norm": [
+   {
+    "notes": [],
+    "lines": [
+     "Lembrete: T",
+     "Quando: uma vez, qua. 25/11 às 09:02",
+     "Não envia e-mail a terceiros",
+     "Fuso: America/Sao_Paulo",
+     "Idioma: Português (Brasil)"
+    ],
+    "g": [
+     "Lembrete: T",
+     "Quando: uma vez, qua. 25/11 às 09:02",
+     "Não envia e-mail a terceiros",
+     "Fuso: America/Sao_Paulo",
+     "Idioma: Português (Brasil)"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Tarefa agendada: P",
+     "Quando: todo dia às 08:00 (próxima: qui. 26/11 às 08:00)",
+     "Fazer: P",
+     "Pode enviar e-mail para: a@b.com",
+     "Pode executar ações nos seus apps conectados (Vertal Fluxos; custo normal de cada ação)",
+     "Também avisa você por e-mail",
+     "Fuso: America/Sao_Paulo",
+     "Idioma: Português (Brasil)"
+    ],
+    "g": [
+     "Tarefa agendada: P",
+     "Quando: todo dia às 08:00 (próxima: qui. 26/11 às 08:00)",
+     "Fazer: P",
+     "Pode enviar e-mail para: a@b.com",
+     "Pode executar ações nos seus apps conectados (Vertal Fluxos; custo normal de cada ação)",
+     "Também avisa você por e-mail",
+     "Fuso: America/Sao_Paulo",
+     "Idioma: Português (Brasil)"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Tarefa agendada: P",
+     "Quando: toda seg., qua. às 08:00 (próxima: seg. 30/11 às 08:00)",
+     "Fazer: P",
+     "Não envia e-mail a terceiros",
+     "Fuso: America/Sao_Paulo",
+     "Idioma: Português (Brasil)"
+    ],
+    "g": [
+     "Tarefa agendada: P",
+     "Quando: toda seg., qua. às 08:00 (próxima: seg. 30/11 às 08:00)",
+     "Fazer: P",
+     "Não envia e-mail a terceiros",
+     "Fuso: America/Sao_Paulo",
+     "Idioma: Português (Brasil)"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Tarefa agendada: P",
+     "Quando: dias úteis às 08:00 (próxima: qui. 26/11 às 08:00)",
+     "Fazer: P",
+     "Não envia e-mail a terceiros",
+     "Fuso: America/Sao_Paulo",
+     "Idioma: Português (Brasil)"
+    ],
+    "g": [
+     "Tarefa agendada: P",
+     "Quando: dias úteis às 08:00 (próxima: qui. 26/11 às 08:00)",
+     "Fazer: P",
+     "Não envia e-mail a terceiros",
+     "Fuso: America/Sao_Paulo",
+     "Idioma: Português (Brasil)"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Tarefa agendada: P",
+     "Quando: todo mês, dia 5, às 08:00 (próxima: sáb. 05/12 às 08:00)",
+     "Fazer: P",
+     "Não envia e-mail a terceiros",
+     "Fuso: America/Sao_Paulo",
+     "Idioma: Português (Brasil)"
+    ],
+    "g": [
+     "Tarefa agendada: P",
+     "Quando: todo mês, dia 5, às 08:00 (próxima: sáb. 05/12 às 08:00)",
+     "Fazer: P",
+     "Não envia e-mail a terceiros",
+     "Fuso: America/Sao_Paulo",
+     "Idioma: Português (Brasil)"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Tarefa agendada: P",
+     "Quando: a cada 2 h (próxima: qua. 25/11 às 11:00)",
+     "Fazer: P",
+     "Não envia e-mail a terceiros",
+     "Fuso: America/Sao_Paulo",
+     "Idioma: Português (Brasil)"
+    ],
+    "g": [
+     "Tarefa agendada: P",
+     "Quando: a cada 2 h (próxima: qua. 25/11 às 11:00)",
+     "Fazer: P",
+     "Não envia e-mail a terceiros",
+     "Fuso: America/Sao_Paulo",
+     "Idioma: Português (Brasil)"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Tarefa agendada: P",
+     "Quando: a cada 15 min (próxima: qua. 25/11 às 09:15)",
+     "Fazer: P",
+     "Não envia e-mail a terceiros",
+     "Fuso: America/Sao_Paulo",
+     "Idioma: Português (Brasil)"
+    ],
+    "g": [
+     "Tarefa agendada: P",
+     "Quando: a cada 15 min (próxima: qua. 25/11 às 09:15)",
+     "Fazer: P",
+     "Não envia e-mail a terceiros",
+     "Fuso: America/Sao_Paulo",
+     "Idioma: Português (Brasil)"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Tarefa agendada: P",
+     "Quando: regra 0 8 * * 1-5 (próxima: qui. 26/11 às 08:00)",
+     "Fazer: P",
+     "Não envia e-mail a terceiros",
+     "Fuso: America/Sao_Paulo",
+     "Idioma: Português (Brasil)"
+    ],
+    "g": [
+     "Tarefa agendada: P",
+     "Quando: regra 0 8 * * 1-5 (próxima: qui. 26/11 às 08:00)",
+     "Fazer: P",
+     "Não envia e-mail a terceiros",
+     "Fuso: America/Sao_Paulo",
+     "Idioma: Português (Brasil)"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Consulta/compromisso: Dent",
+     "Quando: sex. 27/11 às 15:00 até 16:00",
+     "Local: Rua",
+     "Agenda: Agenda do Vertal (com link para adicionar ao Google Agenda)",
+     "Lembrete: 60 min antes",
+     "Não envia e-mail a terceiros",
+     "Fuso: America/Sao_Paulo",
+     "Idioma: Português (Brasil)"
+    ],
+    "g": [
+     "Consulta/compromisso: Dent",
+     "Quando: sex. 27/11 às 15:00 até 16:00",
+     "Local: Rua",
+     "Agenda: Google Agenda conectada",
+     "Lembrete: 60 min antes",
+     "Não envia e-mail a terceiros",
+     "Fuso: America/Sao_Paulo",
+     "Idioma: Português (Brasil)"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Gatilho de e-mail: RH",
+     "Quando: ao chegar o e-mail (confere a cada 5 min)",
+     "Gatilho: e-mail de rh@x.com, assunto \"prop\", busca q (só e-mails que chegarem a partir de agora; cada e-mail dispara uma vez)",
+     "Critério: c",
+     "Se positivo: p",
+     "Se negativo: n",
+     "Se neutro: u",
+     "Não envia e-mail a terceiros",
+     "Fuso: America/Sao_Paulo",
+     "Idioma: Português (Brasil)"
+    ],
+    "g": [
+     "Gatilho de e-mail: RH",
+     "Quando: ao chegar o e-mail (confere a cada 5 min)",
+     "Gatilho: e-mail de rh@x.com, assunto \"prop\", busca q (só e-mails que chegarem a partir de agora; cada e-mail dispara uma vez)",
+     "Critério: c",
+     "Se positivo: p",
+     "Se negativo: n",
+     "Se neutro: u",
+     "Não envia e-mail a terceiros",
+     "Fuso: America/Sao_Paulo",
+     "Idioma: Português (Brasil)"
+    ]
+   },
+   {
+    "ok": false,
+    "error": "Não entendi quando. Diga, por exemplo, \"amanhã às 9h\" ou \"toda segunda às 8h\"."
+   },
+   {
+    "ok": false,
+    "error": "Esse horário já passou."
+   }
+  ],
+  "fmt": "qua. 25/11 às 09:00",
+  "tpl": [
+   {
+    "id": "reminder",
+    "label": "Lembrete",
+    "example": "Me lembre amanhã às 9h de pagar o boleto"
+   },
+   {
+    "id": "daily_news",
+    "label": "Resumo diário",
+    "example": "Todo dia às 8h me mande as 5 principais notícias de tecnologia"
+   },
+   {
+    "id": "weekly_report",
+    "label": "Relatório semanal",
+    "example": "Toda segunda às 9h pesquise o preço do dólar e me dê um resumo da semana"
+   },
+   {
+    "id": "appointment",
+    "label": "Consulta",
+    "example": "Agende uma consulta no dentista sexta às 15h e me lembre 1 hora antes"
+   },
+   {
+    "id": "email_approval",
+    "label": "E-mail de aprovação",
+    "example": "Quando eu receber um e-mail do RH com assunto proposta: se for aprovado, me avise e crie um lembrete para assinar; se for recusado, me avise"
+   },
+   {
+    "id": "payment",
+    "label": "Pagamento",
+    "example": "Quando chegar e-mail do banco sobre pagamento: se confirmado, me avise; se falhou, me avise com urgência"
+   }
+  ],
+  "ui": {
+   "name": "Tarefas agendadas",
+   "button": "Tarefas",
+   "description": "Peça no chat: \"me lembre amanhã às 9h\", \"todo dia às 8h…\", \"agende uma consulta…\" ou \"quando eu receber um e-mail de…\".",
+   "tabTasks": "Tarefas",
+   "tabAgenda": "Agenda",
+   "tabSettings": "Ajustes",
+   "refresh": "Atualizar",
+   "loading": "Carregando…",
+   "empty": "Nenhuma tarefa ainda. Ideias para pedir no chat:",
+   "copied": "Copiado. Cole no chat.",
+   "next": "Próxima",
+   "last": "Última",
+   "runs": "A1 execução(ões)",
+   "error": "Erro",
+   "sendTo": "Pode enviar e-mail para",
+   "pause": "Pausar",
+   "activate": "Ativar",
+   "runNow": "Rodar agora",
+   "history": "Histórico",
+   "del": "Apagar",
+   "confirmDelete": "Apagar \"A1\"?",
+   "ranNow": "Rodou agora. O resultado está na conversa da tarefa.",
+   "neverRan": "Ainda não rodou.",
+   "agendaEmpty": "Nenhum compromisso. Peça no chat: \"agende uma consulta…\".",
+   "inGoogle": "No seu Google Agenda",
+   "addGoogle": "Adicionar ao Google Agenda",
+   "timezone": "Fuso horário",
+   "quiet": "Horário de silêncio (gatilhos e repetições automáticas esperam; hora marcada sempre toca)",
+   "until": "até",
+   "save": "Salvar",
+   "notifyEmail": "Também me avisar por e-mail (para a sua própria conta do Gmail)",
+   "saved": "Ajustes salvos.",
+   "language": "Idioma",
+   "languageHint": "Lembretes, resultados e avisos saem neste idioma. \"Automático\" usa o idioma em que você pediu a tarefa.",
+   "langAuto": "Automático",
+   "toastFallback": "Rodou agora. Veja o resultado na conversa.",
+   "taskFallback": "Tarefa agendada",
+   "cardHost": "Vertal Chat · Tarefas agendadas",
+   "warning": "Aviso",
+   "newTask": "nova tarefa",
+   "task": "tarefa",
+   "deleteReason": "Apagar esta tarefa agendada (e o compromisso da agenda, se houver). Não dá para desfazer.",
+   "permSendTo": "Passa a poder enviar e-mail para: A1",
+   "permApps": "Passa a poder executar ações nos seus apps conectados (Vertal Fluxos)",
+   "permNotify": "Também avisa você por e-mail",
+   "kind": {
+    "task": "Tarefa",
+    "reminder": "Lembrete",
+    "appointment": "Consulta",
+    "email_trigger": "Gatilho de e-mail"
+   },
+   "status": {
+    "active": "Ativa",
+    "paused": "Pausada",
+    "done": "Concluída",
+    "failed": "Falhou"
+   },
+   "runStatus": {
+    "running": "rodando",
+    "ok": "ok",
+    "error": "erro",
+    "skipped": "pulada"
+   },
+   "runTrigger": {
+    "schedule": "agendada",
+    "retry": "nova tentativa",
+    "manual": "manual",
+    "email": "e-mail"
+   },
+   "errors": {
+    "not_found": "As tarefas agendadas ainda não estão liberadas para a sua conta.",
+    "task_not_found": "Não achei essa tarefa.",
+    "Unauthorized": "Sua sessão expirou. Entre novamente.",
+    "save_failed": "Não consegui salvar agora. Tente de novo em instantes.",
+    "rate": "Muitos pedidos em pouco tempo. Aguarde um minuto.",
+    "generic": "Não consegui falar com as tarefas agendadas agora.",
+    "notOk": "Não deu certo."
+   }
+  },
+  "dl": "pt-BR"
+ },
+ "en": {
+  "text": {
+   "monthly": "every month on day A1 at B2",
+   "everyH": "every A1 h",
+   "everyMin": "every A1 min",
+   "email": "when the email arrives (checks every A1 min)",
+   "when": "When",
+   "until": "until",
+   "place": "Location",
+   "agenda": "Calendar",
+   "agendaGoogle": "Connected Google Calendar",
+   "agendaVertal": "Vertal calendar (with a link to add it to Google Calendar)",
+   "reminderBefore": "Reminder: A1 min before",
+   "next": "next",
+   "from": "from",
+   "subject": "subject",
+   "search": "search",
+   "trigger": "Trigger: email A1 (only emails arriving from now on; each email fires once)",
+   "criteria": "Criteria",
+   "ifPos": "If positive",
+   "ifNeg": "If negative",
+   "ifNeu": "If neutral",
+   "todo": "Do",
+   "sendTo": "May send email to",
+   "noSend": "Does not email anyone else",
+   "appActions": "May run actions in your connected apps (Vertal Fluxos; normal cost per action)",
+   "notifyEmail": "Also notifies you by email",
+   "tz": "Time zone",
+   "language": "Language",
+   "errFromSubject": "Say who the triggering email is from or what its subject is.",
+   "errBranches": "Say what to do when the email arrives (if positive / if negative).",
+   "errApptTime": "The appointment's date and time are missing.",
+   "errPast": "That time has already passed.",
+   "errCron": "Invalid cron expression (use 5 fields: minute hour day month weekday).",
+   "errWhen": "I didn't understand when. Say, for example, \"tomorrow at 9am\" or \"every Monday at 8am\".",
+   "errNoNext": "There is no next time for that rule.",
+   "noTime": "No time given: used A1.",
+   "remindSoon": "The reminder was set for 1 minute from now (the appointment is close).",
+   "defaultTask": "Task",
+   "defaultAppt": "Appointment",
+   "reminder": "Reminder",
+   "apptReminder": "Appointment reminder",
+   "inGoogle": "It's in your Google Calendar.",
+   "addGoogle": "Add to Google Calendar",
+   "taskHeader": "Scheduled task",
+   "failed": "⚠️ **The task \"A1\" failed** after B2 retries.\nReason: C3\nYou can run it again in Scheduled tasks.",
+   "failSubject": "Failed",
+   "noResult": "The AI returned no result.",
+   "needsGmail": "⚠️ The trigger \"A1\" needs Gmail connected. Connect it in Connectors → Gmail and resume the task in Scheduled tasks.",
+   "gmailMissing": "Gmail is not connected: connect it in Connectors → Gmail for the trigger to work.",
+   "trig": "Trigger",
+   "mailArrived": "Email from A1 arrived — \"B2\".",
+   "classified": "Classified as",
+   "noAction": "No action set for this case.",
+   "actionFailed": "⚠️ The action \"A1\" failed: B2",
+   "noNewMail": "No new email matches the trigger.",
+   "sentiment": {
+    "positive": "positive",
+    "negative": "negative",
+    "neutral": "neutral"
+   },
+   "emailFooter": "— Vertal Chat scheduled tasks",
+   "nothing": "You didn't say what to schedule.",
+   "tooMany": "You already have A1 tasks; delete one first.",
+   "pastEdit": "That time has already passed. Edit the date to reactivate it."
+  },
+  "kind": {
+   "task": "Scheduled task",
+   "reminder": "Reminder",
+   "appointment": "Appointment",
+   "email_trigger": "Email trigger"
+  },
+  "norm": [
+   {
+    "notes": [],
+    "lines": [
+     "Reminder: T",
+     "When: once, Wed 11/25 at 09:02",
+     "Does not email anyone else",
+     "Time zone: America/Sao_Paulo",
+     "Language: English"
+    ],
+    "g": [
+     "Reminder: T",
+     "When: once, Wed 11/25 at 09:02",
+     "Does not email anyone else",
+     "Time zone: America/Sao_Paulo",
+     "Language: English"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Scheduled task: P",
+     "When: every day at 08:00 (next: Thu 11/26 at 08:00)",
+     "Do: P",
+     "May send email to: a@b.com",
+     "May run actions in your connected apps (Vertal Fluxos; normal cost per action)",
+     "Also notifies you by email",
+     "Time zone: America/Sao_Paulo",
+     "Language: English"
+    ],
+    "g": [
+     "Scheduled task: P",
+     "When: every day at 08:00 (next: Thu 11/26 at 08:00)",
+     "Do: P",
+     "May send email to: a@b.com",
+     "May run actions in your connected apps (Vertal Fluxos; normal cost per action)",
+     "Also notifies you by email",
+     "Time zone: America/Sao_Paulo",
+     "Language: English"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Scheduled task: P",
+     "When: every Mon, Wed at 08:00 (next: Mon 11/30 at 08:00)",
+     "Do: P",
+     "Does not email anyone else",
+     "Time zone: America/Sao_Paulo",
+     "Language: English"
+    ],
+    "g": [
+     "Scheduled task: P",
+     "When: every Mon, Wed at 08:00 (next: Mon 11/30 at 08:00)",
+     "Do: P",
+     "Does not email anyone else",
+     "Time zone: America/Sao_Paulo",
+     "Language: English"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Scheduled task: P",
+     "When: weekdays at 08:00 (next: Thu 11/26 at 08:00)",
+     "Do: P",
+     "Does not email anyone else",
+     "Time zone: America/Sao_Paulo",
+     "Language: English"
+    ],
+    "g": [
+     "Scheduled task: P",
+     "When: weekdays at 08:00 (next: Thu 11/26 at 08:00)",
+     "Do: P",
+     "Does not email anyone else",
+     "Time zone: America/Sao_Paulo",
+     "Language: English"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Scheduled task: P",
+     "When: every month on day 5 at 08:00 (next: Sat 12/05 at 08:00)",
+     "Do: P",
+     "Does not email anyone else",
+     "Time zone: America/Sao_Paulo",
+     "Language: English"
+    ],
+    "g": [
+     "Scheduled task: P",
+     "When: every month on day 5 at 08:00 (next: Sat 12/05 at 08:00)",
+     "Do: P",
+     "Does not email anyone else",
+     "Time zone: America/Sao_Paulo",
+     "Language: English"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Scheduled task: P",
+     "When: every 2 h (next: Wed 11/25 at 11:00)",
+     "Do: P",
+     "Does not email anyone else",
+     "Time zone: America/Sao_Paulo",
+     "Language: English"
+    ],
+    "g": [
+     "Scheduled task: P",
+     "When: every 2 h (next: Wed 11/25 at 11:00)",
+     "Do: P",
+     "Does not email anyone else",
+     "Time zone: America/Sao_Paulo",
+     "Language: English"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Scheduled task: P",
+     "When: every 15 min (next: Wed 11/25 at 09:15)",
+     "Do: P",
+     "Does not email anyone else",
+     "Time zone: America/Sao_Paulo",
+     "Language: English"
+    ],
+    "g": [
+     "Scheduled task: P",
+     "When: every 15 min (next: Wed 11/25 at 09:15)",
+     "Do: P",
+     "Does not email anyone else",
+     "Time zone: America/Sao_Paulo",
+     "Language: English"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Scheduled task: P",
+     "When: rule 0 8 * * 1-5 (next: Thu 11/26 at 08:00)",
+     "Do: P",
+     "Does not email anyone else",
+     "Time zone: America/Sao_Paulo",
+     "Language: English"
+    ],
+    "g": [
+     "Scheduled task: P",
+     "When: rule 0 8 * * 1-5 (next: Thu 11/26 at 08:00)",
+     "Do: P",
+     "Does not email anyone else",
+     "Time zone: America/Sao_Paulo",
+     "Language: English"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Appointment: Dent",
+     "When: Fri 11/27 at 15:00 until 16:00",
+     "Location: Rua",
+     "Calendar: Vertal calendar (with a link to add it to Google Calendar)",
+     "Reminder: 60 min before",
+     "Does not email anyone else",
+     "Time zone: America/Sao_Paulo",
+     "Language: English"
+    ],
+    "g": [
+     "Appointment: Dent",
+     "When: Fri 11/27 at 15:00 until 16:00",
+     "Location: Rua",
+     "Calendar: Connected Google Calendar",
+     "Reminder: 60 min before",
+     "Does not email anyone else",
+     "Time zone: America/Sao_Paulo",
+     "Language: English"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Email trigger: RH",
+     "When: when the email arrives (checks every 5 min)",
+     "Trigger: email from rh@x.com, subject \"prop\", search q (only emails arriving from now on; each email fires once)",
+     "Criteria: c",
+     "If positive: p",
+     "If negative: n",
+     "If neutral: u",
+     "Does not email anyone else",
+     "Time zone: America/Sao_Paulo",
+     "Language: English"
+    ],
+    "g": [
+     "Email trigger: RH",
+     "When: when the email arrives (checks every 5 min)",
+     "Trigger: email from rh@x.com, subject \"prop\", search q (only emails arriving from now on; each email fires once)",
+     "Criteria: c",
+     "If positive: p",
+     "If negative: n",
+     "If neutral: u",
+     "Does not email anyone else",
+     "Time zone: America/Sao_Paulo",
+     "Language: English"
+    ]
+   },
+   {
+    "ok": false,
+    "error": "I didn't understand when. Say, for example, \"tomorrow at 9am\" or \"every Monday at 8am\"."
+   },
+   {
+    "ok": false,
+    "error": "That time has already passed."
+   }
+  ],
+  "fmt": "Wed 11/25 at 09:00",
+  "tpl": [
+   {
+    "id": "reminder",
+    "label": "Reminder",
+    "example": "Remind me tomorrow at 9am to pay the bill"
+   },
+   {
+    "id": "daily_news",
+    "label": "Daily digest",
+    "example": "Every day at 8am send me the top 5 tech news stories"
+   },
+   {
+    "id": "weekly_report",
+    "label": "Weekly report",
+    "example": "Every Monday at 9am check the dollar exchange rate and give me a weekly summary"
+   },
+   {
+    "id": "appointment",
+    "label": "Appointment",
+    "example": "Schedule a dentist appointment on Friday at 3pm and remind me 1 hour before"
+   },
+   {
+    "id": "email_approval",
+    "label": "Approval email",
+    "example": "When I get an email from HR with subject offer: if approved, tell me and create a reminder to sign; if rejected, tell me"
+   },
+   {
+    "id": "payment",
+    "label": "Payment",
+    "example": "When the bank emails about a payment: if confirmed, tell me; if it failed, alert me urgently"
+   }
+  ],
+  "ui": {
+   "name": "Scheduled tasks",
+   "button": "Tasks",
+   "description": "Ask in the chat: \"remind me tomorrow at 9am\", \"every day at 8am…\", \"schedule an appointment…\" or \"when I get an email from…\".",
+   "tabTasks": "Tasks",
+   "tabAgenda": "Calendar",
+   "tabSettings": "Settings",
+   "refresh": "Refresh",
+   "loading": "Loading…",
+   "empty": "No tasks yet. Ideas to ask in the chat:",
+   "copied": "Copied. Paste it in the chat.",
+   "next": "Next",
+   "last": "Last",
+   "runs": "A1 run(s)",
+   "error": "Error",
+   "sendTo": "May send email to",
+   "pause": "Pause",
+   "activate": "Activate",
+   "runNow": "Run now",
+   "history": "History",
+   "del": "Delete",
+   "confirmDelete": "Delete \"A1\"?",
+   "ranNow": "Ran just now. The result is in the task's conversation.",
+   "neverRan": "Has not run yet.",
+   "agendaEmpty": "No appointments. Ask in the chat: \"schedule an appointment…\".",
+   "inGoogle": "In your Google Calendar",
+   "addGoogle": "Add to Google Calendar",
+   "timezone": "Time zone",
+   "quiet": "Quiet hours (triggers and automatic repeats wait; times you set always fire)",
+   "until": "to",
+   "save": "Save",
+   "notifyEmail": "Also notify me by email (to your own Gmail account)",
+   "saved": "Settings saved.",
+   "language": "Language",
+   "languageHint": "Reminders, results and notices use this language. \"Automatic\" uses the language you asked for the task in.",
+   "langAuto": "Automatic",
+   "toastFallback": "Ran just now. See the result in the conversation.",
+   "taskFallback": "Scheduled task",
+   "cardHost": "Vertal Chat · Scheduled tasks",
+   "warning": "Note",
+   "newTask": "new task",
+   "task": "task",
+   "deleteReason": "Delete this scheduled task (and its calendar appointment, if any). This cannot be undone.",
+   "permSendTo": "Will be allowed to email: A1",
+   "permApps": "Will be allowed to run actions in your connected apps (Vertal Fluxos)",
+   "permNotify": "Also notifies you by email",
+   "kind": {
+    "task": "Task",
+    "reminder": "Reminder",
+    "appointment": "Appointment",
+    "email_trigger": "Email trigger"
+   },
+   "status": {
+    "active": "Active",
+    "paused": "Paused",
+    "done": "Done",
+    "failed": "Failed"
+   },
+   "runStatus": {
+    "running": "running",
+    "ok": "ok",
+    "error": "error",
+    "skipped": "skipped"
+   },
+   "runTrigger": {
+    "schedule": "scheduled",
+    "retry": "retry",
+    "manual": "manual",
+    "email": "email"
+   },
+   "errors": {
+    "not_found": "Scheduled tasks are not enabled for your account yet.",
+    "task_not_found": "I couldn't find that task.",
+    "Unauthorized": "Your session expired. Please sign in again.",
+    "save_failed": "Couldn't save right now. Try again in a moment.",
+    "rate": "Too many requests in a short time. Wait a minute.",
+    "generic": "Couldn't reach scheduled tasks right now.",
+    "notOk": "That didn't work."
+   }
+  },
+  "dl": "en-US"
+ },
+ "es": {
+  "text": {
+   "monthly": "cada mes, día A1, a las B2",
+   "everyH": "cada A1 h",
+   "everyMin": "cada A1 min",
+   "email": "al llegar el correo (revisa cada A1 min)",
+   "when": "Cuándo",
+   "until": "hasta",
+   "place": "Lugar",
+   "agenda": "Agenda",
+   "agendaGoogle": "Google Calendar conectado",
+   "agendaVertal": "Agenda de Vertal (con enlace para añadir a Google Calendar)",
+   "reminderBefore": "Recordatorio: A1 min antes",
+   "next": "próxima",
+   "from": "de",
+   "subject": "asunto",
+   "search": "búsqueda",
+   "trigger": "Disparador: correo A1 (solo correos que lleguen desde ahora; cada correo dispara una vez)",
+   "criteria": "Criterio",
+   "ifPos": "Si es positivo",
+   "ifNeg": "Si es negativo",
+   "ifNeu": "Si es neutro",
+   "todo": "Hacer",
+   "sendTo": "Puede enviar correo a",
+   "noSend": "No envía correos a terceros",
+   "appActions": "Puede ejecutar acciones en tus apps conectadas (Vertal Fluxos; costo normal de cada acción)",
+   "notifyEmail": "También te avisa por correo",
+   "tz": "Zona horaria",
+   "language": "Idioma",
+   "errFromSubject": "Di de quién es o qué asunto tiene el correo que dispara la tarea.",
+   "errBranches": "Di qué hacer cuando llegue el correo (si es positivo / si es negativo).",
+   "errApptTime": "Falta el día y la hora de la cita.",
+   "errPast": "Esa hora ya pasó.",
+   "errCron": "Expresión cron no válida (usa 5 campos: minuto hora día mes día-de-la-semana).",
+   "errWhen": "No entendí cuándo. Di, por ejemplo, \"mañana a las 9\" o \"cada lunes a las 8\".",
+   "errNoNext": "No hay próxima hora para esa regla.",
+   "noTime": "Sin hora: usé A1.",
+   "remindSoon": "El recordatorio quedó para dentro de 1 minuto (la cita está cerca).",
+   "defaultTask": "Tarea",
+   "defaultAppt": "Cita",
+   "reminder": "Recordatorio",
+   "apptReminder": "Recordatorio de cita",
+   "inGoogle": "Está en tu Google Calendar.",
+   "addGoogle": "Añadir a Google Calendar",
+   "taskHeader": "Tarea programada",
+   "failed": "⚠️ **La tarea \"A1\" falló** después de B2 reintentos.\nMotivo: C3\nPuedes ejecutarla de nuevo en Tareas programadas.",
+   "failSubject": "Falló",
+   "noResult": "La IA no devolvió resultado.",
+   "needsGmail": "⚠️ El disparador \"A1\" necesita Gmail conectado. Conéctalo en Conectores → Gmail y reanuda la tarea en Tareas programadas.",
+   "gmailMissing": "Gmail no está conectado: conéctalo en Conectores → Gmail para que el disparador funcione.",
+   "trig": "Disparador",
+   "mailArrived": "Llegó un correo de A1 — \"B2\".",
+   "classified": "Clasificado como",
+   "noAction": "No hay acción definida para este caso.",
+   "actionFailed": "⚠️ La acción \"A1\" falló: B2",
+   "noNewMail": "Ningún correo nuevo coincide con el disparador.",
+   "sentiment": {
+    "positive": "positivo",
+    "negative": "negativo",
+    "neutral": "neutro"
+   },
+   "emailFooter": "— Tareas programadas de Vertal Chat",
+   "nothing": "Faltó decir qué programar.",
+   "tooMany": "Ya tienes A1 tareas; borra alguna antes.",
+   "pastEdit": "Esa hora ya pasó. Edita la fecha para reactivarla."
+  },
+  "kind": {
+   "task": "Tarea programada",
+   "reminder": "Recordatorio",
+   "appointment": "Cita",
+   "email_trigger": "Disparador de correo"
+  },
+  "norm": [
+   {
+    "notes": [],
+    "lines": [
+     "Recordatorio: T",
+     "Cuándo: una vez, mié. 25/11 a las 09:02",
+     "No envía correos a terceros",
+     "Zona horaria: America/Sao_Paulo",
+     "Idioma: Español"
+    ],
+    "g": [
+     "Recordatorio: T",
+     "Cuándo: una vez, mié. 25/11 a las 09:02",
+     "No envía correos a terceros",
+     "Zona horaria: America/Sao_Paulo",
+     "Idioma: Español"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Tarea programada: P",
+     "Cuándo: todos los días a las 08:00 (próxima: jue. 26/11 a las 08:00)",
+     "Hacer: P",
+     "Puede enviar correo a: a@b.com",
+     "Puede ejecutar acciones en tus apps conectadas (Vertal Fluxos; costo normal de cada acción)",
+     "También te avisa por correo",
+     "Zona horaria: America/Sao_Paulo",
+     "Idioma: Español"
+    ],
+    "g": [
+     "Tarea programada: P",
+     "Cuándo: todos los días a las 08:00 (próxima: jue. 26/11 a las 08:00)",
+     "Hacer: P",
+     "Puede enviar correo a: a@b.com",
+     "Puede ejecutar acciones en tus apps conectadas (Vertal Fluxos; costo normal de cada acción)",
+     "También te avisa por correo",
+     "Zona horaria: America/Sao_Paulo",
+     "Idioma: Español"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Tarea programada: P",
+     "Cuándo: cada lun., mié. a las 08:00 (próxima: lun. 30/11 a las 08:00)",
+     "Hacer: P",
+     "No envía correos a terceros",
+     "Zona horaria: America/Sao_Paulo",
+     "Idioma: Español"
+    ],
+    "g": [
+     "Tarea programada: P",
+     "Cuándo: cada lun., mié. a las 08:00 (próxima: lun. 30/11 a las 08:00)",
+     "Hacer: P",
+     "No envía correos a terceros",
+     "Zona horaria: America/Sao_Paulo",
+     "Idioma: Español"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Tarea programada: P",
+     "Cuándo: días laborables a las 08:00 (próxima: jue. 26/11 a las 08:00)",
+     "Hacer: P",
+     "No envía correos a terceros",
+     "Zona horaria: America/Sao_Paulo",
+     "Idioma: Español"
+    ],
+    "g": [
+     "Tarea programada: P",
+     "Cuándo: días laborables a las 08:00 (próxima: jue. 26/11 a las 08:00)",
+     "Hacer: P",
+     "No envía correos a terceros",
+     "Zona horaria: America/Sao_Paulo",
+     "Idioma: Español"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Tarea programada: P",
+     "Cuándo: cada mes, día 5, a las 08:00 (próxima: sáb. 05/12 a las 08:00)",
+     "Hacer: P",
+     "No envía correos a terceros",
+     "Zona horaria: America/Sao_Paulo",
+     "Idioma: Español"
+    ],
+    "g": [
+     "Tarea programada: P",
+     "Cuándo: cada mes, día 5, a las 08:00 (próxima: sáb. 05/12 a las 08:00)",
+     "Hacer: P",
+     "No envía correos a terceros",
+     "Zona horaria: America/Sao_Paulo",
+     "Idioma: Español"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Tarea programada: P",
+     "Cuándo: cada 2 h (próxima: mié. 25/11 a las 11:00)",
+     "Hacer: P",
+     "No envía correos a terceros",
+     "Zona horaria: America/Sao_Paulo",
+     "Idioma: Español"
+    ],
+    "g": [
+     "Tarea programada: P",
+     "Cuándo: cada 2 h (próxima: mié. 25/11 a las 11:00)",
+     "Hacer: P",
+     "No envía correos a terceros",
+     "Zona horaria: America/Sao_Paulo",
+     "Idioma: Español"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Tarea programada: P",
+     "Cuándo: cada 15 min (próxima: mié. 25/11 a las 09:15)",
+     "Hacer: P",
+     "No envía correos a terceros",
+     "Zona horaria: America/Sao_Paulo",
+     "Idioma: Español"
+    ],
+    "g": [
+     "Tarea programada: P",
+     "Cuándo: cada 15 min (próxima: mié. 25/11 a las 09:15)",
+     "Hacer: P",
+     "No envía correos a terceros",
+     "Zona horaria: America/Sao_Paulo",
+     "Idioma: Español"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Tarea programada: P",
+     "Cuándo: regla 0 8 * * 1-5 (próxima: jue. 26/11 a las 08:00)",
+     "Hacer: P",
+     "No envía correos a terceros",
+     "Zona horaria: America/Sao_Paulo",
+     "Idioma: Español"
+    ],
+    "g": [
+     "Tarea programada: P",
+     "Cuándo: regla 0 8 * * 1-5 (próxima: jue. 26/11 a las 08:00)",
+     "Hacer: P",
+     "No envía correos a terceros",
+     "Zona horaria: America/Sao_Paulo",
+     "Idioma: Español"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Cita: Dent",
+     "Cuándo: vie. 27/11 a las 15:00 hasta 16:00",
+     "Lugar: Rua",
+     "Agenda: Agenda de Vertal (con enlace para añadir a Google Calendar)",
+     "Recordatorio: 60 min antes",
+     "No envía correos a terceros",
+     "Zona horaria: America/Sao_Paulo",
+     "Idioma: Español"
+    ],
+    "g": [
+     "Cita: Dent",
+     "Cuándo: vie. 27/11 a las 15:00 hasta 16:00",
+     "Lugar: Rua",
+     "Agenda: Google Calendar conectado",
+     "Recordatorio: 60 min antes",
+     "No envía correos a terceros",
+     "Zona horaria: America/Sao_Paulo",
+     "Idioma: Español"
+    ]
+   },
+   {
+    "notes": [],
+    "lines": [
+     "Disparador de correo: RH",
+     "Cuándo: al llegar el correo (revisa cada 5 min)",
+     "Disparador: correo de rh@x.com, asunto \"prop\", búsqueda q (solo correos que lleguen desde ahora; cada correo dispara una vez)",
+     "Criterio: c",
+     "Si es positivo: p",
+     "Si es negativo: n",
+     "Si es neutro: u",
+     "No envía correos a terceros",
+     "Zona horaria: America/Sao_Paulo",
+     "Idioma: Español"
+    ],
+    "g": [
+     "Disparador de correo: RH",
+     "Cuándo: al llegar el correo (revisa cada 5 min)",
+     "Disparador: correo de rh@x.com, asunto \"prop\", búsqueda q (solo correos que lleguen desde ahora; cada correo dispara una vez)",
+     "Criterio: c",
+     "Si es positivo: p",
+     "Si es negativo: n",
+     "Si es neutro: u",
+     "No envía correos a terceros",
+     "Zona horaria: America/Sao_Paulo",
+     "Idioma: Español"
+    ]
+   },
+   {
+    "ok": false,
+    "error": "No entendí cuándo. Di, por ejemplo, \"mañana a las 9\" o \"cada lunes a las 8\"."
+   },
+   {
+    "ok": false,
+    "error": "Esa hora ya pasó."
+   }
+  ],
+  "fmt": "mié. 25/11 a las 09:00",
+  "tpl": [
+   {
+    "id": "reminder",
+    "label": "Recordatorio",
+    "example": "Recuérdame mañana a las 9 pagar la factura"
+   },
+   {
+    "id": "daily_news",
+    "label": "Resumen diario",
+    "example": "Todos los días a las 8 envíame las 5 noticias de tecnología más importantes"
+   },
+   {
+    "id": "weekly_report",
+    "label": "Informe semanal",
+    "example": "Cada lunes a las 9 busca el precio del dólar y dame un resumen de la semana"
+   },
+   {
+    "id": "appointment",
+    "label": "Cita",
+    "example": "Agenda una cita con el dentista el viernes a las 15 y recuérdame 1 hora antes"
+   },
+   {
+    "id": "email_approval",
+    "label": "Correo de aprobación",
+    "example": "Cuando reciba un correo de RR. HH. con asunto propuesta: si es aprobada, avísame y crea un recordatorio para firmar; si es rechazada, avísame"
+   },
+   {
+    "id": "payment",
+    "label": "Pago",
+    "example": "Cuando llegue un correo del banco sobre un pago: si se confirmó, avísame; si falló, avísame con urgencia"
+   }
+  ],
+  "ui": {
+   "name": "Tareas programadas",
+   "button": "Tareas",
+   "description": "Pídelo en el chat: \"recuérdame mañana a las 9\", \"todos los días a las 8…\", \"agenda una cita…\" o \"cuando reciba un correo de…\".",
+   "tabTasks": "Tareas",
+   "tabAgenda": "Agenda",
+   "tabSettings": "Ajustes",
+   "refresh": "Actualizar",
+   "loading": "Cargando…",
+   "empty": "Aún no hay tareas. Ideas para pedir en el chat:",
+   "copied": "Copiado. Pégalo en el chat.",
+   "next": "Próxima",
+   "last": "Última",
+   "runs": "A1 ejecución(es)",
+   "error": "Error",
+   "sendTo": "Puede enviar correo a",
+   "pause": "Pausar",
+   "activate": "Activar",
+   "runNow": "Ejecutar ahora",
+   "history": "Historial",
+   "del": "Borrar",
+   "confirmDelete": "¿Borrar \"A1\"?",
+   "ranNow": "Se ejecutó ahora. El resultado está en la conversación de la tarea.",
+   "neverRan": "Aún no se ha ejecutado.",
+   "agendaEmpty": "No hay citas. Pídelo en el chat: \"agenda una cita…\".",
+   "inGoogle": "En tu Google Calendar",
+   "addGoogle": "Añadir a Google Calendar",
+   "timezone": "Zona horaria",
+   "quiet": "Horario de silencio (disparadores y repeticiones automáticas esperan; la hora que fijes siempre suena)",
+   "until": "hasta",
+   "save": "Guardar",
+   "notifyEmail": "Avisarme también por correo (a tu propia cuenta de Gmail)",
+   "saved": "Ajustes guardados.",
+   "language": "Idioma",
+   "languageHint": "Recordatorios, resultados y avisos salen en este idioma. \"Automático\" usa el idioma en que pediste la tarea.",
+   "langAuto": "Automático",
+   "toastFallback": "Se ejecutó ahora. Mira el resultado en la conversación.",
+   "taskFallback": "Tarea programada",
+   "cardHost": "Vertal Chat · Tareas programadas",
+   "warning": "Aviso",
+   "newTask": "nueva tarea",
+   "task": "tarea",
+   "deleteReason": "Borrar esta tarea programada (y la cita de la agenda, si la hay). No se puede deshacer.",
+   "permSendTo": "Podrá enviar correo a: A1",
+   "permApps": "Podrá ejecutar acciones en tus apps conectadas (Vertal Fluxos)",
+   "permNotify": "También te avisa por correo",
+   "kind": {
+    "task": "Tarea",
+    "reminder": "Recordatorio",
+    "appointment": "Cita",
+    "email_trigger": "Disparador de correo"
+   },
+   "status": {
+    "active": "Activa",
+    "paused": "Pausada",
+    "done": "Completada",
+    "failed": "Falló"
+   },
+   "runStatus": {
+    "running": "en curso",
+    "ok": "ok",
+    "error": "error",
+    "skipped": "omitida"
+   },
+   "runTrigger": {
+    "schedule": "programada",
+    "retry": "reintento",
+    "manual": "manual",
+    "email": "correo"
+   },
+   "errors": {
+    "not_found": "Las tareas programadas aún no están habilitadas para tu cuenta.",
+    "task_not_found": "No encontré esa tarea.",
+    "Unauthorized": "Tu sesión expiró. Vuelve a iniciar sesión.",
+    "save_failed": "No pude guardar ahora. Inténtalo de nuevo en un momento.",
+    "rate": "Demasiadas solicitudes en poco tiempo. Espera un minuto.",
+    "generic": "No pude conectar con las tareas programadas ahora.",
+    "notOk": "No funcionó."
+   }
+  },
+  "dl": "es-ES"
+ },
+ "noLang": [
+  "Lembrete: T",
+  "Quando: uma vez, qui. 26/11 às 09:00",
+  "Não envia e-mail a terceiros",
+  "Fuso: America/Sao_Paulo"
+ ]
+}

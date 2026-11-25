@@ -120,6 +120,8 @@ produção diverge do repositório), com backup antes.
 | `supabase/functions/creative-router/index.ts` | passa `scheduler: true` só se `schedulerAllowed()` e a conversa fala de agendar | nada muda |
 | `src/lib/chatAgent/runAction.ts` | `case 'agendador'` + rótulo de progresso | o modelo nunca devolve a ação |
 | `src/components/vertal-chat/VertalChat.tsx` | `<SchedulerEntryButton />` no topo; rótulo "Resumo" no cartão quando o método é `TAREFA AGENDADA` | botão não renderiza nada (teste) |
+| `src/components/vertal-chat/VertalChat.tsx` (cartão "Permitir esta ação?") | rótulos traduzidos só com `labels` do Agendador + flag do build | HTML idêntico (teste com SHA-256) |
+| `src/lib/chatAgent/runAction.ts` | campo opcional `labels` em `ApiApprovalRequest` | ninguém além do Agendador preenche |
 | `supabase/config.toml` | `verify_jwt = false` para a função nova | — |
 | `.env.production` | `VITE_VERTAL_CHAT_SCHEDULER=true` | servidor decide por usuário |
 
@@ -131,6 +133,10 @@ produção diverge do repositório), com backup antes.
 - `src/lib/chatScheduler/integration.test.tsx`: prompt com a flag, parse da ação, cartão de
   confirmação obrigatório, mudança de permissão pede confirmação, botão some com a flag desligada.
 - `src/lib/chatScheduler/promptBaseline.test.ts`: regressão do prompt do Vertal Chat.
+- `src/lib/chatScheduler/i18n.test.ts`: todo idioma tem toda chave obrigatória, marcadores iguais ao pt-BR,
+  fallback pt-BR e herança de variante, de-CH sem ß, pt/en/es idênticos ao main (fixture), detecção por escrita,
+  datas via Intl, RTL, ISO explícito validado (fr, de, ru, ja, ar).
+- `src/components/vertal-chat/ApiApprovalDialog.i18n.test.tsx`: cartão compartilhado idêntico sem a flag/rótulos.
 - `deno check` em `vertal-chat-scheduler/index.ts` e `creative-router/index.ts` (sem erros novos;
   os 7 erros de tipo já existentes no main continuam iguais).
 
@@ -147,13 +153,50 @@ dos gatilhos de e-mail. Ordem para escolher o idioma:
 4. Idioma do **perfil** (`user_metadata.locale`, quando o login traz).
 5. `pt-BR`.
 
-Textos fixos existem em pt-BR, en e es (`SCHED_TEXT` no módulo compartilhado e
-`src/lib/chatScheduler/i18n.ts` na tela; o app não tem i18n global). Para outros idiomas, a IA
-responde no idioma guardado e os textos fixos saem em inglês. O executor recebe a instrução
-"IDIOMA: escreva o reply SEMPRE em …". "Quando" em inglês/espanhol ("in 2 minutes", "tomorrow at 9am",
-"en 2 minutos", "mañana a las 9") é traduzido para o leitor de datas (`parseWhen`/`whenToPt`); o
-português continua exatamente como antes. Migração aditiva: `20261125120000_vertal_chat_scheduler_lang.sql`.
-O prompt global do Vertal Chat não muda (só o bloco do Agendador, que já é atrás da flag).
+Migração aditiva (só a coluna `lang`): `20261125120000_vertal_chat_scheduler_lang.sql`. A versão multilíngue
+abaixo **não mexe no banco** (a coluna `lang` já aceita qualquer código).
+
+### 65 idiomas e variantes (dicionário único)
+
+Todos os textos fixos (painel, botão, avisos/toasts, cartão de confirmação, lembretes, avisos de falha e por
+e-mail, mensagens dos gatilhos de e-mail, modelos prontos, seletor **Ajustes → Idioma** com cada idioma no próprio
+nome e o cartão "Permitir esta ação?" quando vem do Agendador) saem de **um dicionário só**:
+`supabase/functions/_shared/chatSchedulerI18n.ts` (estrutura, chaves, metadados, pt-BR/en/es) +
+`supabase/functions/_shared/chatSchedulerLangs/*.ts` (demais idiomas).
+
+Idiomas: pt-BR, pt-PT, en, es, fr (+ fr-BE, fr-CH), de (+ de-CH, sem ß), it (+ it-CH), nl (+ nl-BE/flamengo), rm
+(romanche), ru, uk, bg, sr (cirílico), mk, kk, pl, cs, sk, sl, hr, bs, sv, nb, da, fi, is, et, lt, lv, hu, ro, el,
+sq, tr, az, uz, ka, hy, ar, he, fa, ur, zh-Hans, zh-Hant, ja, ko, hi, bn, ta, th, vi, id, ms, fil, sw, ca, eu, gl,
+ga, cy.
+
+- **Busca de uma chave**: idioma → idioma-base da variante (de-CH → de; pt-PT → pt-BR) → apelido no mesmo
+  idioma (ex.: `tabTasks` = `button`) → **pt-BR**. Código desconhecido (ex.: `xx`) usa o inglês.
+- **pt-BR, en e es são idênticos ao que já existia** (teste com fixture medida no main `ebbae80`).
+- **Carregamento**: o servidor registra todos os idiomas no import da função; no navegador, pt/en/es vêm no
+  bundle e os demais são baixados por import dinâmico **só quando o Agendador está liberado** para o usuário.
+- **Datas**: pt/en/es mantêm o formato de antes; os demais usam `Intl` no locale do idioma (dia da semana,
+  data e hora; dias da semana nas regras semanais; lista com `Intl.ListFormat`).
+- **Detecção do idioma da mensagem** (reserva; o modelo manda `lang`): primeiro pela escrita (cirílico com
+  uk/bg/sr/mk/kk, árabe com fa/ur, hebraico, CJK com ja/zh-Hans/zh-Hant/ko, grego, tailandês, devanágari,
+  bengali, tâmil, armênio, georgiano); depois pt/en/es como antes; outro idioma latino só quando as palavras dele
+  pesam mais. `normLang` entende variantes (`zh-TW` → zh-Hant, `de-CH`, `nl_BE`, `no` → nb, `iw` → he…).
+- **RTL**: árabe, hebraico, persa e urdu abrem o painel e o cartão com `dir="rtl"`.
+- **Datas faladas em outros idiomas**: o leitor determinístico continua só para pt/en/es. Para os demais, a regra
+  do prompt (só com a flag) manda o modelo calcular e enviar `"at"` em ISO 8601 **com fuso** (ex.
+  `2026-11-26T09:00:00+01:00`) e `"timezone"` (IANA). O servidor valida (`parseExplicitIso`: formato estrito, data
+  real, até 5 anos, não pode estar no passado; fuso inválido do modelo cai no fuso do usuário). Sem `at`, o texto
+  de `when` nesses idiomas **não é adivinhado**: volta o erro "não entendi quando" no idioma do usuário.
+- **Pedido de lembrete em outro idioma**: `wantsScheduler` reconhece "rappelle-moi", "erinnere", "напомни",
+  "リマインド", "ذكرني", "याद दिला", "提醒", "알려"… (a ferramenta só entra no prompt de quem tem a flag).
+
+**As traduções fora de pt-BR/en/es foram feitas por máquina (IA) e precisam de revisão de falante nativo**
+antes de anunciar esses idiomas. Romanche (rm) é o que mais precisa de revisão.
+
+### Cartão "Permitir esta ação?" (componente compartilhado)
+
+`ApiApprovalDialog` em `VertalChat.tsx` só usa os rótulos traduzidos quando o pedido traz `labels` (só o
+Agendador manda) **e** `VITE_VERTAL_CHAT_SCHEDULER` está ligada. Sem isso, o HTML é byte a byte o do main
+(teste `ApiApprovalDialog.i18n.test.tsx` com SHA-256 medido antes da mudança).
 
 ## Limites conhecidos
 
@@ -164,5 +207,6 @@ O prompt global do Vertal Chat não muda (só o bloco do Agendador, que já é a
 - Gatilho de e-mail usa checagem periódica (2–60 min, padrão 5), não push do Gmail.
 - Aviso por e-mail vai só para a própria conta Gmail conectada; não há push no celular ainda.
 - Um usuário só tem 50 tarefas ativas/pausadas.
-- O cabeçalho do cartão de permissão do chat ("TAREFA AGENDADA") e seus botões são do componente
-  genérico do Vertal Chat e continuam em português.
+- Traduções fora de pt-BR/en/es: feitas por máquina, sem revisão nativa ainda.
+- Datas escritas em idiomas fora de pt/en/es dependem do modelo mandar `at` em ISO (o servidor valida, não adivinha).
+- Mensagens que vão para o modelo (resumo da ferramenta) seguem em português; o que o usuário vê sai no idioma dele.
