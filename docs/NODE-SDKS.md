@@ -224,3 +224,27 @@ Os apps chamam `POST /functions/v1/vertal-node-heartbeat` com o token do usuári
 - [ ] Google Ad Manager: conta, aprovação de rewarded web, ad unit → `VITE_GAM_REWARDED_AD_UNIT`.
 - [ ] Rodar as migrações e publicar as 2 Edge Functions.
 - [ ] Atualizar a política de privacidade do Vertal mencionando os SDKs de banda usados e os anúncios do Google.
+
+---
+
+## vertal.js no Vertal Dev (consentimento reaproveitado)
+
+O app carrega o loader `vertal.js` (Vertal DePIN; snippet e API em `kuboprotocol/vertal-ai-grid`,
+`docs/VERTAL-JS.md`) só para quem **já aceitou o Vertal Node**. O painel de recompensas
+(`VertalNodeCard`) não muda: `src/lib/vertal-js.ts` apenas **lê** o aceite em
+`public.vertal_nodes.opted_in` (gravado pelo `vertal-node-heartbeat` depois da tela de consentimento
+do parceiro no app nativo; RLS = só as próprias linhas). Montado uma vez em `src/main.tsx` (`startVertalJs()`, sem UI; acompanha a sessão do Supabase).
+
+| Estado | Efeito |
+|---|---|
+| `VITE_VERTAL_JS_SRC` (https) ou `VITE_VERTAL_APP_ID` vazio | nada: sem consulta, sem script |
+| logado e algum dispositivo com `opted_in = true` | no idle: `Vertal.init({ appId })` + `Vertal.consent.grant()` (o script só baixa aqui) |
+| dispositivos só com opt-out, ou logout | `Vertal.consent.revoke()` (ou só apaga `vertal:v1:config` se o script não foi liberado) |
+| sem dispositivo registrado | nada |
+
+Esse consentimento cobre só o script (status, recompensas, deep link para o app). Compartilhar banda
+continua sendo opt-in explícito no app nativo; o navegador nunca liga nada. Releitura do aceite quando a
+aba volta a ficar visível (no máximo a cada 10 min). Sem logs no console. Testes: `src/test/vertal-js.test.ts`.
+
+- [ ] Publicar o gateway com `/sdk/v1/vertal.js` e definir `VITE_VERTAL_JS_SRC` / `VITE_VERTAL_APP_ID` no build.
+- [ ] Liberar o domínio do gateway na CSP do site (`script-src` e `connect-src`), se houver CSP.
