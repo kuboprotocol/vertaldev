@@ -56,7 +56,7 @@ describe('PostAgent do Vertal Fluxos', () => {
     const o = fluxosPostAgentOptions({ routerUrl: 'https://p.supabase.co/functions/v1/creative-router', anonKey: 'anon', token: 'vat1_tok', spec });
     expect(o).toMatchObject({
       post_url: 'https://p.supabase.co/functions/v1/creative-router', content_type: 'json', method: 'post',
-      no_merge: true, emit_events: true, parse_body: true,
+      no_merge: true, emit_events: true, parse_body: true, event_headers: 'Content-Type',
       payload: { op: 'run', app: 'todoist', kind: 'action', key: 'createTask', parameters: { content: '{{ title }}' } },
     });
     expect((o.headers as Record<string, string>)[AGENT_TOKEN_HEADER]).toBe('vat1_tok');

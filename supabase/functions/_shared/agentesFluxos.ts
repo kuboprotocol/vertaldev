@@ -121,7 +121,8 @@ export function fluxosAgentName(spec: FluxosAgentSpec): string {
 /**
  * Opções do PostAgent que roda a ação/busca do Fluxos a cada evento recebido
  * (ou na agenda). A resposta (JSON) vira um evento do agente (`emit_events`,
- * `parse_body`), que alimenta outros agentes ou um fluxo. `no_merge: true`: só
+ * `parse_body`), que alimenta outros agentes ou um fluxo: `body.result` (texto) e
+ * `body.data` (objeto, quando cabe). `no_merge: true`: só
  * o payload (com Liquid já interpolado) é enviado, nunca o evento inteiro.
  */
 export function fluxosPostAgentOptions(input: { routerUrl: string; anonKey: string; token: string; spec: FluxosAgentSpec }): Record<string, unknown> {
@@ -145,6 +146,8 @@ export function fluxosPostAgentOptions(input: { routerUrl: string; anonKey: stri
     },
     emit_events: true,
     parse_body: true,
+    // Só o tipo do conteúdo vai para o evento (sem cookies e cabeçalhos da plataforma).
+    event_headers: "Content-Type",
     no_merge: true,
     output_mode: "clean",
   };
