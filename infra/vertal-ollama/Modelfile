@@ -1,7 +1,8 @@
-# Modelo "vertal-coder": base de código pequena o bastante para CPU.
-# Pouca RAM livre? Troque o FROM por qwen3:4b (≈2,5 GB) ou qwen2.5-coder:1.5b (≈1 GB), ambos Apache-2.0.
+# Modelo "vertal-coder" (Apache-2.0). Padrão: qwen2.5-coder:1.5b (≈1 GB) — cabe na vertal-e2b-vm
+# junto do E2B (1 OCPU/12 GB, 8 GB em hugepages). Medido lá em 24/11/2026: ~19 tok/s lendo o prompt,
+# ~6-7 tok/s gerando. Com mais RAM/CPU (ou GPU), troque por qwen2.5-coder:7b/14b (também Apache-2.0).
 # Evite qwen2.5-coder:3b: a licença dele (Qwen Research) restringe uso comercial.
-FROM qwen2.5-coder:7b
+FROM qwen2.5-coder:1.5b
 PARAMETER num_ctx 8192
 PARAMETER temperature 0.2
 PARAMETER num_thread 2

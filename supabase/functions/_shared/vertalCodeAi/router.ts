@@ -1,16 +1,18 @@
 // VERTAL Code AI · roteador "grátis primeiro".
 //
 //   pedido → (modo, esforço, precisa de visão?) → cadeia de modelos:
-//     1. modelos grátis na nuvem (cota diária gratuita dos provedores)
-//     2. servidor próprio Vertal (Ollama na nuvem, VERTAL_OLLAMA_URL) — sem cota, mais lento
+//     1. LLM própria Vertal (VERTAL_OLLAMA_URL e, opcional, VERTAL_OLLAMA_URL_2) — só para pedidos
+//        que cabem no orçamento dela (contexto pequeno, tempo curto); senão pula
+//     2. modelos grátis na nuvem (cota diária gratuita dos provedores)
 //     3. modelos baratos pagos — SÓ se VERTAL_CODE_AI_ALLOW_PAID=true
+//   VERTAL_CODE_AI_PREFER_SELF_HOSTED=false volta à ordem antiga (grátis → própria → pago).
 //
 // Módulo PURO (sem Deno, sem rede): roda no Vitest, no navegador e na edge function.
 // É 100% aditivo: não usa nem altera o modelRouter.ts / llm.ts do Vibe Code.
 //
 // Marca: o usuário só vê `label` (nomes Vertal). `provider`/`model` ficam no servidor e nos logs.
 
-export type VcaProvider = "openrouter" | "gemini" | "groq" | "ollama";
+export type VcaProvider = "openrouter" | "gemini" | "groq" | "ollama" | "deepseek";
 export type VcaCost = "free" | "self_hosted" | "paid";
 export type VcaEffort = "auto" | "low" | "high" | "max";
 export type VcaMode = "plan" | "build";
@@ -36,6 +38,19 @@ export interface VcaModel {
   reasoning: boolean;
   /** Pontos fortes: em qual esforço este modelo entra (ordem importa). */
   efforts: VcaEffort[];
+  /** Orçamento da LLM própria (CPU/GPU nossa): fora dele, a cadeia pula para o próximo. */
+  budget?: VcaBudget;
+}
+
+export interface VcaBudget {
+  /** Tempo máximo até o 1º pedaço da resposta (ms). */
+  firstTokenMs: number;
+  /** Tempo máximo total da chamada (ms). */
+  totalMs: number;
+  /** Maior entrada (tokens estimados) que ela aceita. */
+  maxInputTokens: number;
+  /** Teto de tokens de saída pedidos a ela. */
+  maxOutputTokens: number;
 }
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -165,8 +180,23 @@ export const VCA_FREE_CATALOG: VcaModel[] = [
   },
 ];
 
-/** Modelo barato pago (US$0,05/US$0,20 por 1M tokens em 24/11/2026). Só com VERTAL_CODE_AI_ALLOW_PAID=true. */
+/** Modelos baratos pagos. Só com VERTAL_CODE_AI_ALLOW_PAID=true. Direto no provedor primeiro (chave DEEPSEEK_API_KEY). */
 export const VCA_PAID_CATALOG: VcaModel[] = [
+  {
+    id: "vca-turbo-direct",
+    label: "Vertal Turbo Direto",
+    provider: "deepseek",
+    url: "https://api.deepseek.com/chat/completions",
+    keyEnv: "DEEPSEEK_API_KEY",
+    model: "deepseek-chat",
+    cost: "paid",
+    vision: false,
+    context: 64_000,
+    jsonMode: true,
+    reasoning: false,
+    efforts: ["auto", "low", "high", "max"],
+  },
+  // Modelo barato pago via OpenRouter (US$0,05/US$0,20 por 1M tokens em 24/11/2026).
   {
     id: "vca-turbo-paid",
     label: "Vertal Turbo",
@@ -184,6 +214,14 @@ export const VCA_PAID_CATALOG: VcaModel[] = [
 ];
 
 export const DEFAULT_OLLAMA_MODEL = "qwen2.5-coder:7b";
+
+/** Orçamento padrão da LLM própria em CPU (VM Oracle): ~19 tok/s lendo, ~6 tok/s gerando (medido em 24/11/2026). */
+export const DEFAULT_SELF_HOSTED_BUDGET: VcaBudget = {
+  firstTokenMs: 20_000,
+  totalMs: 75_000,
+  maxInputTokens: 1_500,
+  maxOutputTokens: 1_024,
+};
 
 export type VcaEnv = Record<string, string | undefined>;
 
@@ -211,27 +249,68 @@ export function isVcaUserAllowed(env: VcaEnv, userId: string | null | undefined)
   return !!userId && ids.includes(userId.trim().toLowerCase());
 }
 
-/** Servidor próprio (Ollama na nuvem), se configurado. URL base sem /v1. */
-export function selfHostedModel(env: VcaEnv): VcaModel | null {
-  const raw = (env.VERTAL_OLLAMA_URL ?? "").trim().replace(/\/+$/, "");
+const num = (v: string | undefined, d: number) => (Number(v) > 0 ? Number(v) : d);
+
+/**
+ * Endpoint próprio n (1 ou 2), genérico: qualquer servidor OpenAI-compatível (Ollama na VM, GPU serverless…).
+ * Trocar de máquina = trocar só os segredos. n=1: VERTAL_OLLAMA_URL/_TOKEN/_MODEL/_CONTEXT;
+ * n=2: VERTAL_OLLAMA_URL_2/_TOKEN_2/_MODEL_2/_CONTEXT_2. Orçamento: VERTAL_OLLAMA_FIRST_TOKEN_MS,
+ * _TOTAL_MS, _MAX_INPUT_TOKENS, _MAX_OUTPUT_TOKENS (com sufixo _2 para o segundo).
+ */
+function selfHostedAt(env: VcaEnv, n: 1 | 2): VcaModel | null {
+  const sfx = n === 1 ? "" : "_2";
+  const raw = (env[`VERTAL_OLLAMA_URL${sfx}`] ?? "").trim().replace(/\/+$/, "");
   if (!/^https?:\/\//i.test(raw)) return null;
   const base = raw.replace(/\/v1$/i, "");
+  const b = DEFAULT_SELF_HOSTED_BUDGET;
   return {
-    id: "vca-self-hosted",
-    label: "Vertal Própria",
+    id: n === 1 ? "vca-self-hosted" : "vca-self-hosted-2",
+    label: n === 1 ? "Vertal Própria" : "Vertal Própria 2",
     provider: "ollama",
     url: `${base}/v1/chat/completions`,
-    // Ollama não tem autenticação: o kit de deploy põe um proxy com token (VERTAL_OLLAMA_TOKEN).
-    keyEnv: "VERTAL_OLLAMA_TOKEN",
-    model: (env.VERTAL_OLLAMA_MODEL ?? "").trim() || DEFAULT_OLLAMA_MODEL,
+    // O servidor fica atrás de um proxy com token (VERTAL_OLLAMA_TOKEN / _2).
+    keyEnv: `VERTAL_OLLAMA_TOKEN${sfx}`,
+    model: (env[`VERTAL_OLLAMA_MODEL${sfx}`] ?? "").trim() || DEFAULT_OLLAMA_MODEL,
     cost: "self_hosted",
     vision: false,
     // Em CPU, contexto grande = minutos de processamento. Mantemos pequeno.
-    context: Number(env.VERTAL_OLLAMA_CONTEXT) > 0 ? Number(env.VERTAL_OLLAMA_CONTEXT) : 8_192,
+    context: num(env[`VERTAL_OLLAMA_CONTEXT${sfx}`], 8_192),
     jsonMode: true,
     reasoning: false,
     efforts: ["auto", "low", "high", "max"],
+    budget: {
+      firstTokenMs: num(env[`VERTAL_OLLAMA_FIRST_TOKEN_MS${sfx}`], b.firstTokenMs),
+      totalMs: num(env[`VERTAL_OLLAMA_TOTAL_MS${sfx}`], b.totalMs),
+      maxInputTokens: num(env[`VERTAL_OLLAMA_MAX_INPUT_TOKENS${sfx}`], b.maxInputTokens),
+      maxOutputTokens: num(env[`VERTAL_OLLAMA_MAX_OUTPUT_TOKENS${sfx}`], b.maxOutputTokens),
+    },
   };
+}
+
+/** Servidor próprio principal (VERTAL_OLLAMA_URL), se configurado. URL base sem /v1. */
+export function selfHostedModel(env: VcaEnv): VcaModel | null {
+  return selfHostedAt(env, 1);
+}
+
+/** Todos os endpoints próprios configurados, na ordem 1 → 2. */
+export function selfHostedModels(env: VcaEnv): VcaModel[] {
+  return [selfHostedAt(env, 1), selfHostedAt(env, 2)].filter((m): m is VcaModel => !!m);
+}
+
+/** Estimativa barata de tokens (≈3,5 caracteres por token; imagem conta como 1 000). */
+export function estimateTokens(messages: VcaChatMessage[]): number {
+  let chars = 0;
+  for (const m of messages) {
+    if (typeof m.content === "string") chars += m.content.length;
+    else for (const p of m.content) chars += p.type === "text" ? p.text.length : 3_500;
+  }
+  return Math.ceil(chars / 3.5);
+}
+
+/** A LLM própria aguenta esta chamada? (entrada pequena o bastante e tempo suficiente no prazo) */
+export function withinSelfHostedBudget(m: VcaModel, inputTokens: number, msLeft = Infinity): boolean {
+  if (!m.budget) return true;
+  return inputTokens <= m.budget.maxInputTokens && msLeft >= m.budget.firstTokenMs + 5_000;
 }
 
 /** Lista grátis: VERTAL_CODE_AI_FREE_MODELS="id-openrouter-1,id-2" substitui só os modelos do OpenRouter. */
@@ -278,8 +357,8 @@ export interface ChainOptions {
 
 /**
  * Cadeia de modelos para um pedido. Só entra quem tem chave configurada.
- * Ordem: grátis (os do esforço pedido primeiro) → servidor próprio → pago (se liberado).
- * VERTAL_CODE_AI_PREFER_SELF_HOSTED=true põe o servidor próprio na frente.
+ * Ordem: LLM própria (se couber no orçamento dela) → grátis (os do esforço pedido primeiro) → pago (se liberado).
+ * VERTAL_CODE_AI_PREFER_SELF_HOSTED=false põe a própria depois dos grátis.
  */
 export function buildChain(env: VcaEnv, opts: ChainOptions): VcaModel[] {
   const hasKey = (m: VcaModel) => m.provider === "ollama" || !!(env[m.keyEnv] ?? "").trim();
@@ -302,13 +381,14 @@ export function buildChain(env: VcaEnv, opts: ChainOptions): VcaModel[] {
     .map((x) => x.m)
     .filter((m) => m.model === "openrouter/free" || rank(m) < 99);
 
-  const self = selfHostedModel(env);
-  const selfList = self && fits(self) ? [self] : [];
+  const selfList = selfHostedModels(env).filter(
+    (m) => fits(m) && (!opts.promptTokens || opts.promptTokens <= (m.budget?.maxInputTokens ?? Infinity)),
+  );
   const paid = truthy(env.VERTAL_CODE_AI_ALLOW_PAID) ? VCA_PAID_CATALOG.filter((m) => hasKey(m) && fits(m)) : [];
 
-  const ordered = truthy(env.VERTAL_CODE_AI_PREFER_SELF_HOSTED)
-    ? [...selfList, ...freeSorted, ...paid]
-    : [...freeSorted, ...selfList, ...paid];
+  // Padrão (decisão de 24/11/2026): LLM própria primeiro. "false" volta à ordem antiga.
+  const selfFirst = !/^(0|false|no|off|nao|não)$/i.test((env.VERTAL_CODE_AI_PREFER_SELF_HOSTED ?? "").trim());
+  const ordered = selfFirst ? [...selfList, ...freeSorted, ...paid] : [...freeSorted, ...selfList, ...paid];
   const seen = new Set<string>();
   return ordered.filter((m) => (seen.has(m.id) ? false : (seen.add(m.id), true)));
 }
@@ -337,15 +417,16 @@ export function requestBody(
   const body: Record<string, unknown> = {
     model: m.model,
     messages: m.vision ? messages : messages.map(stripImages),
-    max_tokens: opts.maxTokens,
+    max_tokens: m.budget ? Math.min(opts.maxTokens, m.budget.maxOutputTokens) : opts.maxTokens,
     temperature: opts.temperature ?? 0.2,
   };
   if (opts.json && m.jsonMode) body.response_format = { type: "json_object" };
   if (m.provider === "openrouter" && m.reasoning && opts.effort !== "auto") {
     body.reasoning = { effort: opts.effort === "max" ? "high" : opts.effort };
   }
-  // Ollama: num_ctx fica no Modelfile do kit de deploy (a API compatível não recebe "options").
-  if (m.provider === "ollama") body.stream = false;
+  // LLM própria: num_ctx fica no Modelfile do kit de deploy (a API compatível não recebe "options").
+  // Com orçamento, vem em streaming para podermos cortar se o 1º token demorar.
+  if (m.provider === "ollama") body.stream = !!m.budget;
   return body;
 }
 

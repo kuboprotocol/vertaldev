@@ -8,6 +8,11 @@ import {
   selfHostedModel,
   shouldFallback,
   VCA_FREE_CATALOG,
+  VCA_PAID_CATALOG,
+  DEFAULT_SELF_HOSTED_BUDGET,
+  estimateTokens,
+  selfHostedModels,
+  withinSelfHostedBudget,
 } from '../../../supabase/functions/_shared/vertalCodeAi/router';
 
 const OR = { OPENROUTER_API_KEY: 'x' };
@@ -36,14 +41,69 @@ describe('VERTAL Code AI · roteador grátis primeiro', () => {
     expect(chain.filter((m) => m.cost === 'paid')).toHaveLength(1);
   });
 
-  it('servidor próprio entra depois dos grátis e antes do pago (ou na frente, se preferido)', () => {
+  it('LLM própria vem primeiro por padrão, depois grátis, depois pago (e "false" volta à ordem antiga)', () => {
     const env = { ...OR, VERTAL_OLLAMA_URL: 'https://ollama.vertal.dev/', VERTAL_CODE_AI_ALLOW_PAID: '1' };
     const chain = buildChain(env, { effort: 'auto' });
     const costs = chain.map((m) => m.cost);
-    expect(costs.indexOf('self_hosted')).toBeGreaterThan(costs.lastIndexOf('free'));
-    expect(costs.indexOf('self_hosted')).toBeLessThan(costs.indexOf('paid'));
-    const pref = buildChain({ ...env, VERTAL_CODE_AI_PREFER_SELF_HOSTED: 'true' }, { effort: 'auto' });
-    expect(pref[0].cost).toBe('self_hosted');
+    expect(costs[0]).toBe('self_hosted');
+    expect(costs.indexOf('free')).toBeGreaterThan(0);
+    expect(costs.lastIndexOf('free')).toBeLessThan(costs.indexOf('paid'));
+    const old = buildChain({ ...env, VERTAL_CODE_AI_PREFER_SELF_HOSTED: 'false' }, { effort: 'auto' });
+    const oc = old.map((m) => m.cost);
+    expect(oc.indexOf('self_hosted')).toBeGreaterThan(oc.lastIndexOf('free'));
+    expect(oc.indexOf('self_hosted')).toBeLessThan(oc.indexOf('paid'));
+    expect(buildChain({ ...env, VERTAL_CODE_AI_PREFER_SELF_HOSTED: 'true' }, { effort: 'auto' })[0].cost).toBe('self_hosted');
+  });
+
+  it('ordem decidida: própria → OpenRouter grátis → pago direto → pago via OpenRouter', () => {
+    const env = { ...OR, DEEPSEEK_API_KEY: 'd', VERTAL_OLLAMA_URL: 'https://llm.vertalrun.com', VERTAL_CODE_AI_ALLOW_PAID: 'true' };
+    const ids = buildChain(env, { effort: 'auto' }).map((m) => m.id);
+    expect(ids[0]).toBe('vca-self-hosted');
+    expect(ids.slice(-2)).toEqual(['vca-turbo-direct', 'vca-turbo-paid']);
+    const direct = VCA_PAID_CATALOG.find((m) => m.id === 'vca-turbo-direct')!;
+    expect(direct.keyEnv).toBe('DEEPSEEK_API_KEY');
+    // sem liberar pago, nada pago entra mesmo com a chave
+    expect(buildChain({ ...env, VERTAL_CODE_AI_ALLOW_PAID: '' }, { effort: 'auto' }).some((m) => m.cost === 'paid')).toBe(false);
+  });
+
+  it('pedido grande pula a LLM própria (fica para a reserva)', () => {
+    const env = { ...OR, VERTAL_OLLAMA_URL: 'https://llm.vertalrun.com' };
+    expect(buildChain(env, { effort: 'auto', promptTokens: 200 })[0].id).toBe('vca-self-hosted');
+    expect(buildChain(env, { effort: 'auto', promptTokens: 5_000 }).some((m) => m.cost === 'self_hosted')).toBe(false);
+    const bigger = buildChain({ ...env, VERTAL_OLLAMA_MAX_INPUT_TOKENS: '6000' }, { effort: 'auto', promptTokens: 5_000 });
+    expect(bigger[0].id).toBe('vca-self-hosted');
+  });
+
+  it('orçamento da LLM própria: entrada, tempo e teto de saída', () => {
+    const m = selfHostedModel({ VERTAL_OLLAMA_URL: 'https://llm.vertalrun.com' })!;
+    expect(m.budget).toEqual(DEFAULT_SELF_HOSTED_BUDGET);
+    expect(withinSelfHostedBudget(m, 500, 60_000)).toBe(true);
+    expect(withinSelfHostedBudget(m, 5_000, 60_000)).toBe(false);
+    expect(withinSelfHostedBudget(m, 500, 10_000)).toBe(false);
+    const body = requestBody(m, [{ role: 'user', content: 'oi' }], { effort: 'auto', json: true, maxTokens: 8_000 });
+    expect(body.max_tokens).toBe(DEFAULT_SELF_HOSTED_BUDGET.maxOutputTokens);
+    expect(body.stream).toBe(true);
+    expect(estimateTokens([{ role: 'user', content: 'x'.repeat(350) }])).toBe(100);
+  });
+
+  it('segundo endpoint próprio (ex.: GPU) só por segredo, com URL/token/modelo próprios', () => {
+    const env = {
+      ...OR,
+      VERTAL_OLLAMA_URL: 'https://llm.vertalrun.com',
+      VERTAL_OLLAMA_URL_2: 'https://gpu.example.com/v1',
+      VERTAL_OLLAMA_MODEL_2: 'vertal-coder-gpu',
+      VERTAL_OLLAMA_MAX_INPUT_TOKENS_2: '30000',
+    };
+    const own = selfHostedModels(env);
+    expect(own.map((m) => m.id)).toEqual(['vca-self-hosted', 'vca-self-hosted-2']);
+    expect(own[1].url).toBe('https://gpu.example.com/v1/chat/completions');
+    expect(own[1].keyEnv).toBe('VERTAL_OLLAMA_TOKEN_2');
+    expect(own[1].model).toBe('vertal-coder-gpu');
+    // pedido médio: só o 2º (mais forte) aguenta
+    const chain = buildChain(env, { effort: 'auto', promptTokens: 5_000 });
+    expect(chain[0].id).toBe('vca-self-hosted-2');
+    expect(chain.some((m) => m.id === 'vca-self-hosted')).toBe(false);
+    expect(selfHostedModels({ VERTAL_OLLAMA_URL_2: 'https://gpu.example.com' }).map((m) => m.id)).toEqual(['vca-self-hosted-2']);
   });
 
   it('monta a URL do Ollama compatível com OpenAI e o modelo padrão para CPU', () => {

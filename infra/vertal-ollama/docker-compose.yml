@@ -1,5 +1,5 @@
 # VERTAL Code AI · servidor próprio de modelo (Ollama) atrás de um proxy com token.
-# Pensado para CPU (sem GPU): Oracle Ampere A1 (ARM) ou a VM vertal-e2b-vm.
+# Pensado para CPU (sem GPU): Oracle Ampere A1 (ARM) ou a VM vertal-e2b-vm (x86, modo túnel: docker-compose.tunnel.yml).
 # Ollama NÃO tem autenticação: ele só escuta na rede interna; o Caddy exige o token.
 services:
   ollama:
