@@ -51,10 +51,11 @@ class CashRavenNodeSdk : NodeSdk {
         if (c.isOptedIn()) return onConsentResult(true)
         // requestConsent precisa de uma Activity real (a tela é do SDK).
         if (activity == null) return onConsentResult(false)
-        // Listener explícito (CrConsentListener.onConsent): funciona seja ou não `fun interface`.
+        // Assinatura 4.1.4: requestConsent(activity, <Boolean com default>, listener) (@JvmOverloads);
+        // em Kotlin o listener vai nomeado para usar o default do Boolean.
         c.requestConsent(
             activity,
-            object : CrConsentListener {
+            listener = object : CrConsentListener {
                 override fun onConsent(result: CrConsentResult) = onConsentResult(result == CrConsentResult.GRANTED)
             },
         )
