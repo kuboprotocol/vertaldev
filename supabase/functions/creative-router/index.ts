@@ -94,6 +94,7 @@ import { decodeImageDataUrl, generateChatImage } from "../_shared/chatImage.ts";
 import { GMAIL_SECRETARY_COST } from "../_shared/gmailBilling.ts";
 // Agendador do Vertal Chat: desligado por padrão (VERTAL_CHAT_SCHEDULER_ENABLED + VERTAL_CHAT_SCHEDULER_USER_IDS).
 import { schedulerAllowed, wantsScheduler } from "../_shared/chatScheduler.ts";
+import { vertalPersonaEnabled, withVertalPersona } from "../_shared/vertalPersona.ts";
 
 const InputSchema = z.object({
   messages: z.array(z.object({
@@ -738,6 +739,8 @@ async function handleAgentChat(
     huginn: huginnOn,
     authKit: authKitOn,
     fluxosApps,
+    // Atitude Vertal: ligada para todos por padrão; VERTAL_PERSONA_ENABLED=off desliga na hora.
+    persona: vertalPersonaEnabled(Deno.env.get("VERTAL_PERSONA_ENABLED")),
     // Só com a flag ligada para este usuário E a conversa falando de agendar/lembrar/gatilho; senão o prompt é o mesmo de antes.
     ...(!delegated && schedulerAllowed((k) => Deno.env.get(k), user.id) && wantsScheduler([...all.slice(-6), ...results.slice(-4)])
       ? { scheduler: true }
@@ -816,7 +819,12 @@ async function handleAgentChat(
       try {
         const again = await runGateway({
           messages: [
-            { role: "system", content: "Você é o Vertal Chat. Responda curto e direto, em português do Brasil." },
+            {
+              role: "system",
+              content: vertalPersonaEnabled(Deno.env.get("VERTAL_PERSONA_ENABLED"))
+                ? withVertalPersona("Você é o Vertal Chat. Responda curto e direto, no idioma do pedido do usuário (na dúvida, português do Brasil).", "chat", true)
+                : "Você é o Vertal Chat. Responda curto e direto, em português do Brasil.",
+            },
             { role: "user", content: plainReplyPrompt(results, lastUserText) },
           ],
           kind: "chat",
