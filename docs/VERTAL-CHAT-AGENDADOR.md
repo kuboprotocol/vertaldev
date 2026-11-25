@@ -137,6 +137,8 @@ produção diverge do repositório), com backup antes.
   fallback pt-BR e herança de variante, de-CH sem ß, pt/en/es idênticos ao main (fixture), detecção por escrita,
   datas via Intl, RTL, ISO explícito validado (fr, de, ru, ja, ar).
 - `src/components/vertal-chat/ApiApprovalDialog.i18n.test.tsx`: cartão compartilhado idêntico sem a flag/rótulos.
+- `src/components/vertal-chat/scheduler/SchedulerEntryButton.lang.test.tsx`: botão no mesmo idioma do painel desde a
+  primeira pintura (cache), troca sem recarregar, ordem Ajustes → perfil → navegador → pt-BR, RTL, nada com a flag desligada.
 - `deno check` em `vertal-chat-scheduler/index.ts` e `creative-router/index.ts` (sem erros novos;
   os 7 erros de tipo já existentes no main continuam iguais).
 
@@ -152,6 +154,14 @@ dos gatilhos de e-mail. Ordem para escolher o idioma:
 3. Idioma do **navegador** na criação (`spec.locale`; o cliente manda `locale` em toda chamada).
 4. Idioma do **perfil** (`user_metadata.locale`, quando o login traz).
 5. `pt-BR`.
+
+**Tela do Agendador (botão "Tarefas" no topo + painel)**: os dois usam o mesmo idioma, resolvido no navegador
+por `useSchedulerUiLang()` (`src/lib/chatScheduler/client.ts`): Ajustes → Idioma → idioma do perfil
+(`user_metadata.locale/language/lang`) → navegador → `pt-BR`. O botão busca `settings_get` ao montar (só com o
+Agendador liberado), e o valor fica em `localStorage` (`vertal-scheduler-lang`, com o id do usuário) para a primeira
+pintura já sair no idioma certo, sem piscar no idioma do navegador. Trocar o Idioma no painel atualiza o botão na
+hora (store compartilhado). Idiomas fora de pt/en/es: o botão espera o pacote do idioma antes de aparecer. RTL
+(ar, he, fa, ur) vale para o botão também. Teste: `SchedulerEntryButton.lang.test.tsx`.
 
 Migração aditiva (só a coluna `lang`): `20261125120000_vertal_chat_scheduler_lang.sql`. A versão multilíngue
 abaixo **não mexe no banco** (a coluna `lang` já aceita qualquer código).

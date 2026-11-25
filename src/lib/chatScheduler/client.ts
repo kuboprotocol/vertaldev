@@ -1,7 +1,7 @@
 // Vertal Chat · Agendador — cliente (navegador).
 // Desligado por padrão: só aparece com VITE_VERTAL_CHAT_SCHEDULER=true E o servidor liberando
 // este usuário (edge function vertal-chat-scheduler: VERTAL_CHAT_SCHEDULER_ENABLED + _USER_IDS).
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { functionErrorCode } from '@/lib/functionError';
 import { browserLocale, schedUi, schedulerUiLang } from './i18n';
@@ -56,20 +56,105 @@ export interface SchedulerSettings { timezone: string; quiet: { start: string; e
 
 export type SchedulerResult<T> = { ok: true; data: T; message?: string; code?: string } | { ok: false; data?: undefined; message: string; code?: string };
 
-/** Idioma escolhido em Ajustes (o painel atualiza ao carregar/salvar), para as mensagens de erro locais. */
-let savedLangSetting: string | null = null;
+/**
+ * Idioma escolhido em Ajustes (chat_scheduler_settings.lang) + idioma do perfil (user_metadata.locale),
+ * compartilhados entre o botão do topo e o painel. Guardados em localStorage para a primeira pintura
+ * já sair no idioma certo (sem piscar no idioma do navegador); o servidor confirma logo depois.
+ */
+export const SCHEDULER_LANG_CACHE_KEY = 'vertal-scheduler-lang';
+interface LangState { setting: string | null; profile: string | null; uid: string | null }
+type LangCache = Partial<LangState>;
+
+function readLangCache(): LangState {
+  try {
+    if (typeof localStorage === 'undefined') return { setting: null, profile: null, uid: null };
+    const raw = localStorage.getItem(SCHEDULER_LANG_CACHE_KEY);
+    const c = (raw ? JSON.parse(raw) : {}) as LangCache;
+    const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
+    return { setting: str(c.setting), profile: str(c.profile), uid: str(c.uid) };
+  } catch {
+    return { setting: null, profile: null, uid: null };
+  }
+}
+
+let langState: LangState = readLangCache();
+let langSync: { uid: string; p: Promise<void> } | null = null;
+const langListeners = new Set<() => void>();
+
+function writeLangState(next: LangState): void {
+  if (next.setting === langState.setting && next.profile === langState.profile && next.uid === langState.uid) return;
+  langState = next;
+  try {
+    if (typeof localStorage !== 'undefined') localStorage.setItem(SCHEDULER_LANG_CACHE_KEY, JSON.stringify(next));
+  } catch { /* modo privado / cota: segue só em memória */ }
+  langListeners.forEach((fn) => fn());
+}
+
 export function setSchedulerLangSetting(lang: string | null | undefined): void {
-  savedLangSetting = lang ?? null;
+  writeLangState({ ...langState, setting: lang ?? null });
 }
 export function getSchedulerLangSetting(): string | null {
-  return savedLangSetting;
+  return langState.setting;
+}
+/** Idioma do perfil (user_metadata.locale/language/lang), mesma regra do servidor. */
+export function setSchedulerProfileLocale(locale: string | null | undefined, uid?: string | null): void {
+  const sameUser = uid === undefined || langState.uid === null || uid === langState.uid;
+  writeLangState({ setting: sameUser ? langState.setting : null, profile: locale ?? null, uid: uid === undefined ? langState.uid : uid });
+}
+export function getSchedulerProfileLocale(): string | null {
+  return langState.profile;
+}
+/** Para testes: relê o cache do localStorage. */
+export function __reloadSchedulerLangCache(): void {
+  langSync = null;
+  langState = readLangCache();
+  langListeners.forEach((fn) => fn());
+}
+
+function subscribeLang(fn: () => void): () => void {
+  langListeners.add(fn);
+  return () => { langListeners.delete(fn); };
+}
+const getLangSnapshot = () => langState;
+
+/** Idioma da tela do Agendador (botão e painel): Ajustes → perfil → navegador → pt-BR. Atualiza na hora. */
+export function useSchedulerUiLang(): string {
+  const st = useSyncExternalStore(subscribeLang, getLangSnapshot, getLangSnapshot);
+  return schedulerUiLang(st.setting, browserLocale(), st.profile);
+}
+
+export function currentSchedulerUiLang(): string {
+  return schedulerUiLang(langState.setting, browserLocale(), langState.profile);
+}
+
+function metaLocale(m: Record<string, unknown> | null | undefined): string | null {
+  const v = m?.locale ?? m?.language ?? m?.lang;
+  return typeof v === 'string' && v ? v : null;
+}
+
+/** Busca Ajustes → Idioma e o idioma do perfil (uma vez por usuário/carregamento) e atualiza o cache. */
+export function syncSchedulerLang(force = false): Promise<void> {
+  const run = async () => {
+    const { data } = await supabase.auth.getSession();
+    const user = data.session?.user;
+    if (!user) return;
+    if (!force && langSync?.uid === user.id) return langSync.p;
+    const p = (async () => {
+      setSchedulerProfileLocale(metaLocale(user.user_metadata as Record<string, unknown>), user.id);
+      const r = await callScheduler<{ settings: SchedulerSettings }>('settings_get');
+      if (r.ok && r.data?.settings) setSchedulerLangSetting(r.data.settings.lang ?? 'auto');
+    })().catch(() => { langSync = null; });
+    langSync = { uid: user.id, p };
+    return p;
+  };
+  return run().catch(() => undefined);
 }
 
 export async function callScheduler<T = Record<string, unknown>>(action: string, payload: Record<string, unknown> = {}): Promise<SchedulerResult<T>> {
   // O servidor usa o idioma do navegador quando não há outro (Ajustes / idioma do pedido).
   const locale = browserLocale();
   const { data, error } = await supabase.functions.invoke(SCHEDULER_FUNCTION, { body: { action, ...(locale ? { locale } : {}), ...payload } });
-  const E = schedUi(schedulerUiLang(savedLangSetting)).errors;
+  const E = schedUi(currentSchedulerUiLang()).errors;
   if (error) {
     const code = (await functionErrorCode(error)) ?? 'error';
     if (code.startsWith('rate_limit_exceeded')) return { ok: false, code, message: E.rate };

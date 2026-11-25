@@ -1,6 +1,6 @@
 // Vertal Chat · Agendador — textos da tela (dicionário único em supabase/functions/_shared/chatSchedulerI18n.ts).
 // O app não tem um sistema de i18n global; este dicionário vale só para o Agendador.
-// Idioma: Ajustes → Idioma (se não for "automático") → idioma do navegador → pt-BR.
+// Idioma: Ajustes → Idioma (se não for "automático") → idioma do perfil → idioma do navegador → pt-BR.
 // pt-BR, en e es vêm no bundle; os outros idiomas são baixados sob demanda (só para quem tem o
 // Agendador liberado), então o app de ninguém fica mais pesado.
 import { useEffect, useState } from 'react';
@@ -21,9 +21,12 @@ export function browserLocale(): string | null {
   }
 }
 
-/** Idioma da tela do Agendador. `setting` = valor salvo em Ajustes ("auto" ou um idioma). */
-export function schedulerUiLang(setting?: string | null, browser: string | null = browserLocale()): UiLang {
-  return schedLang(normLang(setting) ?? normLang(browser) ?? 'pt-BR');
+/**
+ * Idioma da tela do Agendador. `setting` = valor salvo em Ajustes ("auto" ou um idioma);
+ * `profile` = idioma do perfil (user_metadata.locale). Ordem: Ajustes → perfil → navegador → pt-BR.
+ */
+export function schedulerUiLang(setting?: string | null, browser: string | null = browserLocale(), profile: string | null = null): UiLang {
+  return schedLang(normLang(setting) ?? normLang(profile) ?? normLang(browser) ?? 'pt-BR');
 }
 
 /** Locale do Intl para datas no idioma. */
@@ -45,6 +48,11 @@ export const LANG_CHOICES: Array<{ value: string; label: (l: UiLang) => string }
   { value: 'auto', label: (l) => schedUi(l).langAuto },
   ...SCHED_LANGS.map((m) => ({ value: m.code, label: () => m.native })),
 ];
+
+/** pt-BR, pt, en e es vêm no bundle; os demais dependem do download sob demanda. */
+export function schedLangBundled(l: UiLang): boolean {
+  return l === 'pt-BR' || l === 'pt' || l === 'en' || l === 'es';
+}
 
 let loading: Promise<void> | null = null;
 

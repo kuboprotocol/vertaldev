@@ -8,10 +8,10 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import {
-  SCHEDULER_CHANGED_EVENT, callScheduler, setSchedulerLangSetting,
+  SCHEDULER_CHANGED_EVENT, callScheduler, currentSchedulerUiLang, setSchedulerLangSetting, useSchedulerUiLang,
   type SchedulerRun, type SchedulerSettings, type SchedulerTaskView,
 } from '@/lib/chatScheduler/client';
-import { LANG_CHOICES, dateLocale, schedUi, schedulerUiLang, useSchedulerLangs } from '@/lib/chatScheduler/i18n';
+import { LANG_CHOICES, dateLocale, schedUi, useSchedulerLangs } from '@/lib/chatScheduler/i18n';
 
 interface AgendaEvent { id: string; title: string; starts_at: string; ends_at: string; location?: string | null; provider: string; add_to_google_url?: string | null }
 interface Template { id: string; label: string; example: string }
@@ -25,8 +25,8 @@ export function SchedulerPanel({ open, onOpenChange }: { open: boolean; onOpenCh
   const [busy, setBusy] = useState<string | null>(null);
   const [history, setHistory] = useState<Record<string, SchedulerRun[]>>({});
   useSchedulerLangs(true);
-  // Idioma da tela: Ajustes → Idioma (se não for automático) → navegador → pt-BR.
-  const ui = schedulerUiLang(settings?.lang);
+  // Idioma da tela: o mesmo do botão do topo (Ajustes → perfil → navegador → pt-BR), compartilhado e em cache.
+  const ui = useSchedulerUiLang();
   const U = schedUi(ui);
   const fmt = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString(dateLocale(ui), { dateStyle: 'short', timeStyle: 'short' }) : '—');
 
@@ -73,7 +73,7 @@ export function SchedulerPanel({ open, onOpenChange }: { open: boolean; onOpenCh
     if (r.ok) {
       setSettings(r.data.settings);
       setSchedulerLangSetting(r.data.settings.lang);
-      toast.success(schedUi(schedulerUiLang(r.data.settings.lang)).saved);
+      toast.success(schedUi(currentSchedulerUiLang()).saved);
       if (patch.lang !== undefined) void load();
     } else toast.error(r.message);
   };

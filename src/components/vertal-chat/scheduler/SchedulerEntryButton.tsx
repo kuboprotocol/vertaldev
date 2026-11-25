@@ -4,8 +4,10 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { CalendarClock } from 'lucide-react';
 import { toast } from 'sonner';
-import { SCHEDULER_OPEN_EVENT, callScheduler, getSchedulerLangSetting, useSchedulerAccess } from '@/lib/chatScheduler/client';
-import { schedUi, schedulerUiLang, useSchedulerLangs } from '@/lib/chatScheduler/i18n';
+import {
+  SCHEDULER_OPEN_EVENT, callScheduler, currentSchedulerUiLang, syncSchedulerLang, useSchedulerAccess, useSchedulerUiLang,
+} from '@/lib/chatScheduler/client';
+import { dateLocale, schedLangBundled, schedUi, useSchedulerLangs } from '@/lib/chatScheduler/i18n';
 
 const SchedulerPanel = lazy(() => import('./SchedulerPanel'));
 
@@ -15,11 +17,20 @@ interface UnseenRun { id: string; status: string; output: string | null; error: 
 
 export function SchedulerEntryButton({ enabledOverride }: { enabledOverride?: boolean }) {
   const access = useSchedulerAccess(enabledOverride);
-  // Idiomas além de pt/en/es: baixados só quando o Agendador está liberado.
-  useSchedulerLangs(access === 'allowed');
+  // Mesmo idioma do painel desde a primeira pintura (cache local) e atualizado na hora ao trocar em Ajustes.
+  const lang = useSchedulerUiLang();
+  const bundled = schedLangBundled(lang);
+  // Idiomas além de pt/en/es: baixados só quando o Agendador está liberado (ou quando o idioma salvo em
+  // cache precisa deles, para já chegarem enquanto o acesso é conferido).
+  const langsVersion = useSchedulerLangs(access === 'allowed' || (access === 'checking' && !bundled));
   const [open, setOpen] = useState(false);
   const [unseen, setUnseen] = useState(0);
   const shown = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (access !== 'allowed') return;
+    void syncSchedulerLang();
+  }, [access]);
 
   useEffect(() => {
     if (access !== 'allowed') return;
@@ -39,7 +50,7 @@ export function SchedulerEntryButton({ enabledOverride }: { enabledOverride?: bo
       for (const run of r.data.runs.slice(0, 3).reverse()) {
         if (shown.current.has(run.id)) continue;
         shown.current.add(run.id);
-        const U = schedUi(schedulerUiLang(getSchedulerLangSetting()));
+        const U = schedUi(currentSchedulerUiLang());
         const title = run.chat_scheduled_tasks?.title ?? U.taskFallback;
         const text = (run.output ?? run.error ?? '').replace(/[*_#>`]/g, '').slice(0, 140);
         (run.status === 'error' ? toast.error : toast.success)(`${title}`, { description: text || U.toastFallback });
@@ -51,7 +62,9 @@ export function SchedulerEntryButton({ enabledOverride }: { enabledOverride?: bo
   }, [access]);
 
   if (access !== 'allowed') return null;
-  const U = schedUi(schedulerUiLang(getSchedulerLangSetting()));
+  // Sem piscar em outro idioma: espera o pacote do idioma (alguns ms) antes de mostrar o botão.
+  if (!bundled && !langsVersion) return null;
+  const U = schedUi(lang);
   return (
     <>
       <button
@@ -59,7 +72,10 @@ export function SchedulerEntryButton({ enabledOverride }: { enabledOverride?: bo
         data-testid="scheduler-entry"
         onClick={() => { setOpen(true); setUnseen(0); }}
         title={U.name}
+        aria-label={U.name}
         dir={U.dir}
+        lang={dateLocale(lang)}
+        data-lang={lang}
         className="relative inline-flex items-center gap-1.5 rounded-full border border-border/60 px-3 py-1.5 text-xs font-medium text-foreground/80 hover:border-primary/50"
       >
         <CalendarClock className="h-3.5 w-3.5" aria-hidden />
