@@ -11,6 +11,8 @@ import { CrmDashboard, CrmTasksList } from '@/components/vertal-crm/CrmDashboard
 import { CrmCompanies, CrmContacts } from '@/components/vertal-crm/CrmContacts';
 import { CrmDeals } from '@/components/vertal-crm/CrmDeals';
 import { CrmSettings } from '@/components/vertal-crm/CrmSettings';
+import { CrmWaitlist } from '@/components/vertal-crm/CrmWaitlist';
+import { isCrmWaitlistEnabled } from '@/lib/vertalCrm/waitlist';
 
 const NotFound = lazy(() => import('@/pages/NotFound'));
 
@@ -75,7 +77,10 @@ export default function VertalCrmPage() {
   const access = useVertalCrmAccess();
   const [sp] = useSearchParams();
   if (access === 'checking') return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
-  if (access !== 'allowed') return <Suspense fallback={null}><NotFound /></Suspense>;
+  // Fora da allowlist: "liberação em breve / entrar na lista" (nunca um erro). Com VITE_VERTAL_CRM_WAITLIST=false volta ao 404.
+  if (access !== 'allowed') {
+    return isCrmWaitlistEnabled() ? <CrmWaitlist langHint={sp.get('lang')} /> : <Suspense fallback={null}><NotFound /></Suspense>;
+  }
   return (
     <CrmProvider langHint={sp.get('lang')}>
       <CrmShell />

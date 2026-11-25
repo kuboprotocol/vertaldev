@@ -28,13 +28,17 @@ Tudo é **aditivo** e **desligado por padrão**. Nada no CRM envia e-mail ou men
 | Cada uso de IA (resumo, e-mail de follow-up, pontuação do lead, próxima ação, busca em linguagem natural) | **1** |
 | Ativar a sincronização com um CRM pago (por workspace + provedor, uma vez) | **4** |
 | Cada sincronização/mapeamento **com IA** entre o Vertal CRM e o outro CRM | **2** |
-| Sincronização **sem IA** (mapeamento padrão) | **0 por padrão** — `VERTAL_CRM_PLAIN_SYNC_COST` muda (decisão pendente do Laércio) |
+| Sincronização **sem IA** (mapeamento padrão) | **2** em produção (`VERTAL_CRM_PLAIN_SYNC_COST=2`, decisão do Laércio 2026-11-25; sem o secret o código cobra 0) |
 
 - O custo aparece **antes** (diálogo da IA; confirmação na ativação/sincronização).
 - Débito atômico e idempotente (`execute_atomic_credit_deduction`, chave `crm_ai:<uuid>`, `crm_sync_activate:<uuid>`,
   `crm_sync_run:<uuid>`); repetir o mesmo pedido devolve o resultado guardado sem cobrar de novo (`crm_ai_runs`).
 - Falhou depois do débito: **devolução** (`execute_atomic_credit_topup`, chave `refund:<chave>`).
 - Modelo: o roteador do VERTAL Code AI, sem mudança nenhuma (LLM própria → OpenRouter grátis → DeepSeek).
+- **IA exige plano pago** (`VERTAL_CRM_AI_REQUIRES_PLAN`, padrão ligado): a op `ai` e a sincronização **com IA** respondem
+  `402 plan_required` (com `upgradeUrl: /pricing`) para quem não tem assinatura ativa em `subscriptions` com plano pago
+  (starter, pro, premium_1/2, business_1–7, enterprise; free e beta não contam). Nada é cobrado nem registrado. Erro ao ler
+  a assinatura conta como "sem plano". O resto do CRM (CRUD, CSV, API, webhooks, ativação e sync **sem** IA) não muda.
 - `VERTAL_CRM_CHARGE=true` liga a cobrança. Admins não pagam, a não ser com `VERTAL_CRM_CHARGE_ADMINS=true` (teste na conta do Laércio).
 
 ## CRMs externos
@@ -100,7 +104,11 @@ Ids externos ficam em `external_ids` para não duplicar. Até 100 contatos por e
 | Edge secret | `VERTAL_CRM_USER_IDS` | lista de ids (vazia = ninguém; `*` = todos — **não usado**; abrir é decisão do Laércio) |
 | Edge secret | `VERTAL_CRM_CHARGE` | `true` cobra os créditos |
 | Edge secret | `VERTAL_CRM_CHARGE_ADMINS` | `true` cobra também admins (teste) |
-| Edge secret | `VERTAL_CRM_PLAIN_SYNC_COST` | créditos da sincronização sem IA (padrão 0) |
+| Edge secret | `VERTAL_CRM_PLAIN_SYNC_COST` | créditos da sincronização sem IA (produção: 2; sem o secret: 0) |
+| Edge secret | `VERTAL_CRM_AI_REQUIRES_PLAN` | padrão ligado; `false` deixa a IA do CRM sem exigir plano pago |
+| Front | `VITE_VERTAL_CRM_WAITLIST` | padrão ligado: fora da allowlist, `/crm` mostra “liberação em breve / entrar na lista” (tabela `crm_waitlist`); `false` volta ao 404 |
+| Front | `VITE_VERTAL_CRM_DOCS` | padrão ligado: seção “Vertal CRM (free)” em `/docs`; `false` tira |
+| Build | `VERTAL_FREE_CRM_SEO` | padrão ligado: landing + documentação estáticas em 21 idiomas e entradas no sitemap; `false` tira tudo (sitemap volta a ser idêntico) |
 | Edge secret | `VERTAL_CRM_ALLOW_SIMULATED_FAILURE` | `true` só durante o teste de devolução (desligar depois) |
 | Front | `VITE_VERTAL_CRM` | `true` mostra cartão/rota/botão só para quem o servidor libera |
 | Fluxos (Railway) | `VERTAL_CRM_URL` (opcional) | URL da rota do CRM (padrão: vertal-code-ai do kubovibe) |
@@ -115,3 +123,21 @@ Ids externos ficam em `external_ids` para não duplicar. Até 100 contatos por e
 | `src/lib/connectorsConfig.ts` | campos opcionais `pinned`, `badge` na interface | nenhum conector existente usa |
 | `supabase/functions/vertal-code-ai/index.ts` | rota `?app=crm` antes do resto; importação automática depois de ops do Prospector/Growth | 404 na rota; importação não roda (só com `isCrmEnabled`) |
 | `scripts/vertal-code-ai/engine-guard.mjs` | aceita linhas `VertalCrm`/`VERTAL_CRM` nos FLAGGED | — |
+| `vite-plugins/seo.ts` | sitemap com `xmlns:xhtml` + entradas do CRM; páginas do CRM no `writeBundle` | `VERTAL_FREE_CRM_SEO=false`: sitemap e páginas idênticos aos de antes |
+| `src/pages/AuthPage.tsx` | aceita `redirect=/crm` (só `/crm` e `/crm?…`) | só com `VITE_VERTAL_CRM`; demais redirects iguais |
+| `src/pages/DocsPage.tsx` | seção “Vertal CRM (free)” com créditos e links | `VITE_VERTAL_CRM_DOCS=false`: seções idênticas |
+| `src/pages/VertalCrmPage.tsx` | fora da allowlist: tela de lista de espera em vez de 404 | `VITE_VERTAL_CRM_WAITLIST=false`: 404 como antes |
+| `supabase/functions/vertal-code-ai/index.ts` | `hasPaidPlan` (lê `subscriptions`) para a regra “IA exige plano” | `VERTAL_CRM_AI_REQUIRES_PLAN=false` |
+
+## Página pública e documentação (SEO, 21 idiomas)
+
+Landing “CRM grátis” e documentação completa em HTML estático (sem React), uma URL por idioma, com hreflang,
+JSON-LD e sitemap. Detalhes, URLs e como adicionar idiomas: [`docs/VERTAL-CRM-SEO.md`](VERTAL-CRM-SEO.md).
+
+## Lista de espera
+
+Enquanto o CRM está só na allowlist, quem chega em `/crm` (CTA “Começar grátis” → cadastro → `/crm`) vê
+“liberação em breve” e pode entrar na lista: `public.crm_waitlist` (user_id, e-mail da própria sessão, idioma, origem;
+RLS: cada um grava/lê só a própria linha; anon sem acesso). Migração `20261125190000_vertal_crm_waitlist.sql`.
+Nenhuma mensagem é enviada. Ver a lista: `select * from public.crm_waitlist order by created_at desc;` (service role).
+Abrir o CRM para essas pessoas é decisão do Laércio (adicionar ids em `VERTAL_CRM_USER_IDS`).

@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
 import { motion, AnimatePresence } from 'framer-motion'
 import { clearStoredReferralCode, getStoredReferralCode, storeReferralCode } from '@/lib/referral'
+import { crmBuildFlagOn, isCrmRedirect } from '@/lib/vertalCrm/redirect'
 
 // Google sign-in (Supabase Auth, provedor Google ligado; callback
 // https://sccizjlpwezsgaxkclot.supabase.co/auth/v1/callback no cliente OAuth).
@@ -35,6 +36,8 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
   ]
   const isAllowedRedirect = (p: string): boolean => {
     if (typeof p !== 'string' || !p.startsWith('/') || p.startsWith('//')) return false
+    // Vertal CRM (landing "CRM grátis" → cadastro → /crm): só com VITE_VERTAL_CRM ligado.
+    if (crmBuildFlagOn() && isCrmRedirect(p)) return true
     return ALLOWED_REDIRECT_PREFIXES.some(
       (pre) => p === pre || p.startsWith(pre + '/') || p.startsWith(pre + '?'),
     )

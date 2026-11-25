@@ -37,6 +37,9 @@ import {
 import { hreflangLinks, localizedUrls, renderLocalizedPages } from "./seoLocales";
 import { renderVibePayPages, vibePayUrls } from "./vibePay";
 import { VIBE_PAY, VIBE_PAY_COPY } from "../src/config/vibePay";
+// Vertal CRM grátis (landing + docs em vários idiomas). Interruptor: VERTAL_FREE_CRM_SEO=false.
+import { isFreeCrmSeoEnabled } from "../src/config/freeCrm";
+import { freeCrmSitemapEntries, renderFreeCrmPages } from "./freeCrm";
 
 /** Rotas públicas indexáveis (sem login). */
 const PUBLIC_ROUTES = [
@@ -66,10 +69,16 @@ export function sitemapUrls(origin: string = SITE_ORIGIN): string[] {
 export function renderSitemap(
   origin: string = SITE_ORIGIN,
   lastmod: string = new Date().toISOString().slice(0, 10),
+  crmEnabled: boolean = isFreeCrmSeoEnabled(),
 ): string {
   const urls = sitemapUrls(origin)
     .map((loc) => `  <url><loc>${loc}</loc><lastmod>${lastmod}</lastmod></url>`)
     .join("\n");
+  // Com as páginas do Vertal CRM grátis: entradas com <xhtml:link hreflang> de cada idioma.
+  // Desligado (VERTAL_FREE_CRM_SEO=false), o sitemap sai idêntico ao de antes.
+  if (crmEnabled) {
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${urls}\n${freeCrmSitemapEntries(origin, lastmod)}\n</urlset>\n`;
+  }
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
 }
 
@@ -291,7 +300,12 @@ export function seoPlugin(): Plugin {
       } catch {
         return; // build sem index.html (ex.: bibliotecas, testes)
       }
-      const pages = new Map([...prerenderPages(indexHtml), ...renderLocalizedPages(), ...renderVibePayPages()]);
+      const pages = new Map([
+        ...prerenderPages(indexHtml),
+        ...renderLocalizedPages(),
+        ...renderVibePayPages(),
+        ...(isFreeCrmSeoEnabled() ? renderFreeCrmPages() : []),
+      ]);
       for (const [file, html] of pages) {
         const out = join(dir, file);
         mkdirSync(dirname(out), { recursive: true });

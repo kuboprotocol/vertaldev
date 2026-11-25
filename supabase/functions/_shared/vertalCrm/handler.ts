@@ -12,7 +12,7 @@
 
 import {
   aiMessages, API_KEY_PREFIX, compactContext, contactPatch, CRM_AI_COST, CRM_EVENT_TYPES, CRM_SYNC_ACTIVATE_COST,
-  CRM_SYNC_AI_RUN_COST, crmLang, dealPatch, DEFAULT_MAPPING, defaultPipelineName, defaultStages, EMAIL_RE,
+  CRM_SYNC_AI_RUN_COST, crmAiRequiresPlan, crmLang, dealPatch, DEFAULT_MAPPING, defaultPipelineName, defaultStages, EMAIL_RE,
   extractJson, flattenContact, growthContactToCrm, isAiKind, isSafeWebhookUrl, mappingMessages, normalizeEvents,
   normalizeMapping, normalizeStages, parseEmailDraft, parseNextAction, parseScore, plainSyncCost, providerInfo,
   prospectorLeadToCrm, pulledToContacts, PUSH_ACTION, pushParameters, SALESFORCE_PULL_QUERY, sanitizeSearchFilter,
@@ -47,6 +47,8 @@ export interface CrmDeps {
   /** Motor do Vertal Fluxos (para sincronizar pelos apps que o usuário já conectou). */
   engine?: CrmEngine | null;
   gmailToken?: (accountId: string) => Promise<{ token: string; email: string }>;
+  /** O usuário tem plano pago ativo? (VERTAL_CRM_AI_REQUIRES_PLAN). Sem a função, a regra não se aplica. */
+  hasPaidPlan?: () => Promise<boolean>;
 }
 
 type Res = { status: number; body: Record<string, unknown> };
@@ -66,6 +68,18 @@ const API_OPS = new Set([
   "delete_deal", "create_task", "complete_task", "list_tasks", "create_note", "events_since",
 ]);
 const WRITE_API_OPS = new Set(["create_contact", "update_contact", "delete_contact", "create_company", "create_deal", "update_deal", "move_deal", "delete_deal", "create_task", "complete_task", "create_note"]);
+
+/** IA do CRM exige qualquer plano pago (padrão ligado). Devolve a resposta de upsell ou null. */
+async function planGate(deps: CrmDeps, cost: number): Promise<Res | null> {
+  if (!crmAiRequiresPlan(deps.env) || !deps.hasPaidPlan) return null;
+  let paid = false;
+  try {
+    paid = await deps.hasPaidPlan();
+  } catch {
+    paid = false;
+  }
+  return paid ? null : fail(402, "plan_required", { cost, upgradeUrl: "/pricing", hint: "crm_ai_requires_any_paid_plan" });
+}
 
 const str = (v: unknown, n = 200) => (typeof v === "string" ? v.trim().slice(0, n) : "");
 const uuid = (v: unknown) => (typeof v === "string" && UUID_RE.test(v) ? v.toLowerCase() : null);
@@ -292,6 +306,8 @@ async function runAi(deps: CrmDeps, ws: string, body: Loose): Promise<Res> {
   if (!key) return fail(400, "missing_idempotency_key");
   const lang = crmLang(body.lang);
   const chargeKey = `crm_ai:${key}`;
+  const gate = await planGate(deps, CRM_AI_COST);
+  if (gate) return gate;
 
   // Repetiu o mesmo pedido: devolve o resultado guardado, sem cobrar de novo.
   const { data: prev } = await deps.admin.from("crm_ai_runs").select("*").eq("user_id", deps.userId).eq("idempotency_key", chargeKey).maybeSingle();
@@ -481,6 +497,10 @@ async function syncRun(deps: CrmDeps, ws: string, body: Loose): Promise<Res> {
   if ((direction === "push" && !p.push) || (direction === "pull" && !p.pull)) return fail(400, "direction_not_supported", { push: p.push, pull: p.pull });
 
   const cost = mode === "ai" ? CRM_SYNC_AI_RUN_COST : plainSyncCost(deps.env);
+  if (mode === "ai") {
+    const gate = await planGate(deps, cost);
+    if (gate) return gate;
+  }
   const chargeKey = `crm_sync_run:${key}`;
   const { data: prevRun } = await deps.admin.from("crm_sync_runs").select("*").eq("workspace_id", ws).eq("charge_key", chargeKey).maybeSingle();
   if (prevRun) return prevRun.status === "ok" ? ok({ replayed: true, run: prevRun, credits: 0 }) : fail(409, "previous_attempt_" + prevRun.status);

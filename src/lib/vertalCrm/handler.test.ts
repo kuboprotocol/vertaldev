@@ -226,3 +226,60 @@ describe('Vertal CRM · API, webhooks e integrações', () => {
     expect(db.tables.crm_contacts[0]).toMatchObject({ source: 'prospector', status: 'warm' });
   });
 });
+
+describe('Vertal CRM · IA exige plano pago (VERTAL_CRM_AI_REQUIRES_PLAN, padrão ligado)', () => {
+  const contact = async (deps: CrmDeps, ws: string) =>
+    ((await handleCrm({ op: 'create_contact', workspaceId: ws, name: 'Ana', email: 'ana@acme.com.br' }, deps)).body.contact as { id: string }).id;
+
+  it('sem plano pago: IA → 402 plan_required, nada cobrado nem registrado; o resto do CRM segue grátis', async () => {
+    const { deps, debits, db } = setup();
+    deps.hasPaidPlan = async () => false;
+    const ws = await boot(deps);
+    const id = await contact(deps, ws);
+    const r = await handleCrm({ op: 'ai', workspaceId: ws, kind: 'summary', entityType: 'contact', entityId: id, idempotencyKey: KEY1 }, deps);
+    expect(r.status).toBe(402);
+    expect(r.body).toMatchObject({ error: 'plan_required', upgradeUrl: '/pricing', cost: 1 });
+    expect(debits).toHaveLength(0);
+    expect(db.tables.crm_ai_runs ?? []).toHaveLength(0);
+    expect((await handleCrm({ op: 'list_contacts', workspaceId: ws }, deps)).status).toBe(200);
+  });
+
+  it('com plano pago: IA funciona e cobra 1 crédito', async () => {
+    const { deps, debits } = setup();
+    deps.hasPaidPlan = async () => true;
+    const ws = await boot(deps);
+    const id = await contact(deps, ws);
+    const r = await handleCrm({ op: 'ai', workspaceId: ws, kind: 'summary', entityType: 'contact', entityId: id, idempotencyKey: KEY1 }, deps);
+    expect(r.status).toBe(200);
+    expect(debits).toEqual([{ amount: 1, key: `crm_ai:${KEY1}` }]);
+  });
+
+  it('flag desligada: regra não se aplica', async () => {
+    const { deps } = setup({ env: { VERTAL_CRM_AI_REQUIRES_PLAN: 'false' } });
+    deps.hasPaidPlan = async () => false;
+    const ws = await boot(deps);
+    const id = await contact(deps, ws);
+    expect((await handleCrm({ op: 'ai', workspaceId: ws, kind: 'summary', entityType: 'contact', entityId: id, idempotencyKey: KEY1 }, deps)).status).toBe(200);
+  });
+
+  it('erro ao ler a assinatura conta como sem plano (fail closed)', async () => {
+    const { deps } = setup();
+    deps.hasPaidPlan = async () => { throw new Error('db fora'); };
+    const ws = await boot(deps);
+    const id = await contact(deps, ws);
+    expect((await handleCrm({ op: 'ai', workspaceId: ws, kind: 'summary', entityType: 'contact', entityId: id, idempotencyKey: KEY1 }, deps)).body.error).toBe('plan_required');
+  });
+
+  it('sincronização com IA exige plano; ativação (4) e sincronização sem IA não', async () => {
+    const { deps, debits } = setup({ fluxos: [{ user_id: U, app_key: 'pipedrive', status: 'connected', fluxos_connection_id: 'fx1' }], env: { VERTAL_CRM_PLAIN_SYNC_COST: '2' } });
+    deps.hasPaidPlan = async () => false;
+    const ws = await boot(deps);
+    await contact(deps, ws);
+    expect((await handleCrm({ op: 'sync_activate', workspaceId: ws, provider: 'pipedrive', idempotencyKey: KEY1 }, deps)).status).toBe(200);
+    const ai = await handleCrm({ op: 'sync_run', workspaceId: ws, provider: 'pipedrive', mode: 'ai', direction: 'push', idempotencyKey: KEY1 }, deps);
+    expect(ai.body.error).toBe('plan_required');
+    const plain = await handleCrm({ op: 'sync_run', workspaceId: ws, provider: 'pipedrive', mode: 'plain', direction: 'push', idempotencyKey: KEY2 }, deps);
+    expect(plain.status).toBe(200);
+    expect(debits.map((d) => d.amount)).toEqual([4, 2]);
+  });
+});

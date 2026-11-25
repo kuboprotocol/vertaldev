@@ -22,9 +22,20 @@ import {
   Mail,
   Globe,
   Workflow,
+  Users,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import {
+  FREE_CRM_COSTS,
+  FREE_CRM_DOCS_PATH,
+  FREE_CRM_EN_DOCS_PATH,
+  FREE_CRM_EN_LANDING_PATH,
+  FREE_CRM_LANDING_PATH,
+} from '@/config/freeCrmCosts'
+
+/** Seção "Vertal CRM" nesta página (VITE_VERTAL_CRM_DOCS=false tira; padrão: mostra). */
+const SHOW_CRM_DOCS = String(import.meta.env.VITE_VERTAL_CRM_DOCS ?? '').toLowerCase() !== 'false'
 
 interface DocSection {
   id: string
@@ -313,6 +324,47 @@ testimonials and a waitlist form.`}</Pre>
       </>
     ),
   },
+  ...(SHOW_CRM_DOCS
+    ? [
+        {
+          id: 'vertal-crm',
+          title: 'Vertal CRM (free)',
+          icon: Users,
+          group: 'Core Features',
+          content: (
+            <>
+              <H2>Vertal CRM — free CRM</H2>
+              <P>
+                Vertal CRM is the built-in CRM of {APP_NAME}: contacts, companies, Kanban deal pipelines,
+                tasks, notes, CSV import/export, team roles, API keys and webhooks. Using the CRM is free;
+                only the AI is paid in credits. Open it from <Code>/connectors</Code> (first card) or{' '}
+                <Code>/crm</Code>. Access is being rolled out gradually; accounts without access see a
+                waitlist screen.
+              </P>
+              <H3>Credits</H3>
+              <UL>
+                <li>Using the CRM (CRUD, Kanban, CSV, API, webhooks, Vertal Fluxos): <strong>free</strong></li>
+                <li>Each AI action (summary, follow-up email, lead score, next action, natural-language search): <strong>{FREE_CRM_COSTS.ai} credit</strong></li>
+                <li>Activating sync with a paid CRM (Pipedrive, HubSpot, Salesforce), once: <strong>{FREE_CRM_COSTS.activate} credits</strong></li>
+                <li>Each AI-assisted sync: <strong>{FREE_CRM_COSTS.aiSync} credits</strong></li>
+                <li>Each sync without AI: <strong>{FREE_CRM_COSTS.plainSync} credits</strong></li>
+              </UL>
+              <Callout type="info">
+                CRM AI requires any paid plan (see <Link to="/pricing" className="text-primary hover:underline">Pricing</Link>).
+                Without a plan the CRM keeps working in full, and you can export your data (CSV, API,
+                webhooks) and use it in any other project.
+              </Callout>
+              <H3>Full documentation</H3>
+              <UL>
+                <li><a className="text-primary hover:underline" href={FREE_CRM_DOCS_PATH}>Documentação completa (português)</a></li>
+                <li><a className="text-primary hover:underline" href={FREE_CRM_EN_DOCS_PATH}>Full documentation (English, 20+ languages)</a></li>
+                <li><a className="text-primary hover:underline" href={FREE_CRM_LANDING_PATH}>CRM grátis</a> · <a className="text-primary hover:underline" href={FREE_CRM_EN_LANDING_PATH}>Free CRM</a></li>
+              </UL>
+            </>
+          ),
+        } as DocSection,
+      ]
+    : []),
   {
     id: 'creative-studio',
     title: 'Creative Studio',
