@@ -136,6 +136,7 @@ produção diverge do repositório), com backup antes.
 
 ## Limites conhecidos
 
+- Precisão de até 1 minuto (o pg_cron confere a cada minuto).
 - No servidor a tarefa usa um subconjunto das ferramentas (web, Gmail, Vertal Fluxos). Ferramentas
   que rodam no navegador (imagem, app, música, navegador na nuvem, Vibe Code) não rodam sozinhas:
   a tarefa avisa o que preparou e o que o usuário precisa abrir.

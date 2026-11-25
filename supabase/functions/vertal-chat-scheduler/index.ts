@@ -14,7 +14,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { enforceRateLimit, getUser, sanitizeError, supaAdmin } from "../_shared/creative.ts";
 import {
   SCHEDULER_LIMITS, SCHEDULER_TEMPLATES, describeSchedule, formatLocal, isUuid, nextRun, normTime, normalizeSpec,
-  hasCalendarScope, schedulerAllowed, summaryLines, validTimezone, type NormalizedTask, type SchedulerSpec,
+  hasCalendarScope, sanitizeChangesInput as sanitizeChanges, sanitizeSpecInput as sanitizeSpec, schedulerAllowed, summaryLines, validTimezone, type NormalizedTask, type SchedulerSpec,
 } from "../_shared/chatScheduler.ts";
 import {
   createAgendaEvent, deleteAgendaEvent, gmailAccount, loadSettings, pollEmailTask, runScheduledTask, tick, type TaskRow,
@@ -177,7 +177,8 @@ async function list(admin: Admin, userId: string): Promise<Response> {
 }
 
 async function previewOrCreate(admin: Admin, user: { id: string; email: string | null }, body: Record<string, unknown>, create: boolean): Promise<Response> {
-  const spec = (body.spec && typeof body.spec === "object" ? body.spec : {}) as SchedulerSpec;
+  const spec = sanitizeSpec(body.spec);
+  if (!spec) return json(200, { ok: false, error: "Faltou dizer o que agendar." });
   const settings = await loadSettings(admin, user.id);
   const tz = validTimezone(spec.timezone ?? (typeof body.timezone === "string" ? body.timezone : undefined) ?? settings.timezone);
   const norm = normalizeSpec({ ...spec, timezone: tz }, Date.now(), tz);
@@ -238,7 +239,7 @@ async function update(admin: Admin, userId: string, body: Record<string, unknown
     }).eq("id", task.id);
     return json(200, { ok: true, status: "active", title: task.title, next_run_text: formatLocal(next, task.timezone) });
   }
-  const changes = (body.changes && typeof body.changes === "object" ? body.changes : null) as SchedulerSpec | null;
+  const changes = sanitizeChanges(body.changes);
   if (!changes) return json(400, { error: "invalid_input" });
   const prev = (task.spec && typeof task.spec === "object" ? task.spec : {}) as SchedulerSpec;
   // Mudou "quando": descarta as formas antigas de horário para não misturar.
@@ -258,3 +259,4 @@ async function update(admin: Admin, userId: string, body: Record<string, unknown
   }).eq("id", task.id);
   return json(200, { ok: true, title: t.title, summary: summaryLines(t) });
 }
+

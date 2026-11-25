@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   backoffMs, branchFor, buildGmailQuery, describeSchedule, formatLocal, googleCalendarLink, hasCalendarScope, inQuietHours,
   localParts, nextRun, normalizeSpec, parseCron, parsePtTimeOfDay, parsePtWhen, parseSchedulerAction, parseSentiment,
-  quietApplies, quietEnd, schedulerAllowed, summaryLines, wantsScheduler, zonedToUtc,
+  quietApplies, quietEnd, sanitizeChangesInput, sanitizeSpecInput, schedulerAllowed, summaryLines, wantsScheduler, zonedToUtc,
 } from '../../../supabase/functions/_shared/chatScheduler';
 
 const TZ = 'America/Sao_Paulo';
@@ -92,6 +92,16 @@ describe('contrato da ferramenta', () => {
     expect(parseSchedulerAction({ tool: 'agendador', op: 'pause' })).toBeNull();
     expect(parseSchedulerAction({ tool: 'agendador', op: 'pause', name: 'Boleto' })).toEqual({ tool: 'agendador', op: 'pause', name: 'Boleto' });
     expect(parseSchedulerAction({ tool: 'agendador', op: 'list' })).toEqual({ tool: 'agendador', op: 'list' });
+  });
+});
+
+describe('entrada da API', () => {
+  it('passa pela mesma validação do chat', () => {
+    const spec = sanitizeSpecInput({ kind: 'email_trigger', title: 'X', trigger: { from: 'a@b.com', every_min: 2 }, send_to: ['ok@x.com', 'nao-e-email'], evil: 1 });
+    expect(spec).toEqual({ kind: 'email_trigger', title: 'X', trigger: { from: 'a@b.com' }, repeat: { every: 'minutes', interval: 2 }, send_to: ['ok@x.com'] });
+    expect(sanitizeSpecInput('x')).toBeNull();
+    expect(sanitizeChangesInput({ when: 'amanhã às 10h', send_to: 'bad' })).toEqual({ when: 'amanhã às 10h' });
+    expect(normalizeSpec({ ...spec!, branches: { positive: 'avise' } }, NOW, TZ)).toMatchObject({ ok: true, task: { schedule: { type: 'email', every_min: 2 } } });
   });
 });
 

@@ -233,6 +233,21 @@ export function parseSchedulerAction(raw: unknown): SchedulerAction | null {
   return { tool, op: op as "pause", ...ref };
 }
 
+/** Entrada da API (navegador) passa pela MESMA validação da ação do chat: e-mails, limites, campos conhecidos. */
+export function sanitizeSpecInput(raw: unknown): SchedulerSpec | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const parsed = parseSchedulerAction({ ...(raw as Record<string, unknown>), op: "create" });
+  if (!parsed || parsed.op !== "create") return null;
+  const { tool: _t, op: _o, ...spec } = parsed;
+  return spec;
+}
+
+export function sanitizeChangesInput(raw: unknown): SchedulerSpec | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const parsed = parseSchedulerAction({ op: "update", name: "x", changes: raw });
+  return parsed && parsed.op === "update" ? parsed.changes : null;
+}
+
 // ─── Fuso horário (sem bibliotecas) ──────────────────────────────────────
 
 export const DEFAULT_TIMEZONE = "America/Sao_Paulo";
