@@ -221,7 +221,7 @@ describe('idioma (responder na língua do usuário)', () => {
     expect(describeSchedule({ type: 'daily', time: '08:00' }, TZ, 'es')).toBe('todos los días a las 08:00');
     expect(formatLocal(NOW, TZ)).toBe('qua. 25/11 às 04:55');
     expect(schedText('en').reminder).toBe('Reminder');
-    expect(schedText('fr').reminder).toBe('Reminder');
+    expect(schedText('xx').reminder).toBe('Reminder'); // idioma sem dicionário → inglês (fr agora tem o seu: ver i18n.test.ts)
     expect(templatesFor('es')[0].label).toBe('Recordatorio');
     expect(normalizeSpec({ kind: 'reminder', title: 'x', when: 'blah' }, NOW, TZ, 'en')).toEqual({ ok: false, error: schedText('en').errWhen });
     expect(classifyPrompt({ from: 'a', subject: 'b', text: 'c' }, undefined, 'en')).toContain('motivo curto em inglês');

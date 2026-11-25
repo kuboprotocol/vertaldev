@@ -30,6 +30,7 @@ import { toast } from 'sonner';
 import { DICTATION_ERROR_TEXT, useDictation } from '@/lib/voice/useDictation';
 import { VertalCodeAiEntryButton } from '@/components/vertal-code-ai/VertalCodeAiEntryButton';
 import { SchedulerEntryButton } from './scheduler/SchedulerEntryButton';
+import { isSchedulerBuildEnabled } from '@/lib/chatScheduler/client';
 // Vertal Prospector: botão e comando "prospectar clientes" (não renderiza/age com VITE_VERTAL_PROSPECTOR desligado).
 import { VertalProspectorEntryButton } from '@/components/vertal-prospector/VertalProspectorEntryButton';
 import { isProspectCommand as isVertalProspectorCommand, useVertalProspectorAccess, vertalProspectorHrefFromChat } from '@/lib/vertalProspector/client';
@@ -933,28 +934,30 @@ function Composer({
 
 // ─── Aprovação de chamada de API ─────────────────────────────────────────
 
-function ApiApprovalDialog({ approval }: { approval: ReturnType<typeof useVertalChat>['approval'] }) {
+export function ApiApprovalDialog({ approval }: { approval: ReturnType<typeof useVertalChat>['approval'] }) {
+  // Rótulos traduzidos só chegam do Agendador e só valem com a flag dele ligada; sem isso o cartão é idêntico ao de sempre.
+  const L = approval?.labels && isSchedulerBuildEnabled() ? approval.labels : null;
   return (
     <Dialog open={!!approval} onOpenChange={(open) => !open && approval?.resolve(false)}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
+      <DialogContent className={L?.dir === 'rtl' ? 'max-w-md text-right' : 'max-w-md'} dir={L?.dir} lang={L?.lang}>
+        <DialogHeader className={L?.dir === 'rtl' ? 'pr-6 sm:text-right' : undefined}>
           <DialogTitle className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-primary" aria-hidden /> Permitir esta ação?
+            <ShieldCheck className="h-5 w-5 text-primary" aria-hidden /> {L ? L.title : 'Permitir esta ação?'}
           </DialogTitle>
-          <DialogDescription>O chat precisa da sua permissão para agir fora dele e concluir o seu pedido.</DialogDescription>
+          <DialogDescription>{L ? L.description : 'O chat precisa da sua permissão para agir fora dele e concluir o seu pedido.'}</DialogDescription>
         </DialogHeader>
         {approval && (
           <dl className="space-y-3 text-sm">
             <div>
-              <dt className="text-xs text-muted-foreground">Serviço</dt>
+              <dt className="text-xs text-muted-foreground">{L ? L.service : 'Serviço'}</dt>
               <dd className="font-semibold">{approval.host}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Chamada</dt>
-              <dd className="break-all rounded-lg bg-muted/50 px-2.5 py-2 font-mono text-xs">{approval.method} {approval.url}</dd>
+              <dt className="text-xs text-muted-foreground">{L ? L.call : 'Chamada'}</dt>
+              <dd className="break-all rounded-lg bg-muted/50 px-2.5 py-2 font-mono text-xs">{L ? L.method : approval.method} {approval.url}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">{approval.method.includes('E-MAIL') ? 'Texto exato que será enviado' : approval.method === 'TAREFA AGENDADA' ? 'Resumo (o que, quando, gatilho e permissões)' : 'Motivo'}</dt>
+              <dt className="text-xs text-muted-foreground">{L ? L.summary : approval.method.includes('E-MAIL') ? 'Texto exato que será enviado' : approval.method === 'TAREFA AGENDADA' ? 'Resumo (o que, quando, gatilho e permissões)' : 'Motivo'}</dt>
               <dd className="max-h-64 overflow-y-auto whitespace-pre-wrap break-words">{approval.reason}</dd>
             </div>
             {approval.secrets.length > 0 && (
@@ -969,10 +972,10 @@ function ApiApprovalDialog({ approval }: { approval: ReturnType<typeof useVertal
         )}
         <DialogFooter className="gap-2 sm:gap-2">
           <button type="button" onClick={() => approval?.resolve(false)} className="rounded-lg border border-border/60 px-4 py-2 text-sm font-medium hover:bg-secondary">
-            Não permitir
+            {L ? L.deny : 'Não permitir'}
           </button>
           <button type="button" onClick={() => approval?.resolve(true)} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
-            Permitir
+            {L ? L.allow : 'Permitir'}
           </button>
         </DialogFooter>
       </DialogContent>

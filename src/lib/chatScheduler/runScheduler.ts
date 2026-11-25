@@ -5,12 +5,16 @@ import type { AgentAction, ToolResult } from '@/lib/chatAgent/contract';
 import {
   callScheduler, getSchedulerLangSetting, notifySchedulerChanged, openSchedulerPanel, type SchedulerRun, type SchedulerTaskView,
 } from './client';
-import { schedUi, schedulerUiLang } from './i18n';
+import { ensureSchedulerLangs, schedApprovalLabels, schedUi, schedulerUiLang, type ApprovalLabels } from './i18n';
 
 type SchedulerAgentAction = Extract<AgentAction, { tool: 'agendador' }>;
 
 export interface SchedulerActionContext {
-  approveApi: (request: { method: string; url: string; host: string; reason: string; secrets: string[]; hasBody: boolean }) => Promise<boolean>;
+  approveApi: (request: {
+    method: string; url: string; host: string; reason: string; secrets: string[]; hasBody: boolean;
+    /** Rótulos do cartão no idioma do usuário (o cartão só usa com a flag do Agendador ligada). */
+    labels?: ApprovalLabels;
+  }) => Promise<boolean>;
   chatConversationId?: string | null;
 }
 
@@ -49,7 +53,9 @@ export async function runScheduler(action: SchedulerAgentAction, ctx: SchedulerA
       const preview = await callScheduler<{ summary: string[]; warnings: string[]; lang?: string }>('preview', { spec, timezone: tz });
       if (!preview.ok) return out(false, `Não deu para montar a tarefa: ${preview.message}`, preview.message);
       // Cartão no idioma do usuário (o servidor resolve: Ajustes → idioma do pedido → navegador).
-      const U = schedUi(schedulerUiLang(preview.data.lang));
+      await ensureSchedulerLangs();
+      const lang = schedulerUiLang(preview.data.lang);
+      const U = schedUi(lang);
       const lines = [...preview.data.summary, ...(preview.data.warnings ?? []).map((w) => `${U.warning}: ${w}`)];
       const approved = await ctx.approveApi({
         method: SCHEDULER_CARD_METHOD,
@@ -58,6 +64,7 @@ export async function runScheduler(action: SchedulerAgentAction, ctx: SchedulerA
         reason: lines.join('\n'),
         secrets: [],
         hasBody: false,
+        labels: schedApprovalLabels(lang),
       });
       if (!approved) return out(false, 'O usuário não confirmou a criação da tarefa.', 'Tarefa não criada.');
       const created = await callScheduler<{ task: SchedulerTaskView; summary: string[]; event?: { add_to_google_url?: string; provider?: string } }>('create', {
@@ -108,10 +115,12 @@ export async function runScheduler(action: SchedulerAgentAction, ctx: SchedulerA
       return out(true, `Rodei agora. Resultado (também postado na conversa da tarefa):\n${r.data.text}`);
     }
     case 'delete': {
-      const U = schedUi(schedulerUiLang(getSchedulerLangSetting()));
+      await ensureSchedulerLangs();
+      const lang = schedulerUiLang(getSchedulerLangSetting());
+      const U = schedUi(lang);
       const approved = await ctx.approveApi({
         method: SCHEDULER_CARD_METHOD, url: action.name ?? action.id ?? U.task, host: U.cardHost,
-        reason: U.deleteReason, secrets: [], hasBody: false,
+        reason: U.deleteReason, secrets: [], hasBody: false, labels: schedApprovalLabels(lang),
       });
       if (!approved) return out(false, 'O usuário não confirmou apagar.', 'Nada foi apagado.');
       const r = await callScheduler<{ deleted: string }>('delete', { id: action.id, name: action.name });
@@ -122,7 +131,9 @@ export async function runScheduler(action: SchedulerAgentAction, ctx: SchedulerA
     case 'update': {
       const c = action.changes;
       if (c.send_to?.length || c.allow_app_actions || c.notify_email) {
-        const U = schedUi(schedulerUiLang(c.lang ?? getSchedulerLangSetting()));
+        await ensureSchedulerLangs();
+        const lang = schedulerUiLang(c.lang ?? getSchedulerLangSetting());
+        const U = schedUi(lang);
         const approved = await ctx.approveApi({
           method: SCHEDULER_CARD_METHOD, url: action.name ?? action.id ?? U.task, host: U.cardHost,
           reason: [
@@ -130,7 +141,7 @@ export async function runScheduler(action: SchedulerAgentAction, ctx: SchedulerA
             c.allow_app_actions ? U.permApps : '',
             c.notify_email ? U.permNotify : '',
           ].filter(Boolean).join('\n'),
-          secrets: [], hasBody: false,
+          secrets: [], hasBody: false, labels: schedApprovalLabels(lang),
         });
         if (!approved) return out(false, 'O usuário não confirmou a mudança de permissões.', 'Nada foi alterado.');
       }
