@@ -119,6 +119,10 @@ const FLUXOS_APP_LOGOS: Record<string, string> = {
   airbrake: '/connectors/airbrake.png',
   airtable: '/connectors/airtable.png',
   asana: '/connectors/asana.png',
+  'azure-openai': '/connectors/microsoft.png',
+  'microsoft-365': '/connectors/microsoft.png',
+  'microsoft-outlook': '/connectors/microsoft.png',
+  'microsoft-teams': '/connectors/microsoft.png',
   anthropic: '/connectors/anthropic.png',
   appwrite: '/connectors/appwrite.png',
 }
