@@ -125,6 +125,8 @@ Deno.serve(async (req) => {
         .from('github_connections')
         .upsert({
           user_id: userId,
+          // Coluna legada em texto puro (NOT NULL, ninguém lê): fica vazia; o token vai só cifrado.
+          access_token: '',
           access_token_ciphertext: enc.ciphertext,
           access_token_iv: enc.iv,
           access_token_tag: enc.tag,
