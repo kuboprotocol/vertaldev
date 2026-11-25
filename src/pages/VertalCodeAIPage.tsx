@@ -11,13 +11,18 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import {
   errorText,
+  functionUrl,
+  isMediaOption,
   postAction,
   readHandoff,
   streamRun,
   VERTAL_CODE_AI_NAME,
+  VCA_UI_OPTION_LABEL,
+  VCA_UI_TEXT_OPTIONS,
   type VcaStreamEvent,
   type VcaUiEffort,
   type VcaUiMode,
+  type VcaUiOption,
 } from '@/lib/vertalCodeAi/client';
 import {
   type ChatItem,
@@ -70,6 +75,8 @@ function VertalCodeAIScreen() {
 
   const [mode, setMode] = useState<VcaUiMode>('build');
   const [effort, setEffort] = useState<VcaUiEffort>('auto');
+  const [option, setOption] = useState<VcaUiOption>('auto');
+  const [options, setOptions] = useState<VcaUiOption[]>(VCA_UI_TEXT_OPTIONS);
   const [input, setInput] = useState(handoff.prompt);
   const [items, setItems] = useState<ChatItem[]>(() => loadSession());
   const [running, setRunning] = useState(false);
@@ -97,6 +104,76 @@ function VertalCodeAIScreen() {
 
   const token = async () => (await supabase.auth.getSession()).data.session?.access_token ?? '';
 
+  useEffect(() => {
+    // Opções que o servidor liberou (imagem/vídeo só aparecem quando ligados).
+    (async () => {
+      const t = await token();
+      if (!t) return;
+      try {
+        const res = await postAction<{ options?: Array<{ id: VcaUiOption }> }>(t, { action: 'models' });
+        const ids = (res.options ?? []).map((o) => o.id).filter((id) => id in VCA_UI_OPTION_LABEL);
+        if (ids.length) setOptions(ids);
+      } catch {
+        /* mantém as opções de texto */
+      }
+    })();
+  }, []);
+
+  /** Vertal Imagem / Vertal Vídeo: gera e mostra no balão do agente. */
+  const runMedia = useCallback(
+    async (prompt: string, kind: 'imagem' | 'video') => {
+      const text = prompt.trim();
+      if (!text || running) return;
+      const t = await token();
+      if (!t) {
+        setNotice('Entre na sua conta para usar o VERTAL Code AI.');
+        return;
+      }
+      const runId = `r${Date.now()}`;
+      const patch = (p: Partial<Extract<ChatItem, { type: 'agent' }>>) =>
+        setItems((prev) => prev.map((it) => (it.type === 'agent' && it.id === runId ? { ...it, ...p } : it)));
+      setItems((prev) => [
+        ...prev,
+        { type: 'user', id: `u${runId}`, text, mode: 'build', images: images.length, files: [] },
+        { type: 'agent', id: runId, steps: [{ text: kind === 'imagem' ? 'Gerando imagem' : 'Gerando vídeo (pode levar alguns minutos)' }], diffs: [], done: false, prompt: text },
+      ]);
+      setInput('');
+      setRunning(true);
+      setNotice(null);
+      try {
+        if (kind === 'imagem') {
+          const res = await postAction<{ images: string[]; text?: string; model: { label: string } }>(t, { action: 'image', prompt: text, images });
+          patch({ media: { kind: 'image', urls: res.images }, reply: res.text || undefined, steps: [{ text: `Modelo: ${res.model.label} (pago)` }] });
+        } else {
+          const sub = await postAction<{ job: string; model: { label: string } }>(t, { action: 'video', prompt: text });
+          patch({ steps: [{ text: `Modelo: ${sub.model.label} (pago)` }, { text: 'Na fila…' }] });
+          for (let i = 0; i < 60; i++) {
+            await new Promise((r) => setTimeout(r, 10_000));
+            const st = await postAction<{ status: string; url: string | null; needsProxy?: boolean; error?: string }>(t, { action: 'video_status', job: sub.job });
+            if (st.error) throw new Error(st.error);
+            if (st.status === 'completed') {
+              let url = st.url;
+              if (!url && st.needsProxy) {
+                const r = await fetch(functionUrl(), { method: 'POST', headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'video_content', job: sub.job }) });
+                if (!r.ok) throw new Error('vca_media_failed');
+                url = URL.createObjectURL(await r.blob());
+              }
+              if (url) patch({ media: { kind: 'video', urls: [url] } });
+              break;
+            }
+          }
+        }
+      } catch (err) {
+        patch({ error: errorText(err instanceof Error ? err.message : '') });
+      } finally {
+        patch({ done: true });
+        setRunning(false);
+        setImages([]);
+      }
+    },
+    [running, images],
+  );
+
   const run = useCallback(
     async (prompt: string, runMode: VcaUiMode, plan?: PlanData) => {
       const text = prompt.trim();
@@ -120,6 +197,7 @@ function VertalCodeAIScreen() {
           {
             mode: runMode,
             effort,
+            option,
             prompt: text,
             history,
             images,
@@ -142,7 +220,7 @@ function VertalCodeAIScreen() {
         abortRef.current = null;
       }
     },
-    [running, items, effort, images, attachments, projectId, handoff.from],
+    [running, items, effort, option, images, attachments, projectId, handoff.from],
   );
 
   const toggleDiff = (agentId: string, path: string) =>
@@ -273,6 +351,11 @@ function VertalCodeAIScreen() {
                 )}
               </ul>
               {it.reply && <p className="whitespace-pre-wrap">{it.reply}</p>}
+              {it.media?.kind === 'image' &&
+                it.media.urls.map((u, i) => <img key={i} src={u} alt="Imagem gerada" className="max-h-96 w-full rounded-xl object-contain" />)}
+              {it.media?.kind === 'video' && it.media.urls[0] && (
+                <video src={it.media.urls[0]} controls playsInline className="max-h-96 w-full rounded-xl" />
+              )}
               {it.error && <p className="text-rose-400">{it.error}</p>}
 
               {it.plan && (
@@ -355,6 +438,18 @@ function VertalCodeAIScreen() {
             ))}
           </div>
           <select
+            aria-label="Modelo Vertal"
+            value={option}
+            onChange={(e) => setOption(e.target.value as VcaUiOption)}
+            className="max-w-[34vw] rounded-full border border-border/60 bg-background px-2 py-1 text-xs"
+          >
+            {options.map((k) => (
+              <option key={k} value={k}>
+                {VCA_UI_OPTION_LABEL[k]}
+              </option>
+            ))}
+          </select>
+          <select
             aria-label="Esforço de raciocínio"
             value={effort}
             onChange={(e) => setEffort(e.target.value as VcaUiEffort)}
@@ -395,7 +490,9 @@ function VertalCodeAIScreen() {
             rows={2}
             className="min-h-[44px] flex-1 resize-none text-base sm:text-sm"
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) run(input, mode);
+              if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey)) return;
+              if (isMediaOption(option)) runMedia(input, option as 'imagem' | 'video');
+              else run(input, mode);
             }}
           />
           {running ? (
@@ -403,7 +500,10 @@ function VertalCodeAIScreen() {
               <Square className="h-4 w-4" />
             </Button>
           ) : (
-            <Button size="icon" aria-label="Enviar" disabled={!input.trim()} onClick={() => run(input, mode)}>
+            <Button size="icon" aria-label="Enviar" disabled={!input.trim()} onClick={() => {
+                if (isMediaOption(option)) runMedia(input, option as 'imagem' | 'video');
+                else run(input, mode);
+              }}>
               <Send className="h-4 w-4" />
             </Button>
           )}

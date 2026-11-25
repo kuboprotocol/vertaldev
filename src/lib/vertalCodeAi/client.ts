@@ -7,6 +7,19 @@ export const VERTAL_CODE_AI_NAME = 'VERTAL Code AI';
 export type VcaUiMode = 'plan' | 'build';
 export type VcaUiEffort = 'auto' | 'low' | 'high' | 'max';
 export type VcaFrom = 'chat' | 'vibe' | 'direct';
+/** Opção Vertal escolhida (família de modelos). "auto" = roteamento padrão. */
+export type VcaUiOption = 'auto' | 'code' | 'livre' | 'turbo' | 'pro' | 'imagem' | 'video';
+export const VCA_UI_TEXT_OPTIONS: VcaUiOption[] = ['auto', 'code', 'livre', 'turbo', 'pro'];
+export const VCA_UI_OPTION_LABEL: Record<VcaUiOption, string> = {
+  auto: 'Vertal Auto',
+  code: 'Vertal Code',
+  livre: 'Vertal Livre',
+  turbo: 'Vertal Turbo',
+  pro: 'Vertal Pro',
+  imagem: 'Vertal Imagem',
+  video: 'Vertal Vídeo',
+};
+export const isMediaOption = (o: VcaUiOption) => o === 'imagem' || o === 'video';
 
 type EnvLike = Record<string, unknown> | undefined;
 
@@ -75,6 +88,8 @@ export function functionUrl(base: string | undefined = import.meta.env.VITE_SUPA
 export interface RunRequest {
   mode: VcaUiMode;
   effort: VcaUiEffort;
+  /** Opção Vertal (padrão: auto). */
+  option?: VcaUiOption;
   prompt: string;
   history?: Array<{ role: 'user' | 'assistant'; content: string }>;
   images?: string[];
@@ -137,6 +152,9 @@ export const ERROR_TEXT: Record<string, string> = {
   no_model_configured: 'Nenhum modelo configurado no servidor.',
   project_not_found: 'Projeto não encontrado.',
   empty_prompt: 'Escreva o que você quer construir.',
+  vertal_code_ai_media_disabled: 'Imagem e vídeo ainda não foram liberados na sua conta.',
+  vca_media_failed: 'Não consegui gerar agora. Tente de novo em alguns minutos.',
+  job_not_found: 'Esse vídeo não foi encontrado.',
 };
 
 export function errorText(code: string): string {

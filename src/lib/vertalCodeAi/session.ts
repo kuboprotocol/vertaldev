@@ -46,6 +46,8 @@ export type ChatItem =
       plan?: PlanData;
       /** Pedido original (para "Construir este plano"). */
       prompt?: string;
+      /** Resultado de imagem/vídeo (opções Vertal Imagem / Vertal Vídeo). */
+      media?: { kind: 'image' | 'video'; urls: string[] };
     };
 
 type AgentItem = Extract<ChatItem, { type: 'agent' }>;
@@ -130,7 +132,16 @@ export function loadSession(storage: Pick<Storage, 'getItem'> | undefined = glob
 export function saveSession(items: ChatItem[], storage: Pick<Storage, 'setItem'> | undefined = globalThis.localStorage): void {
   try {
     // Só as últimas 30 mensagens, sem o conteúdo completo dos arquivos (cabe no celular).
-    const slim = items.slice(-30).map((i) => (i.type === 'agent' ? { ...i, diffs: i.diffs.map((d) => ({ ...d, after: d.status === 'pending' ? d.after : null })) } : i));
+    const slim = items.slice(-30).map((i) =>
+      i.type === 'agent'
+        ? {
+            ...i,
+            diffs: i.diffs.map((d) => ({ ...d, after: d.status === 'pending' ? d.after : null })),
+            // Imagem em base64 não cabe no aparelho: guarda só links.
+            ...(i.media ? { media: { ...i.media, urls: i.media.urls.filter((u) => !u.startsWith('data:')) } } : {}),
+          }
+        : i,
+    );
     storage?.setItem(KEY, JSON.stringify(slim));
   } catch {
     /* armazenamento cheio/privado: segue só em memória */

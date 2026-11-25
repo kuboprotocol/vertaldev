@@ -12,7 +12,7 @@
 //
 // Marca: o usuário só vê `label` (nomes Vertal). `provider`/`model` ficam no servidor e nos logs.
 
-export type VcaProvider = "openrouter" | "gemini" | "groq" | "ollama" | "deepseek";
+export type VcaProvider = "openrouter" | "gemini" | "groq" | "ollama" | "deepseek" | "extra";
 export type VcaCost = "free" | "self_hosted" | "paid";
 export type VcaEffort = "auto" | "low" | "high" | "max";
 export type VcaMode = "plan" | "build";
@@ -40,6 +40,10 @@ export interface VcaModel {
   efforts: VcaEffort[];
   /** Orçamento da LLM própria (CPU/GPU nossa): fora dele, a cadeia pula para o próximo. */
   budget?: VcaBudget;
+  /** Teto de tokens de saída por pedido (protege o gasto em modelo pago). */
+  maxOutputTokens?: number;
+  /** Preço de tabela em US$ por 1M tokens (entrada/saída). Só para estimativa; não cobra nada. */
+  price?: { in: number; out: number };
 }
 
 export interface VcaBudget {
@@ -384,11 +388,18 @@ export function buildChain(env: VcaEnv, opts: ChainOptions): VcaModel[] {
   const selfList = selfHostedModels(env).filter(
     (m) => fits(m) && (!opts.promptTokens || opts.promptTokens <= (m.budget?.maxInputTokens ?? Infinity)),
   );
-  const paid = truthy(env.VERTAL_CODE_AI_ALLOW_PAID) ? VCA_PAID_CATALOG.filter((m) => hasKey(m) && fits(m)) : [];
+  const allowPaid = truthy(env.VERTAL_CODE_AI_ALLOW_PAID);
+  const paid = allowPaid ? VCA_PAID_CATALOG.filter((m) => hasKey(m) && fits(m)) : [];
+  // Provedor extra OpenAI-compatível (ex.: plano grátis de outro provedor), só se configurado por segredo.
+  const extra = extraProviderModels(env).filter((m) => fits(m) && (m.cost !== "paid" || allowPaid));
+  const extraFree = extra.filter((m) => m.cost !== "paid");
+  const extraPaid = extra.filter((m) => m.cost === "paid");
 
   // Padrão (decisão de 24/11/2026): LLM própria primeiro. "false" volta à ordem antiga.
   const selfFirst = !/^(0|false|no|off|nao|não)$/i.test((env.VERTAL_CODE_AI_PREFER_SELF_HOSTED ?? "").trim());
-  const ordered = selfFirst ? [...selfList, ...freeSorted, ...paid] : [...freeSorted, ...selfList, ...paid];
+  const ordered = selfFirst
+    ? [...selfList, ...freeSorted, ...extraFree, ...paid, ...extraPaid]
+    : [...freeSorted, ...extraFree, ...selfList, ...paid, ...extraPaid];
   const seen = new Set<string>();
   return ordered.filter((m) => (seen.has(m.id) ? false : (seen.add(m.id), true)));
 }
@@ -417,7 +428,11 @@ export function requestBody(
   const body: Record<string, unknown> = {
     model: m.model,
     messages: m.vision ? messages : messages.map(stripImages),
-    max_tokens: m.budget ? Math.min(opts.maxTokens, m.budget.maxOutputTokens) : opts.maxTokens,
+    max_tokens: m.budget
+      ? Math.min(opts.maxTokens, m.budget.maxOutputTokens)
+      : m.maxOutputTokens
+      ? Math.min(opts.maxTokens, m.maxOutputTokens)
+      : opts.maxTokens,
     temperature: opts.temperature ?? 0.2,
   };
   if (opts.json && m.jsonMode) body.response_format = { type: "json_object" };
@@ -441,4 +456,251 @@ function stripImages(msg: VcaChatMessage): VcaChatMessage {
 /** O que o usuário vê sobre o modelo usado: só nome Vertal e se custou algo. */
 export function publicModelInfo(m: VcaModel): { id: string; label: string; cost: VcaCost } {
   return { id: m.id, label: m.label, cost: m.cost };
+}
+
+// ───────────────────────────── Opções Vertal (famílias de modelos) ─────────────────────────────
+//
+// O usuário escolhe uma OPÇÃO Vertal (nunca o nome do provedor). Cada opção é uma cadeia:
+//   LLM própria (pedido pequeno, igual ao "auto") → grátis da opção → pagos da opção (só com
+//   VERTAL_CODE_AI_ALLOW_PAID=true) → reserva grátis (openrouter/free).
+// "auto" continua exatamente igual (buildChain). Ids de modelo verificados em 24/11/2026 em
+// openrouter.ai/api/v1/models; os grátis que sumirem do catálogo ao vivo são descartados.
+
+export type VcaOption = "auto" | "code" | "livre" | "turbo" | "pro" | "imagem" | "video";
+export const VCA_TEXT_OPTIONS: VcaOption[] = ["auto", "code", "livre", "turbo", "pro"];
+export const VCA_MEDIA_OPTIONS: VcaOption[] = ["imagem", "video"];
+
+export const VCA_OPTION_LABEL: Record<VcaOption, string> = {
+  auto: "Vertal Auto",
+  code: "Vertal Code",
+  livre: "Vertal Livre",
+  turbo: "Vertal Turbo",
+  pro: "Vertal Pro",
+  imagem: "Vertal Imagem",
+  video: "Vertal Vídeo",
+};
+
+export function parseVcaOption(v: unknown): VcaOption {
+  return typeof v === "string" && (Object.keys(VCA_OPTION_LABEL) as string[]).includes(v) ? (v as VcaOption) : "auto";
+}
+
+const orModel = (
+  m: Omit<VcaModel, "provider" | "url" | "keyEnv" | "jsonMode" | "reasoning" | "efforts"> &
+    Partial<Pick<VcaModel, "jsonMode" | "reasoning" | "efforts">>,
+): VcaModel => ({
+  provider: "openrouter",
+  url: OPENROUTER_URL,
+  keyEnv: "OPENROUTER_API_KEY",
+  jsonMode: true,
+  reasoning: false,
+  efforts: ["auto", "low", "high", "max"],
+  ...m,
+});
+
+/** Famílias novas. Preços em US$/1M tokens (tabela do OpenRouter em 24/11/2026). */
+export const VCA_FAMILY_CATALOG: VcaModel[] = [
+  // Grátis (cota diária gratuita do OpenRouter)
+  orModel({ id: "vca-light-free", label: "Vertal Livre · Leve", model: "google/gemma-4-26b-a4b-it:free", cost: "free", vision: true, context: 128_000, reasoning: true, maxOutputTokens: 8_000, price: { in: 0, out: 0 } }),
+  orModel({ id: "vca-omni-free", label: "Vertal Livre · Omni", model: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", cost: "free", vision: true, context: 128_000, jsonMode: false, reasoning: true, maxOutputTokens: 8_000, price: { in: 0, out: 0 } }),
+  orModel({ id: "vca-swift-free", label: "Vertal Livre · Ligeiro", model: "nvidia/nemotron-3.5-lightning:free", cost: "free", vision: false, context: 128_000, jsonMode: false, reasoning: true, maxOutputTokens: 8_000, price: { in: 0, out: 0 } }),
+  // Pagos baratos
+  orModel({ id: "vca-code-agile", label: "Vertal Code · Ágil", model: "qwen/qwen3-coder-30b-a3b-instruct", cost: "paid", vision: false, context: 128_000, maxOutputTokens: 8_000, price: { in: 0.07, out: 0.28 } }),
+  orModel({ id: "vca-code-classic", label: "Vertal Code · Clássico", model: "qwen/qwen-2.5-coder-32b-instruct", cost: "paid", vision: false, context: 24_000, maxOutputTokens: 4_000, price: { in: 0.66, out: 1.0 } }),
+  orModel({ id: "vca-code-pro", label: "Vertal Code · Pro", model: "moonshotai/kimi-k2.7-code", cost: "paid", vision: true, context: 200_000, reasoning: true, maxOutputTokens: 8_000, price: { in: 0.6, out: 3.0 } }),
+  orModel({ id: "vca-pro", label: "Vertal Pro", model: "moonshotai/kimi-k2.6", cost: "paid", vision: true, context: 200_000, reasoning: true, maxOutputTokens: 8_000, price: { in: 0.65, out: 3.41 } }),
+  orModel({ id: "vca-turbo-v4", label: "Vertal Turbo · Fluxo", model: "deepseek/deepseek-v4-flash", cost: "paid", vision: false, context: 200_000, reasoning: true, maxOutputTokens: 8_000, price: { in: 0.09, out: 0.18 } }),
+  orModel({ id: "vca-open", label: "Vertal Aberto", model: "meta-llama/llama-4-maverick", cost: "paid", vision: true, context: 200_000, maxOutputTokens: 8_000, price: { in: 0.35, out: 1.0 } }),
+  orModel({ id: "vca-open-lite", label: "Vertal Aberto · Leve", model: "meta-llama/llama-4-scout", cost: "paid", vision: true, context: 200_000, jsonMode: false, maxOutputTokens: 8_000, price: { in: 0.1, out: 0.3 } }),
+];
+
+/** Preço de tabela dos modelos que já existiam (só para estimativa). */
+const KNOWN_PRICES: Record<string, { in: number; out: number }> = {
+  "vca-turbo-direct": { in: 0.28, out: 0.42 },
+  "vca-turbo-paid": { in: 0.14, out: 0.42 },
+};
+
+/** Ids (Vertal) de cada opção, na ordem: grátis da opção primeiro, depois pagos. */
+export const VCA_OPTION_MODELS: Record<Exclude<VcaOption, "auto" | "imagem" | "video">, string[]> = {
+  code: ["vca-code-free", "vca-multi-free", "vca-reason-free", "vca-code-agile", "vca-code-pro", "vca-turbo-direct", "vca-turbo-paid", "vca-code-classic"],
+  livre: ["vca-multi-free", "vca-light-free", "vca-reason-free", "vca-vision-free", "vca-omni-free", "vca-swift-free", "vca-code-free", "vca-agent-free", "vca-fast-free", "vca-flash-free"],
+  turbo: ["vca-turbo-direct", "vca-turbo-v4", "vca-turbo-paid", "vca-open", "vca-open-lite"],
+  pro: ["vca-pro", "vca-code-pro", "vca-turbo-direct", "vca-turbo-paid"],
+};
+
+/** Todos os modelos de texto conhecidos (catálogo antigo + famílias novas), por id. */
+export function allTextModels(env: VcaEnv): VcaModel[] {
+  return [...VCA_FREE_CATALOG, ...VCA_FAMILY_CATALOG, ...VCA_PAID_CATALOG, ...extraProviderModels(env)];
+}
+
+/** Preço de tabela de um modelo (US$/1M tokens) ou null se desconhecido. */
+export function modelPrice(m: VcaModel): { in: number; out: number } | null {
+  if (m.cost === "free" || m.cost === "self_hosted") return { in: 0, out: 0 };
+  return m.price ?? KNOWN_PRICES[m.id] ?? null;
+}
+
+/** Custo estimado em US$ de uma chamada. */
+export function estimateCostUsd(m: VcaModel, inputTokens: number, outputTokens: number): number {
+  const p = modelPrice(m);
+  if (!p) return 0;
+  return (inputTokens * p.in + outputTokens * p.out) / 1_000_000;
+}
+
+/**
+ * Preço de varejo em créditos (fórmula do config do VERTAL Code AI):
+ *   (custo + US$0,05) × 1,5 ÷ US$0,03 por crédito. Só informativo: a cobrança segue DESLIGADA.
+ */
+export const VCA_RETAIL = { feeUsd: 0.05, markup: 1.5, usdPerCredit: 0.03 } as const;
+export function retailCredits(costUsd: number): number {
+  const c = ((Math.max(0, costUsd) + VCA_RETAIL.feeUsd) * VCA_RETAIL.markup) / VCA_RETAIL.usdPerCredit;
+  return Math.round(c * 100) / 100;
+}
+
+/**
+ * Provedor extra OpenAI-compatível por segredo (ex.: um plano grátis de outro provedor):
+ *   VERTAL_EXTRA_PROVIDER_URL   base (…/v1) ou URL completa de /chat/completions
+ *   VERTAL_EXTRA_PROVIDER_KEY   chave (Bearer)
+ *   VERTAL_EXTRA_PROVIDER_MODELS  ids separados por vírgula (na ordem de preferência)
+ *   VERTAL_EXTRA_PROVIDER_COST  "free" (padrão) ou "paid" (aí só entra com ALLOW_PAID)
+ *   VERTAL_EXTRA_PROVIDER_CONTEXT  contexto útil (padrão 32 000)
+ */
+export function extraProviderModels(env: VcaEnv): VcaModel[] {
+  const raw = (env.VERTAL_EXTRA_PROVIDER_URL ?? "").trim().replace(/\/+$/, "");
+  if (!/^https:\/\//i.test(raw) || !(env.VERTAL_EXTRA_PROVIDER_KEY ?? "").trim()) return [];
+  const url = /\/chat\/completions$/i.test(raw) ? raw : `${raw}/chat/completions`;
+  const cost: VcaCost = /^paid$/i.test((env.VERTAL_EXTRA_PROVIDER_COST ?? "").trim()) ? "paid" : "free";
+  return (env.VERTAL_EXTRA_PROVIDER_MODELS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 6)
+    .map((model, i) => ({
+      id: `vca-extra-${i + 1}`,
+      label: `Vertal Parceiro · ${i + 1}`,
+      provider: "extra" as const,
+      url,
+      keyEnv: "VERTAL_EXTRA_PROVIDER_KEY",
+      model,
+      cost,
+      vision: false,
+      context: num(env.VERTAL_EXTRA_PROVIDER_CONTEXT, 32_000),
+      jsonMode: false,
+      reasoning: false,
+      efforts: ["auto", "low", "high", "max"] as VcaEffort[],
+      maxOutputTokens: 8_000,
+    }));
+}
+
+export interface OptionChainOptions extends ChainOptions {
+  option: VcaOption;
+  /** Fixa um modelo (id Vertal) da opção — útil para testar uma família. Ignorado se não estiver na opção. */
+  modelId?: string | null;
+}
+
+/**
+ * Cadeia de uma opção Vertal. "auto" = buildChain sem mudança nenhuma.
+ * Demais: própria (se couber) → grátis da opção → pagos da opção (se liberado) → provedor extra → reserva grátis.
+ */
+export function buildOptionChain(env: VcaEnv, opts: OptionChainOptions): VcaModel[] {
+  const option = opts.option;
+  if (option === "auto" || option === "imagem" || option === "video") {
+    const base = buildChain(env, opts);
+    return pinModel(base, opts.modelId);
+  }
+  const hasKey = (m: VcaModel) => m.provider === "ollama" || !!(env[m.keyEnv] ?? "").trim();
+  const fits = (m: VcaModel) =>
+    (!opts.needsVision || m.vision) && (!opts.promptTokens || opts.promptTokens < m.context * 0.8);
+  const allowPaid = truthy(env.VERTAL_CODE_AI_ALLOW_PAID);
+  const byId = new Map(allTextModels(env).map((m) => [m.id, m]));
+  const wanted = VCA_OPTION_MODELS[option].map((id) => byId.get(id)).filter((m): m is VcaModel => !!m);
+  const live = reconcileFreeModels(wanted, opts.liveFreeIds);
+  const usable = live.filter((m) => hasKey(m) && fits(m) && (m.cost !== "paid" || allowPaid));
+  const free = usable.filter((m) => m.cost !== "paid");
+  const paid = usable.filter((m) => m.cost === "paid");
+  const selfList = selfHostedModels(env).filter(
+    (m) => fits(m) && (!opts.promptTokens || opts.promptTokens <= (m.budget?.maxInputTokens ?? Infinity)),
+  );
+  const extra = extraProviderModels(env).filter((m) => fits(m) && (m.cost !== "paid" || allowPaid));
+  const reserve = reconcileFreeModels(
+    VCA_FREE_CATALOG.filter((m) => m.model === "openrouter/free"),
+    opts.liveFreeIds,
+  ).filter((m) => hasKey(m) && fits(m));
+  const selfFirst = !/^(0|false|no|off|nao|não)$/i.test((env.VERTAL_CODE_AI_PREFER_SELF_HOSTED ?? "").trim());
+  const ordered = selfFirst
+    ? [...selfList, ...free, ...extra.filter((m) => m.cost !== "paid"), ...paid, ...extra.filter((m) => m.cost === "paid"), ...reserve]
+    : [...free, ...extra.filter((m) => m.cost !== "paid"), ...selfList, ...paid, ...extra.filter((m) => m.cost === "paid"), ...reserve];
+  const seen = new Set<string>();
+  const chain = ordered.filter((m) => (seen.has(m.id) ? false : (seen.add(m.id), true)));
+  return pinModel(chain, opts.modelId);
+}
+
+function pinModel(chain: VcaModel[], modelId: string | null | undefined): VcaModel[] {
+  if (!modelId) return chain;
+  const hit = chain.find((m) => m.id === modelId);
+  return hit ? [hit] : chain;
+}
+
+// ───────────────────────────── Imagem e vídeo (desligado por padrão) ─────────────────────────────
+
+export interface VcaMediaModel {
+  id: string;
+  label: string;
+  kind: "image" | "video";
+  model: string;
+  /** Imagem: US$ por imagem (≈1 290 tokens de saída). Vídeo: US$ por segundo na resolução usada. */
+  usdPerUnit: number;
+  /** Vídeo: duração e resolução que pedimos (as mais baratas que o modelo aceita). */
+  seconds?: number;
+  resolution?: string;
+}
+
+export const VCA_IMAGE_MODELS: VcaMediaModel[] = [
+  { id: "vca-image", label: "Vertal Imagem", kind: "image", model: "google/gemini-3.1-flash-lite-image", usdPerUnit: 0.04 },
+];
+
+export const VCA_VIDEO_MODELS: VcaMediaModel[] = [
+  { id: "vca-video", label: "Vertal Vídeo", kind: "video", model: "google/gemini-omni-1.2-flash", usdPerUnit: 0.023172, seconds: 4, resolution: "360p" },
+  { id: "vca-video-alt", label: "Vertal Vídeo · Reserva", kind: "video", model: "google/veo-3.1-lite", usdPerUnit: 0.05, seconds: 4, resolution: "720p" },
+];
+
+/** Imagem/vídeo: exige VERTAL_CODE_AI_MEDIA_ENABLED=true, pago liberado e chave do OpenRouter. */
+export function isVcaMediaEnabled(env: VcaEnv): boolean {
+  return truthy(env.VERTAL_CODE_AI_MEDIA_ENABLED) && truthy(env.VERTAL_CODE_AI_ALLOW_PAID) &&
+    !!(env.OPENROUTER_API_KEY ?? "").trim();
+}
+
+export function mediaCostUsd(m: VcaMediaModel): number {
+  return m.kind === "video" ? m.usdPerUnit * (m.seconds ?? 4) : m.usdPerUnit;
+}
+
+/** Corpo do pedido de imagem (chat completions com saída de imagem). */
+export function imageRequestBody(m: VcaMediaModel, prompt: string, images: string[] = []): Record<string, unknown> {
+  const content = images.length
+    ? [{ type: "text", text: prompt }, ...images.slice(0, 2).map((url) => ({ type: "image_url", image_url: { url } }))]
+    : prompt;
+  return { model: m.model, modalities: ["image", "text"], messages: [{ role: "user", content }], max_tokens: 2_000 };
+}
+
+/** Lê as imagens (data URL ou https) da resposta do OpenRouter. */
+export function extractImages(resp: unknown): { images: string[]; text: string } {
+  type Part = { type?: string; url?: string; image_url?: { url?: string } };
+  type Msg = { content?: string | Part[]; images?: Part[] };
+  const msg: Msg = (resp as { choices?: Array<{ message?: Msg }> } | null)?.choices?.[0]?.message ?? {};
+  const images: string[] = [];
+  for (const im of Array.isArray(msg.images) ? msg.images : []) {
+    const url = im?.image_url?.url ?? im?.url;
+    if (typeof url === "string" && (/^data:image\//.test(url) || /^https:\/\//.test(url))) images.push(url);
+  }
+  if (Array.isArray(msg.content)) {
+    for (const p of msg.content) {
+      const url = p?.image_url?.url;
+      if (p?.type === "image_url" && typeof url === "string") images.push(url);
+    }
+  }
+  const text = typeof msg.content === "string" ? msg.content : "";
+  return { images, text };
+}
+
+/** Corpo do pedido de vídeo (API assíncrona POST /api/v1/videos). */
+export function videoRequestBody(m: VcaMediaModel, prompt: string): Record<string, unknown> {
+  return { model: m.model, prompt: prompt.slice(0, 2_000), duration: m.seconds ?? 4, resolution: m.resolution ?? "720p", aspect_ratio: "16:9" };
 }
