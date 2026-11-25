@@ -16,7 +16,7 @@ native/node-sdks/
 │   └── vendor/          # SDKs baixados (gitignored)
 ├── android/
 │   └── app/
-│       ├── build.gradle.kts.snippet           # um flavor por provedor (cashraven | honeygain | bright)
+│       ├── build.gradle.kts                   # um flavor por provedor (cashraven | honeygain | bright)
 │       ├── libs/                              # .aar baixados (gitignored)
 │       └── src/
 │           ├── main/…/dev/vertal/node/        # VertalNodeApp, VertalNodeManager, sdk/NodeSdk (interface)
@@ -44,8 +44,10 @@ native/node-sdks/
 3. Desktop: `cd electron && npm run sdk:<provedor>`; no seu `main` chame `setupVertalNode(...)`,
    use `preload.js` com `contextIsolation: true` e, após o login,
    `window.vertalNode.setAccessToken(session.access_token)`.
-4. Android: copie os trechos de gradle/manifest e rode `./gradlew assemble<Provedor>Release`
-   (ou `-PNODE_SDK_PROVIDER=<provedor>`); chame `node.setAccessToken(...)` após o login.
+4. Android: `native/node-sdks/android` é um projeto Gradle mínimo (app de teste, uma tela).
+   `gradle assembleCashravenDebug` (Gradle 8.7, JDK 17) ou `-PNODE_SDK_PROVIDER=<provedor>`.
+   APK de teste no CI: workflow `.github/workflows/vertal-node-android.yml` (artifact
+   `vertal-node-android-test` + pré-release). Chame `node.setAccessToken(...)` após o login.
 
 ## Regras que o código segue (todos os provedores)
 

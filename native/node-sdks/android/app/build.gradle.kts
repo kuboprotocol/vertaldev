@@ -1,4 +1,4 @@
-// Trecho para app/build.gradle.kts do app Android Vertal Node.
+// app/build.gradle.kts do app Android Vertal Node (app de teste mínimo: uma tela com marca Vertal).
 //
 // Um flavor por provedor: cada APK leva UM SDK de compartilhamento de banda só (sem conflito nem
 // problema de exclusividade). Escolha com -PNODE_SDK_PROVIDER=cashraven|honeygain|bright (ou a env
@@ -14,13 +14,24 @@
 //   BRIGHT_SDK_APP_ID_ANDROID (App ID do painel Bright; no Android é o packageName do app),
 //   VERTAL_SUPABASE_URL, VERTAL_SUPABASE_ANON_KEY
 
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+}
+
 fun prop(name: String): String = (project.findProperty(name) ?: System.getenv(name) ?: "").toString()
 
 val nodeSdkProvider = prop("NODE_SDK_PROVIDER").ifBlank { "cashraven" }.lowercase()
 
 android {
+    namespace = "dev.vertal.node"
     compileSdk = 34 // Cash Raven exige compile/targetSdk 34
     defaultConfig {
+        applicationId = "dev.vertal.node"
+        minSdk = 24
+        targetSdk = 34
+        versionCode = prop("VERTAL_NODE_VERSION_CODE").ifBlank { "1" }.toInt()
+        versionName = prop("VERTAL_NODE_VERSION_NAME").ifBlank { "0.1.0-test" }
         buildConfigField("String", "VERTAL_SUPABASE_URL", "\"${prop("VERTAL_SUPABASE_URL")}\"")
         buildConfigField("String", "VERTAL_SUPABASE_ANON_KEY", "\"${prop("VERTAL_SUPABASE_ANON_KEY")}\"")
     }
@@ -51,7 +62,12 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17 // Cash Raven: JDK 17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    kotlinOptions { jvmTarget = "17" }
     buildFeatures { buildConfig = true }
+    buildTypes {
+        getByName("release") { isMinifyEnabled = false }
+    }
+    lint { abortOnError = false; checkReleaseBuilds = false }
 }
 
 // Só o flavor escolhido é montado: evita compilar (e precisar do binário de) outro SDK.
@@ -61,8 +77,7 @@ androidComponents {
     }
 }
 
-// settings.gradle.kts → dependencyResolutionManagement.repositories:
-//   maven { url = uri("https://cashraven-downloads.nyc3.digitaloceanspaces.com/maven") }
+// Repositório Maven da Cash Raven: em settings.gradle.kts (dependencyResolutionManagement).
 
 dependencies {
     // Comuns (manager + heartbeat)

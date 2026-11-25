@@ -41,9 +41,8 @@ class CashRavenNodeSdk : NodeSdk {
         appContext = app.applicationContext
         // Começa OPTED-OUT. O SDK informa o packageName (Application ID) sozinho.
         val client = CashRaven.createManaged(app, apiKey, uid)
-        // Ícone da notificação do serviço em primeiro plano. Troque por um ícone monocromático
-        // (R.drawable.ic_stat_vertal_node) no projeto do app.
-        CashRavenService.configure(client, CashRavenService.Config(app.applicationInfo.icon))
+        // Ícone (monocromático) da notificação do serviço em primeiro plano.
+        CashRavenService.configure(client, CashRavenService.Config(dev.vertal.node.R.drawable.ic_vertal_node))
         cr = client
     }
 

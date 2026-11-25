@@ -1,0 +1,88 @@
+name: Vertal Node Android (APK de teste)
+
+# Monta o APK de TESTE (debug, flavor cashraven) do Vertal Node e publica como artifact e
+# pré-release. Não faz deploy de nada. A chave do Cash Raven vem do secret
+# CASHRAVEN_API_KEY_ANDROID; sem ela o build passa e o app mostra "Chave não configurada".
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/honeygain-rewards]
+    paths:
+      - 'native/node-sdks/android/**'
+      - '.github/workflows/vertal-node-android.yml'
+
+concurrency:
+  group: vertal-node-android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # só para criar a pré-release de teste com o APK
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: native/node-sdks/android
+    env:
+      NODE_SDK_PROVIDER: cashraven
+      CASHRAVEN_API_KEY_ANDROID: ${{ secrets.CASHRAVEN_API_KEY_ANDROID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Chave do SDK presente?
+        id: key
+        run: |
+          if [ -n "$CASHRAVEN_API_KEY_ANDROID" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+            echo "CASHRAVEN_API_KEY_ANDROID: presente" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "CASHRAVEN_API_KEY_ANDROID: AUSENTE (o app mostra 'Chave não configurada')" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Build APK debug (cashraven)
+        run: |
+          SHORT=$(echo "$GITHUB_SHA" | cut -c1-7)
+          gradle --no-daemon --stacktrace \
+            -PVERTAL_NODE_VERSION_CODE=${{ github.run_number }} \
+            -PVERTAL_NODE_VERSION_NAME="0.1.0-test+$SHORT" \
+            assembleCashravenDebug
+          mkdir -p ../../../dist
+          cp app/build/outputs/apk/cashraven/debug/app-cashraven-debug.apk \
+            "../../../dist/vertal-node-android-test-$SHORT.apk"
+          echo "SHORT=$SHORT" >> "$GITHUB_ENV"
+          ls -la ../../../dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vertal-node-android-test
+          path: dist/*.apk
+          if-no-files-found: error
+
+      - name: Pré-release de teste com o APK
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEY_PRESENT: ${{ steps.key.outputs.present }}
+        run: |
+          TAG="vertal-node-android-test-$SHORT"
+          NOTE="APK de TESTE do Vertal Node (debug, Cash Raven SDK 4.1.4), commit $GITHUB_SHA. Não é release de produção. Chave do SDK no build: $KEY_PRESENT."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.apk --clobber
+          else
+            gh release create "$TAG" dist/*.apk --prerelease --latest=false \
+              --target "$GITHUB_SHA" --title "Vertal Node Android (teste) $SHORT" --notes "$NOTE"
+          fi
+          echo "Release: https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"

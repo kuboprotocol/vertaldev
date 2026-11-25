@@ -5,3 +5,8 @@ app/libs/*.zip
 app/libs/cashraven/
 app/libs/bright/
 local.properties
+
+# Build Gradle
+.gradle/
+build/
+app/build/
