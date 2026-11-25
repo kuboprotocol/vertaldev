@@ -104,8 +104,8 @@ export function inferBusinessModel(text: string): ModelInference {
   const [top, second] = ranked;
   const total = ranked.reduce((a, [, v]) => a + v, 0);
   const model: BusinessModel = top[1] > 0 ? top[0] : "b2c";
-  // Causa só quando o sinal de doação é forte (≥ 2 menções) — evita "doar" solto numa loja.
-  const finalModel: BusinessModel = model === "nonprofit" && score.nonprofit < 6 ? (second[1] > 0 ? second[0] : "b2c") : model;
+  // Causa só quando o sinal de doação é forte (≥ 3 menções) — evita "doar"/"doação" soltos numa loja ou num jogo.
+  const finalModel: BusinessModel = model === "nonprofit" && score.nonprofit < 9 ? (second[1] > 0 ? second[0] : "b2c") : model;
   const confidence = total ? Math.round((score[finalModel] / total) * 100) / 100 : 0;
   return { model: finalModel, subscription: sub >= 2, confidence, signals };
 }
