@@ -120,6 +120,7 @@ const FLUXOS_APP_LOGOS: Record<string, string> = {
   airtable: '/connectors/airtable.png',
   'better-stack': '/connectors/better-stack.webp',
   asana: '/connectors/asana.png',
+  freescout: '/connectors/freescout.jpg',
   frappe: '/connectors/frappe.png',
   'flowers-software': '/connectors/flowers-software.png',
   flickr: '/connectors/flickr.jpg',
