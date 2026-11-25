@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { toast } from 'sonner'
 import { logConnectorEvent } from '@/hooks/useConnectorLogs'
+import { getGitHubOAuthUrl, githubOAuthErrorMessage, GITHUB_TOKEN_SETUP_ROUTE } from '@/lib/github/oauth'
 
 interface GitHubConnection {
   id: string
@@ -36,22 +37,39 @@ export function useGitHubConnection() {
     if (!user) return
     const params = new URLSearchParams(window.location.search)
     if (params.get('success') === 'true') {
-      toast.success('GitHub connected successfully!')
+      const who = params.get('username')
+      toast.success(who ? `GitHub conectado: @${who}` : 'GitHub conectado!')
       fetchConnection()
+      logConnectorEvent({
+        connectorSlug: 'github',
+        eventType: 'connected',
+        message: who ? `GitHub conectado via OAuth (@${who})` : 'GitHub conectado via OAuth',
+        status: 'success',
+      })
       window.history.replaceState({}, '', window.location.pathname)
     }
     if (params.get('error')) {
-      toast.error(`Connection error: ${params.get('error')}`)
+      toast.error(githubOAuthErrorMessage(params.get('error')))
       window.history.replaceState({}, '', window.location.pathname)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
 
+  // "Entrar com GitHub": OAuth por usuário. O servidor gera a URL (state guardado
+  // no banco) e o callback grava o token cifrado — nada de token no navegador.
   const connect = async () => {
-    // GitHub now connects via PAT inside KUBO (no external OAuth).
-    // Redirects the user to the internal setup subpage.
     setConnecting(true)
-    window.location.href = '/connectors/github/setup'
+    try {
+      window.location.href = await getGitHubOAuthUrl()
+    } catch {
+      setConnecting(false)
+      toast.error('Não foi possível abrir o login do GitHub. Tente de novo ou use um token em "Avançado".')
+    }
+  }
+
+  // Avançado: conectar colando um token pessoal (PAT). Conexões por token continuam valendo.
+  const connectWithToken = () => {
+    window.location.href = GITHUB_TOKEN_SETUP_ROUTE
   }
 
   const disconnect = async () => {
@@ -61,10 +79,10 @@ export function useGitHubConnection() {
       supabase.from('api_credentials').delete().eq('user_id', user.id).eq('connector_slug', 'github'),
     ])
     if (error) {
-      toast.error('Disconnection error')
+      toast.error('Erro ao desconectar o GitHub')
     } else {
       setConnection(null)
-      toast.info('GitHub disconnected.')
+      toast.info('GitHub desconectado.')
       logConnectorEvent({
         connectorSlug: 'github',
         eventType: 'disconnected',
@@ -74,5 +92,5 @@ export function useGitHubConnection() {
     }
   }
 
-  return { connection, loading, connecting, connect, disconnect, isConnected: !!connection }
+  return { connection, loading, connecting, connect, connectWithToken, disconnect, isConnected: !!connection, viaToken: connection?.scope === 'pat' }
 }

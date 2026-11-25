@@ -9,7 +9,11 @@ Deno.serve(async (req) => {
   const stateParam = url.searchParams.get('state')
 
   // The state parameter is now an opaque nonce; user_id and returnUrl are looked up server-side.
-  let appBaseUrl = ''
+  // Sem returnUrl válido, volta para o app (nunca um caminho relativo no domínio do Supabase).
+  const fallbackOrigin = (() => {
+    try { return new URL(Deno.env.get('APP_ORIGIN') || 'https://vertal.dev').origin } catch { return 'https://vertal.dev' }
+  })()
+  let appBaseUrl = fallbackOrigin
   let uid: string | null = null
 
   const admin = createClient(
@@ -43,10 +47,8 @@ Deno.serve(async (req) => {
   }
 
   const redirect = (path: string) => {
-    const target = appBaseUrl ? `${appBaseUrl}${path}` : path
-    return new Response(`<html><head><meta http-equiv="refresh" content="0;url=${target}"></head></html>`, {
-      headers: { 'Content-Type': 'text/html' }, status: 200,
-    })
+    const target = `${appBaseUrl}${path}`
+    return new Response(null, { status: 302, headers: { Location: target, 'Cache-Control': 'no-store' } })
   }
 
   if (error || !code || !uid) return redirect('/connectors/github?error=oauth_denied')
@@ -67,15 +69,20 @@ Deno.serve(async (req) => {
     const accessToken = tokenData.access_token
     const scope = tokenData.scope || ''
 
+    if (!accessToken) throw new Error('no_access_token')
+
     const userRes = await fetch('https://api.github.com/user', {
-      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/vnd.github+json', 'User-Agent': 'Vertal' },
     })
+    if (!userRes.ok) throw new Error(`github_user_${userRes.status}`)
     const ghUser = await userRes.json()
 
     // Persist token server-side via service role — never trafega pelo client
     // (admin client already created above for state validation)
     const enc = await encryptSecret(accessToken)
-    await admin.from('github_connections').upsert({
+    const now = new Date().toISOString()
+    // Substitui a conexão anterior do usuário (inclusive uma feita por token/PAT).
+    const { error: upsertErr } = await admin.from('github_connections').upsert({
       user_id: uid,
       access_token_ciphertext: enc.ciphertext,
       access_token_iv: enc.iv,
@@ -83,9 +90,11 @@ Deno.serve(async (req) => {
 
       github_username: ghUser.login || null,
       github_avatar_url: ghUser.avatar_url || null,
-      scope,
-      updated_at: new Date().toISOString(),
+      scope: scope || 'oauth',
+      connected_at: now,
+      updated_at: now,
     }, { onConflict: 'user_id' })
+    if (upsertErr) throw new Error('save_failed')
 
     const params = new URLSearchParams({ success: 'true', username: ghUser.login || '' })
     return redirect(`/connectors/github?${params.toString()}`)
