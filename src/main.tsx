@@ -10,6 +10,8 @@ import { installRuntimeReporter, reportRuntime } from "./lib/runtimeReporter";
 import { initSentry, addBreadcrumb } from "./lib/sentry";
 import { redirectNativeToMobileClient } from "./lib/nativeEntry";
 import { installServiceWorkerAutoReload } from "./lib/swAutoReload";
+// vertal.js (Vertal DePIN): só com VITE_VERTAL_JS_SRC + VITE_VERTAL_APP_ID e aceite do Vertal Node.
+import { startVertalJs } from "./lib/vertal-js";
 
 // Install error beacons FIRST so we catch errors thrown during boot.
 initSentry();
@@ -113,4 +115,4 @@ createRoot(document.getElementById("root")!).render(
   </ErrorBoundary>
 );
 
-
+startVertalJs();
