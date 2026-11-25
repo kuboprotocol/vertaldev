@@ -54,7 +54,16 @@ function log(user: User, app: string, event: string, ok: boolean, message: strin
   }).then(({ error }) => { if (error) console.error("[fluxos_apps] log failed:", error.message); });
 }
 
-export async function handleFluxosApps(user: User, raw: unknown, envGet: (k: string) => string | undefined = (k) => Deno.env.get(k)): Promise<Response> {
+/** Quem pediu a execução: o Vertal Chat (padrão) ou um agente do Vertal Agentes. */
+export interface FluxosCallOptions { source?: "vertal_chat" | "vertal_agentes" }
+
+export async function handleFluxosApps(
+  user: User,
+  raw: unknown,
+  envGet: (k: string) => string | undefined = (k) => Deno.env.get(k),
+  opts: FluxosCallOptions = {},
+): Promise<Response> {
+  const source = opts.source ?? "vertal_chat";
   const limit = await enforceRateLimit(user.id, "fluxos_apps", { max: 60, windowSeconds: 60, userEmail: user.email ?? null });
   if (!limit.ok) return json(429, { error: limit.error });
 
@@ -200,8 +209,8 @@ export async function handleFluxosApps(user: User, raw: unknown, envGet: (k: str
   const list = op.kind === "trigger" ? def.searches : def.actions;
   if (!list.some((a) => a.key === op.key)) return json(404, { error: op.kind === "trigger" ? "search_not_found" : "action_not_found" });
   if (op.chatCharge) {
-    const ded = await deductCredits(user.id, FLUXOS_ACTION_COST, `chat_fluxos_${op.app}`,
-      { source: "vertal_chat", app: op.app, key: op.key, kind: op.kind }, user.email ?? null, `fluxos:${op.chatCharge}`);
+    const ded = await deductCredits(user.id, FLUXOS_ACTION_COST, `${source === "vertal_agentes" ? "agentes" : "chat"}_fluxos_${op.app}`,
+      { source, app: op.app, key: op.key, kind: op.kind }, user.email ?? null, `fluxos:${op.chatCharge}`);
     if (!ded.ok) return json(ded.status ?? 402, { error: ded.error });
   }
   const r = await engine.call("POST", "/run", {
@@ -212,7 +221,7 @@ export async function handleFluxosApps(user: User, raw: unknown, envGet: (k: str
     // Não-2xx: os créditos voltam (withRefundOnFailure no creative-router).
     return json(502, { error: "run_failed", message: engineMessage(r.data, "O app recusou o pedido.") });
   }
-  log(user, op.app, "run", true, `${op.kind} ${op.key}`);
+  log(user, op.app, "run", true, `${op.kind} ${op.key}${source === "vertal_agentes" ? " (Vertal Agentes)" : ""}`);
   const payload = op.kind === "trigger" ? r.data.items : r.data.data;
   return json(200, { ok: true, result: compactResult(payload) });
 }

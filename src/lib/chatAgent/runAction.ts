@@ -1565,7 +1565,7 @@ export function actionLabel(action: AgentAction): string {
     case 'youtube': return action.url ? 'Abrindo o vídeo no player' : 'Buscando no YouTube';
     case 'automatisch': return 'Falando com o seu Vertal Fluxos (você aprova cada chamada)';
     case 'fluxos': return action.op === 'run' ? (action.kind === 'action' ? `Executando no ${action.app} pelo Vertal Fluxos (você aprova antes)` : `Buscando no ${action.app} pelo Vertal Fluxos`) : `Consultando o ${action.app} no Vertal Fluxos`;
-    case 'huginn': return action.op.startsWith('connect_') ? 'Ligando o Vertal Agentes ao Vertal Fluxos (você aprova antes)' : 'Falando com o seu Vertal Agentes (você aprova cada chamada)';
+    case 'huginn': return action.op === 'create_fluxos_agent' ? `Criando um agente que usa o ${action.app} pelo Vertal Fluxos (você aprova antes)` : action.op.startsWith('connect_') ? 'Ligando o Vertal Agentes ao Vertal Fluxos (você aprova antes)' : 'Falando com o seu Vertal Agentes (você aprova cada chamada)';
     case 'open_panel': return 'Abrindo painel';
     case 'weather': return 'Consultando o clima';
     case 'web_search': return 'Buscando na web';

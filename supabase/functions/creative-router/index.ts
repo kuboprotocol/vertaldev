@@ -31,6 +31,10 @@ import { getFreshAccessToken, loadAccount } from "../_shared/gmailToken.ts";
 import { decryptSecret as decryptConnectorSecret } from "../_shared/connectorCrypto.ts";
 import { handleFluxosApps } from "../_shared/fluxosAppsHandler.ts";
 import { brokerToken, isFluxosSharedApp, makeFluxosKey, verifyFluxosKey } from "../_shared/fluxosBroker.ts";
+import {
+  AGENT_TOKEN_HEADER, fluxosAgentName, fluxosPostAgentOptions, isAgentesBrokerOp, makeAgentToken,
+  parseAgentBridgeOp, parseAgentesBrokerOp, verifyAgentToken,
+} from "../_shared/agentesFluxos.ts";
 import { handleChatBrainOp, loadChatBrain, saveChatBrain } from "../_shared/chatBrain.ts";
 import { callWithTierFallback, chooseAgentTier, ORCHESTRATOR_LIMITS, type AgentTier } from "../_shared/chatOrchestrator.ts";
 import {
@@ -62,8 +66,14 @@ import {
   wantsAutomatisch,
 } from "../_shared/automatischCore.ts";
 import {
+  clipData,
+  huginnFailure,
+  openHuginnSession,
+  scrubSecrets,
+  HUGINN_ERROR_MESSAGES,
   HUGINN_LIMITS,
   HUGINN_SECRETS,
+  type HuginnOp,
   isHuginnBridge,
   normalizeHuginnUrl,
   parseHuginnOp,
@@ -139,6 +149,9 @@ Deno.serve(withRefundOnFailure(async (req) => {
   // Vertal Fluxos ("Conta do Vertal"): o servidor do Fluxos se autentica com a
   // chave VERTAL_FLUXOS_KEY do usuário, não com a sessão.
   if (req.headers.get("X-Vertal-Fluxos-Key")) return await handleFluxosBroker(req);
+  // Vertal Agentes → apps do Vertal Fluxos: o agente (PostAgent) se autentica com o
+  // token vat1 do dono, não com a sessão. Só ops status/describe/run (ver agentesFluxos.ts).
+  if (req.headers.get(AGENT_TOKEN_HEADER)) return await handleAgentBridge(req);
 
   const user = await getUser(req.headers.get("Authorization"));
   if (!user) {
@@ -1119,7 +1132,146 @@ async function handleFluxosBroker(req: Request): Promise<Response> {
     const { data } = await admin.auth.admin.getUserById(userId);
     return await handleApiRequest({ id: userId, email: data?.user?.email ?? null }, body.request ?? {});
   }
+  // Vertal Fluxos → Vertal Agentes (app "Vertal" do motor): agentes do MESMO usuário.
+  if (isAgentesBrokerOp(body.op)) return await handleAgentesFromFluxos(userId, body);
   return jsonResponse(400, { error: "invalid_op" });
+}
+
+// ─── Vertal Agentes ↔ Vertal Fluxos ──────────────────────────────────────
+
+/** Login no Vertal Agentes do usuário (segredos HUGINN_* do Cofre dele), com host fixo. */
+async function huginnAccess(userId: string): Promise<
+  | { ok: true; creds: { url: string; username: string; password: string }; fetch: (url: string, init: { method: string; headers: Record<string, string>; body?: string }) => Promise<Response>; host: string }
+  | { ok: false; status: number; error: string; missing?: string[] }
+> {
+  const resolved = await resolveEnvForRun(supaAdmin(), userId, [...HUGINN_SECRETS], { target: "huginn" });
+  if (resolved.missing.length > 0) return { ok: false, status: 400, error: "missing_secrets", missing: resolved.missing };
+  const env = resolved.env;
+  const base = normalizeHuginnUrl(env.HUGINN_URL);
+  if (!base) return { ok: false, status: 400, error: "bad_url" };
+  const host = allowedHost(base);
+  if (!host) return { ok: false, status: 400, error: "url_not_allowed" };
+  return {
+    ok: true,
+    host,
+    creds: { url: base, username: env.HUGINN_USERNAME, password: env.HUGINN_PASSWORD },
+    fetch: async (url, init) => {
+      if (new URL(url).host !== host) throw new TypeError("host_changed");
+      return await fetch(url, { ...init, redirect: "manual", signal: AbortSignal.timeout(HUGINN_LIMITS.timeoutMs) });
+    },
+  };
+}
+
+/**
+ * Chamado pelo motor do Vertal Fluxos (app "Vertal", chave vfk1 do usuário):
+ * listar agentes, ler eventos novos (gatilho por consulta), mandar um evento a um
+ * WebhookAgent e rodar um agente. A aprovação foi dada ao montar e publicar o fluxo.
+ */
+async function handleAgentesFromFluxos(userId: string, body: Record<string, unknown>): Promise<Response> {
+  const op = parseAgentesBrokerOp(body);
+  if (!op) return jsonResponse(400, { error: "invalid_input" });
+  const acc = await huginnAccess(userId);
+  if (!acc.ok) return jsonResponse(acc.status, { error: acc.error, ...(acc.missing ? { missing: acc.missing } : {}) });
+  const hop: HuginnOp = op.op === "agentes_list" ? { op: "list_agents" }
+    : op.op === "agentes_events" ? { op: "list_events", agent_id: op.agent_id }
+    : op.op === "agentes_run" ? { op: "run_agent", agent_id: op.agent_id }
+    : { op: "send_webhook_event", agent_id: op.agent_id, payload: op.payload };
+  const result = op.op === "agentes_events"
+    ? await agentEventsForFlow(op.agent_id, acc.creds, acc.fetch)
+    : await runHuginnOp(hop, acc.creds, { fetch: acc.fetch });
+  await supaAdmin().from("connector_activity_logs").insert({
+    user_id: userId, connector_slug: "huginn", event_type: `fluxos_${op.op}`,
+    message: `Vertal Fluxos → Vertal Agentes: ${op.op}${"agent_id" in op ? ` ${op.agent_id}` : ""}`.slice(0, 300),
+    status: result.ok ? "success" : "error", metadata: { op: op.op, source: "vertal_fluxos" },
+  }).then(({ error }) => { if (error) console.error("[creative-router] agentes log failed:", error.message); });
+  if (!result.ok) return jsonResponse(502, { ok: false, error: result.code, message: result.message });
+  // Sem instance_url (marca branca e nada do host para o motor).
+  const data = JSON.parse(JSON.stringify(result.data, (k, v) => (k === "instance_url" ? undefined : v)));
+  return jsonResponse(200, { ok: true, data });
+}
+
+/** Eventos recentes de um agente para o gatilho do fluxo: payload maior que o do chat (até 8 mil caracteres). */
+async function agentEventsForFlow(
+  agentId: number,
+  creds: { url: string; username: string; password: string },
+  fetchFn: (url: string, init: { method: string; headers: Record<string, string>; body?: string }) => Promise<Response>,
+) {
+  const op: HuginnOp = { op: "list_events", agent_id: agentId };
+  let session: Awaited<ReturnType<typeof openHuginnSession>> | undefined;
+  const secrets = () => [creds.password, creds.username, ...(session?.sensitive() ?? [])];
+  try {
+    session = await openHuginnSession(creds, fetchFn);
+    const items = await session.json("GET", `/agents/${agentId}/events.json`);
+    const events = (Array.isArray(items) ? items : []).slice(0, 25).map((e: Record<string, unknown>) => ({
+      id: e.id, agentId: e.agent_id, createdAt: e.created_at, payload: clipData(e.payload, 8_000),
+    }));
+    return { ok: true as const, op: op.op, data: scrubSecrets({ events }, secrets()), summary: "" };
+  } catch (e) {
+    return huginnFailure(op, e, secrets());
+  }
+}
+
+/**
+ * Chamado por um agente do Vertal Agentes (PostAgent criado por
+ * create_fluxos_agent) com o token vat1 do dono: roda a ação/busca do app do
+ * Vertal Fluxos com a conexão desse usuário. 2 créditos por execução, devolvidos
+ * se falhar (withRefundOnFailure). A aprovação foi dada ao criar o agente.
+ */
+async function handleAgentBridge(req: Request): Promise<Response> {
+  const userId = await verifyAgentToken(req.headers.get(AGENT_TOKEN_HEADER), Deno.env.get("FLUXOS_BROKER_SECRET"));
+  if (!userId) return jsonResponse(401, { error: "invalid_token" });
+  const limit = await enforceRateLimit(userId, "agentes_fluxos", { max: 60, windowSeconds: 60, userEmail: null });
+  if (!limit.ok) return jsonResponse(429, { error: limit.error });
+  const op = parseAgentBridgeOp(await req.json().catch(() => null));
+  if (!op) return jsonResponse(400, { error: "invalid_input" });
+  const { data } = await supaAdmin().auth.admin.getUserById(userId);
+  const user = { id: userId, email: data?.user?.email ?? null };
+  if (op.op === "status") return await handleFluxosApps(user, { op: "status" });
+  if (op.op === "describe") return await handleFluxosApps(user, { op: "describe", app: op.app });
+  return await handleFluxosApps(
+    user,
+    { op: "run", app: op.app, kind: op.kind, key: op.key, parameters: op.parameters, chatCharge: crypto.randomUUID() },
+    undefined,
+    { source: "vertal_agentes" },
+  );
+}
+
+/**
+ * create_fluxos_agent: confere que o app está conectado PELO usuário e que a
+ * ação/busca existe, gera o token vat1 dele e monta as opções do PostAgent.
+ * Devolve a op pronta (com post_options) ou um erro.
+ */
+async function prepareFluxosAgent(
+  user: { id: string; email?: string | null },
+  op: Extract<HuginnOp, { op: "create_fluxos_agent" }>,
+): Promise<{ ok: true; op: Extract<HuginnOp, { op: "create_fluxos_agent" }> } | { ok: false; code: string; message: string }> {
+  const secret = Deno.env.get("FLUXOS_BROKER_SECRET");
+  const anon = Deno.env.get("SUPABASE_ANON_KEY");
+  if (!secret || !anon) return { ok: false, code: "fluxos_not_configured", message: HUGINN_ERROR_MESSAGES.fluxos_not_configured };
+  const r = await handleFluxosApps(user, { op: "describe", app: op.app });
+  const d = await r.json().catch(() => ({})) as {
+    ok?: boolean; error?: string;
+    app?: { name?: string; supportsConnections?: boolean };
+    actions?: Array<{ key: string; name?: string }>; searches?: Array<{ key: string; name?: string }>;
+    connection?: { status?: string } | null;
+  };
+  if (!r.ok || d.ok !== true) {
+    const code = d.error === "app_not_found" ? "fluxos_app_not_found" : "fluxos_not_configured";
+    return { ok: false, code, message: HUGINN_ERROR_MESSAGES[code] };
+  }
+  if (d.app?.supportsConnections && d.connection?.status !== "connected") {
+    return { ok: false, code: "fluxos_not_connected", message: `${HUGINN_ERROR_MESSAGES.fluxos_not_connected} (${d.app?.name ?? op.app})` };
+  }
+  const list = (op.kind === "trigger" ? d.searches : d.actions) ?? [];
+  const item = list.find((x) => x.key === op.key);
+  if (!item) return { ok: false, code: "fluxos_action_not_found", message: HUGINN_ERROR_MESSAGES.fluxos_action_not_found };
+  const spec = { app: op.app, appName: d.app?.name, kind: op.kind, key: op.key, keyName: item.name, parameters: op.parameters };
+  const token = await makeAgentToken(user.id, secret);
+  const routerUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/creative-router`;
+  return {
+    ok: true,
+    op: { ...op, name: op.name ?? fluxosAgentName(spec), post_options: fluxosPostAgentOptions({ routerUrl, anonKey: anon, token, spec }) },
+  };
 }
 
 // ─── Vertal Chat: Huginn do cliente ──────────────────────────────────────
@@ -1146,9 +1298,14 @@ async function handleHuginn(user: { id: string; email?: string | null }, raw: un
 
   // Sem a aprovação explícita do usuário na tela a chamada não sai.
   if ((raw as { confirmed?: unknown } | null)?.confirmed !== true) return jsonResponse(400, { error: "confirmation_required" });
-  const op = parseHuginnOp(raw);
+  let op = parseHuginnOp(raw);
   if (!op) return jsonResponse(400, { error: "invalid_input" });
   const bridge = isHuginnBridge(op);
+  if (op.op === "create_fluxos_agent") {
+    const prepared = await prepareFluxosAgent(user, op);
+    if (!prepared.ok) return jsonResponse(200, { ok: false, op: op.op, code: prepared.code, message: prepared.message });
+    op = prepared.op;
+  }
 
   const keys: string[] = [...HUGINN_SECRETS, ...(bridge ? AUTOMATISCH_SECRETS : [])];
   const resolved = await resolveEnvForRun(supaAdmin(), user.id, keys, { target: "huginn" });

@@ -42,6 +42,7 @@ const HUGINN_SAMPLES: Record<string, HuginnOp> = {
   send_webhook_event: { op: 'send_webhook_event', agent_id: 3, payload: {} },
   connect_to_automatisch: { op: 'connect_to_automatisch', source_agent_id: 3, flow_id: FLOW },
   connect_from_automatisch: { op: 'connect_from_automatisch', step_id: STEP },
+  create_fluxos_agent: { op: 'create_fluxos_agent', app: 'todoist', kind: 'action', key: 'createTask', parameters: { content: '{{ title }}' }, source_ids: [3] },
 } as unknown as Record<string, HuginnOp>;
 
 const AUTOMATISCH_SAMPLES: Record<string, AutomatischOp> = {
@@ -114,12 +115,14 @@ describe('marca branca: Vertal Agentes e Vertal Fluxos', () => {
   it('textos literais dos arquivos da integração não citam fornecedores', () => {
     const files = [
       'src/components/huginn/HuginnAgentsCard.tsx',
+      'src/components/huginn/FluxosAgentBuilder.tsx',
       'src/components/vertal-chat/panelList.ts',
       'src/lib/huginn/client.ts',
       'src/lib/automatisch/client.ts',
       'src/lib/connectorsConfig.ts',
       'supabase/functions/_shared/huginnCore.ts',
       'supabase/functions/_shared/huginnBridge.ts',
+      'supabase/functions/_shared/agentesFluxos.ts',
       'supabase/functions/_shared/automatischCore.ts',
     ];
     for (const f of files) {
