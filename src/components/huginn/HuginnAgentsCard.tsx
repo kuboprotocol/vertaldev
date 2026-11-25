@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { callHuginnOp } from '@/lib/huginn/client'
+import { FluxosAgentBuilder } from './FluxosAgentBuilder'
 
 export interface HuginnAgentRow {
   id: number
@@ -84,8 +85,9 @@ export function HuginnAgentsCard() {
             {state.kind === 'setup' && <Badge variant="outline" className="text-[10px]">não configurado</Badge>}
           </h2>
           <p className="text-xs text-muted-foreground">
-            Agentes que vigiam sites, feeds e APIs e reagem a eventos. No Vertal Chat, peça por exemplo
-            “quando o Vertal Agentes detectar X, rode o fluxo Y do Vertal Fluxos”.
+            Agentes que vigiam sites, feeds e APIs, reagem a eventos e agem nos apps que você conectou no
+            Vertal Fluxos. No Vertal Chat, peça por exemplo “quando o Vertal Agentes detectar X, crie uma tarefa
+            no Todoist” ou “rode o fluxo Y do Vertal Fluxos”.
           </p>
         </div>
         {state.kind === 'ready' && state.url && (
@@ -124,7 +126,7 @@ export function HuginnAgentsCard() {
                   {state.url ? <a className="hover:underline" href={`${state.url}/agents/${a.id}`} target="_blank" rel="noopener noreferrer">{a.name}</a> : a.name}
                 </p>
                 <p className="text-xs text-muted-foreground truncate">
-                  {a.type ?? 'Agente'} · {a.events ?? 0} evento(s) · último: {fmt(a.lastEventAt)}{a.lastErrorAt ? ' · teve erro' : ''}
+                  {a.name.startsWith('Vertal Fluxos ·') ? 'usa Vertal Fluxos' : a.type ?? 'Agente'} · {a.events ?? 0} evento(s) · último: {fmt(a.lastEventAt)}{a.lastErrorAt ? ' · teve erro' : ''}
                 </p>
               </div>
               <Switch checked={a.enabled !== false} disabled={busy === a.id} onCheckedChange={(v) => toggle(a, v)} aria-label={`Ativar ${a.name}`} />
@@ -134,6 +136,7 @@ export function HuginnAgentsCard() {
             </div>
           ))}
           {note && <p className="text-xs text-muted-foreground" role="status">{note}</p>}
+          <FluxosAgentBuilder agents={state.agents.map((a) => ({ id: a.id, name: a.name }))} onCreated={load} />
         </div>
       )}
     </section>

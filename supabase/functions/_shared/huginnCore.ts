@@ -38,13 +38,13 @@ export const HUGINN_SECRETS = ["HUGINN_URL", "HUGINN_USERNAME", "HUGINN_PASSWORD
 export const HUGINN_OPS = [
   "status", "list_agents", "get_agent", "list_events", "list_scenarios",
   "create_agent", "import_scenario", "run_agent", "set_agent_enabled", "send_webhook_event",
-  "connect_to_automatisch", "connect_from_automatisch",
+  "connect_to_automatisch", "connect_from_automatisch", "create_fluxos_agent",
 ] as const;
 export type HuginnOpName = (typeof HUGINN_OPS)[number];
 
 export const HUGINN_WRITE_OPS: ReadonlySet<HuginnOpName> = new Set([
   "create_agent", "import_scenario", "run_agent", "set_agent_enabled", "send_webhook_event",
-  "connect_to_automatisch", "connect_from_automatisch",
+  "connect_to_automatisch", "connect_from_automatisch", "create_fluxos_agent",
 ]);
 
 /** Operações da ponte Huginn ↔ Automatisch (precisam também dos segredos do Automatisch). */
@@ -102,7 +102,18 @@ export type HuginnOp =
   /** Quando o agente Huginn `source_agent_id` emitir um evento, dispara o fluxo `flow_id` do Automatisch (gatilho Webhook). */
   | { op: "connect_to_automatisch"; source_agent_id: number; flow_id: string; name?: string }
   /** Faz o passo de ação `step_id` do Automatisch mandar um evento para um WebhookAgent do Huginn (novo ou `webhook_agent_id`). */
-  | { op: "connect_from_automatisch"; step_id: string; webhook_agent_id?: number; name?: string; data?: string };
+  | { op: "connect_from_automatisch"; step_id: string; webhook_agent_id?: number; name?: string; data?: string }
+  /**
+   * Cria no Vertal Agentes um agente que roda a ação/busca `key` do app `app` do
+   * Vertal Fluxos com a conexão do próprio usuário (a cada evento dos agentes
+   * `source_ids`, ou na `schedule`). `parameters` aceita Liquid ({{ campo }}).
+   * `post_options` é preenchido SÓ pelo servidor (creative-router), nunca pelo pedido.
+   */
+  | {
+    op: "create_fluxos_agent"; app: string; kind: "action" | "trigger"; key: string; parameters: Record<string, unknown>;
+    name?: string; source_ids?: number[]; schedule?: string; disabled?: boolean;
+    post_options?: Record<string, unknown>;
+  };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TYPE_RE = /^(?:Agents::)?([A-Z][A-Za-z0-9]{1,60}Agent)$/;
@@ -273,6 +284,39 @@ export function parseHuginnOp(raw: unknown): HuginnOp | null {
         ...(webhook_agent_id ? { webhook_agent_id } : {}), ...(name ? { name } : {}), ...(data.trim() ? { data } : {}),
       };
     }
+    case "create_fluxos_agent": {
+      const app = text(a.app, 70).replace(/^fluxos-/, "");
+      if (!/^[a-z0-9-]{1,64}$/.test(app)) return null;
+      const kind = a.kind === "trigger" || a.kind === "search" ? "trigger" : "action";
+      const key = text(pick(a, "key", "action", "search"), 80);
+      if (!/^[A-Za-z0-9_-]{1,80}$/.test(key)) return null;
+      let p: unknown = a.parameters ?? {};
+      if (typeof p === "string") {
+        try {
+          p = JSON.parse(p);
+        } catch {
+          return null;
+        }
+      }
+      const parameters = plainObject(p, HUGINN_LIMITS.maxOptionsChars);
+      if (!parameters) return null;
+      const out: Extract<HuginnOp, { op: "create_fluxos_agent" }> = { op: "create_fluxos_agent", app, kind, key, parameters };
+      const name = oneLine(a.name, HUGINN_LIMITS.maxName);
+      if (name) out.name = name;
+      const list = ids(pick(a, "source_ids", "sourceIds"));
+      if (list === null) return null;
+      if (list && list.length) out.source_ids = list;
+      if (a.schedule !== undefined && a.schedule !== null && a.schedule !== "") {
+        if (typeof a.schedule !== "string" || !(HUGINN_SCHEDULES as readonly string[]).includes(a.schedule)) return null;
+        out.schedule = a.schedule;
+      }
+      if (a.disabled !== undefined) {
+        const b = bool(a.disabled);
+        if (b === null) return null;
+        out.disabled = b;
+      }
+      return out;
+    }
     default:
       return null;
   }
@@ -297,6 +341,7 @@ export function describeHuginnOp(op: HuginnOp): string {
     case "set_agent_enabled": return op.enabled ? `Ativar o agente ${op.agent_id} do Vertal Agentes` : `Desativar o agente ${op.agent_id} do Vertal Agentes`;
     case "send_webhook_event": return `Enviar um evento para o WebhookAgent ${op.agent_id} do Vertal Agentes`;
     case "connect_to_automatisch": return `LIGAR: quando o agente ${op.source_agent_id} do Vertal Agentes emitir um evento, chamar o fluxo ${op.flow_id.slice(0, 8)}… do Vertal Fluxos (cria um PostAgent no Vertal Agentes)`;
+    case "create_fluxos_agent": return `Criar no Vertal Agentes um agente que ${op.kind === "trigger" ? "busca" : "executa"} "${op.key}" no app ${op.app} pelo Vertal Fluxos com a SUA conexão${op.source_ids?.length ? `, a cada evento do(s) agente(s) ${op.source_ids.join(", ")}` : op.schedule && op.schedule !== "never" ? `, rodando ${op.schedule}` : " (roda quando você mandar)"}. Cada execução cobra 2 créditos (devolvidos se falhar)`;
     case "connect_from_automatisch": return `LIGAR: o passo ${op.step_id.slice(0, 8)}… do Vertal Fluxos passa a mandar um evento para ${op.webhook_agent_id ? `o WebhookAgent ${op.webhook_agent_id}` : "um novo WebhookAgent"} do Vertal Agentes`;
   }
 }
@@ -325,6 +370,10 @@ export const HUGINN_ERROR_MESSAGES: Record<string, string> = {
   huginn_error: "O Vertal Agentes não respondeu como esperado.",
   invalid_input: "Pedido inválido para o Vertal Agentes.",
   confirmation_required: "Esta chamada precisa da sua permissão.",
+  fluxos_not_configured: "O Vertal Fluxos não está disponível agora para os agentes.",
+  fluxos_app_not_found: "Este app não existe no Vertal Fluxos.",
+  fluxos_not_connected: "Este app ainda não está conectado no Vertal Fluxos. Conecte em Conectores e tente de novo.",
+  fluxos_action_not_found: "Essa ação/busca não existe neste app do Vertal Fluxos (veja as ações com a ferramenta fluxos).",
 };
 
 /** Classifica a resposta HTTP do Huginn. */
@@ -647,7 +696,8 @@ export function summarizeHuginnResult(op: HuginnOp, data: unknown): string {
     case "set_agent_enabled": head = op.enabled ? `Agente ${op.agent_id} ativado.` : `Agente ${op.agent_id} desativado.`; break;
     case "send_webhook_event": head = `Evento entregue ao WebhookAgent ${op.agent_id} (HTTP ${String(d.http_status ?? "?")}).`; break;
     case "connect_to_automatisch": head = `Ligado: eventos do agente ${op.source_agent_id} do Vertal Agentes vão para o fluxo do Vertal Fluxos.`; break;
-    case "connect_from_automatisch": head = "Ligado: o passo do Vertal Fluxos vai mandar um evento para o Vertal Agentes.";
+    case "connect_from_automatisch": head = "Ligado: o passo do Vertal Fluxos vai mandar um evento para o Vertal Agentes."; break;
+    case "create_fluxos_agent": head = `Agente criado no Vertal Agentes: "${String(rec(d.agent).name ?? "")}" (id ${String(rec(d.agent).id ?? "?")}). Ele usa ${op.app} pelo Vertal Fluxos com a conexão do usuário; a resposta de cada execução vira um evento do agente.`;
   }
   // O endereço da instância fica fora do texto que vai ao modelo (marca branca).
   return `${head}\n${JSON.stringify(data, (k, v) => (k === "instance_url" ? undefined : v))}`.slice(0, HUGINN_LIMITS.maxSummaryChars);
@@ -713,6 +763,19 @@ async function perform(op: HuginnOp, s: HuginnSession): Promise<unknown> {
       });
       if (!res.ok) throw new HuginnHttpError(res.status === 401 ? "webhook_rejected" : huginnErrorCode(res.status), res.status);
       return { http_status: res.status, response: clipData(body.slice(0, 500), 300) };
+    }
+    case "create_fluxos_agent": {
+      // As opções (URL, token do usuário) são montadas e conferidas no servidor.
+      if (!op.post_options) throw new HuginnHttpError("invalid_input");
+      const created = await createAgent(s, {
+        op: "create_agent", type: "Agents::PostAgent",
+        name: op.name ?? `Vertal Fluxos · ${op.app}: ${op.key}`.slice(0, HUGINN_LIMITS.maxName),
+        options: op.post_options,
+        schedule: op.schedule ?? "never",
+        ...(op.source_ids?.length ? { source_ids: op.source_ids, propagate_immediately: true } : {}),
+        ...(op.disabled !== undefined ? { disabled: op.disabled } : {}),
+      });
+      return { agent: { ...agentView(created, true), type: "PostAgent" }, fluxos: { app: op.app, kind: op.kind, key: op.key } };
     }
     case "connect_to_automatisch":
     case "connect_from_automatisch":
