@@ -58,7 +58,7 @@ import { growthChargeAdmins, isGrowthEnabled } from "../_shared/vertalGrowth/cor
 import { handleGrowth, type DebitResult } from "../_shared/vertalGrowth/handler.ts";
 import { listVisibleSecrets, resolveEnvForRun } from "../_shared/kuboSecrets.ts";
 // Vertal CRM (aditivo, desligado por padrão: VERTAL_CRM_ENABLED + VERTAL_CRM_USER_IDS). Não depende das flags do VERTAL Code AI.
-import { crmChargeAdmins, crmChargeOn, isApiKeyShape as isVertalCrmApiKey, isCrmEnabled } from "../_shared/vertalCrm/core.ts";
+import { crmChargeAdmins, crmChargeOn, isApiKeyShape as isVertalCrmApiKey, isCrmEnabled, isPaidCrmPlan } from "../_shared/vertalCrm/core.ts";
 import { autoImport as vertalCrmAutoImport, handleCrm, hashApiKey as hashVertalCrmKey, type CrmDeps } from "../_shared/vertalCrm/handler.ts";
 import { verifyFluxosKey as verifyVertalCrmFluxosKey } from "../_shared/fluxosBroker.ts";
 import { makeEngine as makeVertalCrmEngine } from "../_shared/fluxosApps.ts";
@@ -327,6 +327,11 @@ function vertalCrmDeps(admin: Loose, userId: string, via: CrmDeps["via"], extra:
     gmailToken: async (accountId) => {
       const acct = await loadAccount(admin, userId, accountId);
       return { token: await getFreshAccessToken(admin, acct), email: acct.email };
+    },
+    // IA do CRM só com plano pago (VERTAL_CRM_AI_REQUIRES_PLAN, padrão ligado): lê a assinatura ativa.
+    hasPaidPlan: async () => {
+      const { data } = await admin.from("subscriptions").select("plan, is_active").eq("user_id", userId).eq("is_active", true).limit(5);
+      return (data ?? []).some((s: Loose) => isPaidCrmPlan(s));
     },
     ...extra,
   };

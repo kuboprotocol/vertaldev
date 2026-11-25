@@ -42,6 +42,25 @@ export function plainSyncCost(env: CrmEnv): number {
   return Number.isFinite(n) && n > 0 ? Math.min(n, 20) : 0;
 }
 
+/**
+ * IA do CRM só para quem tem plano pago (regra do Laércio, 2026-11-25). Padrão LIGADO;
+ * VERTAL_CRM_AI_REQUIRES_PLAN=false desliga. Vale só para as ações de IA do CRM (op "ai" e
+ * sincronização com IA); o resto do CRM continua grátis e sem plano.
+ */
+export function crmAiRequiresPlan(env: CrmEnv): boolean {
+  const v = (env.VERTAL_CRM_AI_REQUIRES_PLAN ?? "").trim().toLowerCase();
+  return !["false", "0", "off", "no", "nao", "não"].includes(v);
+}
+/** Planos pagos (mesmos ids de src/lib/planConfig.ts; "free" e "beta" não contam). */
+export const CRM_PAID_PLANS = [
+  "starter", "pro", "premium_1", "premium_2",
+  "business_1", "business_2", "business_3", "business_4", "business_5", "business_6", "business_7", "enterprise",
+] as const;
+export function isPaidCrmPlan(sub: { plan?: string | null; is_active?: boolean | null } | null | undefined): boolean {
+  if (!sub || sub.is_active !== true) return false;
+  return (CRM_PAID_PLANS as readonly string[]).includes(String(sub.plan ?? "").trim().toLowerCase());
+}
+
 // ─── Idioma ──────────────────────────────────────────────────────────────
 export type CrmLang = "pt" | "en" | "es";
 export function crmLang(...hints: Array<string | null | undefined>): CrmLang {

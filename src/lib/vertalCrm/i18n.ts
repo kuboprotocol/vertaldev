@@ -60,6 +60,7 @@ const pt = {
     copy: 'Copiar', copied: 'Copiado.', createTask: 'Criar a tarefa sugerida', saveAsNote: 'Salvar como nota',
     charged: (n: number) => (n ? `${n} crédito usado.` : 'Sem custo nesta conta.'), refunded: 'A IA falhou e o crédito foi devolvido.',
     noCredits: 'Créditos insuficientes.',
+    planRequired: 'A IA do CRM faz parte de qualquer plano pago do Vertal Dev. O resto do CRM continua grátis. Veja os planos em vertal.dev/pricing.',
   },
   emailCapture: 'Trazer e-mails do Gmail', emailCaptured: (n: number) => `${n} e-mail(s) virou(aram) nota(s).`, gmailMissing: 'Conecte o Gmail em Conectores para trazer e-mails.',
   csv: { import: 'Importar CSV', export: 'Exportar CSV', imported: (n: number, s: number) => `${n} contato(s) importado(s)${s ? `, ${s} linha(s) ignorada(s)` : ''}.`, hint: 'Aceita o formato do Atomic CRM e colunas como nome, sobrenome, e-mail, telefone, empresa, cargo.' },
@@ -109,6 +110,7 @@ const en: CrmUi = {
     goal: 'Email goal (optional)', draftOnly: 'Draft only: copy it and send it yourself. The CRM sends nothing.', copy: 'Copy', copied: 'Copied.',
     createTask: 'Create the suggested task', saveAsNote: 'Save as note', charged: (n: number) => (n ? `${n} credit used.` : 'No charge on this account.'),
     refunded: 'AI failed and the credit was refunded.', noCredits: 'Not enough credits.',
+    planRequired: 'CRM AI is included in any paid Vertal Dev plan. The rest of the CRM stays free. See plans at vertal.dev/pricing.',
   },
   emailCapture: 'Pull emails from Gmail', emailCaptured: (n: number) => `${n} email(s) saved as notes.`, gmailMissing: 'Connect Gmail in Connectors to pull emails.',
   csv: { import: 'Import CSV', export: 'Export CSV', imported: (n: number, s: number) => `${n} contact(s) imported${s ? `, ${s} row(s) skipped` : ''}.`, hint: 'Accepts the Atomic CRM format and columns like first name, last name, email, phone, company, title.' },
@@ -151,6 +153,7 @@ const es: CrmUi = {
     goal: 'Objetivo del correo (opcional)', draftOnly: 'Es solo un borrador: cópialo y envíalo tú. El CRM no envía nada.', copy: 'Copiar', copied: 'Copiado.',
     createTask: 'Crear la tarea sugerida', saveAsNote: 'Guardar como nota', charged: (n: number) => (n ? `${n} crédito usado.` : 'Sin costo en esta cuenta.'),
     refunded: 'La IA falló y el crédito fue devuelto.', noCredits: 'Créditos insuficientes.',
+    planRequired: 'La IA del CRM está incluida en cualquier plan de pago de Vertal Dev. El resto del CRM sigue siendo gratis. Mira los planes en vertal.dev/pricing.',
   },
   emailCapture: 'Traer correos de Gmail', emailCaptured: (n: number) => `${n} correo(s) guardado(s) como nota.`, gmailMissing: 'Conecta Gmail en Conectores para traer correos.',
   csv: { import: 'Importar CSV', export: 'Exportar CSV', imported: (n: number, s: number) => `${n} contacto(s) importado(s)${s ? `, ${s} fila(s) ignorada(s)` : ''}.`, hint: 'Acepta el formato de Atomic CRM y columnas como nombre, apellido, correo, teléfono, empresa, cargo.' },
@@ -176,6 +179,7 @@ export const crmUi = (lang: CrmLang = browserLang()) => CRM_UI[lang] ?? pt;
 /** Mensagem amigável para códigos de erro do servidor. */
 export function crmErrorText(code: string, t: CrmUi): string {
   if (code === 'insufficient_credits') return t.ai.noCredits;
+  if (code === 'plan_required') return t.ai.planRequired;
   if (code === 'provider_not_connected') return t.settings.connectFirst;
   if (code === 'gmail_not_connected') return t.gmailMissing;
   return `${t.error} (${code})`;
