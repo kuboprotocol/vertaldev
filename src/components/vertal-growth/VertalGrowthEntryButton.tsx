@@ -4,7 +4,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Rocket } from 'lucide-react';
 import { useVertalGrowthAccess, vertalGrowthHref } from '@/lib/vertalGrowth/client';
-import { browserLang } from '@/lib/vertalGrowth/i18n';
+import { preferredUiLang } from '@/lib/vertalGrowth/i18n';
 
 interface Props {
   from: 'chat' | 'code' | 'builder';
@@ -23,7 +23,7 @@ export function VertalGrowthEntryButton({ from, projectId, hidden, floating, ena
   const navigate = useNavigate();
   const access = useVertalGrowthAccess(enabledOverride);
   if (access !== 'allowed' || hidden) return null;
-  const label = LABEL[browserLang()];
+  const label = LABEL[preferredUiLang()];
   return (
     <button
       type="button"

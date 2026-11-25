@@ -13,9 +13,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { callScheduler } from '@/lib/chatScheduler/client';
 import {
-  buildTeam, callGrowth, forwardEvents, GrowthError, newIdempotencyKey, readGrowthHandoff, useVertalGrowthAccess,
+  buildTeam, callGrowth, forwardEvents, GrowthError, launchGrowth, newIdempotencyKey, readGrowthHandoff, useVertalGrowthAccess,
 } from '@/lib/vertalGrowth/client';
-import { browserLang, GROWTH_UI, uiLangFrom } from '@/lib/vertalGrowth/i18n';
+import { GROWTH_UI, preferredUiLang, rememberUiLang, uiLangFrom } from '@/lib/vertalGrowth/i18n';
 import { VERTAL_PROSPECTOR_ROUTE } from '@/lib/vertalProspector/client';
 import type { BusinessModel, GrowthKind, TeamPreset } from '../../supabase/functions/_shared/vertalGrowth/core';
 
@@ -41,7 +41,7 @@ interface Dash {
   retencao: { active: number; atRisk: number; churned: number; wonBack: number; drafts: number };
   unit: 'customers' | 'donors';
 }
-interface Status { chargeOn: boolean; launchCost: number; runCost: number; cap: number; sentToday: number; gmailAccounts: Array<{ id: string; email: string }>; stripe: boolean; agents: boolean }
+interface Status { uiLang?: string | null; chargeOn: boolean; launchCost: number; runCost: number; cap: number; sentToday: number; gmailAccounts: Array<{ id: string; email: string }>; stripe: boolean; agents: boolean }
 
 const card = 'rounded-xl border border-border/60 bg-card/60 p-3';
 const selectCls = 'w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm';
@@ -59,7 +59,8 @@ export function VertalGrowthScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const handoff = useMemo(() => readGrowthHandoff(location.search), [location.search]);
-  const lang = uiLangFrom(handoff.lang, browserLang());
+  // Idioma nativo do usuário: pedido explícito → idioma salvo (CRM/servidor) → navegador → pt-BR.
+  const [lang, setLang] = useState(() => preferredUiLang(handoff.lang));
   const t = GROWTH_UI[lang];
   const errText = (e: unknown) => {
     const code = e instanceof GrowthError ? e.code : e instanceof Error ? e.message : String(e);
@@ -113,6 +114,10 @@ export function VertalGrowthScreen() {
     ]);
     if (s) {
       setStatus(s);
+      if (s.uiLang && !handoff.lang) {
+        setLang(uiLangFrom(s.uiLang));
+        rememberUiLang(s.uiLang);
+      }
       setCap({ cap: s.cap, sentToday: s.sentToday });
       setAccountId((cur) => cur || s.gmailAccounts?.[0]?.id || '');
     }
@@ -127,7 +132,7 @@ export function VertalGrowthScreen() {
       if (hit) setProjectId(hit.id);
       else setForm((f) => ({ ...f, name: handoff.project }));
     }
-  }, [handoff.project, handoff.projectId]);
+  }, [handoff.project, handoff.projectId, handoff.lang]);
 
   useEffect(() => {
     void loadList();
@@ -171,10 +176,15 @@ export function VertalGrowthScreen() {
   const launch = async () => {
     if (!accepted || !form.name.trim()) return;
     if (status?.chargeOn && !window.confirm(t.launchConfirm(cost))) return;
-    const r = await run(t.launching, () => callGrowth<{ growth: Growth }>('launch', {
+    // Resposta pode demorar (perfil + cliente ideal com IA): repete com a mesma chave até a campanha existir,
+    // sem cobrar de novo. Antes a conexão caía em ~60 s e a tela sumia sem campanha nem erro.
+    const r = await run(t.launching, () => launchGrowth<{ growth: Growth; replayed?: boolean }>({
       ...form, projectId: projectId || undefined, acceptCost: true, idempotencyKey: launchKey, lang,
     }));
-    if (!r) return;
+    if (!r) {
+      await loadList();
+      return;
+    }
     setLaunchKey(newIdempotencyKey());
     toast.success(t.launched);
     await loadList();

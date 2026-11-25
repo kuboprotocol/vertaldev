@@ -14,6 +14,7 @@ import { getEcosystemProduct, siblingsOf } from '@/lib/ecosystem'
 // Vertal CRM: entra na lista (fixado no topo) só com VITE_VERTAL_CRM ligado e o usuário liberado no servidor.
 import { useVertalCrmAccess } from '@/lib/vertalCrm/client'
 import { VERTAL_CRM_CONNECTOR } from '@/lib/vertalCrm/connector'
+import { useVertalPageTitle, vertalConnectorsTitle } from '@/lib/vertalCrm/pageTitle'
 
 type Availability = 'all' | 'available' | 'coming_soon'
 
@@ -37,6 +38,8 @@ export default function ConnectorsHubPage() {
     () => (vertalCrmAccess === 'allowed' ? [VERTAL_CRM_CONNECTOR, ...connectors] : connectors),
     [vertalCrmAccess],
   )
+  // Vertal CRM: título da aba "Conectores" (só para quem tem o CRM liberado; os demais ficam como estão).
+  useVertalPageTitle(vertalCrmAccess === 'allowed' ? vertalConnectorsTitle() : null)
 
   const search = searchParams.get('q') ?? ''
   const activeCategory = searchParams.get('cat') ?? 'all'

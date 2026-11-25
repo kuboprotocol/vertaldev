@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { callCrm, CrmError, newIdempotencyKey } from '@/lib/vertalCrm/client';
+import { callCrmAi, CrmError, newIdempotencyKey } from '@/lib/vertalCrm/client';
 import { crmErrorText } from '@/lib/vertalCrm/i18n';
 import type { CrmAiKind } from '../../../supabase/functions/_shared/vertalCrm/core';
 import { useCrm } from './crmState';
@@ -36,16 +36,17 @@ export function CrmAiDialog({ kind, entityType, entityId, query, open, onOpenCha
     setBusy(true);
     setMsg('');
     try {
-      const r = await callCrm<{ result: Record<string, unknown>; credits: number }>('ai', {
+      // Mesma chave em todas as tentativas: repetir não cobra de novo e traz o resultado guardado.
+      const r = await callCrmAi<{ result: Record<string, unknown>; credits: number; replayed?: boolean }>({
         workspaceId: workspace.id, kind, entityType, entityId, query, goal, lang, createTask, saveAsNote, idempotencyKey: newIdempotencyKey(),
-      });
+      }, { onWaiting: () => setMsg(t.ai.slow) });
       setResult(r.result);
-      setMsg(t.ai.charged(r.credits));
+      setMsg(r.replayed ? '' : t.ai.charged(r.credits));
       onDone?.(r.result);
     } catch (e) {
       const code = e instanceof CrmError ? e.code : 'error';
       const refunded = e instanceof CrmError && e.detail.refunded === true;
-      setMsg(refunded ? t.ai.refunded : crmErrorText(code, t));
+      setMsg(refunded ? t.ai.refunded : code === 'ai_slow' ? t.ai.slowGaveUp : crmErrorText(code, t));
     } finally {
       setBusy(false);
     }

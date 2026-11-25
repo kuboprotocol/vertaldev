@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { attachmentPath, callCrm, CRM_BUCKET, crmDb, CrmError } from '@/lib/vertalCrm/client';
-import { crmErrorText } from '@/lib/vertalCrm/i18n';
+import { crmActivityText, crmDateTime, crmErrorText, crmSourceText, ellipsis } from '@/lib/vertalCrm/i18n';
 import { CONTACT_STATUSES, TASK_TYPES, type CrmAiKind } from '../../../supabase/functions/_shared/vertalCrm/core';
 import { CrmAiDialog } from './CrmAiDialog';
 import { fullName, STATUS_COLORS, useCrm } from './crmState';
@@ -21,9 +21,9 @@ type Row = Record<string, any>;
 const TABLE: Record<RecordType, string> = { contact: 'crm_contacts', company: 'crm_companies', deal: 'crm_deals' };
 const FK: Record<RecordType, string> = { contact: 'contact_id', company: 'company_id', deal: 'deal_id' };
 
-interface Props { type: RecordType; id: string | null; onClose: () => void; onChanged?: () => void }
+interface Props { type: RecordType; id: string | null; onClose: () => void; onChanged?: () => void; /** Tira o registro apagado da lista na hora (antes a lista só atualizava ao recarregar). */ onDeleted?: (id: string) => void }
 
-export function CrmRecordPanel({ type, id, onClose, onChanged }: Props) {
+export function CrmRecordPanel({ type, id, onClose, onChanged, onDeleted }: Props) {
   const { t, workspace, userId, canWrite, fields, tags, pipelines, money, lang } = useCrm();
   const [rec, setRec] = useState<Row | null>(null);
   const [draft, setDraft] = useState<Row>({});
@@ -86,8 +86,9 @@ export function CrmRecordPanel({ type, id, onClose, onChanged }: Props) {
     const { error } = await db.from(TABLE[type]).delete().eq('workspace_id', ws).eq('id', id);
     if (error) return toast.error(t.error);
     toast.success(t.deleted);
-    onChanged?.();
+    onDeleted?.(id);
     onClose();
+    onChanged?.();
   };
 
   const addNote = async () => {
@@ -153,7 +154,8 @@ export function CrmRecordPanel({ type, id, onClose, onChanged }: Props) {
   const title = !rec ? t.loading : type === 'contact' ? fullName(rec) : rec.name;
   const myFields = fields.filter((f) => f.entity === type);
   const pipeline = type === 'deal' ? pipelines.find((p) => p.id === draft.pipeline_id) : null;
-  const dateFmt = (s: string) => new Date(s).toLocaleString(lang === 'pt' ? 'pt-BR' : lang);
+  const dateFmt = (s: string) => crmDateTime(s, lang);
+  const stageLabel = (sid: unknown) => pipelines.flatMap((p) => p.stages).find((x) => x.id === sid)?.label ?? String(sid ?? '');
 
   const field = (k: string, label: string, opts: { type?: string; textarea?: boolean } = {}) => (
     <label className="block text-xs text-muted-foreground">
@@ -173,8 +175,8 @@ export function CrmRecordPanel({ type, id, onClose, onChanged }: Props) {
           <SheetTitle className="flex items-center gap-2">
             {type === 'contact' && rec && <span className="h-2.5 w-2.5 rounded-full" style={{ background: STATUS_COLORS[rec.status] ?? '#999' }} />}
             {title}
-            {type === 'contact' && typeof rec?.score === 'number' && <span className="rounded bg-primary/10 px-1.5 text-xs text-primary">{rec.score}/100</span>}
-            {type === 'deal' && rec && <span className="text-sm font-normal text-muted-foreground">{money(rec.amount)}</span>}
+            {type === 'contact' && typeof rec?.score === 'number' && <span className="rounded bg-primary/10 px-1.5 text-xs text-primary">{' '}{rec.score}/100</span>}
+            {type === 'deal' && rec && <span className="text-sm font-normal text-muted-foreground">{' · '}{money(rec.amount)}</span>}
           </SheetTitle>
         </SheetHeader>
         {!rec ? (
@@ -280,7 +282,7 @@ export function CrmRecordPanel({ type, id, onClose, onChanged }: Props) {
                 </div>
               )}
               {type === 'contact' && rec.score_reason && <p className="text-xs text-muted-foreground sm:col-span-2">{t.score}: {rec.score_reason}</p>}
-              <p className="text-[11px] text-muted-foreground sm:col-span-2">{t.source}: {rec.source}</p>
+              <p className="text-[11px] text-muted-foreground sm:col-span-2">{t.source}: {crmSourceText(rec.source, t)}</p>
             </section>
 
             {/* Notas */}
@@ -296,7 +298,7 @@ export function CrmRecordPanel({ type, id, onClose, onChanged }: Props) {
                 {notes.map((n) => (
                   <li key={n.id} className="rounded-lg border p-2 text-sm">
                     <p className="whitespace-pre-wrap">{n.text}</p>
-                    <p className="mt-1 text-[11px] text-muted-foreground">{dateFmt(n.created_at)} · {n.source}</p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">{dateFmt(n.created_at)} · {crmSourceText(n.source, t)}</p>
                   </li>
                 ))}
               </ul>
@@ -322,7 +324,7 @@ export function CrmRecordPanel({ type, id, onClose, onChanged }: Props) {
                       {tk.done_at ? <CheckCircle2 className="h-4 w-4 text-primary" /> : <Circle className="h-4 w-4" />}
                     </button>
                     <span className={tk.done_at ? 'line-through text-muted-foreground' : ''}>{t.taskTypes[tk.type] ?? tk.type}: {tk.text}</span>
-                    {tk.due_date && <span className={`ml-auto text-xs ${!tk.done_at && new Date(tk.due_date) < new Date() ? 'text-destructive' : 'text-muted-foreground'}`}>{dateFmt(tk.due_date)}</span>}
+                    {tk.due_date && <span className={`ml-auto pl-1 text-xs ${!tk.done_at && new Date(tk.due_date) < new Date() ? 'text-destructive' : 'text-muted-foreground'}`}>{dateFmt(tk.due_date)}</span>}
                   </li>
                 ))}
               </ul>
@@ -349,8 +351,8 @@ export function CrmRecordPanel({ type, id, onClose, onChanged }: Props) {
               <ol className="space-y-1 border-l pl-3 text-xs">
                 {acts.map((a) => (
                   <li key={a.id}>
-                    <span className="text-muted-foreground">{dateFmt(a.created_at)}</span> · {a.kind}
-                    {a.data?.from && <> ({a.data.from} → {a.data.to})</>} {a.summary && <span className="text-muted-foreground">— {String(a.summary).slice(0, 80)}</span>}
+                    <span className="text-muted-foreground">{dateFmt(a.created_at)}</span> · {crmActivityText(a.kind, t)}
+                    {a.data?.from && <> ({stageLabel(a.data.from)} → {stageLabel(a.data.to)})</>} {a.summary && <span className="text-muted-foreground" title={String(a.summary)}>— {ellipsis(String(a.summary), 80)}</span>}
                   </li>
                 ))}
               </ol>

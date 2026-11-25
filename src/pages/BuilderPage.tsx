@@ -27,6 +27,7 @@ import RunwayDialog from '@/components/runway/RunwayDialog'
 import BuilderChat from '@/components/builder/chat/BuilderChat'
 import { splitProseAndCode } from '@/lib/builderTurn'
 import { VertalGrowthEntryButton } from '@/components/vertal-growth/VertalGrowthEntryButton' // Vertal Growth Team (não renderiza nada com VITE_VERTAL_GROWTH_TEAM desligado)
+import { useVertalCrmGrowthShortcut } from '@/lib/vertalCrm/builderShortcut' // Atalhos "/crm" e "buscar clientes…" (só UI; desligado com VITE_VERTAL_BUILDER_SHORTCUTS e só para contas liberadas)
 
 
 
@@ -312,8 +313,10 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
     finally { setSaving(false) }
   }
 
+  const vertalCrmShortcut = useVertalCrmGrowthShortcut() // VertalCrm/VertalGrowth: atalhos só de interface
   const send = async () => {
     if (!input.trim() || isLoading) return
+    if (vertalCrmShortcut(input)) { setInput(''); return } // VertalCrm/VertalGrowth: atalho abriu outra tela, nada é enviado ao chat
     if (!subscription?.is_active) {
       toast.error('You need an active plan to edit.', {
         action: { label: 'View plans', onClick: () => navigate('/pricing') },

@@ -27,7 +27,7 @@ export class CrmError extends Error {
 export async function callCrm<T = Record<string, unknown>>(
   op: string,
   payload: Record<string, unknown> = {},
-  opts: { token?: string; fetchImpl?: typeof fetch; url?: string } = {},
+  opts: { token?: string; fetchImpl?: typeof fetch; url?: string; timeoutMs?: number } = {},
 ): Promise<T> {
   let token = opts.token;
   if (!token) {
@@ -35,14 +35,64 @@ export async function callCrm<T = Record<string, unknown>>(
     token = data.session?.access_token ?? '';
   }
   if (!token) throw new CrmError('not_signed_in');
-  const r = await (opts.fetchImpl ?? fetch)(opts.url ?? crmFunctionUrl(), {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ op, ...payload }),
-  });
+  // Prazo opcional: sem ele, uma resposta que não chega deixava o diálogo girando para sempre.
+  const ctrl = opts.timeoutMs && typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), opts.timeoutMs) : undefined;
+  let r: Response;
+  try {
+    r = await (opts.fetchImpl ?? fetch)(opts.url ?? crmFunctionUrl(), {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ op, ...payload }),
+      signal: ctrl?.signal,
+    });
+  } catch (e) {
+    throw new CrmError(ctrl?.signal.aborted ? 'timeout' : 'network', { message: e instanceof Error ? e.message : String(e) });
+  } finally {
+    clearTimeout(timer);
+  }
   const data = (await r.json().catch(() => ({}))) as Record<string, unknown>;
   if (!r.ok) throw new CrmError(String(data.error ?? `http_${r.status}`), data);
   return data as T;
+}
+
+export const AI_ATTEMPT_MS = 40_000;
+export const AI_TOTAL_MS = 150_000;
+export const AI_POLL_MS = 4_000;
+
+/**
+ * Ação de IA (1 crédito) resistente a conexão que cai: se a resposta não chega (prazo/rede) ou o servidor diz que o
+ * mesmo pedido ainda está rodando (in_progress), repete com a MESMA chave — o servidor devolve o resultado guardado,
+ * sem cobrar de novo. Se a IA falhou, o servidor já devolveu o crédito (refunded).
+ */
+export async function callCrmAi<T = Record<string, unknown>>(
+  payload: Record<string, unknown> & { idempotencyKey: string },
+  opts: {
+    call?: (op: string, payload: Record<string, unknown>, o: { timeoutMs: number }) => Promise<T>;
+    sleep?: (ms: number) => Promise<void>;
+    now?: () => number;
+    totalMs?: number;
+    onWaiting?: (attempt: number) => void;
+  } = {},
+): Promise<T> {
+  const call = opts.call ?? ((op, p, o) => callCrm<T>(op, p, o));
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((res) => setTimeout(res, ms)));
+  const now = opts.now ?? Date.now;
+  const deadline = now() + (opts.totalMs ?? AI_TOTAL_MS);
+  let attempt = 0;
+  for (;;) {
+    attempt++;
+    try {
+      return await call('ai', payload, { timeoutMs: AI_ATTEMPT_MS });
+    } catch (e) {
+      const code = e instanceof CrmError ? e.code : '';
+      const retryable = code === 'timeout' || code === 'network' || code === 'in_progress' || /^http_5(02|03|04|46)$/.test(code);
+      if (!retryable) throw e;
+      if (now() + AI_POLL_MS >= deadline) throw new CrmError('ai_slow', { attempts: attempt });
+      opts.onWaiting?.(attempt);
+      await sleep(AI_POLL_MS);
+    }
+  }
 }
 
 export const newIdempotencyKey = () =>

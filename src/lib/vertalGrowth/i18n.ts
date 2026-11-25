@@ -15,6 +15,29 @@ export function browserLang(): GrowthLang {
   return uiLangFrom(typeof navigator !== 'undefined' ? navigator.language : 'pt-BR');
 }
 
+/**
+ * Idioma nativo do usuário guardado pelo Vertal CRM/Growth (idioma do workspace do CRM ou o que o servidor
+ * devolveu), para que as telas não caiam no idioma do navegador (ex.: navegador em inglês de um usuário brasileiro).
+ */
+export const VERTAL_UI_LANG_KEY = 'vertal-ui-lang';
+export function storedUiLang(): string | null {
+  try {
+    return typeof localStorage !== 'undefined' ? localStorage.getItem(VERTAL_UI_LANG_KEY) : null;
+  } catch {
+    return null;
+  }
+}
+export function rememberUiLang(lang: string | null | undefined): void {
+  if (!lang) return;
+  try {
+    if (typeof localStorage !== 'undefined') localStorage.setItem(VERTAL_UI_LANG_KEY, lang);
+  } catch { /* modo privado */ }
+}
+/** Ordem: pedido explícito (?lang / comando do chat) → idioma salvo do usuário → navegador → pt-BR. */
+export function preferredUiLang(explicit?: string | null): GrowthLang {
+  return uiLangFrom(explicit, storedUiLang(), typeof navigator !== 'undefined' ? navigator.language : null);
+}
+
 const pt = {
   title: 'Vertal Growth · equipe de crescimento',
   subtitle: 'Captação, conversão e retenção para o seu projeto. Nada é enviado sem a sua aprovação.',
@@ -43,7 +66,7 @@ const pt = {
   launch: (n: number) => `Lançar equipe (${n} créditos)`,
   launchFree: 'Lançar equipe',
   launchConfirm: (n: number) => `Lançar a equipe de crescimento? Serão debitados ${n} créditos uma vez.`,
-  launching: 'Montando a equipe…',
+  launching: 'Montando a equipe… (pode levar até 2 minutos)',
   launched: 'Equipe lançada. Agora confirme o cliente ideal na Captação.',
   stage: 'Etapa',
   leads: 'Leads', contacted: 'Contatados', replies: 'Respostas', optedOut: 'Não contatar',
@@ -108,6 +131,9 @@ const pt = {
     vertal_growth_disabled: 'O Vertal Growth não está liberado na sua conta.',
     insufficient_credits: 'Créditos insuficientes para lançar (20 créditos).',
     duplicate_request: 'Esse pedido já foi processado. Recarregue a página.',
+    launch_slow: 'A montagem da equipe está demorando mais que o normal. Se ela não aparecer em Campanhas em alguns minutos, os créditos voltam sozinhos.',
+    timeout: 'O servidor demorou para responder. Tente de novo.',
+    network: 'Sem conexão com o servidor. Confira a internet e tente de novo.',
     model_failed: 'A IA não respondeu agora. Nada foi cobrado (créditos devolvidos). Tente de novo.',
     blocked_content: 'Esse conteúdo não pode ser promovido pela equipe.',
     too_many_campaigns: 'Você atingiu o máximo de campanhas ativas.',
@@ -147,7 +173,7 @@ const en: Dict = {
   costSafety: 'Nothing is sent to anyone without your approval. WhatsApp is always sent by you.',
   accept: 'I understand the cost', launch: (n: number) => `Launch team (${n} credits)`, launchFree: 'Launch team',
   launchConfirm: (n: number) => `Launch the growth team? ${n} credits will be debited once.`,
-  launching: 'Setting up the team…', launched: 'Team launched. Now confirm the ideal customer in Lead generation.',
+  launching: 'Setting up the team… (can take up to 2 minutes)', launched: 'Team launched. Now confirm the ideal customer in Lead generation.',
   stage: 'Stage', leads: 'Leads', contacted: 'Contacted', replies: 'Replies', optedOut: 'Do not contact',
   engaged: 'Interested', conversions: 'Conversions', drafts: 'Drafts',
   activeCustomers: 'Active customers', activeDonors: 'Active donors', atRisk: 'At risk', churned: 'Cancelled', wonBack: 'Won back',
@@ -182,7 +208,9 @@ const en: Dict = {
   errors: {
     ...pt.errors,
     vertal_growth_disabled: 'Vertal Growth is not enabled on your account.', insufficient_credits: 'Not enough credits to launch (20 credits).',
-    duplicate_request: 'This request was already processed. Reload the page.', model_failed: 'The AI did not answer. Nothing was charged (credits refunded). Try again.',
+    duplicate_request: 'This request was already processed. Reload the page.',
+    launch_slow: 'Setting up the team is taking longer than usual. If it does not show up in Campaigns in a few minutes, the credits come back automatically.',
+    timeout: 'The server took too long to answer. Try again.', network: 'No connection to the server. Check your internet and try again.', model_failed: 'The AI did not answer. Nothing was charged (credits refunded). Try again.',
     blocked_content: 'This content cannot be promoted by the team.', too_many_campaigns: 'You reached the maximum number of active campaigns.',
     launch_limit: "Today's launch limit was reached.", consent_required: 'Confirm the person already has a relationship with the project.',
     contact_exists: 'This contact is already in the campaign.', contact_blocked: 'This contact is on the do-not-contact list.', invalid_email: 'Invalid email.',
@@ -210,7 +238,7 @@ const es: Dict = {
   costSafety: 'Nada se envía a nadie sin su aprobación. WhatsApp siempre lo envía usted.',
   accept: 'Entiendo el costo', launch: (n: number) => `Lanzar equipo (${n} créditos)`, launchFree: 'Lanzar equipo',
   launchConfirm: (n: number) => `¿Lanzar el equipo de crecimiento? Se descontarán ${n} créditos una vez.`,
-  launching: 'Armando el equipo…', launched: 'Equipo lanzado. Ahora confirme el cliente ideal en Captación.',
+  launching: 'Armando el equipo… (puede tardar hasta 2 minutos)', launched: 'Equipo lanzado. Ahora confirme el cliente ideal en Captación.',
   stage: 'Etapa', leads: 'Leads', contacted: 'Contactados', replies: 'Respuestas', optedOut: 'No contactar',
   engaged: 'Interesados', conversions: 'Conversiones', drafts: 'Borradores',
   activeCustomers: 'Clientes activos', activeDonors: 'Donantes activos', atRisk: 'En riesgo', churned: 'Cancelaron', wonBack: 'Recuperados',
@@ -245,7 +273,9 @@ const es: Dict = {
   errors: {
     ...pt.errors,
     vertal_growth_disabled: 'Vertal Growth no está habilitado en su cuenta.', insufficient_credits: 'Créditos insuficientes para lanzar (20 créditos).',
-    duplicate_request: 'Este pedido ya fue procesado. Recargue la página.', model_failed: 'La IA no respondió. No se cobró nada (créditos devueltos). Intente de nuevo.',
+    duplicate_request: 'Este pedido ya fue procesado. Recargue la página.',
+    launch_slow: 'Armar el equipo está tardando más de lo normal. Si no aparece en Campañas en unos minutos, los créditos vuelven solos.',
+    timeout: 'El servidor tardó en responder. Intente de nuevo.', network: 'Sin conexión con el servidor. Revise internet e intente de nuevo.', model_failed: 'La IA no respondió. No se cobró nada (créditos devueltos). Intente de nuevo.',
     blocked_content: 'Este contenido no puede ser promovido por el equipo.', too_many_campaigns: 'Llegó al máximo de campañas activas.',
     launch_limit: 'Se alcanzó el límite de lanzamientos de hoy.', consent_required: 'Confirme que la persona ya tiene relación con el proyecto.',
     contact_exists: 'Este contacto ya está en la campaña.', contact_blocked: 'Este contacto está en la lista de no contactar.', invalid_email: 'Correo inválido.',

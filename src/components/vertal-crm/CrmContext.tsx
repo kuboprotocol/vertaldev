@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { callCrm, crmDb } from '@/lib/vertalCrm/client';
-import { crmUi, uiLangFrom, browserLang } from '@/lib/vertalCrm/i18n';
+import { crmUi, crmLocale, uiLangFrom, browserLang } from '@/lib/vertalCrm/i18n';
+import { rememberUiLang, storedUiLang } from '@/lib/vertalGrowth/i18n';
 import type { CrmPipeline } from '../../../supabase/functions/_shared/vertalCrm/core';
 import { CrmCtx, type CrmCosts, type CrmCtxValue, type CrmField, type CrmMember, type CrmTag, type CrmWorkspace } from './crmState';
 
@@ -20,8 +21,21 @@ export function CrmProvider({ children, langHint }: { children: ReactNode; langH
   const [costs, setCosts] = useState<CrmCosts>({ ai: 1, syncActivate: 4, syncAiRun: 2, syncPlainRun: 0 });
 
   const workspace = workspaces.find((w) => w.id === wsId) ?? workspaces[0] ?? null;
-  const lang = uiLangFrom(langHint, (workspace?.settings?.uiLang as string) ?? null, browserLang());
+  // Idioma nativo: ?lang → ajuste do workspace → idioma do workspace (o mesmo das etapas do funil) → idioma salvo → navegador.
+  // Antes o idioma do workspace era ignorado e um navegador em inglês deixava a tela em inglês com etapas em português.
+  const lang = uiLangFrom(langHint, (workspace?.settings?.uiLang as string) ?? null, workspace?.lang ?? null, storedUiLang(), browserLang());
   const t = crmUi(lang);
+  useEffect(() => {
+    if (workspace) rememberUiLang(lang);
+  }, [workspace, lang]);
+  useEffect(() => {
+    // <title> da aba (antes ficava o título da home do Vertal Dev).
+    const prev = document.title;
+    document.title = t.docTitle;
+    return () => {
+      document.title = prev;
+    };
+  }, [t.docTitle]);
 
   const loadMeta = useCallback(async (ws: string) => {
     const db = crmDb();
@@ -41,7 +55,7 @@ export function CrmProvider({ children, langHint }: { children: ReactNode; langH
     try {
       const { data } = await supabase.auth.getUser();
       setUserId(data.user?.id ?? '');
-      const r = await callCrm<{ workspaces: CrmWorkspace[]; workspace: CrmWorkspace }>('bootstrap', { lang: browserLang() });
+      const r = await callCrm<{ workspaces: CrmWorkspace[]; workspace: CrmWorkspace }>('bootstrap', { lang: uiLangFrom(langHint, storedUiLang(), browserLang()) });
       const st = await callCrm<{ costs: CrmCosts }>('status');
       setCosts(st.costs);
       setWorkspaces(r.workspaces);
@@ -53,7 +67,7 @@ export function CrmProvider({ children, langHint }: { children: ReactNode; langH
     } finally {
       setReady(true);
     }
-  }, [loadMeta, wsId]);
+  }, [loadMeta, wsId, langHint]);
 
   useEffect(() => {
     void reload();
@@ -71,7 +85,7 @@ export function CrmProvider({ children, langHint }: { children: ReactNode; langH
   const money = useCallback((n: number | string | null | undefined) => {
     const v = Number(n ?? 0);
     try {
-      return new Intl.NumberFormat(lang === 'pt' ? 'pt-BR' : lang === 'es' ? 'es' : 'en-US', { style: 'currency', currency: workspace?.currency ?? 'BRL', maximumFractionDigits: 0 }).format(Number.isFinite(v) ? v : 0);
+      return new Intl.NumberFormat(crmLocale(lang), { style: 'currency', currency: workspace?.currency ?? 'BRL', maximumFractionDigits: 0 }).format(Number.isFinite(v) ? v : 0);
     } catch {
       return String(v);
     }
@@ -82,7 +96,10 @@ export function CrmProvider({ children, langHint }: { children: ReactNode; langH
     ready, error, userId, workspace, workspaces, setWorkspaceId, pipelines, tags, fields, members, costs, lang, t,
     canWrite: role === 'owner' || role === 'admin' || role === 'member', isAdmin: role === 'owner' || role === 'admin',
     reload: async () => {
-      if (workspace) await loadMeta(workspace.id);
+      if (!workspace) return;
+      const r = await callCrm<{ workspaces: CrmWorkspace[] }>('list_workspaces').catch(() => null);
+      if (r?.workspaces?.length) setWorkspaces(r.workspaces);
+      await loadMeta(workspace.id);
     },
     money,
   }), [ready, error, userId, workspace, workspaces, setWorkspaceId, pipelines, tags, fields, members, costs, lang, t, role, loadMeta, money]);

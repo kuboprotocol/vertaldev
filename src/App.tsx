@@ -20,6 +20,7 @@ import { isVertalCodeAiEnabled, VERTAL_CODE_AI_ROUTE } from "@/lib/vertalCodeAi/
 import { isVertalProspectorEnabled, VERTAL_PROSPECTOR_ROUTE } from "@/lib/vertalProspector/client";
 // VertalGrowth Team (aditivo, desligado por padrão: VITE_VERTAL_GROWTH_TEAM=true liga a rota; o servidor libera por usuário).
 import { isVertalGrowthEnabled, VERTAL_GROWTH_ROUTE } from "@/lib/vertalGrowth/client";
+import { isVertalCodeAiChatAliasesEnabled } from "@/lib/vertalCodeAi/chatAliases";
 // VertalCrm (aditivo, desligado por padrão: VITE_VERTAL_CRM=true liga a rota /crm; o servidor libera por usuário; tela carregada sob demanda).
 import { isVertalCrmEnabled, VERTAL_CRM_ROUTE } from "@/lib/vertalCrm/client";
 const VertalCrmPage = lazy(() => import("./pages/VertalCrmPage"));
@@ -315,6 +316,9 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 {isVertalCodeAiEnabled() && <Route path={VERTAL_CODE_AI_ROUTE} element={<ProtectedRoute><VertalCodeAIPage /></ProtectedRoute>} />}
                 {isVertalProspectorEnabled() && <Route path={VERTAL_PROSPECTOR_ROUTE} element={<ProtectedRoute><VertalProspectorPage /></ProtectedRoute>} />}
                 {isVertalGrowthEnabled() && <Route path={VERTAL_GROWTH_ROUTE} element={<ProtectedRoute><VertalGrowthPage /></ProtectedRoute>} />}
+                {/* VERTAL Code AI · aliases do Vertal Chat (antes 404): /chat e /vertal-chat → /builder. Desligado por padrão (VITE_VERTAL_CHAT_ALIASES). */}
+                {isVertalCodeAiChatAliasesEnabled() && <Route path="/chat" element={<KeepQueryRedirect to="/builder" />} />}
+                {isVertalCodeAiChatAliasesEnabled() && <Route path="/vertal-chat" element={<KeepQueryRedirect to="/builder" />} />}
                 {isVertalCrmEnabled() && <Route path={VERTAL_CRM_ROUTE} element={<ProtectedRoute><VertalCrmPage /></ProtectedRoute>} />}
                 <Route path="/affiliate-program" element={<ProtectedRoute><AffiliateProgramPage /></ProtectedRoute>} />
                 <Route path="/docs/mcp" element={<DocsMcpPage />} />

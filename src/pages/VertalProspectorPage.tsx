@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import {
-  callProspector, downloadCsv, ProspectorError, prospectorErrorText, PROSPECTOR_NAME, readProspectorHandoff, runMapQueryInBrowser, useVertalProspectorAccess,
+  callProspector, downloadCsv, prospectorErrorText, PROSPECTOR_NAME, readProspectorHandoff, searchCompaniesInBrowser, useVertalProspectorAccess,
 } from '@/lib/vertalProspector/client';
 import {
   EMAIL_STATUS_LABEL, leadsToCsv, textProblems, type CsvLead, type EmailStatus, type Icp,
@@ -149,6 +149,8 @@ export function VertalProspectorScreen() {
     );
     if (!r) return;
     setCampaign(r.campaign);
+    // Etapa "1. Empresa" mostra os dados salvos da campanha (antes aparecia vazia ao reabrir).
+    setForm({ companyName: r.campaign.company_name ?? '', cnpj: r.campaign.cnpj ?? '', website: r.campaign.website ?? '' });
     setLeads(r.leads);
     setMessages(r.messages);
     setCap({ cap: r.cap, sentToday: r.sentToday });
@@ -211,16 +213,12 @@ export function VertalProspectorScreen() {
 
   const findLeads = async () => {
     if (!campaign) return;
-    const r = await run('Buscando empresas', async () => {
-      try {
-        return await callProspector<{ added: number; found: number; findings: string[] }>('find_leads', { campaignId: campaign.id, limit });
-      } catch (e) {
-        // Servidor não alcançou o mapa aberto: o seu navegador faz a mesma consulta e o servidor filtra.
-        const query = e instanceof ProspectorError && e.code === 'map_busy' ? String(e.detail.query ?? '') : '';
-        const elements = query ? await runMapQueryInBrowser(query) : null;
-        if (!elements) throw e;
-        return callProspector<{ added: number; found: number; findings: string[] }>('find_leads', { campaignId: campaign.id, limit, elements });
-      }
+    const r = await run('Buscando empresas no mapa aberto', async () => {
+      // O mapa público recusa o servidor (403/406): o navegador do usuário consulta, com prazo e espelhos,
+      // e o servidor só filtra e grava. Sem prazo a tela girava para sempre.
+      const { elements, via } = await searchCompaniesInBrowser(campaign.icp);
+      const res = await callProspector<{ added: number; found: number; findings: string[] }>('find_leads', { campaignId: campaign.id, limit, elements });
+      return { ...res, via };
     });
     if (!r) return;
     setFindings(r.findings ?? []);
@@ -443,7 +441,7 @@ export function VertalProspectorScreen() {
         {step === 'leads' && campaign && (
           <section className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <select aria-label="Quantas" value={limit} onChange={(e) => setLimit(Number(e.target.value))} className="rounded-md border border-border/60 bg-background px-2 py-1.5 text-xs">
+              <select aria-label="Quantas" value={limit} onChange={(e) => setLimit(Number(e.target.value))} onInput={(e) => setLimit(Number((e.target as HTMLSelectElement).value))} className="rounded-md border border-border/60 bg-background px-2 py-1.5 text-xs">
                 {[10, 25, 50].map((n) => <option key={n} value={n}>{n} empresas</option>)}
               </select>
               <Button size="sm" disabled={!!busy || campaign.status !== 'icp_confirmed'} onClick={findLeads}>
@@ -460,7 +458,7 @@ export function VertalProspectorScreen() {
               </Button>
             </div>
             {campaign.status !== 'icp_confirmed' && <p className="text-xs text-amber-300">Confirme o ICP para buscar empresas.</p>}
-            {leads.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma empresa ainda.</p>}
+            {leads.length === 0 && !busy && <p className="text-sm text-muted-foreground">Nenhuma empresa ainda.</p>}
             <ul className="space-y-2">
               {leads.map((l) => (
                 <li key={l.id} className="rounded-lg border border-border/50 p-3 text-sm">

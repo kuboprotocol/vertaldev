@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { crmDb } from '@/lib/vertalCrm/client';
+import { crmActivityText, crmDateTime, ellipsis } from '@/lib/vertalCrm/i18n';
 import { computeMetrics, TASK_TYPES, type MetricDeal } from '../../../supabase/functions/_shared/vertalCrm/core';
 import { fullName, useCrm } from './crmState';
 
@@ -28,7 +29,7 @@ function Bars({ rows, money }: { rows: Array<{ label: string; value: number; sub
     <ul className="space-y-1.5">
       {rows.map((r) => (
         <li key={r.label} className="text-xs">
-          <div className="flex justify-between"><span>{r.label}</span><span className="text-muted-foreground">{money(r.value)}{r.sub !== undefined ? ` · ${money(r.sub)}` : ''}</span></div>
+          <div className="flex justify-between gap-2"><span>{r.label}</span>{' '}<span className="text-muted-foreground">{money(r.value)}{r.sub !== undefined ? ` · ${money(r.sub)}` : ''}</span></div>
           <div className="mt-0.5 h-1.5 rounded bg-muted"><div className="h-1.5 rounded bg-primary" style={{ width: `${(r.value / max) * 100}%` }} /></div>
         </li>
       ))}
@@ -106,7 +107,7 @@ export function CrmTasksList({ compact = false }: { compact?: boolean }) {
                     {tk.crm_contacts && <span className="text-muted-foreground"> · {fullName(tk.crm_contacts)}</span>}
                     {tk.crm_deals && <span className="text-muted-foreground"> · {tk.crm_deals.name}</span>}
                   </span>
-                  {tk.due_date && <span className="shrink-0 text-xs text-muted-foreground">{new Date(tk.due_date).toLocaleString(lang === 'pt' ? 'pt-BR' : lang, { dateStyle: 'short', timeStyle: 'short' })}</span>}
+                  {tk.due_date && <span className="shrink-0 text-xs text-muted-foreground">{' '}{crmDateTime(tk.due_date, lang)}</span>}
                 </li>
               ))}
             </ul>
@@ -118,7 +119,7 @@ export function CrmTasksList({ compact = false }: { compact?: boolean }) {
 }
 
 export function CrmDashboard() {
-  const { t, workspace, pipelines, money } = useCrm();
+  const { t, workspace, pipelines, money, lang } = useCrm();
   const [deals, setDeals] = useState<MetricDeal[]>([]);
   const [hot, setHot] = useState<Row[]>([]);
   const [acts, setActs] = useState<Row[]>([]);
@@ -144,7 +145,7 @@ export function CrmDashboard() {
   return (
     <div className="space-y-6" data-testid="crm-dashboard">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label={t.dash.pipelineValue} value={money(m.openValue)} hint={`${m.openCount} ${t.dash.openDeals}`} />
+        <Stat label={t.dash.pipelineValue} value={money(m.openValue)} hint={t.openDealsN(m.openCount)} />
         <Stat label={t.dash.forecast} value={money(m.weightedForecast)} />
         <Stat label={t.dash.winRate} value={pct} hint={`${m.wonCount} ${t.won} · ${m.lostCount} ${t.lost}`} />
         <Stat label={t.dash.wonValue} value={money(m.wonValue)} />
@@ -175,7 +176,13 @@ export function CrmDashboard() {
           </ul>
           <h3 className="mb-2 mt-4 text-sm font-semibold">{t.dash.latest}</h3>
           <ul className="space-y-0.5 text-xs text-muted-foreground">
-            {acts.map((a, i) => <li key={i}>{a.kind} · {String(a.summary ?? '').slice(0, 60)}</li>)}
+            {acts.map((a, i) => (
+              <li key={i} title={String(a.summary ?? '')}>
+                {crmActivityText(a.kind, t)}{a.summary ? ` · ${ellipsis(String(a.summary), 60)}` : ''}
+                {a.created_at ? <span className="opacity-70"> · {crmDateTime(a.created_at, lang)}</span> : null}
+              </li>
+            ))}
+            {!acts.length && <li>{t.empty}</li>}
           </ul>
         </section>
       </div>
