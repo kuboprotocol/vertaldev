@@ -136,3 +136,15 @@ describe('cliente OAuth da Microsoft', () => {
     expect(platformOAuthData('microsoft-365', env({ FLUXOS_OAUTH_MICROSOFT_ID: 'cid' }))).toBeNull()
   })
 })
+
+describe('Google Ads, AdMob e AdSense', () => {
+  it('usam o cliente Google do Vertal Fluxos; Google Ads aceita developer token opcional', () => {
+    for (const app of ['google-ads', 'google-admob', 'google-adsense']) expect(oauthSecretGroup(app)).toBe('GOOGLE')
+    const base = { FLUXOS_OAUTH_GOOGLE_ID: 'gid', FLUXOS_OAUTH_GOOGLE_SECRET: 'gsec' }
+    expect(platformOAuthData('google-adsense', env(base))).toEqual({ clientId: 'gid', clientSecret: 'gsec' })
+    expect(platformOAuthData('google-ads', env(base))).toEqual({ clientId: 'gid', clientSecret: 'gsec' })
+    expect(platformOAuthData('google-ads', env({ ...base, FLUXOS_OAUTH_GOOGLE_ADS_DEVELOPER_TOKEN: 'dt' })))
+      .toEqual({ clientId: 'gid', clientSecret: 'gsec', developerToken: 'dt' })
+    expect(platformOAuthData('google-admob', env({ FLUXOS_OAUTH_GOOGLE_ID: 'gid' }))).toBeNull()
+  })
+})

@@ -134,6 +134,13 @@ export function platformOAuthData(app: string, env: (k: string) => string | unde
     if (!bot) return null;
     out.botToken = bot;
   }
+  if (app === "google-ads") {
+    // Opcional: o Google aposentou o developer token (09/09/2026); o acesso segue o projeto do cliente OAuth.
+    const devToken = env("FLUXOS_OAUTH_GOOGLE_ADS_DEVELOPER_TOKEN");
+    if (devToken) out.developerToken = devToken;
+    const login = env("FLUXOS_OAUTH_GOOGLE_ADS_LOGIN_CUSTOMER_ID");
+    if (login) out.loginCustomerId = login;
+  }
   if (META_APPS.has(app)) {
     // Facebook Login for Business: configuração por conector (opcional).
     const config = env(`FLUXOS_OAUTH_${app.toUpperCase().replace(/-/g, "_")}_CONFIG`);
