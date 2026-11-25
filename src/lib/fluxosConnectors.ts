@@ -121,6 +121,7 @@ const FLUXOS_APP_LOGOS: Record<string, string> = {
   'better-stack': '/connectors/better-stack.webp',
   asana: '/connectors/asana.png',
   carbone: '/connectors/carbone.png',
+  changedetection: '/connectors/changedetection.png',
   'brave-search': '/connectors/brave-search.png',
   'azure-openai': '/connectors/microsoft.png',
   'microsoft-365': '/connectors/microsoft.png',
