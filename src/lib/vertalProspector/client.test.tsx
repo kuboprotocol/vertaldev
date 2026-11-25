@@ -30,7 +30,10 @@ describe('Vertal Prospector · front', () => {
     const href = vertalProspectorHrefFromChat('prospectar clientes para Vertal Company 65.822.139/0001-66 vertal.dev');
     expect(href.startsWith('/vertal-code-ai/prospector?')).toBe(true);
     const h = readProspectorHandoff(href.split('?')[1]);
-    expect(h).toEqual({ companyName: 'Vertal Company', cnpj: '65822139000166', website: 'https://vertal.dev/', from: 'chat' });
+    expect(h).toEqual({ companyName: 'Vertal Company', cnpj: '65822139000166', website: 'https://vertal.dev/', from: 'chat', campaignId: '' });
+    // Vertal Growth Team abre a captação pela campanha.
+    expect(readProspectorHandoff('campanha=10000000-0000-4000-8000-000000000001').campaignId).toBe('10000000-0000-4000-8000-000000000001');
+    expect(readProspectorHandoff('campanha=x').campaignId).toBe('');
   });
   it('acesso: qualquer falha = não liberado; chama a action prospector', async () => {
     const f = vi.fn(async () => new Response(JSON.stringify({ error: 'vertal_prospector_disabled' }), { status: 404 }));

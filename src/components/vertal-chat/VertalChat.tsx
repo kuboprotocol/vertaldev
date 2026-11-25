@@ -33,6 +33,9 @@ import { SchedulerEntryButton } from './scheduler/SchedulerEntryButton';
 // Vertal Prospector: botão e comando "prospectar clientes" (não renderiza/age com VITE_VERTAL_PROSPECTOR desligado).
 import { VertalProspectorEntryButton } from '@/components/vertal-prospector/VertalProspectorEntryButton';
 import { isProspectCommand as isVertalProspectorCommand, useVertalProspectorAccess, vertalProspectorHrefFromChat } from '@/lib/vertalProspector/client';
+// VertalGrowth Team: botão e comando "buscar clientes para meu app X" (não renderiza/age com VITE_VERTAL_GROWTH_TEAM desligado).
+import { VertalGrowthEntryButton } from '@/components/vertal-growth/VertalGrowthEntryButton';
+import { isGrowthCommand as isVertalGrowthCommand, useVertalGrowthAccess, vertalGrowthHrefFromChat } from '@/lib/vertalGrowth/client';
 
 const SIDEBAR_KEY = 'vertal-chat-sidebar';
 const CHAT_ONLY_KEY = 'vertal-chat-only';
@@ -78,6 +81,7 @@ export function VertalChat() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const vertalProspectorAccess = useVertalProspectorAccess(); // Vertal Prospector (desligado por padrão)
+  const vertalGrowthAccess = useVertalGrowthAccess(); // Vertal Growth Team (desligado por padrão)
 
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     try {
@@ -203,6 +207,7 @@ export function VertalChat() {
   const submit = () => {
     if (!input.trim() || chat.busy) return;
     if (dictation.listening) dictation.stop();
+    if (vertalGrowthAccess === 'allowed' && isVertalGrowthCommand(input)) return navigate(vertalGrowthHrefFromChat(input)); // Vertal Growth Team: "buscar clientes para meu app X" abre a equipe (só liberado)
     if (vertalProspectorAccess === 'allowed' && isVertalProspectorCommand(input)) return navigate(vertalProspectorHrefFromChat(input)); // Vertal Prospector: comando abre o pipeline (só liberado)
     const text = input;
     setInput('');
@@ -372,6 +377,7 @@ export function VertalChat() {
           {/* Tarefas agendadas: não renderiza nada com VITE_VERTAL_CHAT_SCHEDULER desligado (padrão). */}
           <SchedulerEntryButton />
           <VertalProspectorEntryButton from="chat" />
+          <VertalGrowthEntryButton from="chat" />
           <button
             type="button"
             onClick={() => setChatOnly(!chatOnly)}

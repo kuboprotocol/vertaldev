@@ -9,6 +9,7 @@
 //   POST {action:"video", prompt}                 → {job, model, estimate}; depois {action:"video_status", job}
 //   POST {action:"video_content", job}            → bytes do vídeo (quando o provedor não devolve link assinado)
 //   POST {action:"prospector", op, ...}           → Vertal Prospector (só com VERTAL_PROSPECTOR_ENABLED e o usuário em VERTAL_PROSPECTOR_USER_IDS)
+//   POST {action:"growth", op, ...}               → Vertal Growth Team (só com VERTAL_GROWTH_TEAM_ENABLED e o mesmo usuário liberado no Prospector)
 //
 // Liga só com VERTAL_CODE_AI_ENABLED=true (padrão: desligado → 404).
 // Com VERTAL_CODE_AI_USER_IDS (lista de ids separada por vírgula), só esses usuários; os demais recebem 404.
@@ -50,6 +51,10 @@ import { type ModelReply, parseVcaTurn, runVertalCodeAi, type VcaEvent, type Vca
 import { isProspectorEnabled } from "../_shared/vertalProspector/core.ts";
 import { handleProspector } from "../_shared/vertalProspector/handler.ts";
 import { getFreshAccessToken, loadAccount } from "../_shared/gmailToken.ts";
+// Vertal Growth Team (aditivo, desligado por padrão: VERTAL_GROWTH_TEAM_ENABLED + allowlist do Prospector).
+import { growthChargeAdmins, isGrowthEnabled } from "../_shared/vertalGrowth/core.ts";
+import { handleGrowth, type DebitResult } from "../_shared/vertalGrowth/handler.ts";
+import { listVisibleSecrets, resolveEnvForRun } from "../_shared/kuboSecrets.ts";
 
 // Cliente do Supabase e módulo TypeScript sem tipos gerados (mesmo padrão do vibe-code-agent).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -318,6 +323,55 @@ Deno.serve(async (req) => {
     } catch (e) {
       console.error("[vertal-prospector] falhou:", e instanceof Error ? e.message : e);
       return json(500, { error: "prospector_failed" });
+    }
+  }
+  // Vertal Growth Team: desligado (404) se o interruptor/lista não liberar este usuário. Não muda nada do resto.
+  if (action === "growth") {
+    if (!isGrowthEnabled(env(), userId)) return json(404, { error: "vertal_growth_disabled" });
+    const chain = buildChain(env(), { effort: "low", liveFreeIds: await liveFreeIds() });
+    if (!chain.length) return json(503, { error: "no_model_configured" });
+    const callModel = (messages: unknown[], o: { json: boolean; maxTokens: number }) =>
+      callChain(chain, messages as VcaChatMessage[], { ...o, effort: "low", deadline: Date.now() + 100_000 });
+    const gmailToken = async (accountId: string) => {
+      const acct = await loadAccount(admin, userId, accountId);
+      return { token: await getFreshAccessToken(admin, acct), email: acct.email };
+    };
+    try {
+      const r = await handleGrowth(body, {
+        admin, userId, env: env(), fetch, callModel, gmailToken,
+        // Créditos: mesmas funções atômicas e idempotentes do resto da plataforma (débito + devolução).
+        credits: {
+          debit: async (amount, key, metadata): Promise<DebitResult> => {
+            const { data: isAdmin } = await admin.rpc("is_admin", { p_user_id: userId });
+            if (isAdmin && !growthChargeAdmins(env())) return { ok: true, charged: 0, free: true };
+            const { data, error } = await admin.rpc("execute_atomic_credit_deduction", {
+              _user_id: userId, _amount: amount, _reason: "vertal_growth_team", _category: "creative_economy", _metadata: metadata, _idempotency_key: key,
+            });
+            if (error) return { ok: false, error: /insufficient_credits/.test(error.message ?? "") ? "insufficient_credits" : "charge_failed" };
+            if (!(data as Loose)?.success) return { ok: false, error: "charge_failed" };
+            if ((data as Loose)?.replayed) return { ok: false, error: "duplicate_request" };
+            return { ok: true, charged: amount, balanceAfter: (data as Loose)?.balance_after ?? null };
+          },
+          refund: async (amount, key, metadata) => {
+            const { error } = await admin.rpc("execute_atomic_credit_topup", {
+              _user_id: userId, _amount: amount, _reason: "refund:vertal_growth_team", _category: "creative_refund",
+              _metadata: { ...metadata, charge_idempotency_key: key }, _idempotency_key: `refund:${key}`,
+            });
+            if (error) console.error("[vertal-growth] devolução falhou:", error.message);
+            return !error;
+          },
+        },
+        stripeKey: async () => (await resolveEnvForRun(admin, userId, ["STRIPE_SECRET_KEY"], { target: "vertal_growth_stripe_read" })).env.STRIPE_SECRET_KEY ?? null,
+        hasSecrets: async (keys) => {
+          const names = new Set((await listVisibleSecrets(admin, userId)).map((s) => s.env_key));
+          return keys.every((k) => names.has(k));
+        },
+        prospector: (b) => handleProspector(b as Record<string, Loose>, { admin, userId, env: env(), fetch, callModel, gmailToken }),
+      });
+      return json(r.status, r.body);
+    } catch (e) {
+      console.error("[vertal-growth] falhou:", e instanceof Error ? e.message : e);
+      return json(500, { error: "growth_failed" });
     }
   }
   const origin = ORIGINS.includes(body.origin) ? body.origin : "vertal_code_ai";

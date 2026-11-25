@@ -160,6 +160,15 @@ export function VertalProspectorScreen() {
     void loadList();
   }, [loadList]);
 
+  // Vertal Growth Team: ?campanha=<id> abre a campanha (ICP para confirmar ou leads).
+  useEffect(() => {
+    if (!handoff.campaignId) return;
+    void (async () => {
+      const r = await callProspector<{ campaign: Campaign }>('get_campaign', { campaignId: handoff.campaignId }).catch(() => null);
+      if (r) await openCampaign(handoff.campaignId, r.campaign.status === 'icp_confirmed' ? 'leads' : 'icp');
+    })();
+  }, [handoff.campaignId, openCampaign]);
+
   const refresh = () => campaign && openCampaign(campaign.id);
 
   const createCampaign = async () => {

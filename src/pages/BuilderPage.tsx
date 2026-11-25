@@ -26,6 +26,7 @@ import PreviewFrame from '@/components/builder/PreviewFrame'
 import RunwayDialog from '@/components/runway/RunwayDialog'
 import BuilderChat from '@/components/builder/chat/BuilderChat'
 import { splitProseAndCode } from '@/lib/builderTurn'
+import { VertalGrowthEntryButton } from '@/components/vertal-growth/VertalGrowthEntryButton' // Vertal Growth Team (não renderiza nada com VITE_VERTAL_GROWTH_TEAM desligado)
 
 
 
@@ -475,6 +476,7 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
 
   return (
     <div ref={ref} className="h-screen w-screen flex flex-col bg-background overflow-hidden">
+      <VertalGrowthEntryButton from="builder" floating projectId={currentProjectId} hidden={!generatedCode || !currentProjectId} />
       {/* Toolbar */}
       <BuilderToolbar
         projectTitle={projectTitle}
