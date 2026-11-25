@@ -30,6 +30,9 @@ import { toast } from 'sonner';
 import { DICTATION_ERROR_TEXT, useDictation } from '@/lib/voice/useDictation';
 import { VertalCodeAiEntryButton } from '@/components/vertal-code-ai/VertalCodeAiEntryButton';
 import { SchedulerEntryButton } from './scheduler/SchedulerEntryButton';
+// Vertal Prospector: botão e comando "prospectar clientes" (não renderiza/age com VITE_VERTAL_PROSPECTOR desligado).
+import { VertalProspectorEntryButton } from '@/components/vertal-prospector/VertalProspectorEntryButton';
+import { isProspectCommand as isVertalProspectorCommand, useVertalProspectorAccess, vertalProspectorHrefFromChat } from '@/lib/vertalProspector/client';
 
 const SIDEBAR_KEY = 'vertal-chat-sidebar';
 const CHAT_ONLY_KEY = 'vertal-chat-only';
@@ -74,6 +77,7 @@ export function VertalChat() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
+  const vertalProspectorAccess = useVertalProspectorAccess(); // Vertal Prospector (desligado por padrão)
 
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     try {
@@ -199,6 +203,7 @@ export function VertalChat() {
   const submit = () => {
     if (!input.trim() || chat.busy) return;
     if (dictation.listening) dictation.stop();
+    if (vertalProspectorAccess === 'allowed' && isVertalProspectorCommand(input)) return navigate(vertalProspectorHrefFromChat(input)); // Vertal Prospector: comando abre o pipeline (só liberado)
     const text = input;
     setInput('');
     void chat.send(text);
@@ -366,6 +371,7 @@ export function VertalChat() {
           <VertalCodeAiEntryButton from="chat" />
           {/* Tarefas agendadas: não renderiza nada com VITE_VERTAL_CHAT_SCHEDULER desligado (padrão). */}
           <SchedulerEntryButton />
+          <VertalProspectorEntryButton from="chat" />
           <button
             type="button"
             onClick={() => setChatOnly(!chatOnly)}
