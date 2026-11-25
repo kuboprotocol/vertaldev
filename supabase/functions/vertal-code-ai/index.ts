@@ -62,6 +62,7 @@ import { crmChargeAdmins, crmChargeOn, isApiKeyShape as isVertalCrmApiKey, isCrm
 import { autoImport as vertalCrmAutoImport, handleCrm, hashApiKey as hashVertalCrmKey, type CrmDeps } from "../_shared/vertalCrm/handler.ts";
 import { verifyFluxosKey as verifyVertalCrmFluxosKey } from "../_shared/fluxosBroker.ts";
 import { makeEngine as makeVertalCrmEngine } from "../_shared/fluxosApps.ts";
+import { vertalPersonaEnabled } from "../_shared/vertalPersona.ts";
 
 // Cliente do Supabase e módulo TypeScript sem tipos gerados (mesmo padrão do vibe-code-agent).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -753,6 +754,7 @@ Deno.serve(async (req) => {
             images,
             attachments,
             plan: body.plan && typeof body.plan === "object" ? (body.plan as VcaPlan) : null,
+            persona: vertalPersonaEnabled(Deno.env.get("VERTAL_PERSONA_ENABLED")),
           },
           {
             callModel: (messages, o) => callChain(chain, messages, { ...o, effort, deadline }),

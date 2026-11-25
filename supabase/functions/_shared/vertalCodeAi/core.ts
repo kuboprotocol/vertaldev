@@ -14,6 +14,7 @@
 import { repairAgentJson } from "../chatOrchestrator.ts";
 import { isSafePath, lintGeneratedFile, looksLikeSecret } from "../vibeAgentCore.ts";
 import type { VcaChatMessage, VcaEffort, VcaMode } from "./router.ts";
+import { withVertalPersona } from "../vertalPersona.ts";
 
 export const VCA_LIMITS = {
   maxTurns: 6,
@@ -425,7 +426,11 @@ const EFFORT_HINT: Record<VcaEffort, string> = {
   max: "Análise profunda: considere arquitetura, casos de borda e testes antes de editar.",
 };
 
-export function systemPrompt(mode: VcaMode, effort: VcaEffort): string {
+export function systemPrompt(mode: VcaMode, effort: VcaEffort, persona = false): string {
+  return withVertalPersona(baseSystemPrompt(mode, effort), "code_ai", persona);
+}
+
+function baseSystemPrompt(mode: VcaMode, effort: VcaEffort): string {
   const common = [
     "Você é o VERTAL Code AI, agente de programação da Vertal. Responda em português do Brasil.",
     "Stack preferida: React + TypeScript + Vite + Tailwind + shadcn/ui; Supabase (Postgres + Edge Functions em Deno).",
@@ -522,6 +527,8 @@ export interface RunInput {
   plan?: VcaPlan | null;
   /** Arquivos que o dev anexou (têm prioridade sobre o projeto). */
   attachments?: Array<{ path: string; content: string }>;
+  /** Atitude Vertal (VERTAL_PERSONA_ENABLED, ligada por padrão). */
+  persona?: boolean;
 }
 
 export interface RunDeps {
@@ -572,7 +579,7 @@ export async function runVertalCodeAi(input: RunInput, deps: RunDeps): Promise<R
     ? [{ type: "text", text: userText }, ...input.images.slice(0, 4).map((url) => ({ type: "image_url" as const, image_url: { url } }))]
     : userText;
   const messages: VcaChatMessage[] = [
-    { role: "system", content: systemPrompt(input.mode, input.effort) },
+    { role: "system", content: systemPrompt(input.mode, input.effort, input.persona === true) },
     ...(input.history ?? []).slice(-8).map((h) => ({ role: h.role, content: h.content.slice(0, 4000) })),
     { role: "user", content: userContent },
   ];
