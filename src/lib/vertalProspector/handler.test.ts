@@ -158,6 +158,25 @@ describe('Vertal Prospector · respostas e LGPD', () => {
     expect(db.tables.prospector_leads.map((l) => l.name)).toContain('Odonto Campinas');
   });
 
+  it('mapa fora do alcance do servidor: devolve a consulta; o navegador traz os elementos e o servidor filtra', async () => {
+    const { db, deps } = setup();
+    deps.fetch = (async () => new Response('busy', { status: 504 })) as unknown as typeof fetch;
+    const r1 = await handleProspector({ op: 'find_leads', campaignId: C, limit: 5 }, deps);
+    expect(r1.status).toBe(503);
+    expect(String(r1.body.query)).toMatch(/^\[out:json\]/);
+    const r2 = await handleProspector({
+      op: 'find_leads', campaignId: C, limit: 5,
+      elements: [
+        { type: 'node', id: 9, tags: { name: 'Dente Feliz', amenity: 'dentist', website: 'dentefeliz.com.br', email: 'oi@dentefeliz.com.br' } },
+        { type: 'node', id: 10, tags: { name: 'Padaria', shop: 'bakery' } },
+        { junk: true },
+      ],
+    }, deps);
+    expect(r2.status).toBe(200);
+    expect(r2.body.via).toBe('navegador');
+    expect(db.tables.prospector_leads.find((l) => l.name === 'Dente Feliz')?.domain).toBe('dentefeliz.com.br');
+  });
+
   it('não lê campanha de outro usuário', async () => {
     const { deps } = setup();
     const r = await handleProspector({ op: 'get_campaign', campaignId: C }, { ...deps, userId: '99999999-0000-4000-8000-000000000000' });
