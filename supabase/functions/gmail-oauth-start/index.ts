@@ -1,18 +1,11 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { gmailOAuthScopes } from '../_shared/gmailOAuthScopes.ts'
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 
-const SCOPES = [
-  'https://www.googleapis.com/auth/gmail.readonly',
-  'https://www.googleapis.com/auth/gmail.send',
-  // Secretário: organizar (rótulos, arquivar, lido, lixeira) e rascunhos. Conta antiga reconecta (include_granted_scopes).
-  'https://www.googleapis.com/auth/gmail.modify',
-  'https://www.googleapis.com/auth/userinfo.email',
-  'https://www.googleapis.com/auth/userinfo.profile',
-].join(' ')
 
 const ORIGIN_ALLOWLIST = [
   'https://kubovibe.dev',
@@ -83,7 +76,8 @@ Deno.serve(async (req) => {
       client_id: clientId,
       redirect_uri: redirectUri,
       response_type: 'code',
-      scope: SCOPES,
+      // Escopo de agenda só com GMAIL_OAUTH_CALENDAR_SCOPE_ENABLED + allowlist do Agendador (desligado por padrão).
+      scope: gmailOAuthScopes(user.id, (k) => Deno.env.get(k)),
       access_type: 'offline',
       prompt: 'consent',
       include_granted_scopes: 'true',
