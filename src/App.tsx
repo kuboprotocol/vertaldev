@@ -109,6 +109,7 @@ const PwaTelemetryPage = lazy(() => import("./pages/PwaTelemetry"));
 const PwaExportJobDetailsPage = lazy(() => import("./pages/PwaExportJobDetails"));
 const DocsPage = lazy(() => import("./pages/DocsPage"));
 const VibeCodePage = lazy(() => import("./pages/VibeCodePage"));
+const NavigatorSessionPage = lazy(() => import("./pages/NavigatorSessionPage"));
 const MobileAgentPage = lazy(() => import("./pages/MobileAgentPage"));
 const AnywherePage = lazy(() => import("./pages/AnywherePage"));
 const AffiliateProgramPage = lazy(() => import("./pages/AffiliateProgramPage"));
@@ -313,6 +314,9 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/admin/skills" element={<ProtectedRoute requireRoles={["admin"]}><AdminSkillsPage /></ProtectedRoute>} />
                 <Route path="/domains" element={<ProtectedRoute><DomainsPage /></ProtectedRoute>} />
                 <Route path="/vibe-code" element={<ProtectedRoute><VibeCodePage /></ProtectedRoute>} />
+                {/* Vertal Navigator em outra tela: só abre pelo botão do cartão ao vivo do projeto. */}
+                <Route path="/navegar" element={<ProtectedRoute><NavigatorSessionPage /></ProtectedRoute>} />
+                <Route path="/navegar/:sessionId" element={<ProtectedRoute><NavigatorSessionPage /></ProtectedRoute>} />
                 {isVertalCodeAiEnabled() && <Route path={VERTAL_CODE_AI_ROUTE} element={<ProtectedRoute><VertalCodeAIPage /></ProtectedRoute>} />}
                 {isVertalProspectorEnabled() && <Route path={VERTAL_PROSPECTOR_ROUTE} element={<ProtectedRoute><VertalProspectorPage /></ProtectedRoute>} />}
                 {isVertalGrowthEnabled() && <Route path={VERTAL_GROWTH_ROUTE} element={<ProtectedRoute><VertalGrowthPage /></ProtectedRoute>} />}

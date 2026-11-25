@@ -40,6 +40,9 @@ export function approvalCopy(approval: { category?: string; url?: string }): { i
   };
 }
 
+/** Rota da sub-página dedicada à sessão ("Abrir em outra tela": só abre quando o usuário toca). */
+export const navigatorSessionPath = (sessionId: string) => `/navegar/${encodeURIComponent(sessionId)}`;
+
 /** Pedidos do agente que viram cartão seguro inline (login, senha, código, telefone, pergunta). */
 export const isRequestCardKind = (kind: string) => kind === 'login' || kind === 'code' || kind === 'phone' || kind === 'text' || kind === 'card';
 

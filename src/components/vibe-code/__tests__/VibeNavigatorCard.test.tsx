@@ -48,7 +48,7 @@ describe("VibeNavigatorCard (navegador dentro do chat do Vibe Code)", () => {
     expect(onRun).toHaveBeenCalled();
   });
 
-  it("ao vivo: tela compacta, Expandir e aprovação de pagamento inline (sem tela cheia)", async () => {
+  it("ao vivo: tela compacta inline, Expandir e aprovação de pagamento inline", async () => {
     store.__resetNavigatorStore();
     callNavigator.mockClear();
     const { unmount } = render(<VibeNavigatorCard card={{ ...base, state: "running" }} />);

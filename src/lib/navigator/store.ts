@@ -185,6 +185,24 @@ export async function poll(): Promise<void> {
   return inflight;
 }
 
+const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Sub-página "Abrir em outra tela" (/navegar/:sessionId): acompanha uma sessão que já
+ * existe, sem abrir outra (nada de start: não cria sandbox nem cobra abertura). O /status
+ * traz a tela ao vivo (liveViewUrl) e o histórico de passos.
+ */
+export async function attachNavigatorSession(sessionId: string): Promise<void> {
+  if (!SESSION_ID_RE.test(sessionId)) {
+    set({ error: 'Link do navegador inválido. Volte ao projeto e toque em “Abrir em outra tela” de novo.' });
+    return;
+  }
+  if (state.sessionId !== sessionId) {
+    set({ ...INITIAL, panelsMounted: state.panelsMounted, inlineApprovalHosts: state.inlineApprovalHosts, sessionId, agentStatus: 'idle' });
+  }
+  await poll();
+}
+
 /** Falhas de abertura que valem uma nova tentativa silenciosa (o sandbox não subiu a tempo). */
 const RETRYABLE_START = new Set(['sandbox_error', 'error']);
 
