@@ -135,7 +135,7 @@ export const PROSPECTOR_ERROR_TEXT: Record<string, string> = {
   icp_incomplete: 'Falta informação no cliente ideal para buscar empresas.',
   icp_not_confirmed: 'Confirme o cliente ideal antes de buscar empresas.',
   area_not_found: 'Não achei essa região no mapa.',
-  map_busy: 'O mapa aberto está ocupado agora. Tente em 1 ou 2 minutos.',
+  map_busy: 'O mapa aberto não respondeu agora. Tente em 1 ou 2 minutos.',
   map_failed: 'A busca no mapa falhou. Tente de novo.',
   no_channel: 'Sem e-mail utilizável nem telefone para este lead.',
   message_locked: 'Essa mensagem já saiu e não pode ser editada.',
@@ -159,6 +159,29 @@ export function prospectorErrorText(e: unknown): string {
   const extra = e instanceof ProspectorError ? (e.detail.finding as string | undefined) ?? (Array.isArray(e.detail.problems) ? (e.detail.problems as string[]).join('; ') : '') : '';
   const base = PROSPECTOR_ERROR_TEXT[code] ?? 'Algo deu errado. Tente de novo.';
   return extra ? `${base} ${extra}` : base;
+}
+
+/** Servidores públicos do mapa aberto (o navegador do usuário consulta quando o servidor não alcança). */
+export const MAP_ENDPOINTS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+
+/** Roda no navegador a consulta que o servidor montou e devolve os elementos (ou null). */
+export async function runMapQueryInBrowser(query: string, fetchImpl: typeof fetch = fetch): Promise<unknown[] | null> {
+  if (!query || query.length > 4_000 || !query.startsWith('[out:json]')) return null;
+  for (const url of MAP_ENDPOINTS) {
+    try {
+      const r = await fetchImpl(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `data=${encodeURIComponent(query)}`,
+      });
+      if (!r.ok) continue;
+      const d = (await r.json()) as { elements?: unknown[] };
+      if (Array.isArray(d?.elements)) return d.elements.slice(0, 400);
+    } catch {
+      /* tenta o próximo */
+    }
+  }
+  return null;
 }
 
 /** Baixa o CSV no navegador (com BOM para o Excel abrir acentos certo). */

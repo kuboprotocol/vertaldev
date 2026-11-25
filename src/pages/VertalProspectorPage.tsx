@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import {
-  callProspector, downloadCsv, prospectorErrorText, PROSPECTOR_NAME, readProspectorHandoff, useVertalProspectorAccess,
+  callProspector, downloadCsv, ProspectorError, prospectorErrorText, PROSPECTOR_NAME, readProspectorHandoff, runMapQueryInBrowser, useVertalProspectorAccess,
 } from '@/lib/vertalProspector/client';
 import {
   EMAIL_STATUS_LABEL, leadsToCsv, textProblems, type CsvLead, type EmailStatus, type Icp,
@@ -202,9 +202,17 @@ export function VertalProspectorScreen() {
 
   const findLeads = async () => {
     if (!campaign) return;
-    const r = await run('Buscando empresas', () =>
-      callProspector<{ added: number; found: number; findings: string[] }>('find_leads', { campaignId: campaign.id, limit }),
-    );
+    const r = await run('Buscando empresas', async () => {
+      try {
+        return await callProspector<{ added: number; found: number; findings: string[] }>('find_leads', { campaignId: campaign.id, limit });
+      } catch (e) {
+        // Servidor não alcançou o mapa aberto: o seu navegador faz a mesma consulta e o servidor filtra.
+        const query = e instanceof ProspectorError && e.code === 'map_busy' ? String(e.detail.query ?? '') : '';
+        const elements = query ? await runMapQueryInBrowser(query) : null;
+        if (!elements) throw e;
+        return callProspector<{ added: number; found: number; findings: string[] }>('find_leads', { campaignId: campaign.id, limit, elements });
+      }
+    });
     if (!r) return;
     setFindings(r.findings ?? []);
     toast.success(`${r.added} empresa(s) nova(s) na lista.`);

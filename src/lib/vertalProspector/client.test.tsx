@@ -7,7 +7,7 @@ vi.mock('@/integrations/supabase/client', () => ({
 }));
 
 import {
-  callProspector, fetchProspectorAccess, isVertalProspectorEnabled, readProspectorHandoff, vertalProspectorHrefFromChat,
+  callProspector, fetchProspectorAccess, runMapQueryInBrowser, isVertalProspectorEnabled, readProspectorHandoff, vertalProspectorHrefFromChat,
 } from './client';
 import { VertalProspectorEntryButton } from '@/components/vertal-prospector/VertalProspectorEntryButton';
 
@@ -40,5 +40,13 @@ describe('Vertal Prospector · front', () => {
     expect(await fetchProspectorAccess('tok', ok as unknown as typeof fetch, 'https://x')).toBe(true);
     expect(await fetchProspectorAccess('', ok as unknown as typeof fetch, 'https://x')).toBe(false);
     await expect(callProspector('status', {}, { token: '', fetchImpl: ok as unknown as typeof fetch })).rejects.toThrow('not_signed_in');
+  });
+  it('consulta do mapa no navegador: só consulta montada pelo servidor; tenta o espelho', async () => {
+    expect(await runMapQueryInBrowser('DROP', vi.fn() as unknown as typeof fetch)).toBeNull();
+    const f = vi.fn()
+      .mockResolvedValueOnce(new Response('busy', { status: 504 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ elements: [{ id: 1 }] }), { status: 200 }));
+    expect(await runMapQueryInBrowser('[out:json][timeout:25];', f as unknown as typeof fetch)).toEqual([{ id: 1 }]);
+    expect(f).toHaveBeenCalledTimes(2);
   });
 });

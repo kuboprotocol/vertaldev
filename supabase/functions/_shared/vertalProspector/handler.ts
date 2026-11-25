@@ -334,35 +334,49 @@ export async function handleProspector(body: Record<string, Loose>, deps: Prospe
       if (c.status !== "icp_confirmed") return err(400, "icp_not_confirmed");
       const icp = parseIcp(c.icp) as Icp;
       const limit = Math.max(1, Math.min(Number(body.limit) || 25, 60));
-      const geo = await fetchJson(deps.fetch, `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=br&q=${encodeURIComponent(icp.area)}`, {
-        headers: { "User-Agent": UA, "Accept-Language": "pt-BR" },
-      });
-      const places = Array.isArray(geo.data) ? (geo.data as Array<{ osm_type?: string; osm_id?: number; display_name?: string }>) : [];
-      const place = places.find((p) => p.osm_type === "relation") ?? places.find((p) => p.osm_type === "way");
-      const areaId = place ? overpassAreaId(String(place.osm_type), Number(place.osm_id)) : null;
-      // Geocodificador fora (recusa/limite): procura o município pelo nome no próprio mapa.
-      const byName = areaId ? null : parseArea(icp.area);
-      if (!areaId && !byName) return err(400, "area_not_found", { finding: `Não achei a região "${icp.area}" no mapa. Use "Cidade, UF" (ex.: "Campinas, SP").` });
-      if (!areaId) log(`[vertal-prospector] geocodificador status=${geo.status}; usando busca do município pelo nome`);
-      const q = areaId ? buildOverpassQuery(icp.osmTags, areaId, 200) : buildOverpassQueryByName(icp.osmTags, byName!.city, byName!.uf, 200);
-      // Servidor público principal do mapa e, se ocupado/fora, um espelho (mesmos dados, mesma licença).
-      let over: { status: number; data: unknown } = { status: 0, data: null };
-      for (const endpoint of OVERPASS_ENDPOINTS) {
-        over = await fetchJson(deps.fetch, endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": UA },
-          body: `data=${encodeURIComponent(q)}`,
-        }, 30_000);
-        if (over.status === 200) break;
-        log(`[vertal-prospector] mapa ${new URL(endpoint).hostname} status=${over.status}`);
+      // O navegador do usuário pode trazer a resposta do mapa (quando o servidor não alcança o mapa público).
+      // Os elementos passam pelo mesmo filtro (parseOverpassElements): só nome, site, telefone, e-mail e endereço.
+      const fromBrowser = Array.isArray(body.elements);
+      let found: ReturnType<typeof parseOverpassElements>;
+      let placeName = icp.area;
+      let areaId: number | null = null;
+      if (fromBrowser) {
+        found = parseOverpassElements({ elements: (body.elements as unknown[]).slice(0, 400) }, icp.osmTags);
+      } else {
+        const geo = await fetchJson(deps.fetch, `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=br&q=${encodeURIComponent(icp.area)}`, {
+          headers: { "User-Agent": UA, "Accept-Language": "pt-BR" },
+        });
+        const places = Array.isArray(geo.data) ? (geo.data as Array<{ osm_type?: string; osm_id?: number; display_name?: string }>) : [];
+        const place = places.find((p) => p.osm_type === "relation") ?? places.find((p) => p.osm_type === "way");
+        areaId = place ? overpassAreaId(String(place.osm_type), Number(place.osm_id)) : null;
+        if (place?.display_name) placeName = place.display_name;
+        // Geocodificador fora (recusa/limite): procura o município pelo nome no próprio mapa.
+        const byName = areaId ? null : parseArea(icp.area);
+        if (!areaId && !byName) return err(400, "area_not_found", { finding: `Não achei a região "${icp.area}" no mapa. Use "Cidade, UF" (ex.: "Campinas, SP").` });
+        if (!areaId) log(`[vertal-prospector] geocodificador status=${geo.status}; usando busca do município pelo nome`);
+        const q = areaId ? buildOverpassQuery(icp.osmTags, areaId, 200) : buildOverpassQueryByName(icp.osmTags, byName!.city, byName!.uf, 200);
+        // Servidor público principal do mapa e, se ocupado/fora, um espelho (mesmos dados, mesma licença).
+        let over: { status: number; data: unknown } = { status: 0, data: null };
+        const statuses: number[] = [];
+        for (const endpoint of OVERPASS_ENDPOINTS) {
+          over = await fetchJson(deps.fetch, endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": UA },
+            body: `data=${encodeURIComponent(q)}`,
+          }, 25_000);
+          statuses.push(over.status);
+          if (over.status === 200) break;
+          log(`[vertal-prospector] mapa ${new URL(endpoint).hostname} status=${over.status}`);
+        }
+        const diag = { geocoder: geo.status, map: statuses };
+        if (over.status !== 200) {
+          // O front tenta pelo navegador do usuário com a mesma consulta.
+          return err(503, "map_busy", { finding: "O mapa aberto não respondeu ao servidor agora.", query: q, diag });
+        }
+        found = parseOverpassElements(over.data, icp.osmTags);
       }
-      if (over.status === 429 || over.status === 504 || over.status === 0) {
-        return err(503, "map_busy", { finding: "O serviço de mapa aberto está ocupado agora (limite de uso). Tente de novo em 1 a 2 minutos." });
-      }
-      if (over.status !== 200) return err(502, "map_failed");
-      const found = parseOverpassElements(over.data, icp.osmTags);
       if (!areaId && !found.length) {
-        return err(400, "area_not_found", { finding: `Não achei empresas em "${icp.area}". Confira o nome da cidade (com acento) e a UF, ex.: "São Paulo, SP".` });
+        return err(400, "area_not_found", { finding: `Não achei empresas em "${icp.area}" nessas categorias. Confira a cidade (com acento), a UF e as categorias.` });
       }
       const dnc = await loadDnc(deps);
       // Sem repetir empresas que já estão em qualquer campanha do usuário (mesmo domínio ou mesmo ponto no mapa).
@@ -396,7 +410,7 @@ export async function handleProspector(body: Record<string, Loose>, deps: Prospe
       if (!found.length) findings.push("O mapa não trouxe empresas com essas categorias nessa região. Tente outras categorias ou uma região maior.");
       if (skippedDup) findings.push(`${skippedDup} já estavam em campanhas suas.`);
       if (skippedDnc) findings.push(`${skippedDnc} estão na lista de não contatar.`);
-      return ok({ added: rows.length, found: found.length, findings, area: place?.display_name ?? icp.area, via: areaId ? "geocodificador" : "nome do município" });
+      return ok({ added: rows.length, found: found.length, findings, area: placeName, via: fromBrowser ? "navegador" : areaId ? "geocodificador" : "nome do município" });
     }
 
     case "enrich_lead": {
