@@ -135,7 +135,7 @@ primeiro para pedidos pequenos; depois vêm os grátis da opção, depois os pag
 | Vertal Turbo | própria → deepseek-chat direto → `vca-turbo-v4` deepseek-v4-flash ($0,09/$0,18) → deepseek-v4.1-flash → `vca-open` llama-4-maverick ($0,35/$1,00) → `vca-open-lite` llama-4-scout ($0,10/$0,30) → reserva |
 | Vertal Pro | própria → `vca-pro` kimi-k2.6 ($0,65/$3,41) → kimi-k2.7-code → deepseek-chat → deepseek-v4.1-flash → reserva |
 | Vertal Imagem | `vca-image` google/gemini-3.1-flash-lite-image (≈US$0,04/imagem) — ação `image` |
-| Vertal Vídeo | `vca-video` google/gemini-omni-1.2-flash, 4 s 360p (≈US$0,09) → `vca-video-alt` google/veo-3.1-lite 4 s 720p sem áudio — ações `video`/`video_status`/`video_content` |
+| Vertal Vídeo | `vca-video` google/veo-3.1-lite 4 s 720p sem áudio (≈US$0,12) → `vca-video-alt` google/gemini-omni-1.2-flash 4 s 360p (≈US$0,09; instável em 24–25/11/2026) — ações `video`/`video_status`/`video_content` |
 
 Preços em US$ por 1M tokens (entrada/saída), tabela do OpenRouter de 24/11/2026. Não existe Llama grátis no
 OpenRouter hoje, por isso Llama ficou no Turbo (pago). Cada modelo novo tem teto de saída por pedido

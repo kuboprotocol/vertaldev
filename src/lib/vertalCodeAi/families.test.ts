@@ -185,5 +185,7 @@ describe('VERTAL Code AI · imagem e vídeo (desligado por padrão)', () => {
     expect((body.prompt as string).length).toBe(2_000);
     expect(mediaCostUsd(v)).toBeLessThan(0.15);
     expect(mediaCostUsd(VCA_IMAGE_MODELS[0])).toBeLessThan(0.1);
+    expect(body.generate_audio).toBe(false);
+    expect('generate_audio' in videoRequestBody(VCA_VIDEO_MODELS[1], 'x')).toBe(false);
   });
 });
