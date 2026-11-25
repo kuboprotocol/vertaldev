@@ -91,6 +91,16 @@ describe('VERTAL Code AI · opções Vertal (famílias de modelos)', () => {
     expect(buildOptionChain(OR, { option: 'pro', effort: 'auto', modelId: 'vca-pro' }).some((m) => m.id === 'vca-pro')).toBe(false);
   });
 
+  it('catálogo ao vivo (só ":free") não derruba os pagos da opção nem o modelo pago fixado', () => {
+    const live = ['google/gemma-4-31b-it:free', 'nvidia/nemotron-3-ultra-550b-a55b:free'];
+    const code = buildOptionChain(PAID, { option: 'code', effort: 'auto', liveFreeIds: live }).map((m) => m.id);
+    expect(code).toEqual(expect.arrayContaining(['vca-code-agile', 'vca-code-pro', 'vca-code-classic', 'vca-turbo-paid']));
+    expect(code).not.toContain('vca-code-free');
+    for (const [option, id] of [['code', 'vca-code-pro'], ['pro', 'vca-pro'], ['turbo', 'vca-turbo-v4'], ['turbo', 'vca-open']] as const) {
+      expect(buildOptionChain(PAID, { option, effort: 'auto', liveFreeIds: live, modelId: id }).map((m) => m.id)).toEqual([id]);
+    }
+  });
+
   it('com imagem, só modelos com visão; grátis que sumiu do catálogo ao vivo sai', () => {
     expect(buildOptionChain(PAID, { option: 'pro', effort: 'auto', needsVision: true }).every((m) => m.vision)).toBe(true);
     const livre = buildOptionChain(PAID, { option: 'livre', effort: 'auto', liveFreeIds: ['google/gemma-4-31b-it:free'] });
@@ -175,5 +185,7 @@ describe('VERTAL Code AI · imagem e vídeo (desligado por padrão)', () => {
     expect((body.prompt as string).length).toBe(2_000);
     expect(mediaCostUsd(v)).toBeLessThan(0.15);
     expect(mediaCostUsd(VCA_IMAGE_MODELS[0])).toBeLessThan(0.1);
+    expect(body.generate_audio).toBe(false);
+    expect('generate_audio' in videoRequestBody(VCA_VIDEO_MODELS[1], 'x')).toBe(false);
   });
 });

@@ -612,7 +612,9 @@ export function buildOptionChain(env: VcaEnv, opts: OptionChainOptions): VcaMode
   const allowPaid = truthy(env.VERTAL_CODE_AI_ALLOW_PAID);
   const byId = new Map(allTextModels(env).map((m) => [m.id, m]));
   const wanted = VCA_OPTION_MODELS[option].map((id) => byId.get(id)).filter((m): m is VcaModel => !!m);
-  const live = reconcileFreeModels(wanted, opts.liveFreeIds);
+  // O catálogo ao vivo só lista os grátis (":free"): a conferência vale só para eles, nunca para os pagos.
+  const keepFree = new Set(reconcileFreeModels(wanted.filter((m) => m.cost !== "paid"), opts.liveFreeIds).map((m) => m.id));
+  const live = wanted.filter((m) => m.cost === "paid" || keepFree.has(m.id));
   const usable = live.filter((m) => hasKey(m) && fits(m) && (m.cost !== "paid" || allowPaid));
   const free = usable.filter((m) => m.cost !== "paid");
   const paid = usable.filter((m) => m.cost === "paid");
@@ -651,15 +653,18 @@ export interface VcaMediaModel {
   /** Vídeo: duração e resolução que pedimos (as mais baratas que o modelo aceita). */
   seconds?: number;
   resolution?: string;
+  /** Vídeo: pede (ou não) áudio; ausente = padrão do modelo. Sem áudio é mais barato quando o modelo cobra à parte. */
+  audio?: boolean;
 }
 
 export const VCA_IMAGE_MODELS: VcaMediaModel[] = [
   { id: "vca-image", label: "Vertal Imagem", kind: "image", model: "google/gemini-3.1-flash-lite-image", usdPerUnit: 0.04 },
 ];
 
+// Ordem trocada em 25/11/2026: o Omni 1.2 Flash estava com ~40% de disponibilidade no dia (job falhou no smoke test).
 export const VCA_VIDEO_MODELS: VcaMediaModel[] = [
-  { id: "vca-video", label: "Vertal Vídeo", kind: "video", model: "google/gemini-omni-1.2-flash", usdPerUnit: 0.023172, seconds: 4, resolution: "360p" },
-  { id: "vca-video-alt", label: "Vertal Vídeo · Reserva", kind: "video", model: "google/veo-3.1-lite", usdPerUnit: 0.05, seconds: 4, resolution: "720p" },
+  { id: "vca-video", label: "Vertal Vídeo", kind: "video", model: "google/veo-3.1-lite", usdPerUnit: 0.03, seconds: 4, resolution: "720p", audio: false },
+  { id: "vca-video-alt", label: "Vertal Vídeo · Reserva", kind: "video", model: "google/gemini-omni-1.2-flash", usdPerUnit: 0.023172, seconds: 4, resolution: "360p" },
 ];
 
 /** Imagem/vídeo: exige VERTAL_CODE_AI_MEDIA_ENABLED=true, pago liberado e chave do OpenRouter. */
@@ -702,5 +707,12 @@ export function extractImages(resp: unknown): { images: string[]; text: string }
 
 /** Corpo do pedido de vídeo (API assíncrona POST /api/v1/videos). */
 export function videoRequestBody(m: VcaMediaModel, prompt: string): Record<string, unknown> {
-  return { model: m.model, prompt: prompt.slice(0, 2_000), duration: m.seconds ?? 4, resolution: m.resolution ?? "720p", aspect_ratio: "16:9" };
+  return {
+    model: m.model,
+    prompt: prompt.slice(0, 2_000),
+    duration: m.seconds ?? 4,
+    resolution: m.resolution ?? "720p",
+    aspect_ratio: "16:9",
+    ...(typeof m.audio === "boolean" ? { generate_audio: m.audio } : {}),
+  };
 }
