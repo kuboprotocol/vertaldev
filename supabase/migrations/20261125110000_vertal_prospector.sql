@@ -105,3 +105,8 @@ end $$;
 
 revoke insert, update on public.prospector_campaigns, public.prospector_leads, public.prospector_messages, public.prospector_dnc from anon, authenticated;
 revoke all on public.prospector_campaigns, public.prospector_leads, public.prospector_messages, public.prospector_dnc from anon;
+
+-- Permissões explícitas: dono lê/apaga (RLS acima); só o service role (edge function) escreve.
+grant select, delete on public.prospector_campaigns, public.prospector_leads, public.prospector_messages, public.prospector_dnc to authenticated;
+grant all on public.prospector_campaigns, public.prospector_leads, public.prospector_messages, public.prospector_dnc to service_role;
+revoke truncate, references, trigger on public.prospector_campaigns, public.prospector_leads, public.prospector_messages, public.prospector_dnc from authenticated;
