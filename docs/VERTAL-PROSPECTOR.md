@@ -122,3 +122,8 @@ Limite: 40 operações/minuto por usuário (balde `vertal_prospector`).
 - Agenda do Google conectada para horários reais (hoje: 3 dias úteis × 10h/15h ou o link de agenda do remetente).
 - Fila com envio espaçado ao longo do dia e checagem de respostas agendada.
 - Fontes pagas de empresas (só com aprovação de custo).
+
+## Vertal CRM (CRM padrão)
+
+Com o Vertal CRM liberado para o usuário, os leads do Prospector entram no CRM depois de buscar/enriquecer/ler respostas
+(sem duplicar; `opted_out` fica de fora). Ver [VERTAL-CRM.md](./VERTAL-CRM.md).

@@ -23,6 +23,10 @@ export interface ConnectorConfig {
   status: 'available' | 'coming_soon'
   /** Produto do Ecossistema Vertal: aparece em destaque no topo do hub. */
   featured?: boolean
+  /** Opção própria do Vertal fixada como a primeira da lista (ex.: Vertal CRM). */
+  pinned?: boolean
+  /** Selo curto ao lado do nome (ex.: "Grátis · IA 1 crédito"). */
+  badge?: string
   internalRoute?: string
   apiKeyLabel: string
   apiKeyPlaceholder: string

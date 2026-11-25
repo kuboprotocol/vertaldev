@@ -133,3 +133,8 @@ Abrir para todos os devs = decisão do Laércio (trocar a allowlist); não foi f
 | `scripts/vertal-code-ai/engine-guard.mjs` | aceita linhas `VertalGrowth`; `BuilderPage.tsx` entra nos FLAGGED | — |
 
 O "comando do Prospector" (`encontrar clientes para <empresa>`) continua no Prospector: o do Growth exige "meu/minha/app/projeto…".
+
+## Vertal CRM (CRM padrão)
+
+Com o Vertal CRM liberado, os contatos da equipe entram no CRM depois de **Atualizar etapas** e de adicionar/editar contato
+(etapa vira status: captação = morno, conversão = quente, retenção = cliente). Ver [VERTAL-CRM.md](./VERTAL-CRM.md).

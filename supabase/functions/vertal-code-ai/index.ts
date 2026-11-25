@@ -10,6 +10,8 @@
 //   POST {action:"video_content", job}            → bytes do vídeo (quando o provedor não devolve link assinado)
 //   POST {action:"prospector", op, ...}           → Vertal Prospector (só com VERTAL_PROSPECTOR_ENABLED e o usuário em VERTAL_PROSPECTOR_USER_IDS)
 //   POST {action:"growth", op, ...}               → Vertal Growth Team (só com VERTAL_GROWTH_TEAM_ENABLED e o mesmo usuário liberado no Prospector)
+//   POST ?app=crm {op, ...}                       → Vertal CRM (só com VERTAL_CRM_ENABLED e o usuário em VERTAL_CRM_USER_IDS;
+//                                                   aceita JWT do usuário, chave da API "x-vertal-crm-key: vcrm_…" ou a chave vfk1 do Vertal Fluxos)
 //
 // Liga só com VERTAL_CODE_AI_ENABLED=true (padrão: desligado → 404).
 // Com VERTAL_CODE_AI_USER_IDS (lista de ids separada por vírgula), só esses usuários; os demais recebem 404.
@@ -55,6 +57,11 @@ import { getFreshAccessToken, loadAccount } from "../_shared/gmailToken.ts";
 import { growthChargeAdmins, isGrowthEnabled } from "../_shared/vertalGrowth/core.ts";
 import { handleGrowth, type DebitResult } from "../_shared/vertalGrowth/handler.ts";
 import { listVisibleSecrets, resolveEnvForRun } from "../_shared/kuboSecrets.ts";
+// Vertal CRM (aditivo, desligado por padrão: VERTAL_CRM_ENABLED + VERTAL_CRM_USER_IDS). Não depende das flags do VERTAL Code AI.
+import { crmChargeAdmins, crmChargeOn, isApiKeyShape as isVertalCrmApiKey, isCrmEnabled } from "../_shared/vertalCrm/core.ts";
+import { autoImport as vertalCrmAutoImport, handleCrm, hashApiKey as hashVertalCrmKey, type CrmDeps } from "../_shared/vertalCrm/handler.ts";
+import { verifyFluxosKey as verifyVertalCrmFluxosKey } from "../_shared/fluxosBroker.ts";
+import { makeEngine as makeVertalCrmEngine } from "../_shared/fluxosApps.ts";
 
 // Cliente do Supabase e módulo TypeScript sem tipos gerados (mesmo padrão do vibe-code-agent).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -273,7 +280,107 @@ async function verifyJob(userId: string, token: string): Promise<string | null> 
   return (await hmacHex(`${userId}:${jobId}`)) === token.slice(i + 1) ? jobId : null;
 }
 
+// ─── Vertal CRM ───────────────────────────────────────────────────────────────
+const vertalCrmCors = { ...corsHeaders, "Access-Control-Allow-Headers": `${corsHeaders["Access-Control-Allow-Headers"]}, x-vertal-crm-key, x-vertal-fluxos-key` };
+const vertalCrmJson = (status: number, body: unknown) =>
+  new Response(JSON.stringify(body), { status, headers: { ...vertalCrmCors, "Content-Type": "application/json", "Cache-Control": "no-store" } });
+
+/** Créditos do Vertal CRM: mesmas funções atômicas e idempotentes da plataforma (débito + devolução). */
+function vertalCrmCredits(admin: Loose, userId: string): CrmDeps["credits"] {
+  return {
+    debit: async (amount, key, metadata) => {
+      if (!crmChargeOn(env())) return { ok: true, charged: 0, free: true };
+      const { data: isAdmin } = await admin.rpc("is_admin", { p_user_id: userId });
+      if (isAdmin && !crmChargeAdmins(env())) return { ok: true, charged: 0, free: true };
+      const { data, error } = await admin.rpc("execute_atomic_credit_deduction", {
+        _user_id: userId, _amount: amount, _reason: String(metadata.source ?? "vertal_crm"), _category: "creative_economy", _metadata: metadata, _idempotency_key: key,
+      });
+      if (error) return { ok: false, error: /insufficient_credits/.test(error.message ?? "") ? "insufficient_credits" : "charge_failed" };
+      if (!(data as Loose)?.success) return { ok: false, error: "charge_failed" };
+      if ((data as Loose)?.replayed) return { ok: false, error: "duplicate_request" };
+      return { ok: true, charged: amount, balanceAfter: (data as Loose)?.balance_after ?? null };
+    },
+    refund: async (amount, key, metadata) => {
+      const { error } = await admin.rpc("execute_atomic_credit_topup", {
+        _user_id: userId, _amount: amount, _reason: `refund:${String(metadata.source ?? "vertal_crm")}`, _category: "creative_refund",
+        _metadata: { ...metadata, charge_idempotency_key: key }, _idempotency_key: `refund:${key}`,
+      });
+      if (error) console.error("[vertal-crm] devolução falhou:", error.message);
+      return !error;
+    },
+  };
+}
+
+function vertalCrmDeps(admin: Loose, userId: string, via: CrmDeps["via"], extra: Partial<CrmDeps> = {}): CrmDeps {
+  const fluxosUrl = Deno.env.get("FLUXOS_INTERNAL_URL");
+  const fluxosKey = Deno.env.get("FLUXOS_INTERNAL_KEY");
+  return {
+    admin, userId, env: env(), fetch, via,
+    // Roteador do VERTAL Code AI (LLM própria → OpenRouter grátis → DeepSeek), sem mudar nada nele.
+    callModel: async (messages, o) => {
+      const chain = buildChain(env(), { effort: "low", liveFreeIds: await liveFreeIds() });
+      if (!chain.length) throw new Error("no_model_configured");
+      return callChain(chain, messages as VcaChatMessage[], { ...o, effort: "low", deadline: Date.now() + 90_000 });
+    },
+    credits: vertalCrmCredits(admin, userId),
+    engine: fluxosUrl && fluxosKey ? makeVertalCrmEngine(fluxosUrl, fluxosKey) : null,
+    gmailToken: async (accountId) => {
+      const acct = await loadAccount(admin, userId, accountId);
+      return { token: await getFreshAccessToken(admin, acct), email: acct.email };
+    },
+    ...extra,
+  };
+}
+
+async function handleVertalCrmRequest(req: Request): Promise<Response> {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: vertalCrmCors });
+  if (req.method !== "POST") return vertalCrmJson(405, { error: "method_not_allowed" });
+  const admin: Loose = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+  let body: Record<string, Loose>;
+  try {
+    body = await req.json();
+  } catch {
+    return vertalCrmJson(400, { error: "invalid_json_body" });
+  }
+  let userId: string | null = null;
+  let via: CrmDeps["via"] = "user";
+  const extra: Partial<CrmDeps> = {};
+  const apiKey = req.headers.get("x-vertal-crm-key");
+  const fluxosKey = req.headers.get("x-vertal-fluxos-key");
+  if (apiKey) {
+    if (!isVertalCrmApiKey(apiKey)) return vertalCrmJson(401, { error: "invalid_api_key" });
+    const { data: k } = await admin.from("crm_api_keys").select("id, workspace_id, scopes, created_by, revoked_at").eq("key_hash", await hashVertalCrmKey(apiKey)).maybeSingle();
+    if (!k || k.revoked_at || !k.created_by) return vertalCrmJson(401, { error: "invalid_api_key" });
+    userId = k.created_by;
+    via = "api";
+    extra.apiWorkspaceId = k.workspace_id;
+    extra.apiScopes = k.scopes ?? ["read"];
+    admin.from("crm_api_keys").update({ last_used_at: new Date().toISOString() }).eq("id", k.id).then(() => {});
+  } else if (fluxosKey) {
+    userId = await verifyVertalCrmFluxosKey(fluxosKey, Deno.env.get("FLUXOS_BROKER_SECRET"));
+    if (!userId) return vertalCrmJson(401, { error: "invalid_fluxos_key" });
+    via = "fluxos";
+  } else {
+    const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+    if (!token) return vertalCrmJson(401, { error: "missing_authorization" });
+    const { data: u, error } = await admin.auth.getUser(token);
+    if (error || !u?.user) return vertalCrmJson(401, { error: "invalid_token" });
+    userId = u.user.id;
+  }
+  // Mesma resposta de "desligado" para quem não está liberado.
+  if (!isCrmEnabled(env(), userId)) return vertalCrmJson(404, { error: "vertal_crm_disabled" });
+  try {
+    const r = await handleCrm(body, vertalCrmDeps(admin, userId!, via, extra));
+    return vertalCrmJson(r.status, r.body);
+  } catch (e) {
+    console.error("[vertal-crm] falhou:", e instanceof Error ? e.message : e);
+    return vertalCrmJson(500, { error: "crm_failed" });
+  }
+}
+
 Deno.serve(async (req) => {
+  // Vertal CRM: rota própria (?app=crm), com as próprias flags; com VERTAL_CRM_ENABLED desligado responde 404.
+  if (new URL(req.url).searchParams.get("app") === "crm") return handleVertalCrmRequest(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
   if (!isVcaEnabled(env())) return json(404, { error: "vertal_code_ai_disabled" });
@@ -319,6 +426,10 @@ Deno.serve(async (req) => {
           return { token: await getFreshAccessToken(admin, acct), email: acct.email };
         },
       });
+      // Vertal CRM como CRM padrão: leads novos/atualizados do Prospector entram no CRM (só com o CRM liberado para o usuário).
+      if (r.status === 200 && isCrmEnabled(env(), userId) && ["find_leads", "enrich_lead", "check_replies", "update_lead"].includes(String(body.op))) {
+        await vertalCrmAutoImport(vertalCrmDeps(admin, userId, "user"), "prospector", typeof body.campaignId === "string" ? body.campaignId : null);
+      }
       return json(r.status, r.body);
     } catch (e) {
       console.error("[vertal-prospector] falhou:", e instanceof Error ? e.message : e);
@@ -368,6 +479,10 @@ Deno.serve(async (req) => {
         },
         prospector: (b) => handleProspector(b as Record<string, Loose>, { admin, userId, env: env(), fetch, callModel, gmailToken }),
       });
+      // Vertal CRM como CRM padrão: contatos do Growth Team entram no CRM depois de "Atualizar etapas"/novo contato (só com o CRM liberado).
+      if (r.status === 200 && isCrmEnabled(env(), userId) && ["sync", "add_contact", "update_contact"].includes(String(body.op))) {
+        await vertalCrmAutoImport(vertalCrmDeps(admin, userId, "user"), "growth", typeof body.growthId === "string" ? body.growthId : typeof body.id === "string" ? body.id : null);
+      }
       return json(r.status, r.body);
     } catch (e) {
       console.error("[vertal-growth] falhou:", e instanceof Error ? e.message : e);
