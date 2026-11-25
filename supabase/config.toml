@@ -21,6 +21,9 @@ project_id = "sccizjlpwezsgaxkclot"
     verify_jwt = false
   [functions.gmail-oauth-callback]
     verify_jwt = false
+  # Vertal Chat · Agendador: pg_cron chama sem JWT (chave própria no cabeçalho); usuários são validados na função.
+  [functions.vertal-chat-scheduler]
+    verify_jwt = false
   [functions.gmail-sync-accounts]
     verify_jwt = false
   [functions.mcp]

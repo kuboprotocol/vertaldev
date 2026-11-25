@@ -29,6 +29,7 @@ import { previewHtml } from '@/lib/chatAgent/previewHtml';
 import { toast } from 'sonner';
 import { DICTATION_ERROR_TEXT, useDictation } from '@/lib/voice/useDictation';
 import { VertalCodeAiEntryButton } from '@/components/vertal-code-ai/VertalCodeAiEntryButton';
+import { SchedulerEntryButton } from './scheduler/SchedulerEntryButton';
 
 const SIDEBAR_KEY = 'vertal-chat-sidebar';
 const CHAT_ONLY_KEY = 'vertal-chat-only';
@@ -363,6 +364,8 @@ export function VertalChat() {
           <h1 className="min-w-0 flex-1 truncate text-sm font-medium text-foreground/80">{currentTitle ?? 'Vertal Chat'}</h1>
           {/* VERTAL Code AI: não renderiza nada com VITE_VERTAL_CODE_AI desligado (padrão). */}
           <VertalCodeAiEntryButton from="chat" />
+          {/* Tarefas agendadas: não renderiza nada com VITE_VERTAL_CHAT_SCHEDULER desligado (padrão). */}
+          <SchedulerEntryButton />
           <button
             type="button"
             onClick={() => setChatOnly(!chatOnly)}
@@ -945,7 +948,7 @@ function ApiApprovalDialog({ approval }: { approval: ReturnType<typeof useVertal
               <dd className="break-all rounded-lg bg-muted/50 px-2.5 py-2 font-mono text-xs">{approval.method} {approval.url}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">{approval.method.includes('E-MAIL') ? 'Texto exato que será enviado' : 'Motivo'}</dt>
+              <dt className="text-xs text-muted-foreground">{approval.method.includes('E-MAIL') ? 'Texto exato que será enviado' : approval.method === 'TAREFA AGENDADA' ? 'Resumo (o que, quando, gatilho e permissões)' : 'Motivo'}</dt>
               <dd className="max-h-64 overflow-y-auto whitespace-pre-wrap break-words">{approval.reason}</dd>
             </div>
             {approval.secrets.length > 0 && (

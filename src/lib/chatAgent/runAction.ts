@@ -40,6 +40,8 @@ import {
 } from '../../../supabase/functions/_shared/automatischCore';
 import { callHuginnOp, huginnSecretsFor } from '@/lib/huginn/client';
 import { describeHuginnOp, isHuginnWrite, type HuginnOp } from '../../../supabase/functions/_shared/huginnCore';
+// Agendador (tarefas agendadas): só chega aqui com a flag ligada no servidor para o usuário.
+import { runScheduler } from '@/lib/chatScheduler/runScheduler';
 
 export interface ApiApprovalRequest {
   method: string;
@@ -1377,6 +1379,8 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
         return await runHuginn(action, ctx);
       case 'fluxos':
         return await runFluxos(action, ctx);
+      case 'agendador':
+        return await runScheduler(action, ctx);
       case 'weather':
         return await runWeather(action);
       case 'web_search':
@@ -1566,6 +1570,8 @@ export function actionLabel(action: AgentAction): string {
     case 'automatisch': return 'Falando com o seu Vertal Fluxos (você aprova cada chamada)';
     case 'fluxos': return action.op === 'run' ? (action.kind === 'action' ? `Executando no ${action.app} pelo Vertal Fluxos (você aprova antes)` : `Buscando no ${action.app} pelo Vertal Fluxos`) : `Consultando o ${action.app} no Vertal Fluxos`;
     case 'huginn': return action.op === 'create_fluxos_agent' ? `Criando um agente que usa o ${action.app} pelo Vertal Fluxos (você aprova antes)` : action.op.startsWith('connect_') ? 'Ligando o Vertal Agentes ao Vertal Fluxos (você aprova antes)' : 'Falando com o seu Vertal Agentes (você aprova cada chamada)';
+    case 'agendador':
+      return action.op === 'create' ? 'Preparando a tarefa agendada (você confirma antes)' : action.op === 'delete' ? 'Apagando tarefa agendada (você confirma antes)' : 'Consultando as tarefas agendadas';
     case 'open_panel': return 'Abrindo painel';
     case 'weather': return 'Consultando o clima';
     case 'web_search': return 'Buscando na web';

@@ -44,6 +44,8 @@ import { parseGithubOp, type GithubOp } from "./githubOps.ts";
 import { YOUTUBE_LIMITS, youtubeVideoId } from "./youtubeCore.ts";
 import { AUTOMATISCH_SECRETS, parseAutomatischOp, type AutomatischOp } from "./automatischCore.ts";
 import { HUGINN_SECRETS, parseHuginnOp, type HuginnOp } from "./huginnCore.ts";
+// Agendador (tarefas agendadas): só entra no prompt com ctx.scheduler (flag VERTAL_CHAT_SCHEDULER_*, desligada por padrão).
+import { SCHEDULER_RULES, SCHEDULER_TOOL_PROMPT, parseSchedulerAction, type SchedulerOp } from "./chatScheduler.ts";
 
 export type Msg = { role: "system" | "user" | "assistant"; content: string };
 
@@ -182,7 +184,9 @@ export type AgentAction =
   // actions: lista ações/buscas e campos (grátis); options: opções de um campo; run: executa (cobra; ação pede aprovação).
   | { tool: "fluxos"; op: "actions"; app: string }
   | { tool: "fluxos"; op: "options"; app: string; key: string; parameters?: Record<string, unknown> }
-  | { tool: "fluxos"; op: "run"; app: string; kind: "action" | "search"; key: string; parameters?: Record<string, unknown> };
+  | { tool: "fluxos"; op: "run"; app: string; kind: "action" | "search"; key: string; parameters?: Record<string, unknown> }
+  // Agendador do Vertal Chat (flag): cria/lista/pausa tarefas agendadas, lembretes, consultas e gatilhos de e-mail.
+  | ({ tool: "agendador" } & SchedulerOp);
 
 /** Conexão que o próprio cliente adicionou (API ou servidor MCP). Só nome, endereço e NOME do segredo. */
 export interface UserConnection {
@@ -273,6 +277,7 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   automatisch: "grátis (você aprova cada chamada)",
   huginn: "grátis (você aprova cada chamada)",
   fluxos: "2 créditos por ação ou busca executada (devolvidos se falhar); listar ações e opções é grátis",
+  agendador: "grátis (você confirma no cartão; o que a tarefa fizer tem o custo normal de cada ferramenta)",
 };
 
 export interface AgentPromptContext {
@@ -313,6 +318,8 @@ export interface AgentPromptContext {
   huginn?: boolean;
   /** Pedido sobre o e-mail do usuário (ver emailRoute): "gmail" inclui as regras do conector. */
   email?: EmailRoute | null;
+  /** Agendador (tarefas agendadas): só com a flag ligada para o usuário E a conversa pedindo (ver wantsScheduler). */
+  scheduler?: boolean;
 }
 
 // ─── Personalidade e regras de conversa ──────────────────────────────────
@@ -500,6 +507,7 @@ function buildPrompt(ctx: AgentPromptContext): string {
     ctx.automatisch ? AUTOMATISCH_TOOL : "",
     ctx.huginn ? HUGINN_TOOL : "",
     ctx.fluxosApps?.length ? fluxosTool(ctx.fluxosApps) : "",
+    ctx.scheduler ? SCHEDULER_TOOL_PROMPT : "",
     `- {"tool":"api_request","method":"GET|POST|PUT|PATCH|DELETE","url":"https://...","headers":{},"body":"texto ou JSON em string","reason":"por que esta chamada"} → chama uma API externa quando nenhuma ferramenta acima resolve. O usuário aprova cada chamada. Para autenticar, escreva {{NOME_DO_SEGREDO}} no valor do cabeçalho, na query ou no corpo; o servidor troca pelo valor do cofre. Nunca peça para o usuário colar chaves no chat. Segredos disponíveis: ${secrets}. Se faltar um segredo, explique qual nome criar e use {"tool":"open_panel","panel":"secrets"}.`,
     `- {"tool":"open_panel","panel":"${PANELS.filter((p) => p !== "navigator").join("|")}"} → abre um painel dentro do chat para o usuário trabalhar à mão. Use quando o pedido precisa de arquivos do usuário (video_studio: fotos viram vídeo; clips: cortes de vídeo longo; avatar: avatar falante; emo: animar foto; notebook: conversar com PDFs e links; office/design/canvas: edição manual).`,
     `- {"tool":"weather","place":"bairro ou cidade"} → clima atual e previsão de 3 dias. Sem "place", usa a localização do aparelho do usuário (ele autoriza). Nunca invente o clima: use sempre esta ferramenta.`,
@@ -548,6 +556,7 @@ function buildPrompt(ctx: AgentPromptContext): string {
     ctx.huginn ? `${HUGINN_RULES}\n` : "",
     ctx.automatisch || ctx.huginn ? `${BRAND_RULES}\n` : "",
     ctx.authKit ? `${AUTH_KIT_RULES}\n` : "",
+    ctx.scheduler ? `${SCHEDULER_RULES}\n` : "",
     ctx.memoryEnabled === false ? MEMORY_OFF : ctx.memoryEnabled === null ? MEMORY_UNAVAILABLE : MEMORY_RULES,
     ctx.localNow
       ? `Agora, para o usuário: ${ctx.localNow}${ctx.timezone ? ` (fuso ${ctx.timezone})` : ""}.`
@@ -968,6 +977,8 @@ export function parseAgentAction(raw: unknown): AgentAction | null {
     }
     case "fluxos":
       return parseFluxosAgentAction(a);
+    case "agendador":
+      return parseSchedulerAction(a);
     case "world_time": {
       const list = Array.isArray(a.places) ? a.places : typeof a.places === "string" ? a.places.split(",") : typeof a.place === "string" ? [a.place] : [];
       const places = list.map((p) => str(p, 80)).filter(Boolean).slice(0, 8);
