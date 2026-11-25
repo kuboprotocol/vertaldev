@@ -612,7 +612,9 @@ export function buildOptionChain(env: VcaEnv, opts: OptionChainOptions): VcaMode
   const allowPaid = truthy(env.VERTAL_CODE_AI_ALLOW_PAID);
   const byId = new Map(allTextModels(env).map((m) => [m.id, m]));
   const wanted = VCA_OPTION_MODELS[option].map((id) => byId.get(id)).filter((m): m is VcaModel => !!m);
-  const live = reconcileFreeModels(wanted, opts.liveFreeIds);
+  // O catálogo ao vivo só lista os grátis (":free"): a conferência vale só para eles, nunca para os pagos.
+  const keepFree = new Set(reconcileFreeModels(wanted.filter((m) => m.cost !== "paid"), opts.liveFreeIds).map((m) => m.id));
+  const live = wanted.filter((m) => m.cost === "paid" || keepFree.has(m.id));
   const usable = live.filter((m) => hasKey(m) && fits(m) && (m.cost !== "paid" || allowPaid));
   const free = usable.filter((m) => m.cost !== "paid");
   const paid = usable.filter((m) => m.cost === "paid");
