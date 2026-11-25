@@ -134,11 +134,35 @@ produção diverge do repositório), com backup antes.
 - `deno check` em `vertal-chat-scheduler/index.ts` e `creative-router/index.ts` (sem erros novos;
   os 7 erros de tipo já existentes no main continuam iguais).
 
+## Idioma (responder sempre na língua do usuário)
+
+Tudo o que o Agendador produz sai no idioma do usuário: resultado das tarefas postado no chat,
+cartão de confirmação, lembretes, avisos de falha, avisos por e-mail, textos do painel e mensagens
+dos gatilhos de e-mail. Ordem para escolher o idioma:
+
+1. **Ajustes → Idioma** no painel (`chat_scheduler_settings.lang`; padrão `auto`).
+2. Idioma da **mensagem com que a tarefa foi pedida**: o modelo manda `"lang"` na ação; se faltar,
+   o servidor detecta no texto (`detectLang`). Fica guardado em `chat_scheduled_tasks.spec.lang`.
+3. Idioma do **navegador** na criação (`spec.locale`; o cliente manda `locale` em toda chamada).
+4. Idioma do **perfil** (`user_metadata.locale`, quando o login traz).
+5. `pt-BR`.
+
+Textos fixos existem em pt-BR, en e es (`SCHED_TEXT` no módulo compartilhado e
+`src/lib/chatScheduler/i18n.ts` na tela; o app não tem i18n global). Para outros idiomas, a IA
+responde no idioma guardado e os textos fixos saem em inglês. O executor recebe a instrução
+"IDIOMA: escreva o reply SEMPRE em …". "Quando" em inglês/espanhol ("in 2 minutes", "tomorrow at 9am",
+"en 2 minutos", "mañana a las 9") é traduzido para o leitor de datas (`parseWhen`/`whenToPt`); o
+português continua exatamente como antes. Migração aditiva: `20261125120000_vertal_chat_scheduler_lang.sql`.
+O prompt global do Vertal Chat não muda (só o bloco do Agendador, que já é atrás da flag).
+
 ## Limites conhecidos
 
+- Precisão de até 1 minuto (o pg_cron confere a cada minuto).
 - No servidor a tarefa usa um subconjunto das ferramentas (web, Gmail, Vertal Fluxos). Ferramentas
   que rodam no navegador (imagem, app, música, navegador na nuvem, Vibe Code) não rodam sozinhas:
   a tarefa avisa o que preparou e o que o usuário precisa abrir.
 - Gatilho de e-mail usa checagem periódica (2–60 min, padrão 5), não push do Gmail.
 - Aviso por e-mail vai só para a própria conta Gmail conectada; não há push no celular ainda.
 - Um usuário só tem 50 tarefas ativas/pausadas.
+- O cabeçalho do cartão de permissão do chat ("TAREFA AGENDADA") e seus botões são do componente
+  genérico do Vertal Chat e continuam em português.

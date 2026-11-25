@@ -4,7 +4,8 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { CalendarClock } from 'lucide-react';
 import { toast } from 'sonner';
-import { SCHEDULER_NAME, SCHEDULER_OPEN_EVENT, callScheduler, useSchedulerAccess } from '@/lib/chatScheduler/client';
+import { SCHEDULER_OPEN_EVENT, callScheduler, getSchedulerLangSetting, useSchedulerAccess } from '@/lib/chatScheduler/client';
+import { schedUi, schedulerUiLang } from '@/lib/chatScheduler/i18n';
 
 const SchedulerPanel = lazy(() => import('./SchedulerPanel'));
 
@@ -36,9 +37,10 @@ export function SchedulerEntryButton({ enabledOverride }: { enabledOverride?: bo
       for (const run of r.data.runs.slice(0, 3).reverse()) {
         if (shown.current.has(run.id)) continue;
         shown.current.add(run.id);
-        const title = run.chat_scheduled_tasks?.title ?? 'Tarefa agendada';
+        const U = schedUi(schedulerUiLang(getSchedulerLangSetting()));
+        const title = run.chat_scheduled_tasks?.title ?? U.taskFallback;
         const text = (run.output ?? run.error ?? '').replace(/[*_#>`]/g, '').slice(0, 140);
-        (run.status === 'error' ? toast.error : toast.success)(`${title}`, { description: text || 'Rodou agora. Veja o resultado na conversa.' });
+        (run.status === 'error' ? toast.error : toast.success)(`${title}`, { description: text || U.toastFallback });
       }
     };
     void poll();
@@ -47,17 +49,18 @@ export function SchedulerEntryButton({ enabledOverride }: { enabledOverride?: bo
   }, [access]);
 
   if (access !== 'allowed') return null;
+  const U = schedUi(schedulerUiLang(getSchedulerLangSetting()));
   return (
     <>
       <button
         type="button"
         data-testid="scheduler-entry"
         onClick={() => { setOpen(true); setUnseen(0); }}
-        title={SCHEDULER_NAME}
+        title={U.name}
         className="relative inline-flex items-center gap-1.5 rounded-full border border-border/60 px-3 py-1.5 text-xs font-medium text-foreground/80 hover:border-primary/50"
       >
         <CalendarClock className="h-3.5 w-3.5" aria-hidden />
-        <span className="hidden sm:inline">Tarefas</span>
+        <span className="hidden sm:inline">{U.button}</span>
         {unseen > 0 && (
           <span className="absolute -right-1 -top-1 min-w-[1.1rem] rounded-full bg-primary px-1 text-center text-[10px] font-semibold leading-[1.1rem] text-primary-foreground">
             {unseen > 9 ? '9+' : unseen}

@@ -3,8 +3,9 @@
 // o servidor (vertal-chat-scheduler) valida tudo de novo.
 import type { AgentAction, ToolResult } from '@/lib/chatAgent/contract';
 import {
-  callScheduler, notifySchedulerChanged, openSchedulerPanel, type SchedulerRun, type SchedulerTaskView,
+  callScheduler, getSchedulerLangSetting, notifySchedulerChanged, openSchedulerPanel, type SchedulerRun, type SchedulerTaskView,
 } from './client';
+import { schedUi, schedulerUiLang } from './i18n';
 
 type SchedulerAgentAction = Extract<AgentAction, { tool: 'agendador' }>;
 
@@ -45,13 +46,15 @@ export async function runScheduler(action: SchedulerAgentAction, ctx: SchedulerA
     case 'create': {
       const { tool: _t, op: _o, ...spec } = action;
       const tz = timezone();
-      const preview = await callScheduler<{ summary: string[]; warnings: string[] }>('preview', { spec, timezone: tz });
+      const preview = await callScheduler<{ summary: string[]; warnings: string[]; lang?: string }>('preview', { spec, timezone: tz });
       if (!preview.ok) return out(false, `Não deu para montar a tarefa: ${preview.message}`, preview.message);
-      const lines = [...preview.data.summary, ...(preview.data.warnings ?? []).map((w) => `Aviso: ${w}`)];
+      // Cartão no idioma do usuário (o servidor resolve: Ajustes → idioma do pedido → navegador).
+      const U = schedUi(schedulerUiLang(preview.data.lang));
+      const lines = [...preview.data.summary, ...(preview.data.warnings ?? []).map((w) => `${U.warning}: ${w}`)];
       const approved = await ctx.approveApi({
         method: SCHEDULER_CARD_METHOD,
-        url: spec.title ?? 'nova tarefa',
-        host: 'Vertal Chat · Tarefas agendadas',
+        url: spec.title ?? U.newTask,
+        host: U.cardHost,
         reason: lines.join('\n'),
         secrets: [],
         hasBody: false,
@@ -105,9 +108,10 @@ export async function runScheduler(action: SchedulerAgentAction, ctx: SchedulerA
       return out(true, `Rodei agora. Resultado (também postado na conversa da tarefa):\n${r.data.text}`);
     }
     case 'delete': {
+      const U = schedUi(schedulerUiLang(getSchedulerLangSetting()));
       const approved = await ctx.approveApi({
-        method: SCHEDULER_CARD_METHOD, url: action.name ?? action.id ?? 'tarefa', host: 'Vertal Chat · Tarefas agendadas',
-        reason: 'Apagar esta tarefa agendada (e o compromisso da agenda, se houver). Não dá para desfazer.', secrets: [], hasBody: false,
+        method: SCHEDULER_CARD_METHOD, url: action.name ?? action.id ?? U.task, host: U.cardHost,
+        reason: U.deleteReason, secrets: [], hasBody: false,
       });
       if (!approved) return out(false, 'O usuário não confirmou apagar.', 'Nada foi apagado.');
       const r = await callScheduler<{ deleted: string }>('delete', { id: action.id, name: action.name });
@@ -118,12 +122,13 @@ export async function runScheduler(action: SchedulerAgentAction, ctx: SchedulerA
     case 'update': {
       const c = action.changes;
       if (c.send_to?.length || c.allow_app_actions || c.notify_email) {
+        const U = schedUi(schedulerUiLang(c.lang ?? getSchedulerLangSetting()));
         const approved = await ctx.approveApi({
-          method: SCHEDULER_CARD_METHOD, url: action.name ?? action.id ?? 'tarefa', host: 'Vertal Chat · Tarefas agendadas',
+          method: SCHEDULER_CARD_METHOD, url: action.name ?? action.id ?? U.task, host: U.cardHost,
           reason: [
-            c.send_to?.length ? `Passa a poder enviar e-mail para: ${c.send_to.join(', ')}` : '',
-            c.allow_app_actions ? 'Passa a poder executar ações nos seus apps conectados (Vertal Fluxos)' : '',
-            c.notify_email ? 'Também avisa você por e-mail' : '',
+            c.send_to?.length ? U.permSendTo(c.send_to.join(', ')) : '',
+            c.allow_app_actions ? U.permApps : '',
+            c.notify_email ? U.permNotify : '',
           ].filter(Boolean).join('\n'),
           secrets: [], hasBody: false,
         });
