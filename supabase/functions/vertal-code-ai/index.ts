@@ -4,6 +4,10 @@
 //   POST {action:"models"}                       → modelos disponíveis (só nomes Vertal)
 //   POST {action:"run", mode, effort, prompt...}  → SSE: status/read/model/verify/diff/plan/reply/done
 //   POST {action:"apply", projectId, changes}     → grava versões novas no cofre de código do projeto
+//   run aceita também option ("auto"|"code"|"livre"|"turbo"|"pro") e modelId (id Vertal, fixa um modelo da opção)
+//   POST {action:"image", prompt, images?}        → {images:[dataUrl], text, model, estimate}  (só com VERTAL_CODE_AI_MEDIA_ENABLED)
+//   POST {action:"video", prompt}                 → {job, model, estimate}; depois {action:"video_status", job}
+//   POST {action:"video_content", job}            → bytes do vídeo (quando o provedor não devolve link assinado)
 //
 // Liga só com VERTAL_CODE_AI_ENABLED=true (padrão: desligado → 404).
 // Com VERTAL_CODE_AI_USER_IDS (lista de ids separada por vírgula), só esses usuários; os demais recebem 404.
@@ -13,7 +17,21 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import {
   buildChain,
+  buildOptionChain,
+  estimateCostUsd,
   estimateTokens,
+  extractImages,
+  imageRequestBody,
+  isVcaMediaEnabled,
+  mediaCostUsd,
+  parseVcaOption,
+  retailCredits,
+  VCA_IMAGE_MODELS,
+  VCA_MEDIA_OPTIONS,
+  VCA_OPTION_LABEL,
+  VCA_TEXT_OPTIONS,
+  VCA_VIDEO_MODELS,
+  videoRequestBody,
   isVcaEnabled,
   isVcaUserAllowed,
   publicModelInfo,
@@ -169,7 +187,7 @@ async function callChain(
           ...(key ? { Authorization: `Bearer ${key}` } : {}),
           ...(m.provider === "openrouter" ? { "HTTP-Referer": "https://vertal.dev", "X-Title": "VERTAL Code AI" } : {}),
         },
-        body: JSON.stringify(reqBody),
+        body: JSON.stringify(m.provider === "openrouter" ? { ...reqBody, usage: { include: true } } : reqBody),
       });
       if (!r.ok) {
         failures.push(`${m.id}:${r.status}`);
@@ -196,7 +214,14 @@ async function callChain(
         failures.push(`${m.id}:bad_json`);
         continue;
       }
-      console.log(`[vertal-code-ai] ok ${m.id} (${m.provider}/${m.model}) in=${inputTokens} tokens=${JSON.stringify(usage)}`);
+      const u = usage as { prompt_tokens?: number; completion_tokens?: number; cost?: number };
+      const costUsd = typeof u.cost === "number"
+        ? u.cost
+        : estimateCostUsd(m, u.prompt_tokens ?? inputTokens, u.completion_tokens ?? Math.ceil(content.length / 3.5));
+      console.log(
+        `[vertal-code-ai] ok ${m.id} (${m.provider}/${m.model}) in=${inputTokens} tokens=${JSON.stringify(usage)} ` +
+          `cost_usd=${costUsd.toFixed(6)} retail_credits=${retailCredits(costUsd)} (cobrança desligada)`,
+      );
       const info = publicModelInfo(m);
       return { content, label: info.label, cost: info.cost, fellBack: failures.some((f) => !f.includes(":skip(")) };
     } catch (err) {
@@ -213,6 +238,29 @@ async function callChain(
 async function sha256(s: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Id do trabalho de vídeo amarrado ao usuário (HMAC): ninguém consulta o vídeo de outro. */
+async function hmacHex(msg: string): Promise<string> {
+  const k = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "vca"),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(msg));
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
+}
+async function signJob(userId: string, jobId: string): Promise<string> {
+  return `${jobId}.${await hmacHex(`${userId}:${jobId}`)}`;
+}
+async function verifyJob(userId: string, token: string): Promise<string | null> {
+  const i = token.lastIndexOf(".");
+  if (i <= 0 || token.length > 300) return null;
+  const jobId = token.slice(0, i);
+  if (!/^[A-Za-z0-9_-]+$/.test(jobId)) return null;
+  return (await hmacHex(`${userId}:${jobId}`)) === token.slice(i + 1) ? jobId : null;
 }
 
 Deno.serve(async (req) => {
@@ -256,8 +304,12 @@ Deno.serve(async (req) => {
 
   if (action === "models") {
     const effort: VcaEffort = EFFORTS.includes(body.effort) ? body.effort : "auto";
-    const chain = buildChain(env(), { effort, liveFreeIds: await liveFreeIds() });
-    return json(200, { models: chain.map(publicModelInfo), paidEnabled: chain.some((m) => m.cost === "paid") });
+    const option = parseVcaOption(body.option);
+    const live = await liveFreeIds();
+    const chain = option === "auto" ? buildChain(env(), { effort, liveFreeIds: live }) : buildOptionChain(env(), { effort, option, liveFreeIds: live });
+    const mediaEnabled = isVcaMediaEnabled(env());
+    const options = [...VCA_TEXT_OPTIONS, ...(mediaEnabled ? VCA_MEDIA_OPTIONS : [])].map((id) => ({ id, label: VCA_OPTION_LABEL[id] }));
+    return json(200, { models: chain.map(publicModelInfo), paidEnabled: chain.some((m) => m.cost === "paid"), options, mediaEnabled });
   }
 
   // Limite por usuário (balde próprio; não divide cota com o Vibe Code).
@@ -326,6 +378,122 @@ Deno.serve(async (req) => {
     return json(200, { applied, conflicts, skipped });
   }
 
+  if (action === "image" || action === "video" || action === "video_status" || action === "video_content") {
+    const e = env();
+    if (!isVcaMediaEnabled(e)) return json(404, { error: "vertal_code_ai_media_disabled" });
+    const key = (e.OPENROUTER_API_KEY ?? "").trim();
+    const orHeaders = { Authorization: `Bearer ${key}`, "Content-Type": "application/json", "HTTP-Referer": "https://vertal.dev", "X-Title": "VERTAL Code AI" };
+    const mprompt = typeof body.prompt === "string" ? body.prompt.trim().slice(0, 2_000) : "";
+
+    if (action === "image") {
+      if (!mprompt) return json(400, { error: "empty_prompt" });
+      const refs: string[] = (Array.isArray(body.images) ? body.images : [])
+        .filter((u: unknown): u is string => typeof u === "string" && (/^data:image\/(png|jpe?g|webp);base64,/.test(u) || /^https:\/\//.test(u)) && u.length < 6_000_000)
+        .slice(0, 2);
+      const fails: string[] = [];
+      for (const m of VCA_IMAGE_MODELS) {
+        const t0 = Date.now();
+        try {
+          const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: orHeaders,
+            signal: AbortSignal.timeout(90_000),
+            body: JSON.stringify({ ...imageRequestBody(m, mprompt, refs), usage: { include: true } }),
+          });
+          if (!r.ok) {
+            fails.push(`${m.id}:${r.status}`);
+            await r.body?.cancel();
+            continue;
+          }
+          const d = await r.json();
+          const out = extractImages(d);
+          if (!out.images.length) {
+            fails.push(`${m.id}:no_image`);
+            continue;
+          }
+          const usd = typeof d?.usage?.cost === "number" ? d.usage.cost : mediaCostUsd(m);
+          console.log(`[vertal-code-ai] image ok ${m.id} (${m.model}) ms=${Date.now() - t0} cost_usd=${usd.toFixed(6)}`);
+          return json(200, {
+            images: out.images.slice(0, 2),
+            text: out.text.slice(0, 2_000),
+            model: { id: m.id, label: m.label, cost: "paid" },
+            estimate: { usd: Math.round(usd * 1e6) / 1e6, credits: retailCredits(usd), charged: false },
+          });
+        } catch (err) {
+          fails.push(`${m.id}:${err instanceof Error ? err.name : "err"}`);
+        }
+      }
+      console.warn(`[vertal-code-ai] image failed: ${fails.join(",")}`);
+      return json(502, { error: "vca_media_failed" });
+    }
+
+    if (action === "video") {
+      if (!mprompt) return json(400, { error: "empty_prompt" });
+      const fails: string[] = [];
+      for (const m of VCA_VIDEO_MODELS) {
+        try {
+          const r = await fetch("https://openrouter.ai/api/v1/videos", {
+            method: "POST",
+            headers: orHeaders,
+            signal: AbortSignal.timeout(30_000),
+            body: JSON.stringify({ ...videoRequestBody(m, mprompt), user: userId }),
+          });
+          if (!r.ok) {
+            fails.push(`${m.id}:${r.status}`);
+            await r.body?.cancel();
+            continue;
+          }
+          const d = await r.json();
+          if (typeof d?.id !== "string") {
+            fails.push(`${m.id}:no_job`);
+            continue;
+          }
+          const usd = mediaCostUsd(m);
+          console.log(`[vertal-code-ai] video submitted ${m.id} (${m.model}) est_usd=${usd.toFixed(4)}`);
+          return json(202, {
+            job: await signJob(userId, d.id),
+            status: d.status ?? "pending",
+            model: { id: m.id, label: m.label, cost: "paid" },
+            estimate: { usd: Math.round(usd * 1e6) / 1e6, credits: retailCredits(usd), charged: false, seconds: m.seconds },
+          });
+        } catch (err) {
+          fails.push(`${m.id}:${err instanceof Error ? err.name : "err"}`);
+        }
+      }
+      console.warn(`[vertal-code-ai] video failed: ${fails.join(",")}`);
+      return json(502, { error: "vca_media_failed" });
+    }
+
+    const jobId = await verifyJob(userId, typeof body.job === "string" ? body.job : "");
+    if (!jobId) return json(404, { error: "job_not_found" });
+    if (action === "video_status") {
+      const r = await fetch(`https://openrouter.ai/api/v1/videos/${encodeURIComponent(jobId)}`, { headers: orHeaders, signal: AbortSignal.timeout(15_000) });
+      if (!r.ok) {
+        await r.body?.cancel();
+        return json(502, { error: "vca_media_failed", status: r.status });
+      }
+      const d = await r.json();
+      const status = typeof d?.status === "string" ? d.status : "unknown";
+      const signed = Array.isArray(d?.urls) && typeof d.urls[0] === "string" ? d.urls[0] : null;
+      const usd = typeof d?.usage?.cost === "number" ? d.usage.cost : null;
+      if (status === "completed" && usd !== null) console.log(`[vertal-code-ai] video done cost_usd=${usd}`);
+      return json(200, {
+        status,
+        url: status === "completed" ? signed : null,
+        needsProxy: status === "completed" && !signed,
+        error: ["failed", "cancelled", "expired"].includes(status) ? "vca_media_failed" : undefined,
+        estimate: usd !== null ? { usd, credits: retailCredits(usd), charged: false } : undefined,
+      });
+    }
+    // video_content: repassa os bytes (o link sem assinatura exige a nossa chave).
+    const r = await fetch(`https://openrouter.ai/api/v1/videos/${encodeURIComponent(jobId)}/content?index=0`, { headers: { Authorization: `Bearer ${key}` } });
+    if (!r.ok || !r.body) {
+      await r.body?.cancel();
+      return json(502, { error: "vca_media_failed", status: r.status });
+    }
+    return new Response(r.body, { headers: { ...corsHeaders, "Content-Type": r.headers.get("Content-Type") ?? "video/mp4", "Cache-Control": "private, max-age=3600" } });
+  }
+
   if (action !== "run") return json(400, { error: "unknown_action" });
 
   const mode: VcaMode = body.mode === "plan" ? "plan" : "build";
@@ -346,12 +514,17 @@ Deno.serve(async (req) => {
 
   const deadlineMs = Number(Deno.env.get("VERTAL_CODE_AI_DEADLINE_MS")) || 140_000;
   const deadline = Date.now() + deadlineMs;
-  const chain = buildChain(env(), {
+  const option = parseVcaOption(body.option);
+  if (option === "imagem" || option === "video") return json(400, { error: "use_media_action" });
+  const modelId = typeof body.modelId === "string" ? body.modelId.slice(0, 64) : null;
+  const chainOpts = {
     effort,
     needsVision: images.length > 0,
     promptTokens: Math.ceil(prompt.length / 3.5),
     liveFreeIds: await liveFreeIds(),
-  });
+  };
+  // Sem opção/modelo fixo: exatamente a cadeia de antes.
+  const chain = option === "auto" && !modelId ? buildChain(env(), chainOpts) : buildOptionChain(env(), { ...chainOpts, option, modelId });
   if (!chain.length) return json(503, { error: "no_model_configured" });
 
   const encoder = new TextEncoder();

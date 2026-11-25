@@ -120,6 +120,40 @@ do Gemini). A edge function ainda confere o catálogo ao vivo (cache de 1 h) e d
 | Vertal Própria | `vertal-coder` (Qwen2.5-Coder 7B no seu servidor) | Sem cota, mas lento em CPU | fallback |
 | Vertal Turbo (pago) | `deepseek/deepseek-v4.1-flash` (US$0,05 entrada / US$0,20 saída por 1M tokens) | Barato e bom em código | só com `ALLOW_PAID` |
 
+### 5.1 Opções Vertal (famílias de modelos) — desde 24/11/2026
+
+O usuário escolhe uma **opção Vertal** no seletor "Modelo Vertal" (campo `option` no `run`). "Vertal Auto" é a cadeia
+de sempre, sem mudança. Em **todas** as opções a LLM própria (`VERTAL_OLLAMA_URL`, e `_2` se houver) continua
+primeiro para pedidos pequenos; depois vêm os grátis da opção, depois os pagos da opção (só com
+`VERTAL_CODE_AI_ALLOW_PAID=true`), depois o provedor extra (se configurado) e, por último, a reserva `openrouter/free`.
+`modelId` (id Vertal) fixa um modelo da opção — útil para testar uma família.
+
+| Opção | Cadeia (ids internos → modelo) |
+|---|---|
+| Vertal Code | própria → `vca-code-free` particle-1:free → `vca-multi-free` gemma-4-31b:free → `vca-reason-free` nemotron-3-ultra:free → `vca-code-agile` qwen3-coder-30b-a3b ($0,07/$0,28) → `vca-code-pro` kimi-k2.7-code ($0,60/$3,00) → `vca-turbo-direct` deepseek-chat (API DeepSeek) → `vca-turbo-paid` deepseek-v4.1-flash → `vca-code-classic` qwen-2.5-coder-32b ($0,66/$1,00) → reserva |
+| Vertal Livre (só grátis) | própria → gemma-4-31b:free → `vca-light-free` gemma-4-26b-a4b:free → nemotron-3-ultra:free → nemotron-3.5-super-vl:free → `vca-omni-free` nemotron-3-nano-omni:free → `vca-swift-free` nemotron-3.5-lightning:free → particle-1:free → (Gemini/Groq se houver chave) → reserva |
+| Vertal Turbo | própria → deepseek-chat direto → `vca-turbo-v4` deepseek-v4-flash ($0,09/$0,18) → deepseek-v4.1-flash → `vca-open` llama-4-maverick ($0,35/$1,00) → `vca-open-lite` llama-4-scout ($0,10/$0,30) → reserva |
+| Vertal Pro | própria → `vca-pro` kimi-k2.6 ($0,65/$3,41) → kimi-k2.7-code → deepseek-chat → deepseek-v4.1-flash → reserva |
+| Vertal Imagem | `vca-image` google/gemini-3.1-flash-lite-image (≈US$0,04/imagem) — ação `image` |
+| Vertal Vídeo | `vca-video` google/gemini-omni-1.2-flash, 4 s 360p (≈US$0,09) → `vca-video-alt` google/veo-3.1-lite 4 s 720p sem áudio — ações `video`/`video_status`/`video_content` |
+
+Preços em US$ por 1M tokens (entrada/saída), tabela do OpenRouter de 24/11/2026. Não existe Llama grátis no
+OpenRouter hoje, por isso Llama ficou no Turbo (pago). Cada modelo novo tem teto de saída por pedido
+(`maxOutputTokens`, 4–8K).
+
+**Preço de varejo** (só estimativa nos logs e na resposta de imagem/vídeo; a cobrança continua desligada):
+`créditos = (custo + US$0,05) × 1,5 ÷ US$0,03`.
+
+**Imagem e vídeo** ficam desligados por padrão: exigem `VERTAL_CODE_AI_MEDIA_ENABLED=true` + `ALLOW_PAID` +
+`OPENROUTER_API_KEY`, e continuam atrás da lista de liberação. O vídeo é assíncrono: `video` devolve um `job`
+assinado (HMAC com o usuário), `video_status` consulta e devolve o link assinado do provedor; quando não há link,
+`video_content` repassa os bytes.
+
+**Provedor extra OpenAI-compatível** (opcional, por segredo): `VERTAL_EXTRA_PROVIDER_URL` (https, base `/v1`),
+`VERTAL_EXTRA_PROVIDER_KEY`, `VERTAL_EXTRA_PROVIDER_MODELS` (ids por vírgula), `VERTAL_EXTRA_PROVIDER_COST`
+(`free` padrão | `paid`), `VERTAL_EXTRA_PROVIDER_CONTEXT`. Entra depois dos grátis e antes dos pagos. Serve, por ex.,
+para o catálogo da NVIDIA (`https://integrate.api.nvidia.com/v1`) ou o Ollama Cloud (`https://ollama.com/v1`).
+
 Limites oficiais dos planos grátis (fontes abaixo, lidas em 24/11/2026):
 
 - **OpenRouter `:free`**: 20 pedidos/min; **50 pedidos/dia** se a conta comprou menos de 10 créditos na vida;
