@@ -73,7 +73,7 @@ Todos pedem também `openid profile email offline_access User.Read` e ganham a a
 - Teams não funciona com conta Microsoft pessoal (a API do Teams é só de trabalho/escola).
 
 ## Google Ads, AdMob e AdSense (nov/2026)
-Apps no motor (fork): `google-ads`, `google-admob`, `google-adsense` (helper `helpers/google-oauth.js`).
+Apps no motor (fork): `google-ads`, `google-admob`, `google-adsense` (helper `helpers/google-oauth.js`); fork PR #9, vertaldev PR #252.
 Mesmo cliente OAuth dos apps Google ("Vertal Fluxos", projeto Cloud `parabolic-eon-462823-g2`), segredos
 `FLUXOS_OAUTH_GOOGLE_ID` / `_SECRET`. Retornos: `https://vertal.dev/fluxos/oauth/google-ads`, `/google-admob`, `/google-adsense`.
 APIs ativadas no projeto: Google Ads API, AdMob API, AdSense Management API.
