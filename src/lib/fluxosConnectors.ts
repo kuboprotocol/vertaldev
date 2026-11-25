@@ -118,6 +118,7 @@ export const FLUXOS_SHARED_APPS: Record<string, string> = {
 const FLUXOS_APP_LOGOS: Record<string, string> = {
   airbrake: '/connectors/airbrake.png',
   airtable: '/connectors/airtable.png',
+  asana: '/connectors/asana.png',
   anthropic: '/connectors/anthropic.png',
   appwrite: '/connectors/appwrite.png',
 }
