@@ -1,0 +1,73 @@
+// Trecho para app/build.gradle.kts do app Android Vertal Node.
+//
+// Um flavor por provedor: cada APK leva UM SDK de compartilhamento de banda só (sem conflito nem
+// problema de exclusividade). Escolha com -PNODE_SDK_PROVIDER=honeygain|cashraven (ou a env
+// NODE_SDK_PROVIDER) ou rode a task do flavor: assembleHoneygainRelease / assembleCashravenRelease.
+// pawns / bright / infatica / earnfm: aguardando aprovação dos parceiros (sem flavor ainda).
+//
+// Chaves: uma por provedor, do app ANDROID (diferente da desktop), em ~/.gradle/gradle.properties
+// ou variável de ambiente — nunca no repositório:
+//   HONEYGAIN_API_KEY_ANDROID (ou HONEYGAIN_API_KEY, legado), CASHRAVEN_API_KEY_ANDROID
+//   VERTAL_SUPABASE_URL, VERTAL_SUPABASE_ANON_KEY
+
+fun prop(name: String): String = (project.findProperty(name) ?: System.getenv(name) ?: "").toString()
+
+val nodeSdkProvider = prop("NODE_SDK_PROVIDER").ifBlank { "honeygain" }.lowercase()
+
+android {
+    compileSdk = 34 // Cash Raven exige compile/targetSdk 34
+    defaultConfig {
+        buildConfigField("String", "VERTAL_SUPABASE_URL", "\"${prop("VERTAL_SUPABASE_URL")}\"")
+        buildConfigField("String", "VERTAL_SUPABASE_ANON_KEY", "\"${prop("VERTAL_SUPABASE_ANON_KEY")}\"")
+    }
+    flavorDimensions += "nodeSdk"
+    productFlavors {
+        create("honeygain") {
+            dimension = "nodeSdk"
+            minSdk = 21 // mínimo do Honeygain SDK
+            buildConfigField(
+                "String", "NODE_SDK_API_KEY",
+                "\"${prop("HONEYGAIN_API_KEY_ANDROID").ifBlank { prop("HONEYGAIN_API_KEY") }}\""
+            )
+        }
+        create("cashraven") {
+            dimension = "nodeSdk"
+            minSdk = 24 // mínimo do Cash Raven SDK 4.1.4
+            buildConfigField("String", "NODE_SDK_API_KEY", "\"${prop("CASHRAVEN_API_KEY_ANDROID")}\"")
+        }
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17 // Cash Raven: JDK 17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    buildFeatures { buildConfig = true }
+}
+
+// Só o flavor escolhido é montado: evita compilar (e precisar do binário de) outro SDK.
+androidComponents {
+    beforeVariants { variant ->
+        if (variant.productFlavors.none { it.second == nodeSdkProvider }) variant.enable = false
+    }
+}
+
+// settings.gradle.kts → dependencyResolutionManagement.repositories:
+//   maven { url = uri("https://cashraven-downloads.nyc3.digitaloceanspaces.com/maven") }
+
+dependencies {
+    // Comuns (manager + heartbeat)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // Honeygain: hgsdk.aar do dashboard (scripts/fetch-sdk.sh honeygain android), NÃO commitado.
+    "honeygainImplementation"(files("libs/hgsdk.aar"))
+    "honeygainImplementation"("org.msgpack:msgpack-core:0.9.11")
+    "honeygainImplementation"("com.google.protobuf:protobuf-javalite:3.25.3")
+
+    // Cash Raven 4.1.4 (Maven da Cash Raven). Offline: -PCASHRAVEN_OFFLINE=1 usa libs/cashraven/*.aar.
+    if (prop("CASHRAVEN_OFFLINE") == "1") {
+        "cashravenImplementation"(fileTree("libs/cashraven") { include("*.aar") })
+    } else {
+        "cashravenImplementation"("io.cashraven:cr-sdk:4.1.4")
+    }
+    "cashravenImplementation"("net.java.dev.jna:jna:5.14.0@aar")
+}

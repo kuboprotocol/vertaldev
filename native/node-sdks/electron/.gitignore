@@ -1,0 +1,12 @@
+# Pacotes dos SDKs dos parceiros (Honeygain .tgz, Cash Raven cr-sdk-electron.zip e o core nativo):
+# baixar do portal de cada parceiro (../scripts/fetch-sdk.sh). Nunca commitar.
+vendor/*
+!vendor/.gitkeep
+*.tgz
+*.zip
+*.dll
+*.dylib
+*.so
+node_modules/
+.env
+.env.*

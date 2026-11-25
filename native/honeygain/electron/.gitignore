@@ -1,4 +1,0 @@
-# Pacote do Honeygain SDK: baixar do dashboard (scripts/fetch-sdk.sh). Nunca commitar.
-vendor/
-*.tgz
-node_modules/

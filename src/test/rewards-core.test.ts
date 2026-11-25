@@ -3,6 +3,8 @@ import {
   honeygainConfig,
   isValidNonce,
   newNonce,
+  nodeConfig,
+  nodeRewardKey,
   parseHeartbeat,
   rewardDay,
   rewardedVideoConfig,
@@ -26,6 +28,16 @@ describe('rewardsCore — config', () => {
     expect(c.cooldownSeconds).toBe(60)
     expect(honeygainConfig(env({ HONEYGAIN_NODE_DAILY_CREDITS: '0' })).dailyAmount).toBe(0)
     expect(rewardedVideoConfig(env({ REWARDED_VIDEO_CREDITS: '1.5' })).amount).toBe(1)
+  })
+
+  it('Vertal Node: padrões, nome antigo do env e provedores liberados', () => {
+    expect(nodeConfig(env({}))).toEqual({ dailyAmount: 2, creditPerProvider: false, enabledProviders: ['honeygain', 'cashraven'] })
+    expect(nodeConfig(env({ HONEYGAIN_NODE_DAILY_CREDITS: '3' })).dailyAmount).toBe(3)
+    expect(nodeConfig(env({ HONEYGAIN_NODE_DAILY_CREDITS: '3', VERTAL_NODE_DAILY_CREDITS: '5' })).dailyAmount).toBe(5)
+    expect(nodeConfig(env({ VERTAL_NODE_CREDIT_PER_PROVIDER: 'true' })).creditPerProvider).toBe(true)
+    expect(nodeConfig(env({ VERTAL_NODE_CREDIT_PER_PROVIDER: 'talvez' })).creditPerProvider).toBe(false)
+    expect(nodeConfig(env({ VERTAL_NODE_PROVIDERS: ' CashRaven, foo ,cashraven' })).enabledProviders).toEqual(['cashraven'])
+    expect(nodeConfig(env({ VERTAL_NODE_PROVIDERS: 'foo' })).enabledProviders).toEqual(['honeygain', 'cashraven'])
   })
 })
 
@@ -80,8 +92,24 @@ describe('rewardsCore — status do vídeo premiado', () => {
 
 describe('rewardsCore — heartbeat', () => {
   it('aceita um corpo válido', () => {
-    const r = parseHeartbeat({ device_id: 'desk-1234abcd', platform: 'desktop', opted_in: true, running: false })
-    expect(r).toEqual({ ok: true, value: { device_id: 'desk-1234abcd', platform: 'desktop', app_version: null, opted_in: true, running: false } })
+    const r = parseHeartbeat({ device_id: 'desk-1234abcd', platform: 'desktop', provider: 'cashraven', opted_in: true, running: false })
+    expect(r).toEqual({
+      ok: true,
+      value: { device_id: 'desk-1234abcd', platform: 'desktop', provider: 'cashraven', app_version: null, opted_in: true, running: false },
+    })
+  })
+
+  it('sem provider = honeygain (apps antigos)', () => {
+    const r = parseHeartbeat({ device_id: 'andr-1234abcd', platform: 'android', opted_in: true, running: true })
+    expect(r.ok && r.value.provider).toBe('honeygain')
+  })
+
+  it('recusa provedor desconhecido ou desligado', () => {
+    const base = { device_id: 'desk-1234abcd', platform: 'desktop', opted_in: true, running: true }
+    expect(parseHeartbeat({ ...base, provider: 'foo' })).toEqual({ ok: false, error: 'invalid_provider' })
+    expect(parseHeartbeat({ ...base, provider: 'pawns' })).toEqual({ ok: false, error: 'provider_disabled' })
+    expect(parseHeartbeat({ ...base, provider: 'cashraven' }, ['honeygain'])).toEqual({ ok: false, error: 'provider_disabled' })
+    expect(parseHeartbeat({ ...base, provider: 'pawns' }, ['honeygain', 'pawns']).ok).toBe(true)
   })
 
   it('recusa campos inválidos', () => {
@@ -89,6 +117,13 @@ describe('rewardsCore — heartbeat', () => {
     expect(parseHeartbeat({ device_id: 'x', platform: 'desktop', opted_in: true, running: true })).toEqual({ ok: false, error: 'invalid_device_id' })
     expect(parseHeartbeat({ device_id: 'desk-1234abcd', platform: 'ios', opted_in: true, running: true })).toEqual({ ok: false, error: 'invalid_platform' })
     expect(parseHeartbeat({ device_id: 'desk-1234abcd', platform: 'android', opted_in: 'yes', running: true })).toEqual({ ok: false, error: 'invalid_state' })
+  })
+
+  it('chave do crédito: 1x por dia para todos os provedores, ou 1x por provedor se configurado', () => {
+    expect(nodeRewardKey('2026-11-24', 'honeygain', false)).toBe(nodeRewardKey('2026-11-24', 'cashraven', false))
+    expect(nodeRewardKey('2026-11-24', 'honeygain', false)).toBe('vertal_node:2026-11-24')
+    expect(nodeRewardKey('2026-11-24', 'cashraven', true)).toBe('vertal_node:cashraven:2026-11-24')
+    expect(nodeRewardKey('2026-11-24', 'honeygain', true)).not.toBe(nodeRewardKey('2026-11-24', 'cashraven', true))
   })
 
   it('soma créditos do ledger', () => {
