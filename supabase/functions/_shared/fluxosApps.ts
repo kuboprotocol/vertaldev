@@ -91,6 +91,8 @@ export const META_APPS = new Set(["facebook", "instagram", "whatsapp", "meta-ads
 export function oauthSecretGroup(app: string): string {
   if (app === "gmail" || app === "youtube" || app.startsWith("google-")) return "GOOGLE";
   if (META_APPS.has(app)) return "META";
+  // Outlook, Microsoft 365 (OneDrive e To Do) e Teams usam um app só do Microsoft Entra ("Vertal Dev").
+  if (app.startsWith("microsoft-")) return "MICROSOFT";
   return app.toUpperCase().replace(/-/g, "_");
 }
 
