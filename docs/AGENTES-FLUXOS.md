@@ -16,7 +16,9 @@ Nenhuma Edge Function nova: tudo passa pelo `creative-router`.
      `X-Vertal-Agent-Token` e o payload `{op:"run", app, kind, key, parameters}`
      (`no_merge: true`, `emit_events: true`, `parse_body: true`).
 - `parameters` aceita Liquid (`{{ title }}`) com dados do evento que chega ao agente.
-- A resposta (JSON) vira um **evento** do agente, que alimenta outros agentes ou um fluxo.
+- A resposta (JSON) vira um **evento** do agente, que alimenta outros agentes ou um fluxo:
+  `body.ok`, `body.result` (texto resumido) e `body.data` (objeto do app, até 20 mil caracteres;
+  ex.: `{{ body.data.output }}`). Só o cabeçalho `Content-Type` entra no evento.
 - O `creative-router` (cabeçalho `X-Vertal-Agent-Token`, `handleAgentBridge`) aceita só
   `status` / `describe` / `run` e chama `handleFluxosApps` com o usuário do token. **Escopo**: o
   usuário vem só do token assinado; a conexão usada é a linha `(user_id, app_key)` dele. Nada de
@@ -37,6 +39,8 @@ Nenhuma Edge Function nova: tudo passa pelo `creative-router`.
 - Continua valendo `connect_to_automatisch` (PostAgent → gatilho Webhook do fluxo).
 
 **Fluxos → Agentes**
+- No campo “Evento (JSON)” da ação, prefira variáveis com texto simples (ex.: `body.data.output`
+  do agente) — um valor com aspas quebra o JSON e o evento chega como `{"mensagem": "..."}`.
 - Ações novas no app **Vertal**: **“Enviar para Vertal Agentes”** (`sendToAgents`: evento JSON para
   um agente receptor/webhook) e **“Rodar um agente do Vertal Agentes”** (`runAgent`).
 - O motor chama o corretor (`X-Vertal-Fluxos-Key`, chave `vfk1` do usuário) com as ops

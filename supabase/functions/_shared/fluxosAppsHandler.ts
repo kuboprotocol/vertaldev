@@ -223,5 +223,8 @@ export async function handleFluxosApps(
   }
   log(user, op.app, "run", true, `${op.kind} ${op.key}${source === "vertal_agentes" ? " (Vertal Agentes)" : ""}`);
   const payload = op.kind === "trigger" ? r.data.items : r.data.data;
-  return json(200, { ok: true, result: compactResult(payload) });
+  // Agentes recebem também o objeto (até 20 mil caracteres) para usar campos no Liquid
+  // ({{ body.data.output }}) sem ter de desmontar o texto do result.
+  const raw = source === "vertal_agentes" && JSON.stringify(payload ?? null).length <= 20_000 ? { data: payload ?? null } : {};
+  return json(200, { ok: true, result: compactResult(payload), ...raw });
 }
