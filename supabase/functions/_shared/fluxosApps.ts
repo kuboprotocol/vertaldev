@@ -84,9 +84,13 @@ export function parseFluxosOp(raw: unknown): FluxosOp | null {
   }
 }
 
+/** Facebook, Instagram, WhatsApp e Meta Ads usam um app só da Meta ("Vertal Dev"). */
+export const META_APPS = new Set(["facebook", "instagram", "whatsapp", "meta-ads"]);
+
 /** Nome do grupo de segredos OAuth do app (apps Google usam um cliente só). */
 export function oauthSecretGroup(app: string): string {
   if (app === "gmail" || app === "youtube" || app.startsWith("google-")) return "GOOGLE";
+  if (META_APPS.has(app)) return "META";
   return app.toUpperCase().replace(/-/g, "_");
 }
 
@@ -115,6 +119,7 @@ export function oauthClientFields(app: string): { id: string; secret?: string } 
  * já com os nomes de campo do motor. null quando o Vertal não tem cliente registrado.
  */
 export function platformOAuthData(app: string, env: (k: string) => string | undefined): Record<string, string> | null {
+  if (app === "ebay") return ebayOAuthData(env);
   const g = oauthSecretGroup(app);
   const id = env(`FLUXOS_OAUTH_${g}_ID`);
   const secret = env(`FLUXOS_OAUTH_${g}_SECRET`);
@@ -127,7 +132,26 @@ export function platformOAuthData(app: string, env: (k: string) => string | unde
     if (!bot) return null;
     out.botToken = bot;
   }
+  if (META_APPS.has(app)) {
+    // Facebook Login for Business: configuração por conector (opcional).
+    const config = env(`FLUXOS_OAUTH_${app.toUpperCase().replace(/-/g, "_")}_CONFIG`);
+    if (config) out.configId = config;
+  }
   return out;
+}
+
+/**
+ * eBay: o retorno do OAuth é o RuName (não a URL). Produção quando há
+ * FLUXOS_OAUTH_EBAY_ID/_SECRET/_RUNAME; senão sandbox (FLUXOS_OAUTH_EBAY_SANDBOX_*).
+ */
+export function ebayOAuthData(env: (k: string) => string | undefined): Record<string, string> | null {
+  for (const [prefix, environment] of [["FLUXOS_OAUTH_EBAY", "production"], ["FLUXOS_OAUTH_EBAY_SANDBOX", "sandbox"]] as const) {
+    const clientId = env(`${prefix}_ID`);
+    const clientSecret = env(`${prefix}_SECRET`);
+    const ruName = env(`${prefix}_RUNAME`);
+    if (clientId && clientSecret && ruName) return { clientId, clientSecret, ruName, environment };
+  }
+  return null;
 }
 
 export interface FluxosArg {
