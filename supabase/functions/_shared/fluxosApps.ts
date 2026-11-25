@@ -100,6 +100,11 @@ export type WhatsAppTestResult =
   | { ok: true; id: string; displayPhoneNumber: string | null; verifiedName: string | null; qualityRating: string | null; wabaName: string | null }
   | { ok: false; error: "missing_fields" | "invalid_id" | "graph_error" | "unreachable"; fields?: string[]; code?: number; message?: string };
 
+interface GraphBody {
+  id?: string; name?: string; display_phone_number?: string; verified_name?: string; quality_rating?: string;
+  error?: { code?: number; message?: string };
+}
+
 /** Dicas para os erros mais comuns do Graph ao testar o token. */
 export function whatsappErrorHint(code: number | undefined): string | null {
   switch (code) {
@@ -132,7 +137,7 @@ export async function whatsappTest(fields: Record<string, string>, fetchImpl: ty
       headers: { Authorization: `Bearer ${token}` },
       ...(typeof AbortSignal.timeout === "function" ? { signal: AbortSignal.timeout(15_000) } : {}),
     });
-    const data = await res.json().catch(() => null) as any;
+    const data = await res.json().catch(() => null) as GraphBody | null;
     return { ok: res.ok, data };
   };
   try {
@@ -285,9 +290,12 @@ export function describeForAgent(def: FluxosAppDef): string {
   return lines.join("\n").slice(0, 6000);
 }
 
+const ANSI_COLORS = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+
 /** Tira o nome do motor de mensagens que vão para o usuário (white-label). */
 export function whiteLabel(text: string): string {
-  return text.replace(/automatisch/gi, "Vertal Fluxos").replace(/huginn/gi, "Vertal Agentes");
+  // O log do motor colore a mensagem do erro (códigos ANSI); tira antes de mostrar.
+  return text.replace(ANSI_COLORS, "").replace(/automatisch/gi, "Vertal Fluxos").replace(/huginn/gi, "Vertal Agentes");
 }
 
 /** Resultado de ação/busca enxuto para o chat (DADOS). */

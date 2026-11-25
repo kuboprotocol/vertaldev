@@ -10,7 +10,7 @@ vi.mock('@/integrations/supabase/client', () => ({
 }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
-import { parseFluxosOp, whatsappTest, whatsappErrorHint } from '../../supabase/functions/_shared/fluxosApps'
+import { parseFluxosOp, whatsappTest, whatsappErrorHint, whiteLabel } from '../../supabase/functions/_shared/fluxosApps'
 import { fluxosAppName, fluxosAppsInConversation } from '../../supabase/functions/_shared/chatAgent'
 import { validateWhatsAppToken, waLang, waTestErrorText, WA_UI } from '@/lib/fluxos/whatsappToken'
 import { WhatsAppConnectPanel } from '@/components/connectors/WhatsAppConnectPanel'
@@ -50,6 +50,9 @@ describe('whatsappTest (servidor)', () => {
       .mockResolvedValueOnce(jsonRes(200, { id: '99999', name: 'Minha WABA' }))
     const r = await whatsappTest({ accessToken: 't', phoneNumberId: '123456789', wabaId: '99999' }, f as unknown as typeof fetch)
     expect(r).toMatchObject({ ok: true, wabaName: 'Minha WABA' })
+  })
+  it('tira as cores ANSI que o log do motor põe na mensagem de erro', () => {
+    expect(whiteLabel('\u001b[31mThe access token is invalid (Meta 190)\u001b[39m')).toBe('The access token is invalid (Meta 190)')
   })
   it('op "test" só existe para whatsapp-cloud', () => {
     expect(parseFluxosOp({ op: 'test', app: 'whatsapp-cloud', fields: { accessToken: 'x', phoneNumberId: '1' } }))
