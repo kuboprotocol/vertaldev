@@ -28,7 +28,12 @@ const BUILDER_SCHEDULES: Array<{ value: string; label: string }> = [
 ]
 
 const SHARED_NAMES: Record<string, string> = { gmail: 'Gmail', slack: 'Slack', github: 'GitHub', stripe: 'Stripe', discord: 'Discord', spotify: 'Spotify' }
-const appLabel = (key: string) => FLUXOS_NATIVE_APPS.find((a) => a.app === key)?.name ?? SHARED_NAMES[key] ?? key
+/** Apps do Vertal Fluxos que não usam login: servem para qualquer usuário, sem conectar nada. */
+const NO_LOGIN_APPS: Array<{ app_key: string; name: string }> = [
+  { app_key: 'formatter', name: 'Formatter (não precisa conectar)' },
+]
+const appLabel = (key: string) =>
+  NO_LOGIN_APPS.find((a) => a.app_key === key)?.name ?? FLUXOS_NATIVE_APPS.find((a) => a.app === key)?.name ?? SHARED_NAMES[key] ?? key
 
 const selectCls = 'w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm'
 
@@ -52,7 +57,11 @@ export function FluxosAgentBuilder({ agents, onCreated }: { agents: BuilderAgent
     const r = await callFluxosApps<{ connections?: Conn[] }>({ op: 'status' })
     setLoading(false)
     if (!r.ok) return setNote(r.message)
-    setConns((r.data?.connections ?? []).filter((c) => c.status === 'connected'))
+    const connected = (r.data?.connections ?? []).filter((c) => c.status === 'connected')
+    setConns([
+      ...connected,
+      ...NO_LOGIN_APPS.filter((n) => !connected.some((c) => c.app_key === n.app_key)).map((n) => ({ app_key: n.app_key, status: 'connected' })),
+    ])
   }
 
   const pickApp = async (key: string) => {
@@ -116,9 +125,9 @@ export function FluxosAgentBuilder({ agents, onCreated }: { agents: BuilderAgent
         que outros agentes ou um fluxo podem usar.
       </p>
       {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-      {conns && conns.length === 0 && (
+      {conns && conns.every((c) => NO_LOGIN_APPS.some((n) => n.app_key === c.app_key)) && (
         <p className="text-xs">
-          Nenhum app conectado ainda. <Link className="underline" to="/connectors">Conectar em Conectores</Link>
+          Nenhum app com login conectado ainda. <Link className="underline" to="/connectors">Conectar em Conectores</Link>
         </p>
       )}
       {conns && conns.length > 0 && (

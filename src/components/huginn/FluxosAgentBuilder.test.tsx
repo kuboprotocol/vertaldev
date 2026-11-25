@@ -36,6 +36,7 @@ describe('FluxosAgentBuilder', () => {
     fireEvent.click(screen.getByTestId('fluxos-agent-open'));
     await waitFor(() => expect(screen.getByLabelText('App conectado')).toBeTruthy());
     expect(screen.queryByText('Notion')).toBeNull();
+    expect(screen.getByText('Formatter (não precisa conectar)')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('App conectado'), { target: { value: 'todoist' } });
     await waitFor(() => expect(screen.getByLabelText('Ação ou busca')).toBeTruthy());
     expect(fluxos).toHaveBeenNthCalledWith(2, { op: 'describe', app: 'todoist' });
@@ -50,5 +51,15 @@ describe('FluxosAgentBuilder', () => {
     });
     await waitFor(() => expect(onCreated).toHaveBeenCalled());
     expect(document.body.textContent).not.toMatch(/railway|Huginn|Automatisch/i);
+  });
+
+  it('oferece o Formatter (sem login) mesmo sem nenhum app conectado', async () => {
+    fluxos.mockResolvedValueOnce({ ok: true, message: 'ok', data: { connections: [] } });
+    renderIt();
+    fireEvent.click(screen.getByTestId('fluxos-agent-open'));
+    await waitFor(() => expect(screen.getByLabelText('App conectado')).toBeTruthy());
+    const options = Array.from((screen.getByLabelText('App conectado') as HTMLSelectElement).options).map((o) => o.value);
+    expect(options).toEqual(['', 'formatter']);
+    expect(screen.getByText(/Nenhum app com login conectado/)).toBeTruthy();
   });
 });
