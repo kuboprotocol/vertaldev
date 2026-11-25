@@ -46,6 +46,9 @@ describe('Vertal Growth · modelo de negócio', () => {
   it('"doar" solto numa loja não vira ONG', () => {
     expect(inferBusinessModel('Loja de roupas para você. Compre e ganhe frete. Doar roupas usadas.').model).not.toBe('nonprofit');
   });
+  it('jogo que cita "doação" duas vezes não vira ONG (caso real do teste de fumaça)', () => {
+    expect(inferBusinessModel('Jogo de navegador. Faça uma doação ao prefeito no jogo. Missão: doação de votos. Empresas, empresas e mais empresas no mapa.').model).not.toBe('nonprofit');
+  });
   it('lê nome, descrição e site publicado do projeto', () => {
     const r = readProject({
       id: 'p', title: 'Crie um app de treino', is_published: true, published_url: 'https://treino.pages.dev',
