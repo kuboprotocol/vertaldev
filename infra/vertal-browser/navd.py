@@ -16,6 +16,8 @@ O Worker do vertal.dev é o único cliente:
   GET  /cookies                      exporta os cookies (CDP Storage.getCookies)
   GET  /pending                      pedidos pendentes (com texto da página, sem screenshot) — auditoria
   GET  /audio                        áudio do navegador em MP3 (stream; ffmpeg no monitor do PulseAudio)
+  POST /media     {action:"pause"}   pausa vídeo/áudio da aba (opção "Tocar no meu aparelho");
+                                     devolve {paused, currentTime}. Script fixo, sem JS do cliente.
 
 Regras de segurança aplicadas aqui (as mesmas do núcleo TS navigatorCore.ts):
   * Gate de pagamento: todo clique/tecla cujo alvo pareça pagar/comprar/confirmar
@@ -1527,9 +1529,11 @@ async def errors(request: web.Request, handler):
 # monitor desse sink com ffmpeg e devolve MP3 em stream chunked. Só um ouvinte por
 # vez: um novo pedido derruba o anterior. O Worker é o único cliente (com o token).
 AUDIO_SOURCE = os.environ.get("NAVD_AUDIO_SOURCE", "vertal.monitor")
+# -fragment_size 4096 (~23 ms a 44,1 kHz estéreo s16): sem isso o PulseAudio usa o buffer
+# padrão (pode passar de 1 s) e o som chega bem atrasado em relação à tela.
 AUDIO_CMD = [
     "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
-    "-f", "pulse", "-i", AUDIO_SOURCE,
+    "-f", "pulse", "-fragment_size", "4096", "-i", AUDIO_SOURCE,
     "-ac", "2", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", "128k",
     "-flush_packets", "1", "-f", "mp3", "pipe:1",
 ]
@@ -1564,6 +1568,50 @@ async def audio(request: web.Request) -> web.StreamResponse:
     return resp
 
 
+# ─── Mídia da aba (opção "Tocar no meu aparelho") ──────────────────────────────
+# O usuário escolheu ouvir no próprio aparelho (player oficial embutido no painel):
+# pausamos o vídeo/áudio da aba na nuvem para não tocar duas vezes nem gastar CPU.
+# O script é FIXO (o cliente só escolhe a ação de uma lista), então o "evaluate
+# desligado" do agente continua valendo: nada de JS vindo de fora roda na página.
+MEDIA_JS = {
+    "pause": r"""
+(() => {
+  let paused = 0, t = 0;
+  for (const m of document.querySelectorAll('video, audio')) {
+    if (!m.paused) { paused++; t = Math.max(t, m.currentTime || 0); }
+    try { m.pause(); } catch (e) {}
+  }
+  return { paused, currentTime: Math.floor(t) };
+})()
+""",
+}
+
+
+def media_script(action: Any) -> str | None:
+    """Script da ação de mídia, ou None se a ação não estiver na lista."""
+    return MEDIA_JS.get(action) if isinstance(action, str) else None
+
+
+async def media(request: web.Request) -> web.Response:
+    if not authed(request):
+        return j({"ok": False, "error": "unauthorized"}, 401)
+    body = await request.json()
+    script = media_script((body or {}).get("action") if isinstance(body, dict) else None)
+    if not script:
+        return j({"ok": False, "error": "bad_action"}, 400)
+    target = await page_target()
+    if not target:
+        return j({"ok": True, "paused": 0, "currentTime": 0})
+    res = await cdp_call(target["webSocketDebuggerUrl"], "Runtime.evaluate", {"expression": script, "returnByValue": True}, timeout=8)
+    value = ((res or {}).get("result") or {}).get("value") or {}
+    try:
+        paused = max(0, int(value.get("paused", 0)))
+        current = max(0, min(int(value.get("currentTime", 0)), 24 * 3600))
+    except (TypeError, ValueError, AttributeError):
+        paused, current = 0, 0
+    return j({"ok": True, "paused": paused, "currentTime": current})
+
+
 def main() -> None:
     os.environ.update(TELEMETRY_OFF_ENV)
     app = web.Application(middlewares=[errors], client_max_size=4 * 1024 * 1024)
@@ -1571,7 +1619,7 @@ def main() -> None:
         web.get("/health", health), web.post("/init", init), web.post("/task", task), web.get("/events", events),
         web.post("/input", submit_input), web.post("/takeover", takeover), web.post("/release", release),
         web.post("/stop", stop), web.get("/cookies", cookies), web.get("/pending", pending_list),
-        web.get("/audio", audio),
+        web.get("/audio", audio), web.post("/media", media),
     ])
     signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
     web.run_app(app, host="0.0.0.0", port=PORT, access_log=None, print=None)

@@ -1,121 +1,19 @@
 // Componentes do Vertal Navigator extraídos do NavigatorPanel (fase 4) para serem
 // usados também no cartão do navegador dentro do chat do Vibe Code. O painel do
 // Vertal Chat continua com a mesma aparência e o mesmo comportamento.
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { CreditCard, Hand, Send, KeyRound, Loader2, MousePointerClick, Play, Power, ShieldAlert, ShieldCheck, Volume2, VolumeX, X } from 'lucide-react';
+import { useState } from 'react';
+import { CreditCard, Hand, Send, KeyRound, Loader2, MousePointerClick, Play, Power, ShieldAlert, ShieldCheck, X } from 'lucide-react';
 import type { NavigatorEvent, NavigatorPending } from '@/lib/navigator/navigatorCore';
-import { navigatorAudioUrl } from '@/lib/navigator/client';
 import {
   answerNavigator, releaseNavigator, startNavigator, stopNavigator, takeoverNavigator, type NavigatorState,
 } from '@/lib/navigator/store';
+import { NavigatorSoundControl } from './NavigatorSound';
 import { approvalCopy, hostOf, navBtn, navBtnSm, navInput, navigatorStepLines, navPrimary, navPrimarySm } from './navigatorUi';
 
-/**
- * Ouvir no celular o áudio que o navegador da nuvem está tocando (stream /audio via Worker).
- * O ticket é buscado antes do clique (prefetch), para o play() rodar dentro do gesto do
- * usuário, exigência do iOS. Se o stream cair, avisa e deixa tocar de novo.
- */
-export function NavigatorAudioButton({ sessionId, compact = false }: { sessionId: string | null | undefined; compact?: boolean }) {
-  const [on, setOn] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const wantOn = useRef(false);
-  const cached = useRef<{ sessionId: string; url: string; expiresAt: number } | null>(null);
+// O botão do som da nuvem mora em NavigatorSound.tsx; reexportado aqui para quem já importava daqui.
+export { NavigatorAudioButton } from './NavigatorSound';
 
-  const stop = useCallback(() => {
-    wantOn.current = false;
-    const el = audioRef.current;
-    if (el) {
-      el.pause();
-      el.removeAttribute('src');
-      el.load();
-    }
-    setOn(false);
-  }, []);
-
-  // Sessão trocou ou acabou: para o som e descarta o ticket.
-  useEffect(() => {
-    cached.current = null;
-    stop();
-  }, [sessionId, stop]);
-
-  // Pega o ticket antes do clique (ver comentário acima).
-  useEffect(() => {
-    if (!sessionId) return undefined;
-    let alive = true;
-    navigatorAudioUrl(sessionId)
-      .then((r) => {
-        if (alive && r.ok) cached.current = { sessionId, url: r.url, expiresAt: r.expiresAt };
-      })
-      .catch(() => undefined);
-    return () => { alive = false; };
-  }, [sessionId]);
-
-  const lost = () => {
-    if (!wantOn.current) return;
-    cached.current = null;
-    stop();
-    setError('O áudio parou. Toque em “Ouvir no celular” para reconectar.');
-  };
-
-  const toggle = async () => {
-    if (on || wantOn.current) {
-      stop();
-      return;
-    }
-    if (!sessionId || !audioRef.current) return;
-    setError(null);
-    wantOn.current = true;
-    let entry = cached.current;
-    if (!entry || entry.sessionId !== sessionId || entry.expiresAt - 30_000 <= Date.now()) {
-      setBusy(true);
-      const r = await navigatorAudioUrl(sessionId);
-      setBusy(false);
-      if (r.ok === false) {
-        wantOn.current = false;
-        setError(r.message);
-        return;
-      }
-      entry = { sessionId, url: r.url, expiresAt: r.expiresAt };
-      cached.current = entry;
-    }
-    const el = audioRef.current;
-    if (!el) return;
-    el.src = entry.url;
-    try {
-      await el.play();
-      setOn(true);
-    } catch {
-      // Bloqueado pelo navegador do celular: o toque seguinte libera o som.
-      wantOn.current = false;
-      el.removeAttribute('src');
-      el.load();
-      setError('Toque em “Ouvir no celular” de novo para liberar o som neste aparelho.');
-    }
-  };
-
-  const label = busy ? 'Conectando…' : on ? 'Parar áudio' : 'Ouvir no celular';
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <audio ref={audioRef} preload="none" onError={lost} onEnded={lost} />
-      <button
-        type="button"
-        onClick={() => void toggle()}
-        disabled={!sessionId || busy}
-        aria-pressed={on}
-        className={compact ? navBtnSm : navBtn}
-      >
-        {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : on ? <VolumeX className="h-4 w-4" aria-hidden /> : <Volume2 className="h-4 w-4" aria-hidden />}
-        {label}
-      </button>
-      {on && <span className={`text-white/80 ${compact ? 'text-[10px]' : 'text-xs'}`}>Tocando o áudio do navegador</span>}
-      {error && <span role="alert" className={`text-amber-300 ${compact ? 'text-[10px]' : 'text-xs'}`}>{error}</span>}
-    </div>
-  );
-}
-
-/** Tela ao vivo (noVNC em iframe) ou a última captura, com o botão de ouvir o áudio. */
+/** Tela ao vivo (noVNC em iframe) ou a última captura, com o controle de som. */
 export function NavigatorLiveFrame({ nav, className = 'aspect-[16/10] w-full', compact = false }: { nav: NavigatorState; className?: string; compact?: boolean }) {
   const frameUrl = nav.takeover && nav.controlUrl ? nav.controlUrl : nav.liveViewUrl;
   return (
@@ -143,7 +41,7 @@ export function NavigatorLiveFrame({ nav, className = 'aspect-[16/10] w-full', c
       )}
       {nav.sessionId && (
         <div className="border-t border-border/60 bg-background/80 px-3 py-2">
-          <NavigatorAudioButton sessionId={nav.sessionId} compact={compact} />
+          <NavigatorSoundControl nav={nav} compact={compact} />
         </div>
       )}
     </div>

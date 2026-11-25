@@ -208,3 +208,29 @@ class PaymentGateTests(unittest.TestCase):
         self.assertFalse(navd.looks_like_card_number("pedido 20261122 total 1990"))
         self.assertEqual(navd.approved_amount({"approve": True, "totalCents": 1990, "currency": "BRL"})["cents"], 1990)
         self.assertIsNone(navd.approved_amount(True))
+
+
+class AudioMediaTests(unittest.TestCase):
+    """Áudio (opção "Som da nuvem") e pausa da mídia (opção "Tocar no meu aparelho")."""
+
+    def test_media_only_whitelisted_actions(self):
+        self.assertIsNotNone(navd.media_script("pause"))
+        for bad in ("play", "eval", "", None, 1, {"x": 1}, "pause; alert(1)"):
+            self.assertIsNone(navd.media_script(bad), bad)
+
+    def test_media_script_is_fixed_and_only_pauses(self):
+        js = navd.media_script("pause")
+        self.assertIn(".pause()", js)
+        # Não toca, não lê cookies/armazenamento, não faz rede.
+        for forbidden in (".play(", "document.cookie", "localStorage", "fetch(", "XMLHttpRequest", "eval("):
+            self.assertNotIn(forbidden, js)
+
+    def test_audio_capture_low_latency_and_no_network(self):
+        cmd = navd.AUDIO_CMD
+        self.assertIn("-fragment_size", cmd)
+        self.assertEqual(cmd[-1], "pipe:1")
+        self.assertFalse(any(str(a).startswith(("http://", "https://", "rtmp://", "udp://")) for a in cmd))
+
+    def test_media_route_registered(self):
+        src = (HERE / "navd.py").read_text(encoding="utf-8")
+        self.assertIn('web.post("/media", media)', src)

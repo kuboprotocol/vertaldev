@@ -3,7 +3,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { NAVIGATOR_MESSAGES, type NavigatorEvent, type NavigatorPending, type NavigatorSettings, type NavigatorStatus } from './navigatorCore';
 
-export type NavigatorRoute = 'start' | 'task' | 'status' | 'input' | 'takeover' | 'release' | 'stop' | 'forget' | 'settings' | 'activity' | 'audio-ticket';
+export type NavigatorRoute = 'start' | 'task' | 'status' | 'input' | 'takeover' | 'release' | 'stop' | 'forget' | 'settings' | 'activity' | 'audio-ticket' | 'media';
 
 export interface NavigatorSessionSummary {
   id: string;
@@ -59,6 +59,9 @@ export interface NavigatorResponse {
   saveError?: string;
   /** /audio-ticket: ticket curto do stream de áudio (ver navigatorAudio.ts no Worker). */
   ticket?: string;
+  /** /media: quantos vídeos/áudios foram pausados na aba e o segundo em que estavam. */
+  paused?: number;
+  currentTime?: number;
 }
 
 const PRODUCTION_ORIGIN = 'https://vertal.dev';
@@ -83,6 +86,24 @@ export async function navigatorAudioUrl(sessionId: string): Promise<{ ok: true; 
   if (!res.ok || !res.ticket) return { ok: false, message: res.message ?? NAVIGATOR_MESSAGES.error };
   const expiresAt = res.expiresAt ? Date.parse(res.expiresAt) : Date.now() + 5 * 60_000;
   return { ok: true, url: `${navigatorApiBase()}/audio?ticket=${encodeURIComponent(res.ticket)}`, expiresAt };
+}
+
+/** Id do usuário logado (para lembrar a escolha de som por usuário neste aparelho). */
+export async function navigatorUserId(): Promise<string | null> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user?.id ?? null;
+}
+
+/**
+ * "Tocar no meu aparelho": pausa o vídeo/áudio da aba na nuvem. Devolve o segundo em que
+ * a mídia estava (para o player oficial continuar do mesmo ponto) ou a mensagem de erro.
+ */
+export async function pauseNavigatorMedia(sessionId: string): Promise<{ ok: true; paused: number; currentTime: number } | { ok: false; message: string }> {
+  const res = await callNavigator('media', { sessionId, action: 'pause' });
+  if (!res.ok) {
+    return { ok: false, message: res.detail === 'media_unsupported' ? 'Não consegui pausar a aba na nuvem (versão antiga do navegador). Ela pode continuar tocando sem som para você.' : (res.message ?? NAVIGATOR_MESSAGES.error) };
+  }
+  return { ok: true, paused: res.paused ?? 0, currentTime: res.currentTime ?? 0 };
 }
 
 /** Chama uma rota do Navigator. Sempre devolve o mesmo formato, mesmo se o HTTP falhar. */
