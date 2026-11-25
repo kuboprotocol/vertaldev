@@ -196,7 +196,7 @@ export async function postToChat(admin: Admin, task: Pick<TaskRow, "user_id" | "
   }
   if (!conversationId) {
     const { data, error } = await admin.from("creative_conversations").insert({
-      user_id: task.user_id, title: CHAT_CONVERSATION_TITLE, description: "Resultados das suas tarefas agendadas", model_used: "vertal-chat",
+      user_id: task.user_id, title: CHAT_CONVERSATION_TITLE, description: "Resultados das suas tarefas agendadas", model_used: "vertal-agent",
     }).select("id").single();
     if (error) { console.error("[scheduler] criar conversa falhou:", error.message); return null; }
     conversationId = data.id;
