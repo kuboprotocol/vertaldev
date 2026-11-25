@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- AndroidManifest.xml (src/main) do app Vertal Node. Comum a todos os provedores.
+     Permissões específicas de cada SDK ficam no manifest do flavor (src/<provedor>/). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 13+: notificação de serviço em primeiro plano (pedida em tempo de execução) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:name="dev.vertal.node.VertalNodeApp"
+        android:allowBackup="false"
+        android:icon="@drawable/ic_vertal_node"
+        android:label="Vertal Node"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.VertalNode">
+        <!-- Serviços do SDK vêm do .aar de cada provedor (manifest merge). Não declare outro. -->
+        <activity
+            android:name="dev.vertal.node.MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

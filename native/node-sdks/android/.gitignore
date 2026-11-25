@@ -1,0 +1,12 @@
+# Binários dos SDKs dos parceiros (Honeygain hgsdk.aar, Cash Raven offline, Bright bright_sdk.aar): baixar do portal de
+# cada parceiro (../scripts/fetch-sdk.sh). Nunca commitar. Chaves ficam em ~/.gradle/gradle.properties.
+app/libs/*.aar
+app/libs/*.zip
+app/libs/cashraven/
+app/libs/bright/
+local.properties
+
+# Build Gradle
+.gradle/
+build/
+app/build/

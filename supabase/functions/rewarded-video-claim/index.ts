@@ -1,0 +1,105 @@
+// Vídeo premiado (Google Ad Manager GPT rewarded) na página /shortlinks.
+//
+// Ações (query ?action= ou campo "action" no corpo):
+//   status -> estado do usuário (quantos hoje, cooldown, valor)
+//   start  -> emite um nonce de uso único ANTES do anúncio (recusa se em cooldown/limite)
+//   claim  -> { nonce } depois do rewardedSlotGranted; marca o nonce como usado e credita
+//
+// Idempotência: o nonce só credita uma vez (claim_rewarded_video trava e marca na mesma
+// transação; o crédito usa a chave "rewarded_video:<nonce>" em credit_transactions).
+// Cooldown e limite diário são conferidos de novo no Postgres, com o dia em America/Sao_Paulo.
+//
+// Env (todos opcionais): REWARDED_VIDEO_CREDITS (1), REWARDED_VIDEO_COOLDOWN_SECONDS (60),
+// REWARDED_VIDEO_DAILY_CAP (10), REWARDED_VIDEO_NONCE_TTL_SECONDS (1800).
+import { sanitizeError } from "../_shared/cors.ts";
+import { adminClient, authUserId, json, readJson, rewardsCors } from "../_shared/rewardsHttp.ts";
+import {
+  isValidNonce,
+  newNonce,
+  REWARDS_TZ,
+  rewardedVideoConfig,
+  rewardedVideoStatus,
+  type ClaimedSession,
+} from "../_shared/rewardsCore.ts";
+
+const CLAIM_ERRORS: Record<string, number> = {
+  invalid_nonce: 400,
+  nonce_expired: 410,
+  nonce_already_used: 409,
+  daily_cap_reached: 429,
+  cooldown: 429,
+};
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: rewardsCors });
+
+  try {
+    const userId = await authUserId(req);
+    if (!userId) return json({ error: "unauthorized" }, 401);
+
+    const body = await readJson(req);
+    const action = new URL(req.url).searchParams.get("action") || (body.action as string) || "status";
+    const cfg = rewardedVideoConfig((n) => Deno.env.get(n));
+    const admin = adminClient();
+
+    const loadStatus = async () => {
+      // 48h cobrem o dia corrente em São Paulo e o último resgate para o cooldown.
+      const since = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
+      const { data, error } = await admin
+        .from("rewarded_video_sessions")
+        .select("claimed_at, reward_day")
+        .eq("user_id", userId)
+        .not("claimed_at", "is", null)
+        .gte("claimed_at", since);
+      if (error) throw error;
+      return rewardedVideoStatus((data ?? []) as ClaimedSession[], Date.now(), cfg);
+    };
+
+    if (action === "status") {
+      return json(await loadStatus());
+    }
+
+    if (action === "start") {
+      if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+      const status = await loadStatus();
+      if (!status.can_watch) return json({ error: status.reason, ...status }, 429);
+
+      const nonce = newNonce();
+      const expiresAt = new Date(Date.now() + cfg.nonceTtlSeconds * 1000).toISOString();
+      const { error } = await admin
+        .from("rewarded_video_sessions")
+        .insert({ nonce, user_id: userId, expires_at: expiresAt });
+      if (error) throw error;
+      return json({ nonce, expires_at: expiresAt, ...status });
+    }
+
+    if (action === "claim") {
+      if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+      if (!isValidNonce(body.nonce)) return json({ error: "invalid_nonce" }, 400);
+
+      const { data, error } = await admin.rpc("claim_rewarded_video", {
+        _user_id: userId,
+        _nonce: body.nonce,
+        _amount: cfg.amount,
+        _cooldown_seconds: cfg.cooldownSeconds,
+        _daily_cap: cfg.dailyCap,
+        _tz: REWARDS_TZ,
+      });
+      if (error) throw error;
+      const result = data as { ok: boolean; error?: string; credits?: number };
+      const status = await loadStatus();
+      if (!result.ok) {
+        const code = result.error ?? "claim_failed";
+        return json({ error: code, ...status }, CLAIM_ERRORS[code] ?? 400);
+      }
+      return json({ success: true, credits_earned: result.credits, ...status });
+    }
+
+    return json({ error: "unknown_action" }, 400);
+  } catch (err) {
+    console.error("rewarded-video-claim error:", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("subscription_not_found")) return json({ error: "subscription_not_found" }, 409);
+    return json({ error: sanitizeError(err) }, 500);
+  }
+});

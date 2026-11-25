@@ -1,0 +1,17 @@
+{
+  "name": "@vertal/node-sdks-electron",
+  "private": true,
+  "version": "0.2.0",
+  "description": "Vertal Node (desktop) — camada de provedores de compartilhamento de banda para Electron. Os SDKs vêm dos portais dos parceiros e não são commitados (ver docs/NODE-SDKS.md).",
+  "main": "main.js",
+  "scripts": {
+    "sdk:honeygain": "bash ../scripts/fetch-sdk.sh honeygain electron && npm install --no-save ./vendor/honeygain-electron-sdk.tgz",
+    "sdk:cashraven": "bash ../scripts/fetch-sdk.sh cashraven electron && npm install --no-save ./vendor/cashraven-electron"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "peerDependencies": {
+    "electron": ">=28"
+  }
+}

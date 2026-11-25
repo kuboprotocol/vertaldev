@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Flavor bright (Bright SDK). O guia oficial não lista permissões nem serviços para o app declarar:
+     vêm do bright_sdk.aar por manifest merge (o SDK roda num processo próprio, sufixo srvh/srvj).
+     Conferir o manifest mesclado no primeiro build com o AAR. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />
