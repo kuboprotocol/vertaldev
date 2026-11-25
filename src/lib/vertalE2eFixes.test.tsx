@@ -32,27 +32,42 @@ describe('Prospector · busca de empresas no navegador (antes girava para sempre
 
   it('servidor do mapa pendurado → tenta o espelho dentro do prazo e devolve as empresas', async () => {
     const f = vi.fn(async (url: string, init?: RequestInit) => {
-      if (url.includes('overpass-api.de')) return hang(url, init);
+      if (url.includes('maps.mail.ru')) return hang(url, init);
       return json({ elements: [{ type: 'node', id: 1, tags: { name: 'Infotech Campinas', shop: 'computer' } }] });
     });
-    const els = await runMapQueryInBrowser('[out:json][timeout:25];', f as unknown as typeof fetch, { attemptMs: 30 });
+    const els = await runMapQueryInBrowser('[out:json][timeout:25];', f as unknown as typeof fetch, { attemptMs: 30, hedgeMs: 5 });
     expect(els).toEqual([{ type: 'node', id: 1, tags: { name: 'Infotech Campinas', shop: 'computer' } }]);
-    expect(f.mock.calls[1][0]).toContain('maps.mail.ru');
+    expect(f.mock.calls[0][0]).toContain('maps.mail.ru');
+    expect(f.mock.calls[1][0]).toContain('overpass-api.de');
   });
 
-  it('ICP da campanha "Vertal Company" (shop=computer, Campinas SP): geocodificador → área oficial do município', async () => {
+  it('ICP da campanha "Vertal Company" (shop=computer, Campinas SP): geocodificador → retângulo do município (consulta leve) primeiro', async () => {
     sessionStorage.clear();
     const bodies: string[] = [];
     const f = vi.fn(async (url: string, init?: RequestInit) => {
       if (url.startsWith('https://nominatim.openstreetmap.org/search')) return json(NOMINATIM);
+      if (url.includes('servicodados.ibge.gov.br')) return new Response('', { status: 503 });
       bodies.push(decodeURIComponent(String(init?.body ?? '')));
       return json({ elements: [{ type: 'node', id: 7, tags: { name: 'Abacenter Informática', shop: 'computer' } }] });
     });
     const r = await searchCompaniesInBrowser(ICP, f as unknown as typeof fetch);
     expect(r.elements).toHaveLength(1);
+    expect(r.via).toBe('região do município');
+    expect(bodies[0]).toContain('nwr["shop"="computer"]["name"](-23.060000,-47.240000,-22.720000,-46.810000)');
+    expect(bodies[0]).not.toContain('area(');
+  });
+
+  it('retângulo não responde → área oficial do município', async () => {
+    sessionStorage.clear();
+    const f = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.startsWith('https://nominatim')) return json(NOMINATIM);
+      if (url.includes('servicodados.ibge.gov.br')) return new Response('', { status: 503 });
+      const body = decodeURIComponent(String(init?.body ?? ''));
+      if (!body.includes('area(id:3600298227)')) return hang(url, init);
+      return json({ elements: [{ type: 'node', id: 9, tags: { name: 'Loja Área', shop: 'computer' } }] });
+    });
+    const r = await searchCompaniesInBrowser(ICP, f as unknown as typeof fetch, { totalMs: 2_000, attemptMs: 60, hedgeMs: 5 });
     expect(r.via).toBe('área do município');
-    expect(bodies[0]).toContain('area(id:3600298227)');
-    expect(bodies[0]).toContain('nwr["shop"="computer"]["name"](area.a)');
   });
 
   it('consulta por área não responde → retângulo do município, descartando outra cidade declarada', async () => {
@@ -83,11 +98,11 @@ describe('Prospector · busca de empresas no navegador (antes girava para sempre
     });
   });
 
-  it('geocodificador fora → busca o município pelo nome no próprio mapa', async () => {
+  it('Nominatim e IBGE fora → busca o município pelo nome no próprio mapa', async () => {
     sessionStorage.clear();
     const bodies: string[] = [];
     const f = vi.fn(async (url: string, init?: RequestInit) => {
-      if (url.startsWith('https://nominatim')) return new Response('', { status: 403 });
+      if (url.startsWith('https://nominatim') || url.includes('servicodados.ibge.gov.br')) return new Response('', { status: 403 });
       bodies.push(decodeURIComponent(String(init?.body ?? '')));
       return json({ elements: [] });
     });
