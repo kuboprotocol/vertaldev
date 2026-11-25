@@ -1,0 +1,16 @@
+# Modo túnel (Cloudflare Tunnel já existente na VM): HTTPS fica no Cloudflare,
+# o proxy só escuta em 127.0.0.1 e continua exigindo o token. Nada abre nas portas 80/443.
+services:
+  ollama:
+    cpu_shares: 256          # sob disputa, E2B/Navigator (peso 1024) têm prioridade
+    oom_score_adj: 800       # se faltar RAM, o kernel mata o modelo antes do E2B
+    environment:
+      - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-30m}
+      - OLLAMA_CONTEXT_LENGTH=${OLLAMA_CONTEXT_LENGTH:-8192}
+  proxy:
+    ports: !override
+      - "127.0.0.1:${VERTAL_OLLAMA_LOCAL_PORT:-11435}:80"
+    environment:
+      - VERTAL_OLLAMA_DOMAIN=:80
