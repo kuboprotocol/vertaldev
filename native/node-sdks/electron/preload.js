@@ -21,6 +21,12 @@ const vertalNode = {
   onHeartbeat: (callback) => {
     ipcRenderer.on("vertal-node:heartbeat-result", (_event, result) => callback(result));
   },
+  /** Deep link vertalnode://open (do site, via vertal.js): { appId, ref, source }. Só informativo. */
+  onDeepLink: (callback) => {
+    ipcRenderer.on("vertal-node:deep-link", (_event, link) => callback(link));
+  },
+  /** Último deep link recebido antes do renderer montar (ou null). */
+  pendingDeepLink: () => ipcRenderer.invoke("vertal-node:deep-link-pending"),
 };
 
 contextBridge.exposeInMainWorld("vertalNode", vertalNode);
