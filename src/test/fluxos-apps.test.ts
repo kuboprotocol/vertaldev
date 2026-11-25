@@ -106,3 +106,24 @@ describe('retorno do OAuth', () => {
     expect(oauthReturnParams('?code=abc&state=s', '#access_token=t&state=h')).toEqual({ access_token: 't', state: 's', code: 'abc' })
   })
 })
+
+describe('clientes OAuth de anúncios, redes e marketplaces', () => {
+  it('Facebook, Instagram, WhatsApp e Meta Ads usam o app da Meta', () => {
+    for (const app of ['facebook', 'instagram', 'whatsapp', 'meta-ads']) expect(oauthSecretGroup(app)).toBe('META')
+    expect(oauthSecretGroup('tiktok-ads')).toBe('TIKTOK_ADS')
+    expect(oauthSecretGroup('amazon-ads')).toBe('AMAZON_ADS')
+    const e = env({ FLUXOS_OAUTH_META_ID: 'a', FLUXOS_OAUTH_META_SECRET: 's', FLUXOS_OAUTH_META_ADS_CONFIG: 'cfg' })
+    expect(platformOAuthData('meta-ads', e)).toEqual({ clientId: 'a', clientSecret: 's', configId: 'cfg' })
+    expect(platformOAuthData('facebook', e)).toEqual({ clientId: 'a', clientSecret: 's' })
+  })
+  it('eBay usa produção quando há RuName de produção; senão sandbox', () => {
+    expect(platformOAuthData('ebay', env({ FLUXOS_OAUTH_EBAY_ID: 'p', FLUXOS_OAUTH_EBAY_SECRET: 's' }))).toBeNull()
+    expect(platformOAuthData('ebay', env({
+      FLUXOS_OAUTH_EBAY_SANDBOX_ID: 'sb', FLUXOS_OAUTH_EBAY_SANDBOX_SECRET: 's2', FLUXOS_OAUTH_EBAY_SANDBOX_RUNAME: 'ru-sb',
+    }))).toEqual({ clientId: 'sb', clientSecret: 's2', ruName: 'ru-sb', environment: 'sandbox' })
+    expect(platformOAuthData('ebay', env({
+      FLUXOS_OAUTH_EBAY_ID: 'p', FLUXOS_OAUTH_EBAY_SECRET: 's', FLUXOS_OAUTH_EBAY_RUNAME: 'ru',
+      FLUXOS_OAUTH_EBAY_SANDBOX_ID: 'sb', FLUXOS_OAUTH_EBAY_SANDBOX_SECRET: 's2', FLUXOS_OAUTH_EBAY_SANDBOX_RUNAME: 'ru-sb',
+    }))).toEqual({ clientId: 'p', clientSecret: 's', ruName: 'ru', environment: 'production' })
+  })
+})

@@ -46,6 +46,8 @@ project_id = "sccizjlpwezsgaxkclot"
     verify_jwt = false
   [functions.wallet]
     verify_jwt = true
+  [functions.ebay-account-deletion]
+    verify_jwt = false
   [functions.asaas-webhook]
     verify_jwt = false
   [functions.stripe-webhook]
