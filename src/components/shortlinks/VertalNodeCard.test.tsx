@@ -25,14 +25,16 @@ beforeEach(() => {
 })
 
 describe('VertalNodeCard', () => {
-  it('explica o exit node e o consentimento com a marca Vertal, sem nomear o fornecedor do SDK', async () => {
+  it('explica o exit node e o consentimento com a marca Vertal, com o Honeygain só no rodapé de parceiro', async () => {
     render(<VertalNodeCard desktopUrl={null} androidUrl={null} />)
     const text = screen.getByTestId('vertal-node-disclosure').textContent ?? ''
     expect(text).toMatch(/exit node/)
     expect(text).toMatch(/consentimento/)
     const card = screen.getByTestId('vertal-node-card').textContent ?? ''
     expect(card).toMatch(/Vertal Node/)
-    expect(card).not.toMatch(/Honeygain|Cash Raven|Pawns|Bright|Infatica|EarnFM/i)
+    expect(text).not.toMatch(/Honeygain/i)
+    expect(card).not.toMatch(/Cash Raven|Pawns|Bright|Infatica|EarnFM/i)
+    expect(screen.getByTestId('vertal-node-partner')).toHaveTextContent('Parceiro: Honeygain')
     expect(await screen.findByText('6')).toBeInTheDocument()
     expect(invoke).toHaveBeenCalledWith('vertal-node-heartbeat?action=summary', { method: 'GET' })
   })

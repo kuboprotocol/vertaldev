@@ -120,6 +120,13 @@ export default function VertalNodeCard({
             )}
           </div>
         )}
+
+        <p
+          className="pt-1 text-center text-[10px] leading-tight text-muted-foreground/60"
+          data-testid="vertal-node-partner"
+        >
+          Parceiro: Honeygain
+        </p>
       </CardContent>
     </Card>
   );
