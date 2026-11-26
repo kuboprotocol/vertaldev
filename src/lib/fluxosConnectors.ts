@@ -121,6 +121,28 @@ const FLUXOS_APP_LOGOS: Record<string, string> = {
   airtable: '/connectors/airtable.png',
   'better-stack': '/connectors/better-stack.webp',
   asana: '/connectors/asana.png',
+  'google-admob': '/connectors/google-admob.png',
+  'google-ads': '/connectors/google-ads.jpg',
+  'google-adsense': '/connectors/google-adsense.png',
+  'google-calendar': '/connectors/google-calendar.png',
+  'google-drive': '/connectors/google-drive.jpg',
+  'google-forms': '/connectors/google-forms.png',
+  'google-sheets': '/connectors/google-sheets.jpg',
+  'google-tasks': '/connectors/google-tasks.webp',
+  helix: '/connectors/helix.png',
+  instagram: '/connectors/instagram.png',
+  'invoice-ninja': '/connectors/invoice-ninja.png',
+  jotform: '/connectors/jotform.jpg',
+  libretranslate: '/connectors/libretranslate.png',
+  mailchimp: '/connectors/mailchimp.png',
+  mailerlite: '/connectors/mailerlite.png',
+  'meta-ads': '/connectors/meta-ads.png',
+  miro: '/connectors/miro.jpg',
+  'mistral-ai': '/connectors/mistral-ai.png',
+  monday: '/connectors/monday.png',
+  notion: '/connectors/notion.png',
+  ntfy: '/connectors/ntfy.png',
+  odoo: '/connectors/odoo.png',
   gitlab: '/connectors/gitlab.webp',
   gitea: '/connectors/gitea.png',
   ghost: '/connectors/ghost.png',
@@ -154,9 +176,14 @@ const FLUXOS_APP_LOGOS: Record<string, string> = {
  *   OAuth (decisão do Laércio, 26/11/2026).
  * - Strava: criar app da API exige assinatura paga do Strava (para o Vertal e para quem quisesse usar app
  *   próprio) e dados de treino não servem ao público do Vertal Dev (26/11/2026).
- * Antes de esconder: conferir que nenhum usuário tem conexão (tabela fluxos_connections) — com conexão, fica.
+ * - OpenAI, OpenRouter e Azure OpenAI: o Vertal vende a própria IA (white-label) para devs, então marcas de
+ *   fornecedores de IA não aparecem como conectores (Laércio, 26/11/2026). Só o catálogo público: o backend de
+ *   IA do Vertal (vertal-code-ai etc.) segue usando esses provedores por dentro. Na data, 0 conexões de usuário.
+ * Antes de esconder: conferir que nenhum usuário tem conexão (tabela fluxos_connections) — com conexão, a
+ * conexão continua funcionando pelo chat/fluxos (o servidor só esconde para quem não tem conexão; ver
+ * supabase/functions/_shared/hiddenFluxosApps.ts, mantenha as duas listas iguais).
  */
-export const HIDDEN_FLUXOS_APPS = new Set(['flickr', 'strava'])
+export const HIDDEN_FLUXOS_APPS = new Set(['flickr', 'strava', 'openai', 'openrouter', 'azure-openai'])
 
 export const fluxosConnectors: ConnectorConfig[] = FLUXOS_NATIVE_APPS.filter(a => !HIDDEN_FLUXOS_APPS.has(a.app)).map(a => ({
   name: a.name,

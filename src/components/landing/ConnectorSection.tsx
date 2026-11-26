@@ -8,7 +8,7 @@ const connectorCategories = [
     title: "AI & Automation",
     icon: Bot,
     accent: "from-primary/20 to-accent",
-    items: ["OpenAI", "Claude", "Gemini", "DeepSeek"],
+    items: ["Vertal Code AI", "Claude", "Gemini", "DeepSeek"],
   },
   {
     title: "Pagamentos",

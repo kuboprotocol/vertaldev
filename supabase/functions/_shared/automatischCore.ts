@@ -13,6 +13,7 @@
 //   passos e execuções, com qualquer ocorrência dessas credenciais apagada.
 // - Usa só /internal/api/v1 (rotas comunitárias). /api/v1 é Enterprise e não
 //   é chamado aqui.
+import { withoutHiddenApps } from "./hiddenFluxosApps.ts";
 
 export const AUTOMATISCH_SECRETS = ["AUTOMATISCH_URL", "AUTOMATISCH_EMAIL", "AUTOMATISCH_PASSWORD"] as const;
 
@@ -529,7 +530,7 @@ async function perform(op: AutomatischOp, call: (c: Call) => Promise<unknown>, v
       return { execution, steps: steps.map(executionStepView) };
     }
     case "list_apps": {
-      const apps = arr(data(await call({ method: "GET", path: "/apps", query: { name: op.name } })));
+      const apps = withoutHiddenApps(arr(data(await call({ method: "GET", path: "/apps", query: { name: op.name } }))));
       return { apps: apps.slice(0, 80).map((a) => compact({ key: a.key, name: a.name, supportsConnections: a.supportsConnections })) };
     }
     case "app_steps": {
