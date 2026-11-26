@@ -69,8 +69,6 @@ export const FLUXOS_NATIVE_APPS: FluxosApp[] = [
   { app: "notion", name: "Notion", category: "development", docsUrl: "https://notion.com" },
   { app: "ntfy", name: "Ntfy", category: "communication", docsUrl: "https://ntfy.sh" },
   { app: "odoo", name: "Odoo", category: "development", docsUrl: "https://odoo.com" },
-  { app: "openai", name: "OpenAI", category: "development", docsUrl: "https://openai.com" },
-  { app: "openrouter", name: "OpenRouter", category: "development", docsUrl: "https://openrouter.ai" },
   { app: "pdfmonkey", name: "PDFMonkey", category: "design", docsUrl: "https://pdfmonkey.io" },
   { app: "perplexity", name: "Perplexity", category: "development", docsUrl: "https://perplexity.ai" },
   { app: "pipedrive", name: "Pipedrive", category: "development", docsUrl: "https://www.pipedrive.com" },
