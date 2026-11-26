@@ -119,6 +119,7 @@ const Index = () => {
               <a href="/docs" className="hover:text-foreground transition-colors">Documentation</a>
               <a href="/pricing" className="hover:text-foreground transition-colors">Pricing</a>
               <a href="/alternativas" className="hover:text-foreground transition-colors">Alternativas</a>
+              <a href="/integracoes" className="hover:text-foreground transition-colors">Integrações</a>
               <a href="/vibe-pay" className="hover:text-foreground transition-colors">Vertal Vibe Pay</a>
               <a href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</a>
               <a href="/terms" className="hover:text-foreground transition-colors">Terms of Service</a>

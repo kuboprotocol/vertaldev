@@ -3,7 +3,7 @@
  *
  * - `index.html`: substitui `%SITE_ORIGIN%` (canonical, og:url, JSON-LD) pela
  *   origem canônica do site e aplica o título/descrição da home.
- * - build: gera `sitemap.xml` (páginas públicas + /alternativas/*) e
+ * - build: gera `sitemap.xml` (páginas públicas + /alternativas/* + /integracoes/*) e
  *   `robots.txt` apontando para o sitemap.
  * - build: pré-renderiza cada página pública em `<rota>.html` com título,
  *   descrição, canonical e JSON-LD próprios. As páginas de comparação também
@@ -40,6 +40,8 @@ import { VIBE_PAY, VIBE_PAY_COPY } from "../src/config/vibePay";
 // Vertal CRM grátis (landing + docs em vários idiomas). Interruptor: VERTAL_FREE_CRM_SEO=false.
 import { isFreeCrmSeoEnabled } from "../src/config/freeCrm";
 import { freeCrmSitemapEntries, renderFreeCrmPages } from "./freeCrm";
+// Páginas de integração (/integracoes e /integracoes/<slug>), geradas do catálogo de conectores.
+import { integrationUrls, renderIntegrationPages } from "./integrations";
 
 /** Rotas públicas indexáveis (sem login). */
 const PUBLIC_ROUTES = [
@@ -61,6 +63,7 @@ export function sitemapUrls(origin: string = SITE_ORIGIN): string[] {
   ];
   return [
     ...paths.map((p) => `${origin}${p === "/" ? "/" : p}`),
+    ...integrationUrls(origin),
     ...vibePayUrls(origin),
     ...localizedUrls(origin),
   ];
@@ -129,7 +132,8 @@ ${body}
 
 export function renderRobots(origin: string = SITE_ORIGIN): string {
   // Allow explícito das landings do Vertal Vibe Pay (todas as línguas).
-  return `User-agent: *\nAllow: /\nAllow: /vibe-pay\nAllow: /*/vibe-pay\nDisallow: /admin/\n\nSitemap: ${origin}/sitemap.xml\n`;
+  // Allow explícito das páginas de integração (uma por conector).
+  return `User-agent: *\nAllow: /\nAllow: /vibe-pay\nAllow: /*/vibe-pay\nAllow: /integracoes\nAllow: /integracoes/\nDisallow: /admin/\n\nSitemap: ${origin}/sitemap.xml\n`;
 }
 
 const esc = (v: string) =>
@@ -267,6 +271,7 @@ export function prerenderPages(html: string, origin: string = SITE_ORIGIN): Map<
     ].join("\n    ");
     pages.set(`alternativas/${alt.slug}.html`, withBody(applyHead(indexHtml, seo, `${origin}${path}`, head), renderAlternativeBody(alt)));
   }
+  for (const [file, page] of renderIntegrationPages(indexHtml, applyHead, origin)) pages.set(file, page);
   return pages;
 }
 

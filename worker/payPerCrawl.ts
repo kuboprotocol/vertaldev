@@ -28,6 +28,8 @@ const RULES: PriceRule[] = [
   { match: prefix('/download'), priceUSD: 0 },
   // Landing do Vertal Vibe Pay (todas as línguas): página de aquisição.
   { match: prefix('/vibe-pay'), priceUSD: 0 },
+  // Páginas de integração (uma por conector): aquisição, grátis para descoberta.
+  { match: prefix('/integracoes'), priceUSD: 0 },
   // Premium: conteúdo editorial e técnico, o que mais vale para IA.
   { match: prefix('/docs'), priceUSD: 0.01 },
   { match: prefix('/alternativas'), priceUSD: 0.005 },
