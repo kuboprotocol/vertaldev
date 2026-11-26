@@ -80,3 +80,12 @@ export function oauthReturnParams(search: string, hash: string): Record<string, 
 export function connectorPathFor(app: string): string {
   return FLUXOS_SHARED_APPS[app] ? `/connectors/${app}` : `/connectors/fluxos-${app}/setup`
 }
+
+/** Página de onde o login saiu (ex.: /connectors/instagram), para voltar a ela depois do OAuth. */
+export const RETURN_PATH_KEY = 'vertal:fluxos:returnPath'
+
+/** Só aceita caminhos internos de /connectors (nada de URL externa). */
+export function safeReturnPath(path: string | null | undefined): string | null {
+  if (!path || !/^\/connectors\/[a-z0-9-]+(\/setup)?$/.test(path)) return null
+  return path
+}

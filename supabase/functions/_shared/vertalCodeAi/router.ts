@@ -3,6 +3,7 @@
 //   pedido → (modo, esforço, precisa de visão?) → cadeia de modelos:
 //     1. LLM própria Vertal (VERTAL_OLLAMA_URL e, opcional, VERTAL_OLLAMA_URL_2) — só para pedidos
 //        que cabem no orçamento dela (contexto pequeno, tempo curto); senão pula
+//     1b. Ollama Cloud (plano do Laércio; só se VERTAL_OLLAMA_CLOUD_URL/_KEY estiverem no VERTAL_GPU_CONFIG)
 //     2. modelos grátis na nuvem (cota diária gratuita dos provedores)
 //     3. modelos baratos pagos — SÓ se VERTAL_CODE_AI_ALLOW_PAID=true
 //   VERTAL_CODE_AI_PREFER_SELF_HOSTED=false volta à ordem antiga (grátis → própria → pago).
@@ -12,7 +13,7 @@
 //
 // Marca: o usuário só vê `label` (nomes Vertal). `provider`/`model` ficam no servidor e nos logs.
 
-export type VcaProvider = "openrouter" | "gemini" | "groq" | "ollama" | "deepseek" | "extra";
+export type VcaProvider = "openrouter" | "gemini" | "groq" | "ollama" | "ollama_cloud" | "deepseek" | "extra";
 export type VcaCost = "free" | "self_hosted" | "paid";
 export type VcaEffort = "auto" | "low" | "high" | "max";
 export type VcaMode = "plan" | "build";
@@ -55,6 +56,12 @@ export interface VcaBudget {
   maxInputTokens: number;
   /** Teto de tokens de saída pedidos a ela. */
   maxOutputTokens: number;
+  /**
+   * true = o prazo do 1º token conta desde o ENVIO do pedido (inclui subir a máquina a frio e esperar
+   * os cabeçalhos), não desde a chegada dos cabeçalhos. Padrão: true no 2º endpoint (GPU serverless,
+   * que pode estar desligada), false no 1º (VM sempre ligada, comportamento de antes).
+   */
+  firstTokenFromStart?: boolean;
 }
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -231,6 +238,34 @@ export type VcaEnv = Record<string, string | undefined>;
 
 const truthy = (v: string | undefined) => /^(1|true|yes|on|sim)$/i.test((v ?? "").trim());
 
+/**
+ * Config compacta da GPU própria num ÚNICO segredo (o projeto tem limite de 100 segredos):
+ *   VERTAL_GPU_CONFIG='{"VERTAL_OLLAMA_URL_2":"https://…","VERTAL_OLLAMA_TOKEN_2":"…","VERTAL_OWN_IMAGE_URL":"…",…}'
+ * Só aceita chaves do 2º endpoint próprio (VERTAL_OLLAMA_*_2, VERTAL_OLLAMA_2_FIRST_ABOVE_TOKENS) e de
+ * imagem/vídeo próprios (VERTAL_OWN_IMAGE_* / VERTAL_OWN_VIDEO_*) e dos sentidos próprios (VERTAL_OWN_DECIDE_* /
+ * VERTAL_OWN_OMNI_* / VERTAL_OWN_NOVELA_*) e do Ollama Cloud (VERTAL_OLLAMA_CLOUD_*). Segredo avulso com o
+ * mesmo nome vence.
+ * Nunca toca em liga/desliga, lista de liberação ou chaves de provedores.
+ */
+const GPU_CONFIG_KEY = /^VERTAL_(OLLAMA_[A-Z_]+_2|OLLAMA_2_FIRST_ABOVE_TOKENS|OLLAMA_CLOUD_[A-Z_]+|OWN_(IMAGE|VIDEO|DECIDE|OMNI|NOVELA)_[A-Z_]+)$/;
+export function expandVcaEnv(env: VcaEnv): VcaEnv {
+  const raw = (env.VERTAL_GPU_CONFIG ?? "").trim();
+  if (!raw) return env;
+  let cfg: unknown;
+  try {
+    cfg = JSON.parse(raw);
+  } catch {
+    return env;
+  }
+  if (!cfg || typeof cfg !== "object" || Array.isArray(cfg)) return env;
+  const out: VcaEnv = { ...env };
+  for (const [k, v] of Object.entries(cfg as Record<string, unknown>)) {
+    if (!GPU_CONFIG_KEY.test(k) || (out[k] ?? "").trim()) continue;
+    if (typeof v === "string" || typeof v === "number") out[k] = String(v);
+  }
+  return out;
+}
+
 /** VERTAL Code AI ligado no servidor? (padrão: desligado) */
 export function isVcaEnabled(env: VcaEnv): boolean {
   return truthy(env.VERTAL_CODE_AI_ENABLED);
@@ -287,8 +322,19 @@ function selfHostedAt(env: VcaEnv, n: 1 | 2): VcaModel | null {
       totalMs: num(env[`VERTAL_OLLAMA_TOTAL_MS${sfx}`], b.totalMs),
       maxInputTokens: num(env[`VERTAL_OLLAMA_MAX_INPUT_TOKENS${sfx}`], b.maxInputTokens),
       maxOutputTokens: num(env[`VERTAL_OLLAMA_MAX_OUTPUT_TOKENS${sfx}`], b.maxOutputTokens),
+      // Só aparece quando ligado (o orçamento da VM continua idêntico ao de antes).
+      ...(flag(env[`VERTAL_OLLAMA_FIRST_TOKEN_FROM_START${sfx}`], n === 2) ? { firstTokenFromStart: true } : {}),
     },
   };
+}
+
+/** Liga/desliga com padrão: vazio = padrão; "true/1/sim…" = true; "false/0/não…" = false. */
+function flag(v: string | undefined, d: boolean): boolean {
+  const t = (v ?? "").trim();
+  if (!t) return d;
+  if (truthy(t)) return true;
+  if (/^(0|false|no|off|nao|não)$/i.test(t)) return false;
+  return d;
 }
 
 /** Servidor próprio principal (VERTAL_OLLAMA_URL), se configurado. URL base sem /v1. */
@@ -301,6 +347,19 @@ export function selfHostedModels(env: VcaEnv): VcaModel[] {
   return [selfHostedAt(env, 1), selfHostedAt(env, 2)].filter((m): m is VcaModel => !!m);
 }
 
+/**
+ * Ordem dos endpoints próprios para um pedido: 1 (VM) → 2 (GPU). Pedidos grandes demais para a VM
+ * (> VERTAL_OLLAMA_2_FIRST_ABOVE_TOKENS; sem ele, > VERTAL_OLLAMA_MAX_INPUT_TOKENS da VM; sem os dois,
+ * 3 000 tokens) vão primeiro ao 2º endpoint, que é o mais forte. Sem tamanho conhecido, mantém 1 → 2.
+ * Vale para TODAS as opções de texto (Auto, Code, Livre, Turbo, Pro): a própria entra antes dos grátis
+ * e dos pagos em buildChain e buildOptionChain.
+ */
+export function orderSelfHosted(env: VcaEnv, list: VcaModel[], promptTokens?: number): VcaModel[] {
+  const above = num(env.VERTAL_OLLAMA_2_FIRST_ABOVE_TOKENS, num(env.VERTAL_OLLAMA_MAX_INPUT_TOKENS, 3_000));
+  if (!promptTokens || promptTokens <= above) return list;
+  return [...list.filter((m) => m.id === "vca-self-hosted-2"), ...list.filter((m) => m.id !== "vca-self-hosted-2")];
+}
+
 /** Estimativa barata de tokens (≈3,5 caracteres por token; imagem conta como 1 000). */
 export function estimateTokens(messages: VcaChatMessage[]): number {
   let chars = 0;
@@ -309,6 +368,28 @@ export function estimateTokens(messages: VcaChatMessage[]): number {
     else for (const p of m.content) chars += p.type === "text" ? p.text.length : 3_500;
   }
   return Math.ceil(chars / 3.5);
+}
+
+/**
+ * Folga da estimativa de tokens (≈3,5 caracteres/token). Medido em 26/11/2026 com o tokenizer real do
+ * Qwen2.5-Coder: texto em português ≈ 1,0–1,1× a estimativa; TS/JSON/CSS ≈ 1,3× em média (até 1,5× por
+ * arquivo). Usada só para não estourar o contexto da LLM própria (estouro = erro 400 do servidor).
+ */
+export const VCA_TOKEN_SAFETY = 1.35;
+/** Menor saída que vale a pena pedir à LLM própria; abaixo disso, pula para o próximo modelo. */
+export const VCA_MIN_SELF_HOSTED_OUTPUT = 1_024;
+
+/**
+ * Tokens de saída a pedir à LLM própria sem estourar o contexto dela:
+ *   min(pedido, teto do orçamento, contexto − entrada × folga − 256).
+ * 0 = não cabe uma resposta útil (a cadeia pula este modelo em vez de tomar um 400).
+ * Modelos sem orçamento: devolve o pedido (sem mudança).
+ */
+export function selfHostedOutputTokens(m: VcaModel, inputTokens: number, requested: number): number {
+  if (!m.budget) return requested;
+  const room = Math.floor(m.context - Math.ceil(inputTokens * VCA_TOKEN_SAFETY) - 256);
+  const out = Math.min(requested, m.budget.maxOutputTokens, room);
+  return out >= Math.min(VCA_MIN_SELF_HOSTED_OUTPUT, requested) ? out : 0;
 }
 
 /** A LLM própria aguenta esta chamada? (entrada pequena o bastante e tempo suficiente no prazo) */
@@ -385,8 +466,12 @@ export function buildChain(env: VcaEnv, opts: ChainOptions): VcaModel[] {
     .map((x) => x.m)
     .filter((m) => m.model === "openrouter/free" || rank(m) < 99);
 
-  const selfList = selfHostedModels(env).filter(
-    (m) => fits(m) && (!opts.promptTokens || opts.promptTokens <= (m.budget?.maxInputTokens ?? Infinity)),
+  const selfList = orderSelfHosted(
+    env,
+    selfHostedModels(env).filter(
+      (m) => fits(m) && (!opts.promptTokens || opts.promptTokens <= (m.budget?.maxInputTokens ?? Infinity)),
+    ),
+    opts.promptTokens,
   );
   const allowPaid = truthy(env.VERTAL_CODE_AI_ALLOW_PAID);
   const paid = allowPaid ? VCA_PAID_CATALOG.filter((m) => hasKey(m) && fits(m)) : [];
@@ -394,12 +479,14 @@ export function buildChain(env: VcaEnv, opts: ChainOptions): VcaModel[] {
   const extra = extraProviderModels(env).filter((m) => fits(m) && (m.cost !== "paid" || allowPaid));
   const extraFree = extra.filter((m) => m.cost !== "paid");
   const extraPaid = extra.filter((m) => m.cost === "paid");
+  // Ollama Cloud (plano pago à parte, com créditos mensais): logo depois da própria, antes dos grátis.
+  const cloud = ollamaCloudModels(env, { fastFirst: opts.effort === "low" }).filter(fits);
 
   // Padrão (decisão de 24/11/2026): LLM própria primeiro. "false" volta à ordem antiga.
   const selfFirst = !/^(0|false|no|off|nao|não)$/i.test((env.VERTAL_CODE_AI_PREFER_SELF_HOSTED ?? "").trim());
   const ordered = selfFirst
-    ? [...selfList, ...freeSorted, ...extraFree, ...paid, ...extraPaid]
-    : [...freeSorted, ...extraFree, ...selfList, ...paid, ...extraPaid];
+    ? [...selfList, ...cloud, ...freeSorted, ...extraFree, ...paid, ...extraPaid]
+    : [...freeSorted, ...extraFree, ...selfList, ...cloud, ...paid, ...extraPaid];
   const seen = new Set<string>();
   return ordered.filter((m) => (seen.has(m.id) ? false : (seen.add(m.id), true)));
 }
@@ -590,6 +677,53 @@ export function extraProviderModels(env: VcaEnv): VcaModel[] {
     }));
 }
 
+/**
+ * Ollama Cloud (https://ollama.com, API OpenAI-compatível em /v1/chat/completions), configurado só pelo
+ * VERTAL_GPU_CONFIG (sem segredo novo):
+ *   VERTAL_OLLAMA_CLOUD_URL         base (https://ollama.com ou …/v1) ou URL completa de /chat/completions
+ *   VERTAL_OLLAMA_CLOUD_KEY         chave (Bearer)
+ *   VERTAL_OLLAMA_CLOUD_CODE_MODEL  modelo de código (padrão kimi-k2.7-code)
+ *   VERTAL_OLLAMA_CLOUD_FAST_MODEL  modelo rápido p/ pedidos pequenos (padrão deepseek-v4.1-flash)
+ *   VERTAL_OLLAMA_CLOUD_CONTEXT     contexto útil (padrão 128 000)
+ *   VERTAL_OLLAMA_CLOUD_ENABLED     "false" desliga sem apagar a config
+ * Ordem: código primeiro; rápido primeiro quando fastFirst (esforço "low" / Turbo).
+ * É gasto do plano Ollama (créditos mensais) → cost "paid"; preços só para estimativa (tabela OpenRouter).
+ */
+export function ollamaCloudModels(env: VcaEnv, opts: { fastFirst?: boolean } = {}): VcaModel[] {
+  const raw = (env.VERTAL_OLLAMA_CLOUD_URL ?? "").trim().replace(/\/+$/, "");
+  if (!/^https:\/\//i.test(raw) || !(env.VERTAL_OLLAMA_CLOUD_KEY ?? "").trim()) return [];
+  if (/^(0|false|no|off|nao|não)$/i.test((env.VERTAL_OLLAMA_CLOUD_ENABLED ?? "").trim())) return [];
+  const url = /\/chat\/completions$/i.test(raw) ? raw : `${raw.replace(/\/v1$/i, "")}/v1/chat/completions`;
+  const context = num(env.VERTAL_OLLAMA_CLOUD_CONTEXT, 128_000);
+  const base = {
+    provider: "ollama_cloud" as const,
+    url,
+    keyEnv: "VERTAL_OLLAMA_CLOUD_KEY",
+    cost: "paid" as const,
+    vision: false,
+    context,
+    jsonMode: true,
+    reasoning: false,
+    efforts: ["auto", "low", "high", "max"] as VcaEffort[],
+    maxOutputTokens: 8_000,
+  };
+  const code: VcaModel = {
+    ...base,
+    id: "vca-ollama-code",
+    label: "Vertal Nuvem · Código",
+    model: (env.VERTAL_OLLAMA_CLOUD_CODE_MODEL ?? "").trim() || "kimi-k2.7-code",
+    price: { in: 0.6, out: 3.0 },
+  };
+  const fast: VcaModel = {
+    ...base,
+    id: "vca-ollama-fast",
+    label: "Vertal Nuvem · Rápido",
+    model: (env.VERTAL_OLLAMA_CLOUD_FAST_MODEL ?? "").trim() || "deepseek-v4.1-flash",
+    price: { in: 0.14, out: 0.42 },
+  };
+  return opts.fastFirst ? [fast, code] : [code, fast];
+}
+
 export interface OptionChainOptions extends ChainOptions {
   option: VcaOption;
   /** Fixa um modelo (id Vertal) da opção — útil para testar uma família. Ignorado se não estiver na opção. */
@@ -618,18 +752,27 @@ export function buildOptionChain(env: VcaEnv, opts: OptionChainOptions): VcaMode
   const usable = live.filter((m) => hasKey(m) && fits(m) && (m.cost !== "paid" || allowPaid));
   const free = usable.filter((m) => m.cost !== "paid");
   const paid = usable.filter((m) => m.cost === "paid");
-  const selfList = selfHostedModels(env).filter(
-    (m) => fits(m) && (!opts.promptTokens || opts.promptTokens <= (m.budget?.maxInputTokens ?? Infinity)),
+  const selfList = orderSelfHosted(
+    env,
+    selfHostedModels(env).filter(
+      (m) => fits(m) && (!opts.promptTokens || opts.promptTokens <= (m.budget?.maxInputTokens ?? Infinity)),
+    ),
+    opts.promptTokens,
   );
   const extra = extraProviderModels(env).filter((m) => fits(m) && (m.cost !== "paid" || allowPaid));
   const reserve = reconcileFreeModels(
     VCA_FREE_CATALOG.filter((m) => m.model === "openrouter/free"),
     opts.liveFreeIds,
   ).filter((m) => hasKey(m) && fits(m));
+  // Ollama Cloud: depois da própria, antes dos grátis. Fora do "livre" (opção grátis; também é a cadeia
+  // de coordenação/Decide, que nunca usa nada pago).
+  const cloud = option === "livre"
+    ? []
+    : ollamaCloudModels(env, { fastFirst: opts.effort === "low" || option === "turbo" }).filter(fits);
   const selfFirst = !/^(0|false|no|off|nao|não)$/i.test((env.VERTAL_CODE_AI_PREFER_SELF_HOSTED ?? "").trim());
   const ordered = selfFirst
-    ? [...selfList, ...free, ...extra.filter((m) => m.cost !== "paid"), ...paid, ...extra.filter((m) => m.cost === "paid"), ...reserve]
-    : [...free, ...extra.filter((m) => m.cost !== "paid"), ...selfList, ...paid, ...extra.filter((m) => m.cost === "paid"), ...reserve];
+    ? [...selfList, ...cloud, ...free, ...extra.filter((m) => m.cost !== "paid"), ...paid, ...extra.filter((m) => m.cost === "paid"), ...reserve]
+    : [...free, ...extra.filter((m) => m.cost !== "paid"), ...selfList, ...cloud, ...paid, ...extra.filter((m) => m.cost === "paid"), ...reserve];
   const seen = new Set<string>();
   const chain = ordered.filter((m) => (seen.has(m.id) ? false : (seen.add(m.id), true)));
   return pinModel(chain, opts.modelId);
@@ -655,6 +798,11 @@ export interface VcaMediaModel {
   resolution?: string;
   /** Vídeo: pede (ou não) áudio; ausente = padrão do modelo. Sem áudio é mais barato quando o modelo cobra à parte. */
   audio?: boolean;
+  /** "own" = endpoint próprio em GPU (VERTAL_OWN_IMAGE_URL / VERTAL_OWN_VIDEO_URL); ausente = OpenRouter. */
+  provider?: "openrouter" | "own";
+  /** Endpoint próprio: URL base (sem barra final) e variável com o token Bearer. */
+  url?: string;
+  keyEnv?: string;
 }
 
 export const VCA_IMAGE_MODELS: VcaMediaModel[] = [
@@ -715,4 +863,81 @@ export function videoRequestBody(m: VcaMediaModel, prompt: string): Record<strin
     aspect_ratio: "16:9",
     ...(typeof m.audio === "boolean" ? { generate_audio: m.audio } : {}),
   };
+}
+
+// ───────────────────────────── Imagem e vídeo próprios (GPU serverless, opcional) ─────────────────────────────
+//
+// Primeira opção de "Vertal Imagem" / "Vertal Vídeo" quando configurados por segredo; se falharem,
+// a cadeia segue para os modelos de sempre (VCA_IMAGE_MODELS / VCA_VIDEO_MODELS).
+//   VERTAL_OWN_IMAGE_URL / _TOKEN   POST {url}/generate {prompt,width,height,steps} → {image:"data:image/…"}
+//   VERTAL_OWN_VIDEO_URL / _TOKEN   POST {url}/submit {prompt,seconds} → {id}; GET {url}/status?id=; GET {url}/result?id= (mp4)
+//   VERTAL_OWN_IMAGE_COST (US$ por imagem) e VERTAL_OWN_VIDEO_COST (US$ por segundo): só estimativa.
+
+/**
+ * Prefixo dos jobs de vídeo do endpoint próprio (o resto é o id do provedor de sempre).
+ * Só [A-Za-z0-9_-]: o job assinado (verifyJob) recusa qualquer outro caractere.
+ */
+export const VCA_OWN_JOB_PREFIX = "vcaown_";
+
+function ownMediaAt(env: VcaEnv, kind: "image" | "video"): VcaMediaModel | null {
+  const pre = kind === "image" ? "VERTAL_OWN_IMAGE" : "VERTAL_OWN_VIDEO";
+  const url = (env[`${pre}_URL`] ?? "").trim().replace(/\/+$/, "");
+  if (!/^https:\/\//i.test(url) || !(env[`${pre}_TOKEN`] ?? "").trim()) return null;
+  return kind === "image"
+    ? {
+      id: "vca-image-own",
+      label: "Vertal Imagem · Própria",
+      kind,
+      model: "vertal-image-gpu",
+      usdPerUnit: num(env.VERTAL_OWN_IMAGE_COST, 0.003),
+      provider: "own",
+      url,
+      keyEnv: `${pre}_TOKEN`,
+    }
+    : {
+      id: "vca-video-own",
+      label: "Vertal Vídeo · Própria",
+      kind,
+      model: "vertal-video-gpu",
+      usdPerUnit: num(env.VERTAL_OWN_VIDEO_COST, 0.02),
+      seconds: 4,
+      resolution: "480p",
+      provider: "own",
+      url,
+      keyEnv: `${pre}_TOKEN`,
+    };
+}
+
+/** Modelos de imagem na ordem de tentativa: própria (se configurada) → os de sempre. */
+export function imageModels(env: VcaEnv): VcaMediaModel[] {
+  const own = ownMediaAt(env, "image");
+  return own ? [own, ...VCA_IMAGE_MODELS] : [...VCA_IMAGE_MODELS];
+}
+
+/** Modelos de vídeo na ordem de tentativa: próprio (se configurado) → os de sempre. */
+export function videoModels(env: VcaEnv): VcaMediaModel[] {
+  const own = ownMediaAt(env, "video");
+  return own ? [own, ...VCA_VIDEO_MODELS] : [...VCA_VIDEO_MODELS];
+}
+
+/** Corpo do pedido de imagem ao endpoint próprio (só texto → imagem, 1024 px). */
+export function ownImageRequestBody(prompt: string): Record<string, unknown> {
+  return { prompt: prompt.slice(0, 2_000), width: 1024, height: 1024, steps: 4, format: "jpeg" };
+}
+
+/** Corpo do pedido de vídeo ao endpoint próprio. */
+export function ownVideoRequestBody(m: VcaMediaModel, prompt: string): Record<string, unknown> {
+  return { prompt: prompt.slice(0, 1_500), seconds: m.seconds ?? 4 };
+}
+
+/** Lê a imagem devolvida pelo endpoint próprio ({image:"data:image/…;base64,…"}). */
+export function extractOwnImage(resp: unknown): string | null {
+  const img = (resp as { image?: unknown } | null)?.image;
+  return typeof img === "string" && /^data:image\/(png|jpe?g|webp);base64,/.test(img) ? img : null;
+}
+
+/** Status do job próprio → status no formato que o app já entende. */
+export function ownVideoStatus(resp: unknown): "pending" | "completed" | "failed" | "expired" {
+  const s = (resp as { status?: unknown } | null)?.status;
+  return s === "completed" || s === "failed" || s === "expired" ? s : "pending";
 }

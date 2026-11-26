@@ -114,3 +114,116 @@ fica desabilitada com "Em breve" até existirem `FLUXOS_OAUTH_META_ID/_SECRET` (
 - OAuth real (Embedded Signup): app da Meta do Vertal + verificação da empresa + App Review de
   `whatsapp_business_management`/`whatsapp_business_messaging` + configuração do Facebook Login for
   Business (`FLUXOS_OAUTH_WHATSAPP_CONFIG`). Com os segredos salvos, a aba "Entrar com Facebook" liga sozinha.
+
+## App da Meta "Vertal Dev" e Instagram por usuário (nov/2026)
+App da Meta **Vertal Dev**, App ID `1145586658064572` (modo Desenvolvimento), segredos
+`FLUXOS_OAUTH_META_ID` / `_SECRET` nas Edge Functions (desde 25/11/2026). Serve os quatro apps da Meta
+(`facebook`, `instagram`, `whatsapp`, `meta-ads`). URIs de redirecionamento válidos no app:
+`https://vertal.dev/fluxos/oauth/facebook`, `/instagram`, `/whatsapp`, `/meta-ads`.
+
+- O botão "Entrar com …" de cada um abre `https://www.facebook.com/v23.0/dialog/oauth` com esse App ID,
+  o retorno do conector e a lista de escopos (ou `config_id`, se existir `FLUXOS_OAUTH_<APP>_CONFIG`).
+  O usuário final não vê App ID, App Secret nem o ID de configuração.
+- Em modo Desenvolvimento só quem tem papel no app (admin, desenvolvedor, testador) consegue autorizar;
+  cada permissão pedida precisa estar no caso de uso do app, senão a Meta responde "Invalid Scopes".
+  Para clientes reais: verificação da empresa + App Review (acesso avançado) de cada permissão + modo Ao vivo.
+
+### Instagram (`/connectors/instagram`)
+- O app "Vertal Dev" é do tipo **Empresa** (o diálogo da Meta volta com `is_business_login=1`): nele vale o
+  **Facebook Login for Business**, em que a configuração (`config_id`) substitui `scope`. Sem configuração o login
+  ainda usa `scope`, o que funciona para quem tem papel no app, mas a Meta recomenda `config_id`.
+- Caminho escolhido: **Instagram API with Unified Login** (configuração do Facebook Login for Business criada em
+  Casos de uso → "Gerenciar mensagens e conteúdo no Instagram" → "Configuração da API com login unificado").
+  O cliente entra com **Instagram ou Facebook**, não precisa de Página, e o token é da empresa (usuário de sistema,
+  BISU) trocado com o App ID/Secret da Meta → funciona com `FLUXOS_OAUTH_META_*` + `FLUXOS_OAUTH_INSTAGRAM_CONFIG`.
+  O motor também aceita o login do Facebook clássico (token de usuário + Página), usado enquanto não houver configuração.
+  Não usamos a "Instagram API with Instagram Login" porque exige um Instagram App ID/Secret separado e outra API
+  (`graph.instagram.com`).
+- Motor: contas por `/me/assigned_instagram_accounts` (login unificado) e `/me/accounts` (Páginas); DMs em
+  `/{ig-id}/conversations|messages` (sem Página) ou `/{page-id}/…` com token da Página; com `config_id` o login
+  manda `prompt=login` (mostra as opções Instagram e Facebook).
+- Topo da página: `FluxosConnectPanel` do app `instagram` ("Entrar com Instagram"); depois do login volta para
+  `/connectors/instagram` (`RETURN_PATH_KEY`, só caminhos internos de /connectors).
+- O canal antigo do operador (webhook `virtual-chat-instagram-webhook`, segredos `INSTAGRAM_*`, respostas por IA)
+  continua igual, recolhido em "Avançado: canal do operador".
+- Escopos (só quando não há configuração): `public_profile, instagram_basic, instagram_content_publish, instagram_manage_insights,
+  instagram_manage_messages, pages_show_list, pages_manage_metadata, pages_read_engagement, business_management`.
+- Ações (aprovação, 2 créditos): publicar foto, publicar Reel, responder DM (`sendMessage`, só até 24 h depois da
+  última mensagem do contato). Buscas: contas, mídias, métricas, conversas de DM, mensagens de uma conversa.
+- Para DMs, a conta do Instagram precisa de "Permitir acesso às mensagens" (Configurações → Privacidade → Mensagens →
+  Ferramentas conectadas) ligado.
+
+## Auditoria de OAuth e novos clientes (26/11/2026)
+- **Limite de 100 segredos** nas Edge Functions do projeto Supabase. Por isso os **IDs públicos** dos clientes
+  OAuth (não são secretos) ficam no código: `PUBLIC_OAUTH_CLIENT_IDS` em `_shared/fluxosApps.ts` (GOOGLE,
+  MICROSOFT, META, SALESFORCE, DISQUS, GITLAB). O segredo `FLUXOS_OAUTH_<GRUPO>_ID`, se existir, vale mais;
+  o `_SECRET` continua obrigatório nos segredos. Para um cliente novo: ID no código + só o `_SECRET` no Supabase.
+- **Salesforce**: External Client App "Vertal Dev" (org de desenvolvedor Agentforce), retorno
+  `https://vertal.dev/fluxos/oauth/salesforce`, escopos `api`, `refresh_token offline_access`, `id profile email`.
+  External Client Apps exigem **PKCE** → motor (fork PR #13) manda `code_challenge` S256 e `code_verifier`.
+- **Disqus**: app 8213420 "Vertal Dev", retorno `https://vertal.dev/fluxos/oauth/disqus`, acesso "Read, Write, Manage Forums".
+- **GitLab**: app OAuth "Vertal Dev" no gitlab.com (escopos `api`, `read_user`), retorno
+  `https://vertal.dev/fluxos/oauth/gitlab`. Com o cliente do Vertal a instância é sempre `https://gitlab.com`.
+- **YouTube**: mesmo cliente Google ("Vertal Fluxos"); YouTube Data API v3 ativada, retorno
+  `https://vertal.dev/fluxos/oauth/youtube` e escopos do YouTube em Acesso a dados (sensíveis → só testadores
+  enquanto o app estiver em Teste).
+- Flickr escondido do catálogo (`HIDDEN_FLUXOS_APPS` em `src/lib/fluxosConnectors.ts`); o app continua no motor.
+- Bloqueados: Strava (API só para assinantes pagos), Flickr (chave de API só no Flickr Pro), Reddit ("Max clients
+  have been reached" — novos clientes da Data API dependem de aprovação do Reddit), HubSpot (apps OAuth só pela
+  HubSpot CLI, `hs project create/upload`), Discord (login do portal pede confirmação por e-mail), eBay (conta
+  de desenvolvedor em análise), Trello (login Atlassian).
+
+## LinkedIn, X e limpeza do catálogo (26/11/2026)
+- **X (Twitter)**: app "Vertal Dev" (ID 33675462) no console do X, Read+write, OAuth 1.0a com retorno
+  `https://vertal.dev/fluxos/oauth/twitter` (e `/x`). "Entrar com X (Twitter)" chega à tela "Autorizar o acesso de
+  Vertal Dev". A conta do X está no plano **Pay Per Use com US$ 0 de crédito** (o X não tem mais nível grátis): o
+  login funciona, mas chamadas da API (postar, ler) falham com 402/403 até alguém comprar créditos no console.
+  No catálogo o card agora se chama "X (Twitter)" (mesmo slug `fluxos-twitter`, mesmo app `twitter`).
+- **LinkedIn**: app `linkedin` no motor (fork PR #15): OAuth 2.0 + OpenID Connect, escopos
+  `openid profile email w_member_social`, retorno `https://vertal.dev/fluxos/oauth/linkedin`; ações "Get my profile",
+  "Create post" e "Create post with link" (Posts API `/rest/posts`, cabeçalho `LinkedIn-Version` = mês atual − 2).
+  Card `fluxos-linkedin` no catálogo. **Sem cliente do Vertal ainda**: o portal de desenvolvedor exige uma
+  LinkedIn Page para criar o app, e a conta kuboprotocol@gmail.com não pode criar Page ("Você não tem conexões
+  suficientes"). Enquanto isso o card mostra o formulário de app próprio. Quando houver Page: criar o app "Vertal Dev",
+  produtos "Sign In with LinkedIn using OpenID Connect" + "Share on LinkedIn", retorno acima, Client ID em
+  `PUBLIC_OAUTH_CLIENT_IDS.LINKEDIN` e só `FLUXOS_OAUTH_LINKEDIN_SECRET` no Supabase.
+- **Escondidos** (`HIDDEN_FLUXOS_APPS`, só catálogo; motor, fluxos e dados ficam): Flickr, Strava (API só com
+  assinatura paga; fora do público do Vertal Dev). Regra: antes de esconder, conferir `fluxos_connections` — app com
+  conexão de usuário continua visível.
+- **Pendentes que ficam** (formulário de app próprio enquanto o cliente do Vertal não sai): LinkedIn, eBay (conta em
+  análise), Amazon Ads (acesso à Ads API pedido), TikTok Ads, Kwai Ads, Discord, Reddit, HubSpot, Trello.
+
+## Meta: "Remover app" e "Exclusão de dados" (26/11/2026)
+Exigidos pela Meta para o app "Vertal Dev" (1145586658064572). Uma Edge Function só (`meta-data-deletion`,
+`verify_jwt = false`; limite de funções do plano), lógica em `_shared/metaDataDeletion.ts`. Sem segredo novo:
+a assinatura do `signed_request` (HMAC-SHA256) é conferida com `FLUXOS_OAUTH_META_SECRET`.
+
+| Campo no painel da Meta | URL |
+| --- | --- |
+| Login do Facebook → Configurações → **URL de retorno de chamada para cancelar autorização** (Deauthorize) | `https://sccizjlpwezsgaxkclot.supabase.co/functions/v1/meta-data-deletion/deauthorize` |
+| Configurações do app → Básico → **URL de solicitação de exclusão de dados** (Data deletion request) | `https://sccizjlpwezsgaxkclot.supabase.co/functions/v1/meta-data-deletion` |
+
+- O ID do usuário da Meta não fica no Supabase. O motor guarda `formattedData.userId` (`/me`) no login dos apps
+  `facebook`, `instagram`, `whatsapp`, `meta-ads`; a rota interna `POST /internal/vertal/connections/find`
+  (fork PR #16) devolve as conexões desse usuário. A função apaga cada uma no motor e a linha em
+  `fluxos_connections` (igual a "Desconectar") e grava um aviso em `connector_activity_logs`. Nada mais é tocado.
+- Cada pedido fica em `meta_data_requests` (só service role): tipo, código de confirmação, HMAC do ID da Meta,
+  status (`completed` ou `pending_review` quando o motor não respondeu), quantas conexões saíram.
+- Exclusão de dados responde `{url, confirmation_code}`; a página pública `https://vertal.dev/data-deletion?code=…`
+  (`DataDeletionPage`, pt-BR) consulta `GET …/meta-data-deletion?code=…`. Sem código, a página explica o que é
+  apagado e como pedir.
+- `pending_review`: rodar de novo a busca quando o motor voltar (ou apagar à mão) e atualizar o status.
+- Não cobre o canal do operador (`virtual-chat-instagram-webhook`, conta do próprio Vertal).
+
+## Cloudflare (26/11/2026)
+
+- A Cloudflare abriu o **OAuth self-managed** para todos os planos (03/06/2026). Cliente **Vertal Dev** criado na conta
+  `43233355e2f598902aab32fce90d2edd` (Manage Account → OAuth clients): client ID `00d74ade9c1be1bfb6b998f7d47d46d7`
+  (em `PUBLIC_OAUTH_CLIENT_IDS.CLOUDFLARE`), segredo em `FLUXOS_OAUTH_CLOUDFLARE_SECRET`, `client_secret_post`,
+  `authorization_code` + `refresh_token`, retorno `https://vertal.dev/fluxos/oauth/cloudflare`.
+- Escopos: `user-details.read account-settings.read memberships.read zone.read dns.read dns.write workers-scripts.read
+  workers-scripts.write workers-routes.write` + opcionais `workers-kv-storage.write page.write cache.purge` + `offline_access`.
+- Visibilidade: clientes novos nascem **private** (só membros da conta autorizam). Para qualquer usuário: verificar o
+  domínio do client URL (TXT `cloudflare_oauth_client_publisher=…` em vertal.dev) e promover a **public** (permanente).
+- Motor: app `cloudflare` (fork PR #17). Tela: `/connectors/cloudflare/setup` abre com "Entrar com Cloudflare";
+  o API token (link com permissões pré-marcadas) fica em "Avançado".

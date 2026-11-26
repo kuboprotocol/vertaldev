@@ -514,6 +514,8 @@ export interface ModelReply {
   label: string;
   cost: string;
   fellBack: boolean;
+  /** Tokens e custo desta chamada (opcional; usado só pela Data Library). */
+  usage?: { inputTokens?: number; outputTokens?: number; costUsd?: number };
 }
 
 export interface RunInput {

@@ -44,3 +44,35 @@ describe('catálogo unificado Vertal Dev ↔ Vertal Fluxos', () => {
     expect(ui).not.toMatch(/automatisch|huginn|railway/i)
   })
 })
+
+describe('apps escondidos do catálogo', () => {
+  it('Flickr não aparece em /connectors', async () => {
+    const { fluxosConnectors, HIDDEN_FLUXOS_APPS } = await import('@/lib/fluxosConnectors')
+    expect(HIDDEN_FLUXOS_APPS.has('flickr')).toBe(true)
+    expect(fluxosConnectors.some(c => c.slug === 'fluxos-flickr')).toBe(false)
+  })
+  it('Strava não aparece em /connectors', async () => {
+    const { fluxosConnectors, HIDDEN_FLUXOS_APPS } = await import('@/lib/fluxosConnectors')
+    expect(HIDDEN_FLUXOS_APPS.has('strava')).toBe(true)
+    expect(fluxosConnectors.some(c => c.slug === 'fluxos-strava')).toBe(false)
+  })
+  it('pendentes importantes continuam no catálogo', () => {
+    for (const app of ['linkedin', 'ebay', 'tiktok-ads', 'kwai-ads', 'amazon-ads', 'reddit', 'hubspot', 'trello']) {
+      expect(getConnectorBySlug(`fluxos-${app}`)?.fluxosApp).toBe(app)
+    }
+    expect(getConnectorBySlug('discord')?.fluxosApp).toBe('discord')
+  })
+})
+
+describe('LinkedIn e X no catálogo', () => {
+  it('LinkedIn aparece com logo próprio', () => {
+    const li = getConnectorBySlug('fluxos-linkedin')
+    expect(li?.name).toBe('LinkedIn')
+    expect(li?.logoUrl).toBe('/connectors/linkedin.svg')
+  })
+  it('Twitter aparece como X (Twitter), mesmo slug e app', () => {
+    const x = getConnectorBySlug('fluxos-twitter')
+    expect(x?.name).toBe('X (Twitter)')
+    expect(x?.fluxosApp).toBe('twitter')
+  })
+})

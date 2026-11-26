@@ -97,6 +97,37 @@ export interface RunRequest {
   plan?: unknown;
   projectId?: string | null;
   origin?: 'vertal_code_ai' | 'vertal_chat' | 'vibe_code';
+  /** "team_run" = Equipe Vertal (só para quem o servidor liberou). Padrão: "run". */
+  action?: 'run' | 'team_run';
+}
+
+/**
+ * VERTAL Code AI · Data Library: repassa ao servidor o consentimento que o visitante JÁ deu no banner de cookies
+ * (mesmas chaves do ads-consent: "cookie_consent" e "cookie_consent_evidence") e o Global Privacy Control.
+ * Não cria tela nem grava nada; sem escolha gravada devolve undefined (o servidor então não envia).
+ */
+export function readVertalCodeAiDataConsent(
+  storage: Pick<Storage, 'getItem'> | null = typeof localStorage !== 'undefined' ? localStorage : null,
+  nav: { globalPrivacyControl?: boolean } | null = typeof navigator !== 'undefined' ? (navigator as { globalPrivacyControl?: boolean }) : null,
+): { cookie: 'granted' | 'denied' | null; purposes: string[]; noticeVersion: string | null; gpc: boolean } | undefined {
+  try {
+    const gpc = nav?.globalPrivacyControl === true;
+    const raw = storage?.getItem('cookie_consent');
+    const cookie = raw === 'granted' || raw === 'denied' ? raw : null;
+    if (!cookie && !gpc) return undefined;
+    let purposes: string[] = [];
+    let noticeVersion: string | null = null;
+    try {
+      const ev = JSON.parse(storage?.getItem('cookie_consent_evidence') ?? 'null');
+      if (ev && Array.isArray(ev.purposes)) purposes = ev.purposes.filter((p: unknown): p is string => typeof p === 'string').slice(0, 10);
+      if (ev && typeof ev.noticeVersion === 'string') noticeVersion = ev.noticeVersion.slice(0, 60);
+    } catch {
+      /* evidência ilegível: só a escolha */
+    }
+    return { cookie, purposes, noticeVersion, gpc };
+  } catch {
+    return undefined;
+  }
 }
 
 export async function streamRun(
@@ -110,7 +141,7 @@ export async function streamRun(
     method: 'POST',
     signal,
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'run', ...req, projectId: req.projectId ?? undefined }),
+    body: JSON.stringify({ ...req, action: req.action ?? 'run', projectId: req.projectId ?? undefined, dataConsent: readVertalCodeAiDataConsent() }),
   });
   if (!r.ok || !r.body) {
     let err = `http_${r.status}`;
@@ -139,7 +170,7 @@ export async function postAction<T>(token: string, body: Record<string, unknown>
   const r = await fetchImpl(functionUrl(), {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify(body.action === 'image' || body.action === 'video' ? { ...body, dataConsent: readVertalCodeAiDataConsent() } : body),
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error((data as { error?: string })?.error ?? `http_${r.status}`);
@@ -155,6 +186,7 @@ export const ERROR_TEXT: Record<string, string> = {
   vertal_code_ai_media_disabled: 'Imagem e vídeo ainda não foram liberados na sua conta.',
   vca_media_failed: 'Não consegui gerar agora. Tente de novo em alguns minutos.',
   job_not_found: 'Esse vídeo não foi encontrado.',
+  vertal_code_ai_team_disabled: 'A Equipe Vertal ainda não foi liberada na sua conta.',
 };
 
 export function errorText(code: string): string {

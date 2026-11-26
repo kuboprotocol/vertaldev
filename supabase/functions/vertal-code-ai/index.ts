@@ -8,6 +8,8 @@
 //   POST {action:"image", prompt, images?}        → {images:[dataUrl], text, model, estimate}  (só com VERTAL_CODE_AI_MEDIA_ENABLED)
 //   POST {action:"video", prompt}                 → {job, model, estimate}; depois {action:"video_status", job}
 //   POST {action:"video_content", job}            → bytes do vídeo (quando o provedor não devolve link assinado)
+//   POST {action:"senses", op:"status|decide|photo|frames|hear|speak"} → Vertal Decide / Visão / Ouvir (só com mídia ligada e endpoint próprio)
+//   POST {action:"novela", op:"submit|status|result"}  → Vertal Novela (~2 min); job assinado como o vídeo
 //   POST {action:"prospector", op, ...}           → Vertal Prospector (só com VERTAL_PROSPECTOR_ENABLED e o usuário em VERTAL_PROSPECTOR_USER_IDS)
 //   POST {action:"growth", op, ...}               → Vertal Growth Team (só com VERTAL_GROWTH_TEAM_ENABLED e o mesmo usuário liberado no Prospector)
 //   POST ?app=crm {op, ...}                       → Vertal CRM (só com VERTAL_CRM_ENABLED e o usuário em VERTAL_CRM_USER_IDS;
@@ -22,33 +24,52 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import {
   buildChain,
   buildOptionChain,
-  estimateCostUsd,
-  estimateTokens,
   extractImages,
   imageRequestBody,
   isVcaMediaEnabled,
   mediaCostUsd,
   parseVcaOption,
   retailCredits,
-  VCA_IMAGE_MODELS,
   VCA_MEDIA_OPTIONS,
   VCA_OPTION_LABEL,
   VCA_TEXT_OPTIONS,
-  VCA_VIDEO_MODELS,
   videoRequestBody,
+  expandVcaEnv,
+  extractOwnImage,
+  imageModels,
+  ownImageRequestBody,
+  ownVideoRequestBody,
+  ownVideoStatus,
+  VCA_OWN_JOB_PREFIX,
+  videoModels,
   isVcaEnabled,
   isVcaUserAllowed,
   publicModelInfo,
-  requestBody,
-  shouldFallback,
   type VcaChatMessage,
   type VcaEffort,
   type VcaMode,
   type VcaModel,
-  withinSelfHostedBudget,
 } from "../_shared/vertalCodeAi/router.ts";
 import { isSafePath } from "../_shared/vibeAgentCore.ts";
-import { type ModelReply, parseVcaTurn, runVertalCodeAi, type VcaEvent, type VcaPlan } from "../_shared/vertalCodeAi/core.ts";
+import { type ModelReply, runVertalCodeAi, type VcaEvent, type VcaPlan } from "../_shared/vertalCodeAi/core.ts";
+import { runChain } from "../_shared/vertalCodeAi/chainRunner.ts";
+import { sensesConfig } from "../_shared/vertalCodeAi/senses.ts";
+import { handleNovela, handleSenses, type SensesHandlerDeps } from "../_shared/vertalCodeAi/sensesHandler.ts";
+// Equipe Vertal (3 núcleos + 5 papéis), memória expansiva e Vertal Decide — aditivo, desligado por padrão:
+// VERTAL_CODE_AI_TEAM_ENABLED + VERTAL_CODE_AI_TEAM_USER_IDS (lista própria; vazia = ninguém).
+import {
+  expandTeamEnv,
+  isVcaTeamEnabled,
+  isVcaTeamMemoryEnabled,
+  isVcaTeamSandboxEnabled,
+  runVertalTeam,
+  teamBudgetFromEnv,
+  VcaBudgetGuard,
+} from "../_shared/vertalCodeAi/team.ts";
+import { deleteMemories, listMemories, type MemoryStoreDeps, rememberRun, retrieveMemories } from "../_shared/vertalCodeAi/memory.ts";
+import { analyzeWithDecide, type DecisionQuestions, makeDecider } from "../_shared/vertalCodeAi/decide.ts";
+import { runSandboxTest } from "../_shared/vertalCodeAi/sandbox.ts";
+import { repairAgentJson } from "../_shared/chatOrchestrator.ts";
 // Vertal Prospector (aditivo, desligado por padrão: VERTAL_PROSPECTOR_ENABLED + VERTAL_PROSPECTOR_USER_IDS).
 import { isProspectorEnabled } from "../_shared/vertalProspector/core.ts";
 import { handleProspector } from "../_shared/vertalProspector/handler.ts";
@@ -63,6 +84,17 @@ import { autoImport as vertalCrmAutoImport, handleCrm, hashApiKey as hashVertalC
 import { verifyFluxosKey as verifyVertalCrmFluxosKey } from "../_shared/fluxosBroker.ts";
 import { makeEngine as makeVertalCrmEngine } from "../_shared/fluxosApps.ts";
 import { vertalPersonaEnabled } from "../_shared/vertalPersona.ts";
+// VERTAL Code AI → Vertal Data Library (Vertaldephin): desligado por padrão (config VERTAL_DATA_LIBRARY); só com consentimento gravado.
+import {
+  dataLibraryConfig as vcaDataLibraryConfig,
+  decideConsent as vcaDlDecideConsent,
+  parseCookieClaim as vcaDlCookieClaim,
+  rewardsConsentFromRows as vcaDlRewardsConsent,
+  trackMedia as vcaDlTrackMedia,
+  type VcaConsentDecision,
+  VcaDataLibrarySender,
+  VcaRunTracker,
+} from "../_shared/vertalCodeAi/dataLibrary.ts";
 
 // Cliente do Supabase e módulo TypeScript sem tipos gerados (mesmo padrão do vibe-code-agent).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -80,7 +112,8 @@ const ORIGINS = ["vertal_code_ai", "vibe_code", "vertal_chat"] as const;
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-const env = () => Deno.env.toObject();
+// VERTAL_GPU_CONFIG (um só segredo) expande só as chaves da GPU própria; o resto do ambiente fica igual.
+const env = () => expandVcaEnv(Deno.env.toObject());
 
 // Catálogo grátis ao vivo do OpenRouter (cache por isolate, 1 h). Falha = mantém a lista configurada.
 let liveFree: { at: number; ids: string[] } | null = null;
@@ -96,6 +129,20 @@ async function liveFreeIds(): Promise<string[] | null> {
   } catch {
     return null;
   }
+}
+
+// Equipe Vertal: config própria (também aceita as chaves VERTAL_CODE_AI_TEAM_* / VERTAL_DECIDE_* dentro de VERTAL_GPU_CONFIG).
+const teamEnv = () => expandTeamEnv(env());
+
+/** Embedding local do Edge Runtime (gte-small, 384 dimensões, sem custo). Sem ele, a memória busca por palavras. */
+let gteSession: Loose = null;
+async function embedText(text: string): Promise<number[] | null> {
+  if (/^(0|false|off|no)$/i.test(Deno.env.get("VERTAL_CODE_AI_TEAM_EMBEDDINGS") ?? "")) return null;
+  const S = (globalThis as Loose).Supabase;
+  if (!S?.ai?.Session || !text.trim()) return null;
+  gteSession ??= new S.ai.Session("gte-small");
+  const out = await gteSession.run(text, { mean_pool: true, normalize: true });
+  return Array.from(out as ArrayLike<number>);
 }
 
 /** Checagem de sintaxe real com o compilador TypeScript (carregado só quando preciso). */
@@ -121,136 +168,46 @@ async function checkSyntax(path: string, content: string): Promise<string[]> {
 
 // LLM própria que falhou por erro/tempo fica de fora por um minuto (por isolate), para não atrasar cada turno.
 const selfHostedCooldown = new Map<string, number>();
-const SELF_HOSTED_COOLDOWN_MS = 60_000;
-/** Tempo que sempre sobra para a reserva (grátis/paga) depois de tentar a LLM própria. */
-const FALLBACK_RESERVE_MS = 45_000;
 
-/** Lê o streaming OpenAI-compatível com prazo para o 1º pedaço e prazo total. */
-async function streamWithBudget(r: Response, firstTokenMs: number, abort: AbortController): Promise<string> {
-  const reader = r.body!.getReader();
-  const dec = new TextDecoder();
-  let buf = "";
-  let out = "";
-  let gotFirst = false;
-  const firstTimer = setTimeout(() => {
-    if (!gotFirst) abort.abort(new DOMException("first token timeout", "TimeoutError"));
-  }, firstTokenMs);
-  try {
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      let nl: number;
-      while ((nl = buf.indexOf("\n")) >= 0) {
-        const line = buf.slice(0, nl).trim();
-        buf = buf.slice(nl + 1);
-        if (!line.startsWith("data:")) continue;
-        const data = line.slice(5).trim();
-        if (data === "[DONE]") return out;
-        try {
-          const piece = JSON.parse(data)?.choices?.[0]?.delta?.content;
-          if (typeof piece === "string" && piece) {
-            gotFirst = true;
-            out += piece;
-          }
-        } catch {
-          /* pedaço parcial */
-        }
-      }
-    }
-    return out;
-  } finally {
-    clearTimeout(firstTimer);
-  }
-}
-
-async function callChain(
+/** Executa a cadeia (lógica em _shared/vertalCodeAi/chainRunner.ts, testada no Vitest). */
+function callChain(
   chain: VcaModel[],
   messages: VcaChatMessage[],
   opts: { json: boolean; maxTokens: number; effort: VcaEffort; deadline: number },
 ): Promise<ModelReply> {
-  const e = env();
-  const failures: string[] = [];
-  const inputTokens = estimateTokens(messages);
-  for (let i = 0; i < chain.length; i++) {
-    const m = chain[i];
-    const left = opts.deadline - Date.now();
-    if (left < 8_000) break;
-    const budget = m.budget;
-    if (budget) {
-      // LLM própria: só pedidos pequenos, com tempo curto, e sem comer o tempo da reserva.
-      if ((selfHostedCooldown.get(m.id) ?? 0) > Date.now()) {
-        failures.push(`${m.id}:cooldown`);
-        continue;
-      }
-      const ownLeft = Math.min(budget.totalMs, left - FALLBACK_RESERVE_MS);
-      if (!withinSelfHostedBudget(m, inputTokens, ownLeft)) {
-        failures.push(`${m.id}:skip(${inputTokens}tok)`);
-        continue;
-      }
-    }
-    const timeout = budget
-      ? Math.min(budget.totalMs, left - FALLBACK_RESERVE_MS)
-      : Math.min(left - 3_000, m.provider === "ollama" ? 240_000 : 90_000);
-    const key = (e[m.keyEnv] ?? "").trim();
-    const abort = new AbortController();
-    const totalTimer = setTimeout(() => abort.abort(new DOMException("timeout", "TimeoutError")), timeout);
-    try {
-      const reqBody = requestBody(m, messages, { effort: opts.effort, json: opts.json, maxTokens: opts.maxTokens });
-      const r = await fetch(m.url, {
-        method: "POST",
-        signal: abort.signal,
-        headers: {
-          "Content-Type": "application/json",
-          ...(key ? { Authorization: `Bearer ${key}` } : {}),
-          ...(m.provider === "openrouter" ? { "HTTP-Referer": "https://vertal.dev", "X-Title": "VERTAL Code AI" } : {}),
-        },
-        body: JSON.stringify(m.provider === "openrouter" ? { ...reqBody, usage: { include: true } } : reqBody),
-      });
-      if (!r.ok) {
-        failures.push(`${m.id}:${r.status}`);
-        await r.body?.cancel();
-        if (budget) selfHostedCooldown.set(m.id, Date.now() + SELF_HOSTED_COOLDOWN_MS);
-        if (budget || shouldFallback(r.status)) continue;
-        break;
-      }
-      let content: unknown;
-      let usage: unknown = {};
-      if (reqBody.stream === true && r.body) {
-        content = await streamWithBudget(r, budget?.firstTokenMs ?? timeout, abort);
-      } else {
-        const d = await r.json();
-        content = d?.choices?.[0]?.message?.content;
-        usage = d?.usage ?? {};
-      }
-      if (typeof content !== "string" || !content.trim()) {
-        failures.push(`${m.id}:empty`);
-        continue;
-      }
-      // LLM própria é pequena: se não entregou o JSON pedido, a reserva tenta (sem gastar um turno).
-      if (budget && opts.json && parseVcaTurn(content).retry) {
-        failures.push(`${m.id}:bad_json`);
-        continue;
-      }
-      const u = usage as { prompt_tokens?: number; completion_tokens?: number; cost?: number };
-      const costUsd = typeof u.cost === "number"
-        ? u.cost
-        : estimateCostUsd(m, u.prompt_tokens ?? inputTokens, u.completion_tokens ?? Math.ceil(content.length / 3.5));
-      console.log(
-        `[vertal-code-ai] ok ${m.id} (${m.provider}/${m.model}) in=${inputTokens} tokens=${JSON.stringify(usage)} ` +
-          `cost_usd=${costUsd.toFixed(6)} retail_credits=${retailCredits(costUsd)} (cobrança desligada)`,
-      );
-      const info = publicModelInfo(m);
-      return { content, label: info.label, cost: info.cost, fellBack: failures.some((f) => !f.includes(":skip(")) };
-    } catch (err) {
-      failures.push(`${m.id}:${err instanceof Error ? err.name : "err"}`);
-      if (budget) selfHostedCooldown.set(m.id, Date.now() + SELF_HOSTED_COOLDOWN_MS);
-    } finally {
-      clearTimeout(totalTimer);
-    }
+  return runChain(chain, messages, opts, {
+    fetch: (url, init) => fetch(url, init),
+    env: env(),
+    cooldown: selfHostedCooldown,
+    log: (m) => console.log(m),
+    warn: (m) => console.warn(m),
+  });
+}
+
+// ── VERTAL Code AI → Data Library (Vertaldephin). Sem config = null = nada muda (nem consulta ao banco). ──
+let vcaDlSender: { sig: string; sender: VcaDataLibrarySender } | null = null;
+const vcaDlDefer = (p: Promise<unknown>) => (globalThis as Loose).EdgeRuntime?.waitUntil?.(p);
+function vcaDataLibrary(admin: Loose, userId: string, body: Record<string, Loose>): { sender: VcaDataLibrarySender; consent: Promise<VcaConsentDecision> } | null {
+  try {
+    const cfg = vcaDataLibraryConfig(Deno.env.toObject());
+    if (!cfg) return null;
+    const sig = `${cfg.endpoint}|${cfg.key}|${cfg.policy}`;
+    if (vcaDlSender?.sig !== sig) vcaDlSender = { sig, sender: new VcaDataLibrarySender(cfg, { fetch, warn: (m) => console.warn(m) }) };
+    const cookie = vcaDlCookieClaim(body.dataConsent);
+    // Consulta em paralelo (o pedido não espera): aceite do Vertal Node no painel de recompensas (vertal_nodes.opted_in).
+    const consent = (async () => {
+      if (!cfg.sources.includes("rewards_panel")) return vcaDlDecideConsent(cfg, "none", cookie);
+      const { data, error } = await admin.from("vertal_nodes").select("opted_in").eq("user_id", userId);
+      return vcaDlDecideConsent(cfg, error ? "none" : vcaDlRewardsConsent(data), cookie);
+    })().catch(() => vcaDlDecideConsent(cfg, "none", cookie));
+    return { sender: vcaDlSender.sender, consent };
+  } catch {
+    return null;
   }
-  console.warn(`[vertal-code-ai] chain failed: ${failures.join(",")}`);
-  throw new Error("vca_all_models_failed");
+}
+function vcaDlMedia(admin: Loose, userId: string, body: Record<string, Loose>, m: Parameters<typeof vcaDlTrackMedia>[1]): void {
+  const dl = vcaDataLibrary(admin, userId, body);
+  if (dl) vcaDlTrackMedia({ ...dl, userId, runId: crypto.randomUUID(), defer: vcaDlDefer }, m);
 }
 
 async function sha256(s: string): Promise<string> {
@@ -516,6 +473,30 @@ Deno.serve(async (req) => {
     return json(200, { models: chain.map(publicModelInfo), paidEnabled: chain.some((m) => m.cost === "paid"), options, mediaEnabled });
   }
 
+  // ─── Equipe Vertal: status e memória (só para quem está na lista da Equipe; os demais, 404) ───
+  const teamActions = ["team_status", "team_run", "memory_list", "memory_delete", "decide", "decide_analyze"];
+  if (teamActions.includes(action) && !isVcaTeamEnabled(teamEnv(), userId)) return json(404, { error: "vertal_code_ai_team_disabled" });
+  const memDeps = (): MemoryStoreDeps => ({
+    admin,
+    userClient,
+    userId,
+    projectId,
+    embed: embedText,
+    warn: (m) => console.warn(m),
+  });
+  if (action === "team_status") {
+    const te = teamEnv();
+    return json(200, { team: true, memory: isVcaTeamMemoryEnabled(te), sandbox: isVcaTeamSandboxEnabled(te), decide: true });
+  }
+  if (action === "memory_list") {
+    if (!isVcaTeamMemoryEnabled(teamEnv())) return json(200, { available: false, items: [] });
+    return json(200, await listMemories(memDeps(), { allProjects: body.allProjects === true }));
+  }
+  if (action === "memory_delete") {
+    if (!isVcaTeamMemoryEnabled(teamEnv())) return json(200, { available: false, deleted: 0 });
+    return json(200, await deleteMemories(memDeps(), { ids: body.ids, clear: body.clear === true, clearAll: body.clearAll === true }));
+  }
+
   // Limite por usuário (balde próprio; não divide cota com o Vibe Code).
   try {
     const { data: rl } = await admin.rpc("bump_rate_limit", { _bucket: "vertal_code_ai", _user: userId, _window_seconds: 60 });
@@ -534,6 +515,155 @@ Deno.serve(async (req) => {
     for (const r of (data ?? []) as Array<{ path: string; content: string }>) if (!out.has(r.path)) out.set(r.path, r.content ?? "");
     return out;
   };
+
+  // Cadeia barata/própria (coordenação e Vertal Decide): própria → grátis → reserva; nunca paga.
+  const coordinatorChain = async (promptTokens: number) =>
+    buildOptionChain(env(), { option: "livre", effort: "low", promptTokens, liveFreeIds: await liveFreeIds() });
+
+  if (action === "decide" || action === "decide_analyze") {
+    const coord = await coordinatorChain(1_000);
+    const deadline = Date.now() + 60_000;
+    const callLlm = coord.length ? (m: VcaChatMessage[], o: { json: boolean; maxTokens: number }) => callChain(coord, m, { ...o, effort: "low", deadline }) : undefined;
+    const decide = makeDecider({ fetch: (u, i) => fetch(u, i), env: teamEnv(), callLlm, log: (m) => console.log(m) });
+    if (action === "decide") {
+      const state = body.state && typeof body.state === "object" && !Array.isArray(body.state) ? body.state : null;
+      const questions = body.questions && typeof body.questions === "object" ? (body.questions as DecisionQuestions) : null;
+      if (!state || !questions || JSON.stringify(state).length > 120_000) return json(400, { error: "invalid_decision_request" });
+      const r = await decide(state, questions);
+      return json(200, { ...r, source: r.source === "none" ? "none" : "vertal_decide", engine: r.source });
+    }
+    if (!body.dossier) return json(400, { error: "invalid_decision_request" });
+    const r = await analyzeWithDecide(
+      { dossier: body.dossier, question: typeof body.question === "string" ? body.question.slice(0, 500) : undefined, causes: Array.isArray(body.causes) ? body.causes : undefined },
+      {
+        decide,
+        proposeCauses: callLlm
+          ? async (dossier, question) => {
+            const reply = await callLlm([
+              { role: "system", content: 'Você é analista de negócios. Liste de 3 a 5 causas candidatas, curtas e distintas, para o problema do dossiê. Responda só JSON: {"causes":["..."]}. Português do Brasil.' },
+              { role: "user", content: `${question ? `Pergunta: ${question}\n\n` : ""}Dossiê:\n${dossier}` },
+            ], { json: true, maxTokens: 400 });
+            const fixed = repairAgentJson(reply.content);
+            const list = fixed && Array.isArray(fixed.value.causes) ? fixed.value.causes : [];
+            return list.filter((c: unknown): c is string => typeof c === "string").map((c: string) => c.slice(0, 200));
+          }
+          : undefined,
+      },
+    );
+    return json(200, { ...r, source: r.source === "none" ? "none" : "vertal_decide", engine: r.source });
+  }
+
+  if (action === "team_run") {
+    const te = teamEnv();
+    const mode: VcaMode = body.mode === "plan" ? "plan" : "build";
+    const effort: VcaEffort = EFFORTS.includes(body.effort) ? body.effort : "auto";
+    const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+    if (!prompt) return json(400, { error: "empty_prompt" });
+    const images: string[] = (Array.isArray(body.images) ? body.images : [])
+      .filter((u: unknown): u is string => typeof u === "string" && (/^data:image\/(png|jpe?g|webp|gif);base64,/.test(u) || /^https:\/\//.test(u)) && u.length < 6_000_000)
+      .slice(0, 4);
+    const attachments = (Array.isArray(body.attachments) ? body.attachments : [])
+      .filter((a: Loose) => a && typeof a.path === "string" && typeof a.content === "string")
+      .slice(0, 10)
+      .map((a: Loose) => ({ path: a.path.slice(0, 300), content: a.content.slice(0, 200_000) }));
+    const history = (Array.isArray(body.history) ? body.history : [])
+      .filter((h: Loose) => h && (h.role === "user" || h.role === "assistant") && typeof h.content === "string")
+      .slice(-8);
+    const option = parseVcaOption(body.option);
+    if (option === "imagem" || option === "video") return json(400, { error: "use_media_action" });
+    const modelId = typeof body.modelId === "string" ? body.modelId.slice(0, 64) : null;
+    const deadlineMs = Number(Deno.env.get("VERTAL_CODE_AI_DEADLINE_MS")) || 140_000;
+    const deadline = Date.now() + deadlineMs;
+    const chainOpts = { effort, needsVision: images.length > 0, promptTokens: Math.ceil(prompt.length / 3.5), liveFreeIds: await liveFreeIds() };
+    // Engenheiros: a cadeia de sempre da opção escolhida (própria primeiro, grátis, pago só com ALLOW_PAID).
+    const engineerChain = option === "auto" && !modelId ? buildChain(env(), chainOpts) : buildOptionChain(env(), { ...chainOpts, option, modelId });
+    if (!engineerChain.length) return json(503, { error: "no_model_configured" });
+    const coordChain = await coordinatorChain(chainOpts.promptTokens);
+    const coord = coordChain.length ? coordChain : engineerChain;
+    const runId = crypto.randomUUID();
+    const memoryOn = isVcaTeamMemoryEnabled(te);
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const send = (e: unknown) => {
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(e)}\n\n`));
+          } catch {
+            /* cliente fechou */
+          }
+        };
+        send({ kind: "status", title: mode === "plan" ? "Equipe Vertal planejando" : "Equipe Vertal construindo", origin, team: true });
+        try {
+          let files: Map<string, string> | null = null;
+          const getFiles = async () => (files ??= await latestFiles());
+          const callCoordinator = (m: VcaChatMessage[], o: { json: boolean; maxTokens: number }) => callChain(coord, m, { ...o, effort: "low", deadline });
+          const result = await runVertalTeam(
+            {
+              mode,
+              effort,
+              prompt,
+              history,
+              images,
+              attachments,
+              plan: body.plan && typeof body.plan === "object" ? (body.plan as VcaPlan) : null,
+              persona: vertalPersonaEnabled(Deno.env.get("VERTAL_PERSONA_ENABLED")),
+              runId,
+              maxEngineers: Number(te.VERTAL_CODE_AI_TEAM_MAX_ENGINEERS) || 3,
+              maxReviewRounds: te.VERTAL_CODE_AI_TEAM_REVIEW_ROUNDS !== undefined ? Number(te.VERTAL_CODE_AI_TEAM_REVIEW_ROUNDS) : 1,
+            },
+            {
+              callCoordinator,
+              callEngineer: (m, o) => callChain(engineerChain, m, { ...o, effort, deadline }),
+              listPaths: async () => [...(await getFiles()).keys()],
+              readFile: async (p) => (await getFiles()).get(p),
+              indexSource: async () => [...(await getFiles())].filter(([, c]) => c.length < 60_000).map(([path, content]) => ({ path, content })),
+              checkSyntax,
+              sandboxTest: isVcaTeamSandboxEnabled(te)
+                ? async (changes) => {
+                  const orch = await import("../_shared/orchestrator.ts");
+                  if (orch.orchestratorDriver() !== "e2b") return { ran: false, ok: false, issues: [] };
+                  return runSandboxTest(changes, {
+                    provision: (sid, t) => orch.provisionContainer(sid, "vertal-code-ai", userId, t),
+                    exec: (ref, cmd, ms) => orch.execInContainer(ref, cmd, "vertal_code_ai_check", ms),
+                    destroy: (ref) => orch.destroyContainer(ref),
+                  }, { runId, timeoutMs: Number(te.VERTAL_CODE_AI_TEAM_E2B_TIMEOUT_MS) || 45_000 });
+                }
+                : undefined,
+              memory: memoryOn
+                ? {
+                  retrieve: (q) => retrieveMemories(memDeps(), q),
+                  remember: (drafts, summary) => rememberRun(memDeps(), drafts, summary, { runId }),
+                }
+                : undefined,
+              decide: makeDecider({ fetch: (u, i) => fetch(u, i), env: te, callLlm: callCoordinator, log: (m) => console.log(m) }),
+              emit: send,
+              budget: new VcaBudgetGuard(teamBudgetFromEnv(te, Math.max(20_000, deadline - Date.now() - 2_000))),
+            },
+          );
+          send({
+            kind: "base_hashes",
+            hashes: Object.fromEntries(await Promise.all(result.changes.map(async (c) => [c.path, await sha256(c.before)]))),
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          send({
+            kind: "error",
+            message: msg === "vca_all_models_failed"
+              ? "Todos os modelos estão ocupados ou sem cota agora. Tente em alguns minutos."
+              : "A Equipe Vertal não conseguiu concluir o pedido.",
+          });
+          console.error("[vertal-code-ai] team_run failed:", msg);
+        } finally {
+          try {
+            controller.close();
+          } catch {
+            /* já fechado */
+          }
+        }
+      },
+    });
+    return new Response(stream, { headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });
+  }
 
   if (action === "apply") {
     const changes = Array.isArray(body.changes) ? body.changes.slice(0, 40) : [];
@@ -595,13 +725,52 @@ Deno.serve(async (req) => {
         .filter((u: unknown): u is string => typeof u === "string" && (/^data:image\/(png|jpe?g|webp);base64,/.test(u) || /^https:\/\//.test(u)) && u.length < 6_000_000)
         .slice(0, 2);
       const fails: string[] = [];
-      for (const m of VCA_IMAGE_MODELS) {
+      const imgStart = Date.now();
+      for (const m of imageModels(e)) {
         const t0 = Date.now();
+        if (m.provider === "own") {
+          // Própria (GPU): só texto → imagem; com imagem de referência vai direto para a de sempre.
+          if (refs.length) {
+            fails.push(`${m.id}:skip(refs)`);
+            continue;
+          }
+          try {
+            const r = await fetch(`${m.url}/generate`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${(e[m.keyEnv ?? ""] ?? "").trim()}`, "Content-Type": "application/json" },
+              signal: AbortSignal.timeout(Number(e.VERTAL_OWN_IMAGE_TIMEOUT_MS) || 70_000),
+              body: JSON.stringify(ownImageRequestBody(mprompt)),
+            });
+            if (!r.ok) {
+              fails.push(`${m.id}:${r.status}`);
+              await r.body?.cancel();
+              continue;
+            }
+            const img = extractOwnImage(await r.json());
+            if (!img) {
+              fails.push(`${m.id}:no_image`);
+              continue;
+            }
+            const usd = mediaCostUsd(m);
+            console.log(`[vertal-code-ai] image ok ${m.id} (${m.model}) ms=${Date.now() - t0} est_usd=${usd.toFixed(6)}`);
+            vcaDlMedia(admin, userId, body, { mediaType: "image", ok: true, latencyMs: Date.now() - imgStart, cost: "self_hosted", label: m.label, fellBack: fails.some((f) => !f.includes(":skip(")), costUsd: usd, referenceImages: refs.length, outputs: 1, videoSeconds: null });
+            return json(200, {
+              images: [img],
+              text: "",
+              model: { id: m.id, label: m.label, cost: "self_hosted" },
+              estimate: { usd: Math.round(usd * 1e6) / 1e6, credits: retailCredits(usd), charged: false },
+            });
+          } catch (err) {
+            fails.push(`${m.id}:${err instanceof Error ? err.name : "err"}`);
+          }
+          continue;
+        }
         try {
           const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
             headers: orHeaders,
-            signal: AbortSignal.timeout(90_000),
+            // Se a própria já gastou tempo, a de sempre fica com o que sobra (nunca mais de 90 s).
+            signal: AbortSignal.timeout(Math.max(20_000, Math.min(90_000, 140_000 - (Date.now() - imgStart)))),
             body: JSON.stringify({ ...imageRequestBody(m, mprompt, refs), usage: { include: true } }),
           });
           if (!r.ok) {
@@ -617,6 +786,7 @@ Deno.serve(async (req) => {
           }
           const usd = typeof d?.usage?.cost === "number" ? d.usage.cost : mediaCostUsd(m);
           console.log(`[vertal-code-ai] image ok ${m.id} (${m.model}) ms=${Date.now() - t0} cost_usd=${usd.toFixed(6)}`);
+          vcaDlMedia(admin, userId, body, { mediaType: "image", ok: true, latencyMs: Date.now() - imgStart, cost: "paid", label: m.label, fellBack: fails.some((f) => !f.includes(":skip(")), costUsd: usd, referenceImages: refs.length, outputs: Math.min(2, out.images.length), videoSeconds: null });
           return json(200, {
             images: out.images.slice(0, 2),
             text: out.text.slice(0, 2_000),
@@ -628,13 +798,47 @@ Deno.serve(async (req) => {
         }
       }
       console.warn(`[vertal-code-ai] image failed: ${fails.join(",")}`);
+      vcaDlMedia(admin, userId, body, { mediaType: "image", ok: false, latencyMs: Date.now() - imgStart, cost: null, label: null, fellBack: fails.length > 1, costUsd: 0, referenceImages: refs.length, outputs: 0, videoSeconds: null });
       return json(502, { error: "vca_media_failed" });
     }
 
     if (action === "video") {
       if (!mprompt) return json(400, { error: "empty_prompt" });
       const fails: string[] = [];
-      for (const m of VCA_VIDEO_MODELS) {
+      const vidStart = Date.now(); // VERTAL Code AI · Data Library (latência até o envio do trabalho)
+      for (const m of videoModels(e)) {
+        if (m.provider === "own") {
+          try {
+            const r = await fetch(`${m.url}/submit`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${(e[m.keyEnv ?? ""] ?? "").trim()}`, "Content-Type": "application/json" },
+              signal: AbortSignal.timeout(30_000),
+              body: JSON.stringify(ownVideoRequestBody(m, mprompt)),
+            });
+            if (!r.ok) {
+              fails.push(`${m.id}:${r.status}`);
+              await r.body?.cancel();
+              continue;
+            }
+            const d = await r.json();
+            if (typeof d?.id !== "string" || !d.id) {
+              fails.push(`${m.id}:no_job`);
+              continue;
+            }
+            const usd = mediaCostUsd(m);
+            console.log(`[vertal-code-ai] video submitted ${m.id} (${m.model}) est_usd=${usd.toFixed(4)}`);
+            vcaDlMedia(admin, userId, body, { mediaType: "video", ok: true, latencyMs: Date.now() - vidStart, cost: "self_hosted", label: m.label, fellBack: fails.length > 0, costUsd: usd, referenceImages: 0, outputs: 1, videoSeconds: m.seconds ?? null });
+            return json(202, {
+              job: await signJob(userId, `${VCA_OWN_JOB_PREFIX}${d.id}`),
+              status: "pending",
+              model: { id: m.id, label: m.label, cost: "self_hosted" },
+              estimate: { usd: Math.round(usd * 1e6) / 1e6, credits: retailCredits(usd), charged: false, seconds: m.seconds },
+            });
+          } catch (err) {
+            fails.push(`${m.id}:${err instanceof Error ? err.name : "err"}`);
+          }
+          continue;
+        }
         try {
           const r = await fetch("https://openrouter.ai/api/v1/videos", {
             method: "POST",
@@ -654,6 +858,7 @@ Deno.serve(async (req) => {
           }
           const usd = mediaCostUsd(m);
           console.log(`[vertal-code-ai] video submitted ${m.id} (${m.model}) est_usd=${usd.toFixed(4)}`);
+          vcaDlMedia(admin, userId, body, { mediaType: "video", ok: true, latencyMs: Date.now() - vidStart, cost: "paid", label: m.label, fellBack: fails.length > 0, costUsd: usd, referenceImages: 0, outputs: 1, videoSeconds: m.seconds ?? null });
           return json(202, {
             job: await signJob(userId, d.id),
             status: d.status ?? "pending",
@@ -665,11 +870,39 @@ Deno.serve(async (req) => {
         }
       }
       console.warn(`[vertal-code-ai] video failed: ${fails.join(",")}`);
+      vcaDlMedia(admin, userId, body, { mediaType: "video", ok: false, latencyMs: Date.now() - vidStart, cost: null, label: null, fellBack: fails.length > 1, costUsd: 0, referenceImages: 0, outputs: 0, videoSeconds: null });
       return json(502, { error: "vca_media_failed" });
     }
 
     const jobId = await verifyJob(userId, typeof body.job === "string" ? body.job : "");
     if (!jobId) return json(404, { error: "job_not_found" });
+    if (jobId.startsWith(VCA_OWN_JOB_PREFIX)) {
+      // Job do vídeo próprio (GPU): status e bytes vêm do endpoint próprio, sempre pelo nosso proxy.
+      const own = videoModels(e).find((m) => m.provider === "own");
+      if (!own?.url) return json(404, { error: "job_not_found" });
+      const ownId = encodeURIComponent(jobId.slice(VCA_OWN_JOB_PREFIX.length));
+      const ownHeaders = { Authorization: `Bearer ${(e[own.keyEnv ?? ""] ?? "").trim()}` };
+      if (action === "video_status") {
+        const r = await fetch(`${own.url}/status?id=${ownId}`, { headers: ownHeaders, signal: AbortSignal.timeout(20_000) });
+        if (!r.ok) {
+          await r.body?.cancel();
+          return json(502, { error: "vca_media_failed", status: r.status });
+        }
+        const status = ownVideoStatus(await r.json());
+        return json(200, {
+          status,
+          url: null,
+          needsProxy: status === "completed",
+          error: status === "failed" || status === "expired" ? "vca_media_failed" : undefined,
+        });
+      }
+      const r = await fetch(`${own.url}/result?id=${ownId}`, { headers: ownHeaders, signal: AbortSignal.timeout(60_000) });
+      if (!r.ok || !r.body) {
+        await r.body?.cancel();
+        return json(502, { error: "vca_media_failed", status: r.status });
+      }
+      return new Response(r.body, { headers: { ...corsHeaders, "Content-Type": "video/mp4", "Cache-Control": "private, max-age=3600" } });
+    }
     if (action === "video_status") {
       const r = await fetch(`https://openrouter.ai/api/v1/videos/${encodeURIComponent(jobId)}`, { headers: orHeaders, signal: AbortSignal.timeout(15_000) });
       if (!r.ok) {
@@ -696,6 +929,24 @@ Deno.serve(async (req) => {
       return json(502, { error: "vca_media_failed", status: r.status });
     }
     return new Response(r.body, { headers: { ...corsHeaders, "Content-Type": r.headers.get("Content-Type") ?? "video/mp4", "Cache-Control": "private, max-age=3600" } });
+  }
+
+  if (action === "senses" || action === "novela") {
+    // Vertal Decide / Visão / Ouvir / Novela: aditivo; sem endpoint próprio configurado responde 404 (desligado).
+    const deps: SensesHandlerDeps = {
+      fetch: (u, i) => fetch(u, i),
+      rawFetch: (u, i) => fetch(u, i),
+      signJob: (id) => signJob(userId, id),
+      verifyJob: (t) => verifyJob(userId, t),
+      log: (m) => console.log(m),
+    };
+    const r = action === "senses" ? await handleSenses(body, sensesConfig(env()), deps) : await handleNovela(body, sensesConfig(env()), deps);
+    if ("response" in r) {
+      const h = new Headers(r.response.headers);
+      for (const [k, v] of Object.entries(corsHeaders)) h.set(k, v);
+      return new Response(r.response.body, { status: r.response.status, headers: h });
+    }
+    return json(r.status, r.body);
   }
 
   if (action !== "run") return json(400, { error: "unknown_action" });
@@ -731,6 +982,16 @@ Deno.serve(async (req) => {
   const chain = option === "auto" && !modelId ? buildChain(env(), chainOpts) : buildOptionChain(env(), { ...chainOpts, option, modelId });
   if (!chain.length) return json(503, { error: "no_model_configured" });
 
+  // VERTAL Code AI → Data Library: null sem config (padrão). Consentimento consultado em paralelo; o pedido não espera.
+  const vcaDl = vcaDataLibrary(admin, userId, body);
+  const vcaDlRun = vcaDl
+    ? new VcaRunTracker(
+      { mode, option, effort, modelPinned: !!modelId, prompt, images: images.length, attachments: attachments.length, historyTurns: history.length, surface: origin },
+      { ...vcaDl, userId, runId: crypto.randomUUID(), defer: vcaDlDefer },
+    )
+    : null;
+  vcaDlRun?.started();
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
@@ -757,7 +1018,7 @@ Deno.serve(async (req) => {
             persona: vertalPersonaEnabled(Deno.env.get("VERTAL_PERSONA_ENABLED")),
           },
           {
-            callModel: (messages, o) => callChain(chain, messages, { ...o, effort, deadline }),
+            callModel: (messages, o) => callChain(chain, messages, { ...o, effort, deadline }).then((r) => (vcaDlRun?.modelCall(r), r)),
             listPaths: async () => [...(await getFiles()).keys()],
             readFile: async (p) => (await getFiles()).get(p),
             indexSource: async () => [...(await getFiles())].filter(([, c]) => c.length < 60_000).map(([path, content]) => ({ path, content })),
@@ -765,6 +1026,7 @@ Deno.serve(async (req) => {
             emit: send,
           },
         );
+        vcaDlRun?.finished({ ok: true, filesChanged: result.changes.length, verified: result.verified, codeExcerpt: result.changes.find((c) => c.after)?.after ?? null });
         // Hash do "antes" de cada arquivo: o apply recusa se o arquivo mudou no meio do caminho.
         send({
           kind: "base_hashes",
@@ -779,6 +1041,7 @@ Deno.serve(async (req) => {
             : "Não consegui concluir o pedido.",
         });
         console.error("[vertal-code-ai] run failed:", msg);
+        vcaDlRun?.finished({ ok: false, errorCode: msg === "vca_all_models_failed" ? "all_models_failed" : "internal" });
       } finally {
         try {
           controller.close();

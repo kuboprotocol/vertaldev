@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { callFluxosApps, PENDING_APP_KEY, type FluxosDescribe, type FluxosField } from '@/lib/fluxos/apps'
+import { callFluxosApps, PENDING_APP_KEY, RETURN_PATH_KEY, type FluxosDescribe, type FluxosField } from '@/lib/fluxos/apps'
 
 const SECRET_HINT = /token|secret|password|senha|key|chave/i
 
@@ -16,7 +16,14 @@ function fieldLabel(f: FluxosField): string {
 }
 
 /** Conectar um app do Vertal Fluxos direto no Vertal Dev: login OAuth do app ou formulário de chave. */
-export function FluxosConnectPanel({ app, name }: { app: string; name: string }) {
+export function FluxosConnectPanel({ app, name, returnPath, intro }: {
+  app: string
+  name: string
+  /** Página para voltar depois do login (padrão: página do conector no catálogo). */
+  returnPath?: string
+  /** Texto extra acima do botão de login (ex.: requisitos da conta). */
+  intro?: string
+}) {
   const [info, setInfo] = useState<FluxosDescribe | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -67,6 +74,8 @@ export function FluxosConnectPanel({ app, name }: { app: string; name: string })
     }
     if (res.data.mode === 'oauth' && res.data.url) {
       sessionStorage.setItem(PENDING_APP_KEY, app)
+      if (returnPath) sessionStorage.setItem(RETURN_PATH_KEY, returnPath)
+      else sessionStorage.removeItem(RETURN_PATH_KEY)
       window.location.assign(res.data.url)
       return
     }
@@ -112,7 +121,10 @@ export function FluxosConnectPanel({ app, name }: { app: string; name: string })
       ) : (
         <div className="space-y-4">
           {oauthReady ? (
-            <p className="text-sm text-muted-foreground">Você entra na sua conta {name} e autoriza o Vertal Dev. Nenhuma senha passa por aqui.</p>
+            <>
+              <p className="text-sm text-muted-foreground">Você entra na sua conta {name} e autoriza o Vertal Dev. Nenhuma senha passa por aqui.</p>
+              {intro && <p className="text-xs text-muted-foreground">{intro}</p>}
+            </>
           ) : info.app.oauth ? (
             <p className="text-sm text-muted-foreground">
               {`O login direto com ${name} ainda não está liberado. Se você tem um app próprio no ${name}, informe o client ID e o secret abaixo (endereço de retorno: https://vertal.dev/fluxos/oauth/${app}).`}

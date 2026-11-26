@@ -55,6 +55,7 @@ export const FLUXOS_NATIVE_APPS: FluxosApp[] = [
   { app: "invoice-ninja", name: "Invoice Ninja", category: "payments", docsUrl: "https://invoiceninja.com" },
   { app: "jotform", name: "Jotform", category: "analytics", docsUrl: "https://www.jotform.com" },
   { app: "kwai-ads", name: "Kwai Ads", category: "analytics", docsUrl: "https://developers.kwai.com/documentation" },
+  { app: "linkedin", name: "LinkedIn", category: "communication", docsUrl: "https://learn.microsoft.com/linkedin/consumer/" },
   { app: "libretranslate", name: "LibreTranslate", category: "development", docsUrl: "https://libretranslate.com" },
   { app: "mailchimp", name: "Mailchimp", category: "communication", docsUrl: "https://mailchimp.com" },
   { app: "mailerlite", name: "MailerLite", category: "communication", docsUrl: "https://www.mailerlite.com" },
@@ -90,7 +91,7 @@ export const FLUXOS_NATIVE_APPS: FluxosApp[] = [
   { app: "together-ai", name: "Together AI", category: "development", docsUrl: "https://together.ai" },
   { app: "trello", name: "Trello", category: "development", docsUrl: "https://trello.com/" },
   { app: "twilio", name: "Twilio", category: "communication", docsUrl: "https://twilio.com" },
-  { app: "twitter", name: "Twitter", category: "communication", docsUrl: "https://twitter.com" },
+  { app: "twitter", name: "X (Twitter)", category: "communication", docsUrl: "https://developer.x.com" },
   { app: "typeform", name: "Typeform", category: "analytics", docsUrl: "https://typeform.com" },
   { app: "virtualq", name: "VirtualQ", category: "communication", docsUrl: "https://www.virtualq.tech" },
   { app: "vtiger-crm", name: "Vtiger CRM", category: "development", docsUrl: "https://www.vtiger.com" },
@@ -147,6 +148,7 @@ const FLUXOS_APP_LOGOS: Record<string, string> = {
   frappe: '/connectors/frappe.png',
   'flowers-software': '/connectors/flowers-software.png',
   flickr: '/connectors/flickr.jpg',
+  linkedin: '/connectors/linkedin.svg',
   'firefly-iii': '/connectors/firefly-iii.jpg',
   facebook: '/connectors/facebook.png',
   eventbrite: '/connectors/eventbrite.png',
@@ -166,7 +168,17 @@ const FLUXOS_APP_LOGOS: Record<string, string> = {
   appwrite: '/connectors/appwrite.png',
 }
 
-export const fluxosConnectors: ConnectorConfig[] = FLUXOS_NATIVE_APPS.map(a => ({
+/**
+ * Apps fora do catálogo de /connectors (o motor, os fluxos e os dados continuam; nada é apagado).
+ * - Flickr: a chave de API só sai para assinantes do Flickr Pro (pago), então o Vertal não tem cliente
+ *   OAuth (decisão do Laércio, 26/11/2026).
+ * - Strava: criar app da API exige assinatura paga do Strava (para o Vertal e para quem quisesse usar app
+ *   próprio) e dados de treino não servem ao público do Vertal Dev (26/11/2026).
+ * Antes de esconder: conferir que nenhum usuário tem conexão (tabela fluxos_connections) — com conexão, fica.
+ */
+export const HIDDEN_FLUXOS_APPS = new Set(['flickr', 'strava'])
+
+export const fluxosConnectors: ConnectorConfig[] = FLUXOS_NATIVE_APPS.filter(a => !HIDDEN_FLUXOS_APPS.has(a.app)).map(a => ({
   name: a.name,
   slug: `fluxos-${a.app}`,
   icon: Workflow,

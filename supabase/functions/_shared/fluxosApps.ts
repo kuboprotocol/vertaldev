@@ -201,18 +201,35 @@ export function oauthClientFields(app: string): { id: string; secret?: string } 
 }
 
 /**
+ * IDs públicos (não secretos) dos clientes OAuth do Vertal. Ficam no código porque o projeto
+ * Supabase tem limite de 100 segredos; o segredo FLUXOS_OAUTH_<GRUPO>_ID, se existir, vale mais.
+ * O client secret continua só nos segredos (FLUXOS_OAUTH_<GRUPO>_SECRET).
+ */
+export const PUBLIC_OAUTH_CLIENT_IDS: Record<string, string> = {
+  GOOGLE: "464032885148-pmphrugign8stpl14o1umfmgbh86ilfh.apps.googleusercontent.com",
+  MICROSOFT: "465da123-3b4b-46b3-be3c-7d460077f762",
+  META: "1145586658064572",
+  SALESFORCE: "3MVG91oqviqJKoEGlsDbC_qpa6kxtDvqHmT1RB8m9ZgtVuXobIRB7lnwbiv_kMwKsrbRHfEKA_DvK3zqWgZWf",
+  DISQUS: "g2xONmGKzLvMczFI9qH0ehpRecS5W8WXCjgyFtftmC8AvpkarI6XMYHQ2yPKUe4s",
+  GITLAB: "6f676bf3b29c5b4d9d645ba7411c9d8d52711b08d0e42d6dd4a837bd083adca6",
+  CLOUDFLARE: "00d74ade9c1be1bfb6b998f7d47d46d7",
+};
+
+/**
  * Credenciais do cliente OAuth do Vertal para o app (segredos FLUXOS_OAUTH_*),
  * já com os nomes de campo do motor. null quando o Vertal não tem cliente registrado.
  */
 export function platformOAuthData(app: string, env: (k: string) => string | undefined): Record<string, string> | null {
   if (app === "ebay") return ebayOAuthData(env);
   const g = oauthSecretGroup(app);
-  const id = env(`FLUXOS_OAUTH_${g}_ID`);
+  const id = env(`FLUXOS_OAUTH_${g}_ID`) || PUBLIC_OAUTH_CLIENT_IDS[g];
   const secret = env(`FLUXOS_OAUTH_${g}_SECRET`);
   const f = oauthClientFields(app);
   if (!id || (f.secret && !secret)) return null;
   const out: Record<string, string> = { [f.id]: id };
   if (f.secret && secret) out[f.secret] = secret;
+  // O cliente do Vertal é do gitlab.com; instâncias próprias usam o formulário com cliente do usuário.
+  if (app === "gitlab") out.instanceUrl = "https://gitlab.com";
   if (app === "discord") {
     const bot = env("FLUXOS_OAUTH_DISCORD_BOT");
     if (!bot) return null;
@@ -271,6 +288,9 @@ export interface FluxosAppDef {
 /** Campos que o usuário precisa preencher, tirando os que o Vertal já fornece (cliente OAuth). */
 export function userAuthFields(def: FluxosAppDef, platform: Record<string, string> | null) {
   const provided = new Set(Object.keys(platform ?? {}));
+  // Meta: o ID de configuração do Facebook Login for Business é do app do Vertal (segredo
+  // FLUXOS_OAUTH_<APP>_CONFIG), nunca do usuário final.
+  if (platform && META_APPS.has(def.key)) provided.add("configId");
   return def.authFields.filter((f) => !provided.has(f.key));
 }
 

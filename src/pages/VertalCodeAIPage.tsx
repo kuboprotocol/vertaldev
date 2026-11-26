@@ -3,11 +3,15 @@
 // conversas, fila de correções). Só aparece com VITE_VERTAL_CODE_AI=true.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, FileCode2, Hammer, ImagePlus, ListChecks, Loader2, Paperclip, Send, Sparkles, Square, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Brain, Check, Eye, FileCode2, Hammer, ImagePlus, ListChecks, Loader2, Paperclip, Send, Sparkles, Square, Trash2, Users, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { VertalCodeAiGate } from '@/components/vertal-code-ai/VertalCodeAiGate';
 import { VertalProspectorEntryButton } from '@/components/vertal-prospector/VertalProspectorEntryButton';
 import { VertalGrowthEntryButton } from '@/components/vertal-growth/VertalGrowthEntryButton';
+import { VertalSensesPanel } from '@/components/vertal-code-ai/VertalSensesPanel';
+import { VertalTeamProgress } from '@/components/vertal-code-ai/VertalTeamProgress';
+import { VertalCodeAiMemoryPanel } from '@/components/vertal-code-ai/VertalCodeAiMemoryPanel';
+import { fetchTeamStatus, type TeamStatus } from '@/lib/vertalCodeAi/team';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -87,6 +91,10 @@ function VertalCodeAIScreen() {
   const [projects, setProjects] = useState<Array<{ id: string; title: string }>>([]);
   const [projectId, setProjectId] = useState<string>(handoff.projectId ?? '');
   const [notice, setNotice] = useState<string | null>(null);
+  // Equipe Vertal: só aparece se o servidor liberar (team_status); desligada por padrão.
+  const [teamStatus, setTeamStatus] = useState<TeamStatus | null>(null);
+  const [teamOn, setTeamOn] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -111,6 +119,8 @@ function VertalCodeAIScreen() {
   }, []);
 
   const token = async () => (await supabase.auth.getSession()).data.session?.access_token ?? '';
+  const [sensesOpen, setSensesOpen] = useState(false);
+  const sensesToken = useCallback(async () => (await supabase.auth.getSession()).data.session?.access_token ?? '', []);
 
   useEffect(() => {
     // Opções que o servidor liberou (imagem/vídeo só aparecem quando ligados).
@@ -124,6 +134,12 @@ function VertalCodeAIScreen() {
       } catch {
         /* mantém as opções de texto */
       }
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      setTeamStatus(await fetchTeamStatus(await token()));
     })();
   }, []);
 
@@ -150,11 +166,11 @@ function VertalCodeAIScreen() {
       setNotice(null);
       try {
         if (kind === 'imagem') {
-          const res = await postAction<{ images: string[]; text?: string; model: { label: string } }>(t, { action: 'image', prompt: text, images });
-          patch({ media: { kind: 'image', urls: res.images }, reply: res.text || undefined, steps: [{ text: `Modelo: ${res.model.label} (pago)` }] });
+          const res = await postAction<{ images: string[]; text?: string; model: { label: string; cost?: string } }>(t, { action: 'image', prompt: text, images });
+          patch({ media: { kind: 'image', urls: res.images }, reply: res.text || undefined, steps: [{ text: `Modelo: ${res.model.label} (${res.model.cost === 'self_hosted' ? 'própria' : 'pago'})` }] });
         } else {
-          const sub = await postAction<{ job: string; model: { label: string } }>(t, { action: 'video', prompt: text });
-          patch({ steps: [{ text: `Modelo: ${sub.model.label} (pago)` }, { text: 'Na fila…' }] });
+          const sub = await postAction<{ job: string; model: { label: string; cost?: string } }>(t, { action: 'video', prompt: text });
+          patch({ steps: [{ text: `Modelo: ${sub.model.label} (${sub.model.cost === 'self_hosted' ? 'própria' : 'pago'})` }, { text: 'Na fila…' }] });
           for (let i = 0; i < 60; i++) {
             await new Promise((r) => setTimeout(r, 10_000));
             const st = await postAction<{ status: string; url: string | null; needsProxy?: boolean; error?: string }>(t, { action: 'video_status', job: sub.job });
@@ -213,6 +229,7 @@ function VertalCodeAIScreen() {
             plan,
             projectId: projectId || null,
             origin: handoff.from === 'chat' ? 'vertal_chat' : handoff.from === 'vibe' ? 'vibe_code' : 'vertal_code_ai',
+            action: teamOn && teamStatus ? 'team_run' : 'run',
           },
           (e: VcaStreamEvent) => setItems((prev) => prev.map((it) => (it.type === 'agent' && it.id === runId ? reduceEvent(it, e) : it))),
           ac.signal,
@@ -228,7 +245,7 @@ function VertalCodeAIScreen() {
         abortRef.current = null;
       }
     },
-    [running, items, effort, option, images, attachments, projectId, handoff.from],
+    [running, items, effort, option, images, attachments, projectId, handoff.from, teamOn, teamStatus],
   );
 
   const toggleDiff = (agentId: string, path: string) =>
@@ -302,6 +319,9 @@ function VertalCodeAIScreen() {
         <h1 className="flex-1 truncate text-sm font-semibold">{VERTAL_CODE_AI_NAME}</h1>
         <VertalProspectorEntryButton from="code" />
         <VertalGrowthEntryButton from="code" projectId={projectId || null} />
+        <button type="button" aria-label="Visão, Ouvir e Novela" onClick={() => setSensesOpen(true)} className="rounded-lg p-2 text-muted-foreground hover:bg-secondary">
+          <Eye className="h-4 w-4" />
+        </button>
         <select
           aria-label="Projeto"
           value={projectId}
@@ -315,6 +335,11 @@ function VertalCodeAIScreen() {
             </option>
           ))}
         </select>
+        {teamStatus?.memory && (
+          <button type="button" aria-label="Memória da Equipe" onClick={() => setMemoryOpen(true)} className="rounded-lg p-2 text-muted-foreground hover:bg-secondary">
+            <Brain className="h-4 w-4" />
+          </button>
+        )}
         {items.length > 0 && (
           <button type="button" aria-label="Limpar conversa" onClick={() => setItems([])} className="rounded-lg p-2 text-muted-foreground hover:bg-secondary">
             <Trash2 className="h-4 w-4" />
@@ -360,6 +385,7 @@ function VertalCodeAIScreen() {
                   </li>
                 )}
               </ul>
+              {it.team && <VertalTeamProgress team={it.team} live={!it.done} />}
               {it.reply && <p className="whitespace-pre-wrap">{it.reply}</p>}
               {it.media?.kind === 'image' &&
                 it.media.urls.map((u, i) => <img key={i} src={u} alt="Imagem gerada" className="max-h-96 w-full rounded-xl object-contain" />)}
@@ -447,6 +473,18 @@ function VertalCodeAIScreen() {
               </button>
             ))}
           </div>
+          {teamStatus && !isMediaOption(option) && (
+            <button
+              type="button"
+              aria-pressed={teamOn}
+              aria-label="Equipe Vertal"
+              title="Equipe Vertal: Gerente, Encarregado, Engenheiros, Revisor e Entregador"
+              onClick={() => setTeamOn((v) => !v)}
+              className={cn('flex items-center gap-1 rounded-full border px-2 py-1 text-xs', teamOn ? 'border-primary bg-primary text-primary-foreground' : 'border-border/60 text-muted-foreground')}
+            >
+              <Users className="h-3.5 w-3.5" /> Equipe
+            </button>
+          )}
           <select
             aria-label="Modelo Vertal"
             value={option}
@@ -519,6 +557,8 @@ function VertalCodeAIScreen() {
           )}
         </div>
       </footer>
+      {sensesOpen && <VertalSensesPanel token={sensesToken} onClose={() => setSensesOpen(false)} />}
+      {memoryOpen && <VertalCodeAiMemoryPanel getToken={token} projectId={projectId || null} onClose={() => setMemoryOpen(false)} />}
     </div>
   );
 }
