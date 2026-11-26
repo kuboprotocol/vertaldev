@@ -165,6 +165,10 @@ após 120 s sem uso), no máximo 1 contêiner por endpoint, cada um protegido po
   (`_COST` US$/segundo, padrão 0,02). Assíncrono: o `job` assinado ganha o prefixo `own:`; `video_status` consulta o
   endpoint próprio e `video_content` repassa o mp4. ~1 min 50 s gerando, ~2 min 40 s a frio.
 - Falhou (erro, tempo, contêiner frio demais)? A cadeia segue para os modelos de sempre. Tirar o segredo desliga.
+- O projeto Supabase está no limite de 100 segredos, então tudo isso vai num **único** segredo JSON,
+  `VERTAL_GPU_CONFIG` (`{"VERTAL_OLLAMA_URL_2":"…","VERTAL_OWN_IMAGE_URL":"…",…}`). Ele só aceita chaves
+  `VERTAL_OLLAMA_*_2`, `VERTAL_OLLAMA_2_FIRST_ABOVE_TOKENS` e `VERTAL_OWN_IMAGE_*`/`VERTAL_OWN_VIDEO_*`; um segredo avulso
+  com o mesmo nome vence. Nunca mexe em liga/desliga, lista de liberação ou chaves de provedores.
 
 **Provedor extra OpenAI-compatível** (opcional, por segredo): `VERTAL_EXTRA_PROVIDER_URL` (https, base `/v1`),
 `VERTAL_EXTRA_PROVIDER_KEY`, `VERTAL_EXTRA_PROVIDER_MODELS` (ids por vírgula), `VERTAL_EXTRA_PROVIDER_COST`

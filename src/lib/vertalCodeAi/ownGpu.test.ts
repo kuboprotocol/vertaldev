@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   buildChain,
   buildOptionChain,
+  expandVcaEnv,
+  isVcaUserAllowed,
   extractOwnImage,
   imageModels,
   mediaCostUsd,
@@ -123,5 +125,45 @@ describe('VERTAL Code AI · imagem e vídeo próprios (GPU)', () => {
     expect(ownVideoStatus({ status: 'weird' })).toBe('pending');
     expect(ownVideoStatus(undefined)).toBe('pending');
     expect(VCA_OWN_JOB_PREFIX).toBe('own:');
+  });
+});
+
+describe('VERTAL Code AI · VERTAL_GPU_CONFIG (um só segredo)', () => {
+  const cfg = JSON.stringify({
+    VERTAL_OLLAMA_URL_2: 'https://gpu.example.modal.run',
+    VERTAL_OLLAMA_TOKEN_2: 't',
+    VERTAL_OLLAMA_MAX_INPUT_TOKENS_2: 12000,
+    VERTAL_OWN_IMAGE_URL: 'https://img.example.modal.run',
+    VERTAL_OWN_IMAGE_TOKEN: 'i',
+    // chaves fora da GPU própria são ignoradas
+    VERTAL_CODE_AI_ENABLED: 'true',
+    VERTAL_CODE_AI_USER_IDS: '',
+    VERTAL_OLLAMA_URL: 'https://hijack.example',
+    OPENROUTER_API_KEY: 'k',
+  });
+
+  it('expande só as chaves da GPU própria, sem mexer em liga/desliga nem na lista de liberação', () => {
+    const base = { VERTAL_CODE_AI_ENABLED: 'false', VERTAL_CODE_AI_USER_IDS: 'u1', VERTAL_OLLAMA_URL: 'https://llm.vertalrun.com', VERTAL_GPU_CONFIG: cfg };
+    const env = expandVcaEnv(base);
+    expect(env.VERTAL_OLLAMA_URL_2).toBe('https://gpu.example.modal.run');
+    expect(env.VERTAL_OLLAMA_MAX_INPUT_TOKENS_2).toBe('12000');
+    expect(env.VERTAL_OWN_IMAGE_URL).toBe('https://img.example.modal.run');
+    expect(env.VERTAL_CODE_AI_ENABLED).toBe('false');
+    expect(env.VERTAL_CODE_AI_USER_IDS).toBe('u1');
+    expect(env.VERTAL_OLLAMA_URL).toBe('https://llm.vertalrun.com');
+    expect(env.OPENROUTER_API_KEY).toBeUndefined();
+    expect(isVcaUserAllowed(env, 'u1')).toBe(false);
+    expect(selfHostedModels(env).map((m) => m.id)).toEqual(['vca-self-hosted', 'vca-self-hosted-2']);
+    expect(imageModels(env)[0].id).toBe('vca-image-own');
+  });
+
+  it('segredo avulso vence; JSON inválido ou ausente não muda nada', () => {
+    const env = expandVcaEnv({ VERTAL_OLLAMA_URL_2: 'https://avulso.example', VERTAL_GPU_CONFIG: cfg });
+    expect(env.VERTAL_OLLAMA_URL_2).toBe('https://avulso.example');
+    const bad = { VERTAL_GPU_CONFIG: '{nope', X: '1' };
+    expect(expandVcaEnv(bad)).toBe(bad);
+    const none = { X: '1' };
+    expect(expandVcaEnv(none)).toBe(none);
+    expect(expandVcaEnv({ VERTAL_GPU_CONFIG: '["a"]' }).VERTAL_OLLAMA_URL_2).toBeUndefined();
   });
 });

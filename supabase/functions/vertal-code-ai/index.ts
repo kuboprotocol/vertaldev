@@ -34,6 +34,7 @@ import {
   VCA_OPTION_LABEL,
   VCA_TEXT_OPTIONS,
   videoRequestBody,
+  expandVcaEnv,
   extractOwnImage,
   imageModels,
   ownImageRequestBody,
@@ -85,7 +86,8 @@ const ORIGINS = ["vertal_code_ai", "vibe_code", "vertal_chat"] as const;
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-const env = () => Deno.env.toObject();
+// VERTAL_GPU_CONFIG (um só segredo) expande só as chaves da GPU própria; o resto do ambiente fica igual.
+const env = () => expandVcaEnv(Deno.env.toObject());
 
 // Catálogo grátis ao vivo do OpenRouter (cache por isolate, 1 h). Falha = mantém a lista configurada.
 let liveFree: { at: number; ids: string[] } | null = null;

@@ -231,6 +231,32 @@ export type VcaEnv = Record<string, string | undefined>;
 
 const truthy = (v: string | undefined) => /^(1|true|yes|on|sim)$/i.test((v ?? "").trim());
 
+/**
+ * Config compacta da GPU própria num ÚNICO segredo (o projeto tem limite de 100 segredos):
+ *   VERTAL_GPU_CONFIG='{"VERTAL_OLLAMA_URL_2":"https://…","VERTAL_OLLAMA_TOKEN_2":"…","VERTAL_OWN_IMAGE_URL":"…",…}'
+ * Só aceita chaves do 2º endpoint próprio (VERTAL_OLLAMA_*_2, VERTAL_OLLAMA_2_FIRST_ABOVE_TOKENS) e de
+ * imagem/vídeo próprios (VERTAL_OWN_IMAGE_* / VERTAL_OWN_VIDEO_*). Segredo avulso com o mesmo nome vence.
+ * Nunca toca em liga/desliga, lista de liberação ou chaves de provedores.
+ */
+const GPU_CONFIG_KEY = /^VERTAL_(OLLAMA_[A-Z_]+_2|OLLAMA_2_FIRST_ABOVE_TOKENS|OWN_(IMAGE|VIDEO)_[A-Z_]+)$/;
+export function expandVcaEnv(env: VcaEnv): VcaEnv {
+  const raw = (env.VERTAL_GPU_CONFIG ?? "").trim();
+  if (!raw) return env;
+  let cfg: unknown;
+  try {
+    cfg = JSON.parse(raw);
+  } catch {
+    return env;
+  }
+  if (!cfg || typeof cfg !== "object" || Array.isArray(cfg)) return env;
+  const out: VcaEnv = { ...env };
+  for (const [k, v] of Object.entries(cfg as Record<string, unknown>)) {
+    if (!GPU_CONFIG_KEY.test(k) || (out[k] ?? "").trim()) continue;
+    if (typeof v === "string" || typeof v === "number") out[k] = String(v);
+  }
+  return out;
+}
+
 /** VERTAL Code AI ligado no servidor? (padrão: desligado) */
 export function isVcaEnabled(env: VcaEnv): boolean {
   return truthy(env.VERTAL_CODE_AI_ENABLED);

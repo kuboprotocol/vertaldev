@@ -32,6 +32,10 @@ modal run vertal_video.py::download && modal deploy vertal_video.py
 - Imagem: `VERTAL_OWN_IMAGE_URL`, `VERTAL_OWN_IMAGE_TOKEN` (opcional `_TIMEOUT_MS`, `_COST`).
 - Vídeo: `VERTAL_OWN_VIDEO_URL`, `VERTAL_OWN_VIDEO_TOKEN` (opcional `_COST`).
 
+Como o projeto está no limite de 100 segredos, as chaves acima podem ir todas num único segredo JSON
+`VERTAL_GPU_CONFIG` (ex.: `{"VERTAL_OLLAMA_URL_2":"https://…","VERTAL_OLLAMA_TOKEN_2":"…","VERTAL_OWN_IMAGE_URL":"…"}`);
+um segredo avulso com o mesmo nome vence.
+
 Tirar o segredo desliga a opção; a cadeia volta a ser exatamente a de antes.
 
 ## Custos (preços Modal por segundo; plano Starter com US$30/mês de crédito)
