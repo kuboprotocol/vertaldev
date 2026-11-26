@@ -189,6 +189,19 @@ após 120 s sem uso), no máximo 1 contêiner por endpoint, cada um protegido po
 (`free` padrão | `paid`), `VERTAL_EXTRA_PROVIDER_CONTEXT`. Entra depois dos grátis e antes dos pagos. Serve, por ex.,
 para o catálogo da NVIDIA (`https://integrate.api.nvidia.com/v1`) ou o Ollama Cloud (`https://ollama.com/v1`).
 
+**Ollama Cloud** (desde 26/11/2026, plano Pro do Laércio, créditos de uso mensais): configurado **só dentro do
+`VERTAL_GPU_CONFIG`** (sem segredo novo) com `VERTAL_OLLAMA_CLOUD_URL` (`https://ollama.com`), `VERTAL_OLLAMA_CLOUD_KEY`,
+`VERTAL_OLLAMA_CLOUD_CODE_MODEL` (padrão `kimi-k2.7-code`), `VERTAL_OLLAMA_CLOUD_FAST_MODEL` (padrão
+`deepseek-v4.1-flash`), opcionais `VERTAL_OLLAMA_CLOUD_CONTEXT` (128 000) e `VERTAL_OLLAMA_CLOUD_ENABLED=false` (desliga).
+Ordem: própria pequena (VM) → GPU (Modal) → **Nuvem** ("Vertal Nuvem · Código" / "· Rápido") → grátis → pagos (só com
+`ALLOW_PAID`). O de código vem primeiro; o rápido vem primeiro com esforço `low` (pedidos curtos, CRM/Prospector) e na
+opção Turbo. Fica fora da opção Livre (que também é a cadeia de coordenação/Decide, sempre sem nada pago) e de pedidos
+com imagem (sem visão). Aparece como `cost: "paid"` (gasta créditos do plano Ollama); a cobrança ao usuário segue
+desligada. Prazo por chamada: 120 s.
+
+**Vertal Decide da Equipe**: prazo da própria (Modal) 30 s (antes 15 s; o frio da L4 passava de 15 s e caía no Jev).
+Ajustável com `VERTAL_OWN_DECIDE_TIMEOUT_MS` (aceito no `VERTAL_GPU_CONFIG`). O prazo do Jev continua 15 s.
+
 Limites oficiais dos planos grátis (fontes abaixo, lidas em 24/11/2026):
 
 - **OpenRouter `:free`**: 20 pedidos/min; **50 pedidos/dia** se a conta comprou menos de 10 créditos na vida;

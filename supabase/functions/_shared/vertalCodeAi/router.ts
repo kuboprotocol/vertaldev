@@ -3,6 +3,7 @@
 //   pedido → (modo, esforço, precisa de visão?) → cadeia de modelos:
 //     1. LLM própria Vertal (VERTAL_OLLAMA_URL e, opcional, VERTAL_OLLAMA_URL_2) — só para pedidos
 //        que cabem no orçamento dela (contexto pequeno, tempo curto); senão pula
+//     1b. Ollama Cloud (plano do Laércio; só se VERTAL_OLLAMA_CLOUD_URL/_KEY estiverem no VERTAL_GPU_CONFIG)
 //     2. modelos grátis na nuvem (cota diária gratuita dos provedores)
 //     3. modelos baratos pagos — SÓ se VERTAL_CODE_AI_ALLOW_PAID=true
 //   VERTAL_CODE_AI_PREFER_SELF_HOSTED=false volta à ordem antiga (grátis → própria → pago).
@@ -12,7 +13,7 @@
 //
 // Marca: o usuário só vê `label` (nomes Vertal). `provider`/`model` ficam no servidor e nos logs.
 
-export type VcaProvider = "openrouter" | "gemini" | "groq" | "ollama" | "deepseek" | "extra";
+export type VcaProvider = "openrouter" | "gemini" | "groq" | "ollama" | "ollama_cloud" | "deepseek" | "extra";
 export type VcaCost = "free" | "self_hosted" | "paid";
 export type VcaEffort = "auto" | "low" | "high" | "max";
 export type VcaMode = "plan" | "build";
@@ -242,10 +243,11 @@ const truthy = (v: string | undefined) => /^(1|true|yes|on|sim)$/i.test((v ?? ""
  *   VERTAL_GPU_CONFIG='{"VERTAL_OLLAMA_URL_2":"https://…","VERTAL_OLLAMA_TOKEN_2":"…","VERTAL_OWN_IMAGE_URL":"…",…}'
  * Só aceita chaves do 2º endpoint próprio (VERTAL_OLLAMA_*_2, VERTAL_OLLAMA_2_FIRST_ABOVE_TOKENS) e de
  * imagem/vídeo próprios (VERTAL_OWN_IMAGE_* / VERTAL_OWN_VIDEO_*) e dos sentidos próprios (VERTAL_OWN_DECIDE_* /
- * VERTAL_OWN_OMNI_* / VERTAL_OWN_NOVELA_*). Segredo avulso com o mesmo nome vence.
+ * VERTAL_OWN_OMNI_* / VERTAL_OWN_NOVELA_*) e do Ollama Cloud (VERTAL_OLLAMA_CLOUD_*). Segredo avulso com o
+ * mesmo nome vence.
  * Nunca toca em liga/desliga, lista de liberação ou chaves de provedores.
  */
-const GPU_CONFIG_KEY = /^VERTAL_(OLLAMA_[A-Z_]+_2|OLLAMA_2_FIRST_ABOVE_TOKENS|OWN_(IMAGE|VIDEO|DECIDE|OMNI|NOVELA)_[A-Z_]+)$/;
+const GPU_CONFIG_KEY = /^VERTAL_(OLLAMA_[A-Z_]+_2|OLLAMA_2_FIRST_ABOVE_TOKENS|OLLAMA_CLOUD_[A-Z_]+|OWN_(IMAGE|VIDEO|DECIDE|OMNI|NOVELA)_[A-Z_]+)$/;
 export function expandVcaEnv(env: VcaEnv): VcaEnv {
   const raw = (env.VERTAL_GPU_CONFIG ?? "").trim();
   if (!raw) return env;
@@ -477,12 +479,14 @@ export function buildChain(env: VcaEnv, opts: ChainOptions): VcaModel[] {
   const extra = extraProviderModels(env).filter((m) => fits(m) && (m.cost !== "paid" || allowPaid));
   const extraFree = extra.filter((m) => m.cost !== "paid");
   const extraPaid = extra.filter((m) => m.cost === "paid");
+  // Ollama Cloud (plano pago à parte, com créditos mensais): logo depois da própria, antes dos grátis.
+  const cloud = ollamaCloudModels(env, { fastFirst: opts.effort === "low" }).filter(fits);
 
   // Padrão (decisão de 24/11/2026): LLM própria primeiro. "false" volta à ordem antiga.
   const selfFirst = !/^(0|false|no|off|nao|não)$/i.test((env.VERTAL_CODE_AI_PREFER_SELF_HOSTED ?? "").trim());
   const ordered = selfFirst
-    ? [...selfList, ...freeSorted, ...extraFree, ...paid, ...extraPaid]
-    : [...freeSorted, ...extraFree, ...selfList, ...paid, ...extraPaid];
+    ? [...selfList, ...cloud, ...freeSorted, ...extraFree, ...paid, ...extraPaid]
+    : [...freeSorted, ...extraFree, ...selfList, ...cloud, ...paid, ...extraPaid];
   const seen = new Set<string>();
   return ordered.filter((m) => (seen.has(m.id) ? false : (seen.add(m.id), true)));
 }
@@ -673,6 +677,53 @@ export function extraProviderModels(env: VcaEnv): VcaModel[] {
     }));
 }
 
+/**
+ * Ollama Cloud (https://ollama.com, API OpenAI-compatível em /v1/chat/completions), configurado só pelo
+ * VERTAL_GPU_CONFIG (sem segredo novo):
+ *   VERTAL_OLLAMA_CLOUD_URL         base (https://ollama.com ou …/v1) ou URL completa de /chat/completions
+ *   VERTAL_OLLAMA_CLOUD_KEY         chave (Bearer)
+ *   VERTAL_OLLAMA_CLOUD_CODE_MODEL  modelo de código (padrão kimi-k2.7-code)
+ *   VERTAL_OLLAMA_CLOUD_FAST_MODEL  modelo rápido p/ pedidos pequenos (padrão deepseek-v4.1-flash)
+ *   VERTAL_OLLAMA_CLOUD_CONTEXT     contexto útil (padrão 128 000)
+ *   VERTAL_OLLAMA_CLOUD_ENABLED     "false" desliga sem apagar a config
+ * Ordem: código primeiro; rápido primeiro quando fastFirst (esforço "low" / Turbo).
+ * É gasto do plano Ollama (créditos mensais) → cost "paid"; preços só para estimativa (tabela OpenRouter).
+ */
+export function ollamaCloudModels(env: VcaEnv, opts: { fastFirst?: boolean } = {}): VcaModel[] {
+  const raw = (env.VERTAL_OLLAMA_CLOUD_URL ?? "").trim().replace(/\/+$/, "");
+  if (!/^https:\/\//i.test(raw) || !(env.VERTAL_OLLAMA_CLOUD_KEY ?? "").trim()) return [];
+  if (/^(0|false|no|off|nao|não)$/i.test((env.VERTAL_OLLAMA_CLOUD_ENABLED ?? "").trim())) return [];
+  const url = /\/chat\/completions$/i.test(raw) ? raw : `${raw.replace(/\/v1$/i, "")}/v1/chat/completions`;
+  const context = num(env.VERTAL_OLLAMA_CLOUD_CONTEXT, 128_000);
+  const base = {
+    provider: "ollama_cloud" as const,
+    url,
+    keyEnv: "VERTAL_OLLAMA_CLOUD_KEY",
+    cost: "paid" as const,
+    vision: false,
+    context,
+    jsonMode: true,
+    reasoning: false,
+    efforts: ["auto", "low", "high", "max"] as VcaEffort[],
+    maxOutputTokens: 8_000,
+  };
+  const code: VcaModel = {
+    ...base,
+    id: "vca-ollama-code",
+    label: "Vertal Nuvem · Código",
+    model: (env.VERTAL_OLLAMA_CLOUD_CODE_MODEL ?? "").trim() || "kimi-k2.7-code",
+    price: { in: 0.6, out: 3.0 },
+  };
+  const fast: VcaModel = {
+    ...base,
+    id: "vca-ollama-fast",
+    label: "Vertal Nuvem · Rápido",
+    model: (env.VERTAL_OLLAMA_CLOUD_FAST_MODEL ?? "").trim() || "deepseek-v4.1-flash",
+    price: { in: 0.14, out: 0.42 },
+  };
+  return opts.fastFirst ? [fast, code] : [code, fast];
+}
+
 export interface OptionChainOptions extends ChainOptions {
   option: VcaOption;
   /** Fixa um modelo (id Vertal) da opção — útil para testar uma família. Ignorado se não estiver na opção. */
@@ -713,10 +764,15 @@ export function buildOptionChain(env: VcaEnv, opts: OptionChainOptions): VcaMode
     VCA_FREE_CATALOG.filter((m) => m.model === "openrouter/free"),
     opts.liveFreeIds,
   ).filter((m) => hasKey(m) && fits(m));
+  // Ollama Cloud: depois da própria, antes dos grátis. Fora do "livre" (opção grátis; também é a cadeia
+  // de coordenação/Decide, que nunca usa nada pago).
+  const cloud = option === "livre"
+    ? []
+    : ollamaCloudModels(env, { fastFirst: opts.effort === "low" || option === "turbo" }).filter(fits);
   const selfFirst = !/^(0|false|no|off|nao|não)$/i.test((env.VERTAL_CODE_AI_PREFER_SELF_HOSTED ?? "").trim());
   const ordered = selfFirst
-    ? [...selfList, ...free, ...extra.filter((m) => m.cost !== "paid"), ...paid, ...extra.filter((m) => m.cost === "paid"), ...reserve]
-    : [...free, ...extra.filter((m) => m.cost !== "paid"), ...selfList, ...paid, ...extra.filter((m) => m.cost === "paid"), ...reserve];
+    ? [...selfList, ...cloud, ...free, ...extra.filter((m) => m.cost !== "paid"), ...paid, ...extra.filter((m) => m.cost === "paid"), ...reserve]
+    : [...free, ...extra.filter((m) => m.cost !== "paid"), ...selfList, ...cloud, ...paid, ...extra.filter((m) => m.cost === "paid"), ...reserve];
   const seen = new Set<string>();
   const chain = ordered.filter((m) => (seen.has(m.id) ? false : (seen.add(m.id), true)));
   return pinModel(chain, opts.modelId);

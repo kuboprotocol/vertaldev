@@ -321,8 +321,17 @@ export interface DeciderDeps {
   callLlm?: (messages: VcaChatMessage[], opts: { json: boolean; maxTokens: number }) => Promise<{ content: string }>;
   now?: () => number;
   log?: (m: string) => void;
+  /** Prazo de cada provedor (padrão: 15 s no Jev). Se dado, vale também para a própria (testes). */
   timeoutMs?: number;
+  /**
+   * Prazo só da própria (Modal, pode estar fria). Padrão: VERTAL_OWN_DECIDE_TIMEOUT_MS (aceito dentro do
+   * VERTAL_GPU_CONFIG) ou 30 s. O prazo do Jev não muda.
+   */
+  ownTimeoutMs?: number;
 }
+
+/** Prazo padrão da própria no Vertal Decide da Equipe (aprovado em 26/11/2026: 15 s → 30 s; frio do L4 > 15 s). */
+export const OWN_DECIDE_TIMEOUT_MS = 30_000;
 
 function validQuestions(questions: DecisionQuestions): DecisionQuestions {
   const out: DecisionQuestions = {};
@@ -345,6 +354,8 @@ export function makeDecider(deps: DeciderDeps): DecideFn {
   const providers = decideProviders(deps.env);
   const now = deps.now ?? Date.now;
   const timeoutMs = deps.timeoutMs ?? 15_000;
+  const envOwn = Number(deps.env.VERTAL_OWN_DECIDE_TIMEOUT_MS);
+  const ownTimeoutMs = deps.ownTimeoutMs ?? deps.timeoutMs ?? (envOwn > 0 ? envOwn : OWN_DECIDE_TIMEOUT_MS);
 
   return async (state, questionsIn) => {
     const start = now();
@@ -355,7 +366,7 @@ export function makeDecider(deps: DeciderDeps): DecideFn {
 
     const r = await requestDecision(providers, deps.fetch as unknown as DecideFetch, state, questions, {
       accept: (d) => complete(read(d)),
-      timeoutMs,
+      timeoutMs: ownTimeoutMs,
       jevTimeoutMs: timeoutMs,
       log: deps.log,
     });
