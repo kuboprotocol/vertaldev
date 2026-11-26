@@ -10,6 +10,7 @@ import {
   type FluxosAppDef,
   type FluxosEngine,
   makeEngine,
+  META_APPS,
   parseFluxosOp,
   platformOAuthData,
   userAuthFields,
@@ -119,6 +120,8 @@ export async function handleFluxosApps(
     if (!def.supportsConnections) return json(400, { error: "no_connection_needed" });
     const data: Record<string, string> = { ...(op.fields ?? {}), ...(platform ?? {}) };
     if (!data.screenName) data.screenName = user.email ? `${def.name} · ${user.email}` : def.name;
+    // Meta: a configuração de login é só a do app do Vertal.
+    if (platform && META_APPS.has(op.app) && !platform.configId) delete data.configId;
     const missing = userAuthFields(def, platform)
       .filter((f) => f.required && !data[f.key] && !(f.value !== undefined && f.value !== null && f.value !== ""))
       .map((f) => f.key);

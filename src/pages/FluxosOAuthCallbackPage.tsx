@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Loader2, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { callFluxosApps, connectorPathFor, oauthReturnParams, PENDING_APP_KEY } from '@/lib/fluxos/apps'
+import { callFluxosApps, connectorPathFor, oauthReturnParams, PENDING_APP_KEY, RETURN_PATH_KEY, safeReturnPath } from '@/lib/fluxos/apps'
 
 /** Janela de login aberta pelo próprio painel do Vertal Fluxos (não pelo Vertal Dev): devolve o retorno para ela. */
 const FLUXOS_UI_ORIGIN = (import.meta.env.VITE_FLUXOS_UI_ORIGIN as string | undefined) ?? 'https://automatisch-main-production.up.railway.app'
@@ -33,9 +33,11 @@ export default function FluxosOAuthCallbackPage() {
     ;(async () => {
       const res = await callFluxosApps({ op: 'complete', app, params })
       sessionStorage.removeItem(PENDING_APP_KEY)
+      const back = safeReturnPath(sessionStorage.getItem(RETURN_PATH_KEY)) ?? connectorPathFor(app)
+      sessionStorage.removeItem(RETURN_PATH_KEY)
       if (res.ok) {
         toast.success('Conectado.')
-        navigate(connectorPathFor(app), { replace: true })
+        navigate(back, { replace: true })
       } else {
         setError(res.message)
       }

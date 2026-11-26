@@ -271,6 +271,9 @@ export interface FluxosAppDef {
 /** Campos que o usuário precisa preencher, tirando os que o Vertal já fornece (cliente OAuth). */
 export function userAuthFields(def: FluxosAppDef, platform: Record<string, string> | null) {
   const provided = new Set(Object.keys(platform ?? {}));
+  // Meta: o ID de configuração do Facebook Login for Business é do app do Vertal (segredo
+  // FLUXOS_OAUTH_<APP>_CONFIG), nunca do usuário final.
+  if (platform && META_APPS.has(def.key)) provided.add("configId");
   return def.authFields.filter((f) => !provided.has(f.key));
 }
 
