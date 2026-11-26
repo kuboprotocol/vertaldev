@@ -127,6 +127,7 @@ const FLUXOS_APP_LOGOS: Record<string, string> = {
   'google-drive': '/connectors/google-drive.jpg',
   'google-forms': '/connectors/google-forms.png',
   'google-sheets': '/connectors/google-sheets.jpg',
+  'google-tasks': '/connectors/google-tasks.webp',
   gitlab: '/connectors/gitlab.webp',
   gitea: '/connectors/gitea.png',
   ghost: '/connectors/ghost.png',
