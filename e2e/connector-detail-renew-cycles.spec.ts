@@ -37,7 +37,7 @@ test.describe('ConnectorDetailPage — Renovar stays clickable across reset-dial
     // 1. Log in.
     await page.goto('/auth')
     await page.getByPlaceholder('Email').fill(TEST_EMAIL!)
-    await page.getByPlaceholder('Senha').fill(TEST_PASSWORD!)
+    await page.getByPlaceholder(/^(Senha|Password|Contraseña)$/).fill(TEST_PASSWORD!)
     await page.getByRole('button', { name: /entrar|login|sign in/i }).first().click()
     await page.waitForURL((url) => !url.pathname.startsWith('/auth'), { timeout: 20_000 })
 

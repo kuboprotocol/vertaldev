@@ -13,11 +13,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { callScheduler } from '@/lib/chatScheduler/client';
 import {
-  buildTeam, callGrowth, forwardEvents, GrowthError, launchGrowth, newIdempotencyKey, readGrowthHandoff, useVertalGrowthAccess,
+  buildTeam, callGrowth, forwardEvents, GrowthError, launchGrowth, matchProjectByName, newIdempotencyKey, readGrowthHandoff, useVertalGrowthAccess,
 } from '@/lib/vertalGrowth/client';
-import { GROWTH_UI, preferredUiLang, rememberUiLang, uiLangFrom } from '@/lib/vertalGrowth/i18n';
+import { GROWTH_UI, preferredUiLang, rememberUiLang, storedUiLang, uiLangFrom } from '@/lib/vertalGrowth/i18n';
 import { VERTAL_PROSPECTOR_ROUTE } from '@/lib/vertalProspector/client';
-import type { BusinessModel, GrowthKind, TeamPreset } from '../../supabase/functions/_shared/vertalGrowth/core';
+import { stageLabels, type BusinessModel, type GrowthKind, type TeamPreset } from '../../supabase/functions/_shared/vertalGrowth/core';
 
 const NotFound = lazy(() => import('@/pages/NotFound'));
 
@@ -61,6 +61,14 @@ export function VertalGrowthScreen() {
   const handoff = useMemo(() => readGrowthHandoff(location.search), [location.search]);
   // Idioma nativo do usuário: pedido explícito → idioma salvo (CRM/servidor) → navegador → pt-BR.
   const [lang, setLang] = useState(() => preferredUiLang(handoff.lang));
+  // Sem idioma pedido nem salvo, espera o idioma do usuário vir do servidor antes de pintar a tela
+  // (antes aparecia em inglês — idioma do navegador — e só depois traduzia). Prazo curto: nunca trava a tela.
+  const [langReady, setLangReady] = useState(() => !!handoff.lang || !!storedUiLang());
+  useEffect(() => {
+    if (langReady) return;
+    const timer = setTimeout(() => setLangReady(true), 2_500);
+    return () => clearTimeout(timer);
+  }, [langReady]);
   const t = GROWTH_UI[lang];
   const errText = (e: unknown) => {
     const code = e instanceof GrowthError ? e.code : e instanceof Error ? e.message : String(e);
@@ -121,14 +129,14 @@ export function VertalGrowthScreen() {
       setCap({ cap: s.cap, sentToday: s.sentToday });
       setAccountId((cur) => cur || s.gmailAccounts?.[0]?.id || '');
     }
+    setLangReady(true);
     if (l) setCampaigns(l.campaigns);
     const { data } = await supabase.from('projects').select('id, title').order('updated_at', { ascending: false }).limit(50);
     const list = ((data ?? []) as Array<{ id: string; title: string | null }>).map((p) => ({ id: p.id, title: (p.title ?? '').slice(0, 80) || p.id.slice(0, 8) }));
     setProjects(list);
     // Comando do chat: "buscar clientes para meu app X" → escolhe o projeto pelo nome.
     if (handoff.project && !handoff.projectId) {
-      const want = handoff.project.toLowerCase();
-      const hit = list.find((p) => p.title.toLowerCase() === want) ?? list.find((p) => p.title.toLowerCase().includes(want));
+      const hit = matchProjectByName(list, handoff.project);
       if (hit) setProjectId(hit.id);
       else setForm((f) => ({ ...f, name: handoff.project }));
     }
@@ -302,9 +310,19 @@ export function VertalGrowthScreen() {
     await loadList();
   };
 
+  // Nomes das etapas no idioma da tela (o servidor manda no idioma da campanha: "Lead generation" numa tela em pt).
+  const stageNames: Record<string, string> = g ? { ...stages, ...stageLabels(g.model, lang) } : stages;
   const drafts = msgs.filter((m) => ['draft', 'approved'].includes(m.status));
   const donors = g?.model === 'nonprofit';
   const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(lang === 'pt' ? 'pt-BR' : lang) : '');
+
+  if (!langReady) {
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center bg-background text-muted-foreground" data-testid="growth-lang-loading">
+        <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-background text-foreground">
@@ -392,7 +410,7 @@ export function VertalGrowthScreen() {
               </div>
               <div className="grid gap-2 sm:grid-cols-3">
                 <div className="space-y-1.5" data-testid="stage-captacao">
-                  <p className="text-xs font-medium">{stages.captacao}</p>
+                  <p className="text-xs font-medium">{stageNames.captacao}</p>
                   <div className="grid grid-cols-2 gap-1.5">
                     <Stat label={t.leads} value={dash.captacao.leads} /><Stat label={t.contacted} value={dash.captacao.contacted} />
                     <Stat label={t.replies} value={dash.captacao.replies} /><Stat label={t.optedOut} value={dash.captacao.optedOut} />
@@ -405,14 +423,14 @@ export function VertalGrowthScreen() {
                   {icpStatus === 'icp_pending' && <p className="text-[11px] text-amber-400">{t.icpPending}</p>}
                 </div>
                 <div className="space-y-1.5" data-testid="stage-conversao">
-                  <p className="text-xs font-medium">{stages.conversao}</p>
+                  <p className="text-xs font-medium">{stageNames.conversao}</p>
                   <div className="grid grid-cols-2 gap-1.5">
                     <Stat label={t.engaged} value={dash.conversao.engaged} /><Stat label={t.conversions} value={dash.conversao.conversions} />
                     <Stat label={t.drafts} value={dash.conversao.drafts} />
                   </div>
                 </div>
                 <div className="space-y-1.5" data-testid="stage-retencao">
-                  <p className="text-xs font-medium">{stages.retencao}</p>
+                  <p className="text-xs font-medium">{stageNames.retencao}</p>
                   <div className="grid grid-cols-2 gap-1.5">
                     <Stat label={donors ? t.activeDonors : t.activeCustomers} value={dash.retencao.active} /><Stat label={t.atRisk} value={dash.retencao.atRisk} />
                     <Stat label={t.churned} value={dash.retencao.churned} /><Stat label={t.wonBack} value={dash.retencao.wonBack} />
@@ -467,7 +485,7 @@ export function VertalGrowthScreen() {
                   <div key={c.id} className="flex flex-wrap items-center gap-2 rounded-md bg-secondary/40 px-2 py-1 text-xs">
                     <Mail className="h-3 w-3 text-muted-foreground" />
                     <span className="min-w-0 flex-1 truncate">{c.name || c.email} <span className="text-muted-foreground">{c.email && c.name ? `· ${c.email}` : ''}</span></span>
-                    <span className="rounded bg-background px-1.5 py-0.5">{stages[c.stage]} · {t.status[c.status as keyof typeof t.status] ?? c.status}</span>
+                    <span className="rounded bg-background px-1.5 py-0.5">{stageNames[c.stage]} · {t.status[c.status as keyof typeof t.status] ?? c.status}</span>
                     <select aria-label={t.markAs} className="rounded border border-border bg-background px-1 py-0.5" value="" onChange={(e) => e.target.value && markContact(c, e.target.value)}>
                       <option value="">{t.markAs}…</option>
                       {Object.entries(t.status).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -482,7 +500,7 @@ export function VertalGrowthScreen() {
                   <Input placeholder={t.email} value={newContact.email} onChange={(e) => setNewContact({ ...newContact, email: e.target.value })} />
                   <Input placeholder={t.contactName} value={newContact.name} onChange={(e) => setNewContact({ ...newContact, name: e.target.value })} />
                   <select className={selectCls} value={newContact.stage} onChange={(e) => setNewContact({ ...newContact, stage: e.target.value })} aria-label={t.stage}>
-                    {Object.entries(stages).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    {Object.entries(stageNames).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
                 </div>
                 <label className="flex items-start gap-2 text-xs"><input type="checkbox" className="mt-0.5" checked={newContact.consent} onChange={(e) => setNewContact({ ...newContact, consent: e.target.checked })} /> {t.consent}</label>
@@ -505,7 +523,7 @@ export function VertalGrowthScreen() {
                           <p className="text-muted-foreground">{t.teamPlan}</p>
                           <ul className="list-disc space-y-0.5 pl-4">
                             {plan.presets.map((p) => (
-                              <li key={p.id}>{stages[p.stage]}: {t.presets[p.id]} <span className="text-muted-foreground">({p.app}{p.needs?.length ? ` · ${t.needsField(p.needs.join(', '))}` : ''})</span></li>
+                              <li key={p.id}>{stageNames[p.stage]}: {t.presets[p.id]} <span className="text-muted-foreground">({p.app}{p.needs?.length ? ` · ${t.needsField(p.needs.join(', '))}` : ''})</span></li>
                             ))}
                           </ul>
                           <p>{t.costRun(runCost)}</p>

@@ -243,3 +243,25 @@ export async function forwardEvents(webhookAgentId: number, events: Array<Record
   }
   return sent;
 }
+
+const normTitle = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+/** Palavras genéricas do chat ("meu app", "site") não apontam para um projeto. */
+const GENERIC_PROJECT_WORDS = new Set(['app', 'apps', 'aplicativo', 'site', 'sistema', 'projeto', 'produto', 'loja', 'negocio', 'empresa', 'saas', 'plataforma', 'project', 'product', 'website', 'store', 'business', 'proyecto', 'tienda', 'aplicacion', 'sitio']);
+
+/**
+ * Acha o projeto pedido no chat ("buscar clientes para meu app X") pelo nome.
+ * Só aceita nome igual, ou a palavra inteira dentro do título com UM único projeto batendo.
+ * Antes, "app" casava com "…herokuapp.com…" e o seletor vinha com um projeto qualquer.
+ * Sem projeto achado → null (o seletor fica em "Escolha o projeto…").
+ */
+export function matchProjectByName<T extends { id: string; title: string }>(list: T[], wanted: string): T | null {
+  const want = normTitle(wanted ?? '').replace(/^(meu|minha|my|mi)\s+/, '');
+  if (!want || want.length < 2) return null;
+  const exact = list.filter((p) => normTitle(p.title) === want);
+  if (exact.length === 1) return exact[0];
+  if (exact.length > 1 || GENERIC_PROJECT_WORDS.has(want)) return null;
+  const esc = want.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(^|[^\\p{L}\\p{N}])${esc}($|[^\\p{L}\\p{N}])`, 'u');
+  const hits = list.filter((p) => re.test(normTitle(p.title)));
+  return hits.length === 1 ? hits[0] : null;
+}

@@ -19,7 +19,7 @@ export const NEEDS_ADMIN_REASON =
 export async function login(page: Page) {
   await page.goto('/auth')
   await page.getByPlaceholder('Email').fill(TEST_EMAIL!)
-  await page.getByPlaceholder('Senha').fill(TEST_PASSWORD!)
+  await page.getByPlaceholder(/^(Senha|Password|Contraseña)$/).fill(TEST_PASSWORD!)
   await page.getByTestId('auth-submit').click()
   await page.waitForURL((u) => !u.pathname.startsWith('/auth'), { timeout: 20_000 })
 }

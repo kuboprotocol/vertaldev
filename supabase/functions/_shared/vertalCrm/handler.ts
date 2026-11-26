@@ -11,7 +11,7 @@
 // Nada aqui envia e-mail ou mensagem para ninguém.
 
 import {
-  aiMessages, API_KEY_PREFIX, compactContext, contactPatch, CRM_AI_COST, CRM_EVENT_TYPES, CRM_SYNC_ACTIVATE_COST,
+  aiMessages, localizeAiText, API_KEY_PREFIX, compactContext, contactPatch, CRM_AI_COST, CRM_EVENT_TYPES, CRM_SYNC_ACTIVATE_COST,
   CRM_SYNC_AI_RUN_COST, crmAiRequiresPlan, crmLang, dealPatch, DEFAULT_MAPPING, defaultPipelineName, defaultStages, EMAIL_RE,
   extractJson, flattenContact, growthContactToCrm, isAiKind, isSafeWebhookUrl, mappingMessages, normalizeEvents,
   normalizeMapping, normalizeStages, parseEmailDraft, parseNextAction, parseScore, plainSyncCost, providerInfo,
@@ -393,7 +393,7 @@ async function runAi(deps: CrmDeps, ws: string, body: Loose): Promise<Res> {
     let result: Record<string, unknown>;
     if (kind === "summary") {
       if (!text.trim()) throw new Error("empty");
-      result = { summary: text.trim().slice(0, 4000) };
+      result = { summary: localizeAiText(text.trim(), lang).slice(0, 4000) };
     } else if (kind === "email") {
       const d = parseEmailDraft(text);
       if (!d) throw new Error("bad_email");

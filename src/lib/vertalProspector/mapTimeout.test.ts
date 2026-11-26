@@ -93,6 +93,7 @@ describe('Prospector · prazo da busca no mapa', () => {
       if (url.startsWith('https://nominatim')) return hang(url, init);
       if (url.includes('/localidades/estados/SP/municipios')) return json(IBGE_LIST);
       if (url.includes('/metadados')) return json(IBGE_META);
+      if (url.includes('/malhas/municipios/')) return new Response('', { status: 503 }); // contorno é opcional
       bodies.push(decodeURIComponent(String(init?.body ?? '')));
       if (!url.includes('maps.mail.ru')) return hang(url, init);
       return json({ elements: [

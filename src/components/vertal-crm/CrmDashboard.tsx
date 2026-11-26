@@ -9,6 +9,7 @@ import { crmDb } from '@/lib/vertalCrm/client';
 import { crmActivityText, crmDateTime, ellipsis } from '@/lib/vertalCrm/i18n';
 import { computeMetrics, TASK_TYPES, type MetricDeal } from '../../../supabase/functions/_shared/vertalCrm/core';
 import { fullName, useCrm } from './crmState';
+import { LocaleDateInput } from './LocaleDateInput';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>;
@@ -86,7 +87,7 @@ export function CrmTasksList({ compact = false }: { compact?: boolean }) {
           <select className="h-10 rounded-md border bg-background px-2 text-sm" value={type} onChange={(e) => setType(e.target.value)}>
             {TASK_TYPES.map((tt) => <option key={tt} value={tt}>{t.taskTypes[tt]}</option>)}
           </select>
-          <Input type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} aria-label={t.due} />
+          <LocaleDateInput withTime lang={lang} value={due} onChange={setDue} ariaLabel={t.due} />
           <Button onClick={add} disabled={!text.trim()}><Plus className="h-4 w-4" />{t.addTask}</Button>
         </div>
       )}
