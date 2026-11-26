@@ -17,6 +17,8 @@ import { ConnectorIcon } from '@/components/connectors/ConnectorIcon'
 import { supabase } from '@/integrations/supabase/client'
 import { FluxosConnectPanel } from '@/components/connectors/FluxosConnectPanel'
 import { WhatsAppConnectPanel } from '@/components/connectors/WhatsAppConnectPanel'
+import { MobileStudioSetupPage } from '@/components/connectors/MobileStudioSetup'
+import { isMobileStudioSlug } from '@/lib/mobileStudio/connectors'
 import { cn } from '@/lib/utils'
 import { getGitHubOAuthUrl, GITHUB_TOKEN_STEPS } from '@/lib/github/oauth'
 
@@ -78,6 +80,9 @@ export default function ConnectorSetupPage() {
     })()
     return () => { cancelled = true }
   }, [slug])
+
+  // Android Studio, iOS / Xcode e Google Play Console: página própria (abre mesmo com o flag do catálogo desligado).
+  if (isMobileStudioSlug(slug)) return <MobileStudioSetupPage slug={slug} />
 
   if (!connector) {
     return (

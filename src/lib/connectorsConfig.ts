@@ -1,6 +1,8 @@
 import { Github, CreditCard, Globe, Figma, Server, Smartphone, Cloud, Database, Mail, MessageSquare, Shield, Container, Wallet, Zap, Leaf, Rocket, Terminal, TrendingUp, Instagram, MessageCircle, Music, Workflow, Radar } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { fluxosConnectors, FLUXOS_SHARED_APPS } from './fluxosConnectors'
+// Android Studio, iOS / Xcode e Google Play Console (flag VITE_VERTAL_MOBILE_STUDIO, padrão desligado).
+import { mobileStudioCatalog } from './mobileStudio/connectors'
 
 export interface ConnectorSetupStep {
   title: string
@@ -624,6 +626,7 @@ export const connectors: ConnectorConfig[] = [
     return app ? { ...c, fluxosApp: app, features: [...c.features, 'Também no Vertal Fluxos'] } : c
   }),
   ...fluxosConnectors,
+  ...mobileStudioCatalog(),
 ]
 
 export function getConnectorBySlug(slug: string): ConnectorConfig | undefined {
