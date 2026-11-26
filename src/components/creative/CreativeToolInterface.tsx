@@ -26,6 +26,7 @@ import { ImageEditorDialog } from "./ImageEditorDialog";
 import { VideoStudio } from "./VideoStudio";
 import { EbookStudio } from "./EbookStudio";
 import { ClipStudio } from "./ClipStudio";
+import { VertalMusicStudio } from "./VertalMusicStudio";
 import { AvatarProgressSteps, type AvatarStepState, type AvatarStepKey } from "./AvatarProgressSteps";
 import { cn } from "@/lib/utils";
 import { PUTER_MODELS, creativeInvoke } from "@/lib/puterAI";
@@ -63,7 +64,7 @@ const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: strin
   { key: "clips", title: "Vertal Clips", desc: "Cortes virais automáticos", icon: Scissors, cost: "1 crédito" },
   { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes realistas", icon: User2, cost: "4 créditos/s de vídeo" },
   { key: "shorts", title: "Vertal Shorts", desc: "Vídeos curtos a partir de texto", icon: Video, cost: "3 créditos" },
-  { key: "music", title: "MusKAI Music", desc: "Redireciona para MusKAI", icon: Music, cost: "Externo" },
+  { key: "music", title: "Vertal Music AI", desc: "Música original com o motor da MusKAI", icon: Music, cost: "1 crédito" },
   { key: "ebook", title: "Vertal Ebook AI", desc: "eBooks completos com capítulos", icon: BookOpen, cost: `a partir de ${ebookCost(EBOOK_MIN_CHAPTERS).credits} créditos` },
   { key: "emo", title: "Vertal EMO AI", desc: "Animação realista de fotos", icon: Sparkles, cost: "5 créditos" },
 ];
@@ -176,6 +177,7 @@ export function CreativeToolInterface({ toolKey, onSuccess }: Props) {
   if (toolKey === "video_studio") return <VideoStudio />;
   if (toolKey === "ebook") return <EbookStudio />;
   if (toolKey === "clips") return <ClipStudio />;
+  if (toolKey === "music") return <VertalMusicStudio />;
   return <StandardToolInterface toolKey={toolKey} onSuccess={onSuccess} />;
 }
 
@@ -355,7 +357,7 @@ function StandardToolInterface({ toolKey, onSuccess }: Props) {
   const handleExecute = async () => {
     if (loading) return;
 
-    if (toolKey === "music" || toolKey === "shorts") {
+    if (toolKey === "shorts") {
       window.open("https://muskai.kubovibe.dev", "_blank");
       toast.info("Redirecionando para MusKAI...");
       return;

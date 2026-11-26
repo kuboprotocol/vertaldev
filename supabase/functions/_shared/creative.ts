@@ -124,16 +124,16 @@ export async function deductCredits(
   userEmail?: string | null,
   idempotencyKey?: string | null,
   /** rateLimit: false for metered charges inside one request (e.g. per agent step), already rate limited at its start. */
-  opts: { rateLimit?: boolean } = {},
-): Promise<{ ok: true; replayed?: boolean } | { ok: false; error: string; status?: number }> {
-  if (amount <= 0) return { ok: true };
-  // Admin bypass (rate limit + credits)
+  opts: { rateLimit?: boolean; chargeAdmins?: boolean } = {},
+): Promise<{ ok: true; replayed?: boolean; charged?: boolean; key?: string } | { ok: false; error: string; status?: number }> {
+  if (amount <= 0) return { ok: true, charged: false };
+  // Admin bypass (rate limit + credits). chargeAdmins: true debits admins too (live tests of a priced tool).
   const adminClient = supaAdmin();
   const { data: adminData } = await adminClient.rpc("is_admin", { p_user_id: userId });
-  if (adminData) return { ok: true };
+  if (adminData && !opts.chargeAdmins) return { ok: true, charged: false };
 
   // Per-tool rate limit (20 req/min)
-  if (opts.rateLimit !== false) {
+  if (opts.rateLimit !== false && !adminData) {
     const rl = await enforceRateLimit(userId, reason, { max: 20, windowSeconds: 60, userEmail });
     if (!rl.ok) return { ok: false, error: rl.error, status: 429 };
   }
@@ -166,7 +166,26 @@ export async function deductCredits(
   if ((data as any)?.replayed) return { ok: false, error: "duplicate_request", status: 409 };
 
   requestCharges.getStore()?.push({ userId, amount, reason, key: idem });
-  return { ok: true };
+  return { ok: true, charged: true, key: idem };
+}
+
+/** Removes the charges of the current request from the automatic refund (an async job owns them now). */
+export function keepCharges() {
+  requestCharges.getStore()?.splice(0);
+}
+
+/** Refunds one earlier charge (idempotent on the charge key), e.g. when an async job fails later. */
+export async function refundCharge(userId: string, amount: number, reason: string, key: string): Promise<boolean> {
+  const { error } = await supaAdmin().rpc("execute_atomic_credit_topup", {
+    _user_id: userId,
+    _amount: amount,
+    _reason: `refund:${reason}`,
+    _category: "creative_refund",
+    _metadata: { charge_idempotency_key: key },
+    _idempotency_key: `refund:${key}`,
+  });
+  if (error) console.error("[refundCharge] refund failed:", error);
+  return !error;
 }
 
 export async function recordSkillExecution(
