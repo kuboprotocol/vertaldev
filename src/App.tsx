@@ -71,6 +71,7 @@ const ShortlinksPage = lazy(() => import("./pages/ShortlinksPage"));
 const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
 const PublicAppPage = lazy(() => import("./pages/PublicAppPage"));
 const EmailDashboardPage = lazy(() => import("./pages/EmailDashboardPage"));
+const VertalMailAccountPage = lazy(() => import("./pages/ConnectorMailAccountPage"));
 const PlanPage = lazy(() => import("./pages/PlanPage"));
 const SharedAuditPage = lazy(() => import("./pages/SharedAuditPage"));
 const GamePage = lazy(() => import("./pages/GamePage"));
@@ -279,6 +280,9 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/connectors/web3" element={<ProtectedRoute><ConnectorWeb3HubPage /></ProtectedRoute>} />
                 <Route path="/connectors/web3/:provider" element={<ProtectedRoute><ConnectorWeb3Page /></ProtectedRoute>} />
                 <Route path="/connectors/gmail" element={<ProtectedRoute><ConnectorGmailPage /></ProtectedRoute>} />
+                {/* VertalMail: subpágina de cada conta de e-mail conectada (só com o Vertal Mail liberado; senão volta ao conector) */}
+                <Route path="/connectors/gmail/:accountId/inbox" element={<ProtectedRoute><VertalMailAccountPage source="gmail" /></ProtectedRoute>} />
+                <Route path="/connectors/microsoft-outlook/inbox" element={<ProtectedRoute><VertalMailAccountPage source="outlook" /></ProtectedRoute>} />
                 <Route path="/connectors/spotify" element={<ProtectedRoute><ConnectorSpotifyPage /></ProtectedRoute>} />
                 <Route path="/connectors/slack" element={<ProtectedRoute><ConnectorSlackPage /></ProtectedRoute>} />
                 <Route path="/connectors/instagram" element={<ProtectedRoute><ConnectorChannelPage channel="instagram" /></ProtectedRoute>} />

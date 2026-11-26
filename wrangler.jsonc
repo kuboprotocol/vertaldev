@@ -58,7 +58,15 @@
     "SPOTIFY_CLIENT_ID": "f190584b3d57481e8b17b7a4efc1dbfe",
     // Vertal Navigator: E2B self-hosted (docs/VERTAL_NAVIGATOR.md)
     "E2B_DOMAIN": "vertalrun.com",
-    "E2B_API_URL": "https://api.vertalrun.com"
+    "E2B_API_URL": "https://api.vertalrun.com",
+    // Vertal Mail: recebimento pelo Email Routing (handler `email`, worker/mailboxInbound.ts).
+    // Vazio = recusa tudo. Só vale depois de ligar o Email Routing de um domínio e apontar para este Worker.
+    // Ligado em 26/11/2026 (OK do Laércio): catch-all de vertal.dev → este Worker.
+    "MAILBOX_INBOUND_ENABLED": "true",
+    // Opcional: destino (verificado no Email Routing) para tudo que não for caixa do Vertal Mail.
+    // Vazio de propósito: antes o catch-all de vertal.dev estava DESLIGADO (endereço desconhecido = recusado);
+    // as regras específicas (contato@, developers@ → Gmail do Laércio) continuam valendo antes do catch-all.
+    "MAILBOX_FALLBACK_FORWARD": ""
   },
   // Navegador na nuvem do Vertal Chat (/api/browser/*, worker/browserFormRoutes.ts):
   // Cloudflare Browser Run. Funciona no plano Workers Free com limites baixos

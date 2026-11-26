@@ -6,7 +6,8 @@
 // e o navegador na nuvem do Vertal Chat em /api/browser/* (docs/BROWSER_FORM_AGENT.md)
 // e o Vertal Navigator em /api/navigator/* (docs/VERTAL_NAVIGATOR.md)
 // e a busca de vídeos do YouTube do chat em /api/media/* (docs/VERTAL_NAVIGATOR.md, fase 3)
-// e o callback OAuth do conector Gmail em /oauth/gmail/callback (worker/gmailOAuthCallback.ts).
+// e o callback OAuth do conector Gmail em /oauth/gmail/callback (worker/gmailOAuthCallback.ts)
+// e o recebimento do Vertal Mail (handler `email`, worker/mailboxInbound.ts; só com Email Routing apontado para cá).
 import { crawlPriceFor, formatCrawlerPrice, isInBandPricing } from './payPerCrawl';
 import { isPaidPath, parsePaidPrefixes, verifyPaymentContext } from './monetizationGateway';
 import { siteVerificationResponse } from './siteVerification';
@@ -16,8 +17,9 @@ import { BROWSER_API_PREFIX, handleBrowserForm, type BrowserFormEnv } from './br
 import { NAVIGATOR_API_PREFIX, handleNavigator, type NavigatorEnv } from './navigatorRoutes';
 import { MEDIA_API_PREFIX, handleMedia, type MediaEnv } from './mediaRoutes';
 import { handleGmailOAuthCallback, isGmailOAuthCallback, type GmailOAuthEnv } from './gmailOAuthCallback';
+import { handleInboundEmail, type InboundEmail, type MailboxInboundEnv } from './mailboxInbound';
 
-export interface Env extends SpotifyRoutesEnv, BrowserFormEnv, NavigatorEnv, MediaEnv, GmailOAuthEnv {
+export interface Env extends SpotifyRoutesEnv, BrowserFormEnv, NavigatorEnv, MediaEnv, GmailOAuthEnv, MailboxInboundEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
   /** Prefixos protegidos pelo Monetization Gateway, separados por vírgula. */
   MONETIZATION_GATEWAY_PATHS?: string;
@@ -100,5 +102,10 @@ export default {
       if (price !== null) response.headers.set('Crawler-Price', formatCrawlerPrice(price));
     }
     return response;
+  },
+
+  // Vertal Mail: e-mail recebido pelo Cloudflare Email Routing (só quando uma regra aponta para este Worker).
+  async email(message: InboundEmail, env: Env): Promise<void> {
+    await handleInboundEmail(message, env);
   },
 };

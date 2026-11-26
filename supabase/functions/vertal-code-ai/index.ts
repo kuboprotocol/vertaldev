@@ -14,6 +14,7 @@
 //   run aceita skipModels:[id|provedor|custo] só de admin (teste de queda da cadeia)
 //   POST {action:"prospector", op, ...}           → Vertal Prospector (só com VERTAL_PROSPECTOR_ENABLED e o usuário em VERTAL_PROSPECTOR_USER_IDS)
 //   POST {action:"growth", op, ...}               → Vertal Growth Team (só com VERTAL_GROWTH_TEAM_ENABLED e o mesmo usuário liberado no Prospector)
+//   POST {action:"mailbox", op, ...}             → Vertal Mail (só com VERTAL_GPU_CONFIG.VERTAL_MAILBOX ligado e o usuário em userIds)
 //   POST ?app=crm {op, ...}                       → Vertal CRM (só com VERTAL_CRM_ENABLED e o usuário em VERTAL_CRM_USER_IDS;
 //                                                   aceita JWT do usuário, chave da API "x-vertal-crm-key: vcrm_…" ou a chave vfk1 do Vertal Fluxos)
 //
@@ -92,7 +93,11 @@ import { listVisibleSecrets, resolveEnvForRun } from "../_shared/kuboSecrets.ts"
 import { crmChargeAdmins, crmChargeOn, isApiKeyShape as isVertalCrmApiKey, isCrmEnabled, isPaidCrmPlan } from "../_shared/vertalCrm/core.ts";
 import { autoImport as vertalCrmAutoImport, handleCrm, hashApiKey as hashVertalCrmKey, type CrmDeps } from "../_shared/vertalCrm/handler.ts";
 import { verifyFluxosKey as verifyVertalCrmFluxosKey } from "../_shared/fluxosBroker.ts";
-import { makeEngine as makeVertalCrmEngine } from "../_shared/fluxosApps.ts";
+import { makeEngine as makeVertalCrmEngine, whiteLabel as fluxosWhiteLabel } from "../_shared/fluxosApps.ts";
+// Vertal Mail (caixa profissional + Gmail/Outlook → CRM): aditivo, desligado por padrão (VERTAL_GPU_CONFIG.VERTAL_MAILBOX).
+import { isMailboxEnabled, mailboxConfig } from "../_shared/vertalMailbox/core.ts";
+import { handleMailbox } from "../_shared/vertalMailbox/handler.ts";
+import { feedMailToCrm } from "../_shared/vertalCrm/handler.ts";
 import { vertalPersonaEnabled } from "../_shared/vertalPersona.ts";
 // VERTAL Code AI → Vertal Data Library (Vertaldephin): desligado por padrão (config VERTAL_DATA_LIBRARY); só com consentimento gravado.
 import {
@@ -485,6 +490,46 @@ Deno.serve(async (req) => {
   }
   const action = body.action ?? "run";
   if (action === "status") return json(200, { enabled: true, allowed: true });
+
+  // Vertal Mail: desligado (404) se VERTAL_MAILBOX (dentro de VERTAL_GPU_CONFIG) não liberar este usuário. Não muda nada do resto.
+  if (action === "mailbox") {
+    if (!isMailboxEnabled(env(), userId)) return json(404, { error: "vertal_mailbox_disabled" });
+    try {
+      const fluxosUrl = Deno.env.get("FLUXOS_INTERNAL_URL");
+      const fluxosKey = Deno.env.get("FLUXOS_INTERNAL_KEY");
+      const crmOn = isCrmEnabled(env(), userId);
+      const r = await handleMailbox(body, {
+        admin, userId, cfg: mailboxConfig(env())!, fetch,
+        // Mesmo provedor de envio que o app já usa (contact-request); nenhum segredo novo.
+        resendKey: Deno.env.get("RESEND_API_KEY") ?? null,
+        gmailToken: async (accountId) => {
+          const acct = await loadAccount(admin, userId, accountId);
+          return { token: await getFreshAccessToken(admin, acct), email: acct.email };
+        },
+        // Outlook: a conexão que o usuário JÁ tem no Vertal Fluxos (sem cobrança, sem escopo novo).
+        outlook: fluxosUrl && fluxosKey
+          ? async (kind, key, parameters) => {
+            const { data: row } = await admin.from("fluxos_connections").select("status, fluxos_connection_id")
+              .eq("user_id", userId).eq("app_key", "microsoft-outlook").maybeSingle();
+            if (!row || row.status !== "connected") return { ok: false, error: "not_connected" };
+            const e = await makeVertalCrmEngine(fluxosUrl, fluxosKey).call("POST", "/run", {
+              appKey: "microsoft-outlook", kind, key, connectionId: row.fluxos_connection_id, parameters,
+            });
+            if (e.status !== 200 || !e.data?.ok) {
+              return { ok: false, error: "outlook_failed", message: fluxosWhiteLabel(String(e.data?.message ?? e.data?.error ?? "")).slice(0, 300) };
+            }
+            return { ok: true, data: kind === "trigger" ? e.data.items : e.data.data };
+          }
+          : undefined,
+        crmEnabled: crmOn,
+        crmFeed: crmOn ? (items) => feedMailToCrm(vertalCrmDeps(admin, userId, "user"), items) : undefined,
+      });
+      return json(r.status, r.body);
+    } catch (e) {
+      console.error("[vertal-mailbox] falhou:", e instanceof Error ? e.message : e);
+      return json(500, { error: "mailbox_failed" });
+    }
+  }
 
   // Vertal Prospector: desligado (404) se o interruptor/lista não liberar este usuário. Não muda nada do resto.
   if (action === "prospector") {
