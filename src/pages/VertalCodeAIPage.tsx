@@ -150,11 +150,11 @@ function VertalCodeAIScreen() {
       setNotice(null);
       try {
         if (kind === 'imagem') {
-          const res = await postAction<{ images: string[]; text?: string; model: { label: string } }>(t, { action: 'image', prompt: text, images });
-          patch({ media: { kind: 'image', urls: res.images }, reply: res.text || undefined, steps: [{ text: `Modelo: ${res.model.label} (pago)` }] });
+          const res = await postAction<{ images: string[]; text?: string; model: { label: string; cost?: string } }>(t, { action: 'image', prompt: text, images });
+          patch({ media: { kind: 'image', urls: res.images }, reply: res.text || undefined, steps: [{ text: `Modelo: ${res.model.label} (${res.model.cost === 'self_hosted' ? 'própria' : 'pago'})` }] });
         } else {
-          const sub = await postAction<{ job: string; model: { label: string } }>(t, { action: 'video', prompt: text });
-          patch({ steps: [{ text: `Modelo: ${sub.model.label} (pago)` }, { text: 'Na fila…' }] });
+          const sub = await postAction<{ job: string; model: { label: string; cost?: string } }>(t, { action: 'video', prompt: text });
+          patch({ steps: [{ text: `Modelo: ${sub.model.label} (${sub.model.cost === 'self_hosted' ? 'própria' : 'pago'})` }, { text: 'Na fila…' }] });
           for (let i = 0; i < 60; i++) {
             await new Promise((r) => setTimeout(r, 10_000));
             const st = await postAction<{ status: string; url: string | null; needsProxy?: boolean; error?: string }>(t, { action: 'video_status', job: sub.job });

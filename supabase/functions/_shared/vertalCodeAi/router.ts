@@ -301,6 +301,17 @@ export function selfHostedModels(env: VcaEnv): VcaModel[] {
   return [selfHostedAt(env, 1), selfHostedAt(env, 2)].filter((m): m is VcaModel => !!m);
 }
 
+/**
+ * Ordem dos endpoints próprios para um pedido: 1 (VM) → 2 (GPU). Pedidos grandes
+ * (> VERTAL_OLLAMA_2_FIRST_ABOVE_TOKENS, padrão 3 000 tokens) vão primeiro ao 2º endpoint,
+ * que é o mais forte. Sem tamanho conhecido, mantém 1 → 2.
+ */
+export function orderSelfHosted(env: VcaEnv, list: VcaModel[], promptTokens?: number): VcaModel[] {
+  const above = num(env.VERTAL_OLLAMA_2_FIRST_ABOVE_TOKENS, 3_000);
+  if (!promptTokens || promptTokens <= above) return list;
+  return [...list.filter((m) => m.id === "vca-self-hosted-2"), ...list.filter((m) => m.id !== "vca-self-hosted-2")];
+}
+
 /** Estimativa barata de tokens (≈3,5 caracteres por token; imagem conta como 1 000). */
 export function estimateTokens(messages: VcaChatMessage[]): number {
   let chars = 0;
@@ -385,8 +396,12 @@ export function buildChain(env: VcaEnv, opts: ChainOptions): VcaModel[] {
     .map((x) => x.m)
     .filter((m) => m.model === "openrouter/free" || rank(m) < 99);
 
-  const selfList = selfHostedModels(env).filter(
-    (m) => fits(m) && (!opts.promptTokens || opts.promptTokens <= (m.budget?.maxInputTokens ?? Infinity)),
+  const selfList = orderSelfHosted(
+    env,
+    selfHostedModels(env).filter(
+      (m) => fits(m) && (!opts.promptTokens || opts.promptTokens <= (m.budget?.maxInputTokens ?? Infinity)),
+    ),
+    opts.promptTokens,
   );
   const allowPaid = truthy(env.VERTAL_CODE_AI_ALLOW_PAID);
   const paid = allowPaid ? VCA_PAID_CATALOG.filter((m) => hasKey(m) && fits(m)) : [];
@@ -618,8 +633,12 @@ export function buildOptionChain(env: VcaEnv, opts: OptionChainOptions): VcaMode
   const usable = live.filter((m) => hasKey(m) && fits(m) && (m.cost !== "paid" || allowPaid));
   const free = usable.filter((m) => m.cost !== "paid");
   const paid = usable.filter((m) => m.cost === "paid");
-  const selfList = selfHostedModels(env).filter(
-    (m) => fits(m) && (!opts.promptTokens || opts.promptTokens <= (m.budget?.maxInputTokens ?? Infinity)),
+  const selfList = orderSelfHosted(
+    env,
+    selfHostedModels(env).filter(
+      (m) => fits(m) && (!opts.promptTokens || opts.promptTokens <= (m.budget?.maxInputTokens ?? Infinity)),
+    ),
+    opts.promptTokens,
   );
   const extra = extraProviderModels(env).filter((m) => fits(m) && (m.cost !== "paid" || allowPaid));
   const reserve = reconcileFreeModels(
@@ -655,6 +674,11 @@ export interface VcaMediaModel {
   resolution?: string;
   /** Vídeo: pede (ou não) áudio; ausente = padrão do modelo. Sem áudio é mais barato quando o modelo cobra à parte. */
   audio?: boolean;
+  /** "own" = endpoint próprio em GPU (VERTAL_OWN_IMAGE_URL / VERTAL_OWN_VIDEO_URL); ausente = OpenRouter. */
+  provider?: "openrouter" | "own";
+  /** Endpoint próprio: URL base (sem barra final) e variável com o token Bearer. */
+  url?: string;
+  keyEnv?: string;
 }
 
 export const VCA_IMAGE_MODELS: VcaMediaModel[] = [
@@ -715,4 +739,78 @@ export function videoRequestBody(m: VcaMediaModel, prompt: string): Record<strin
     aspect_ratio: "16:9",
     ...(typeof m.audio === "boolean" ? { generate_audio: m.audio } : {}),
   };
+}
+
+// ───────────────────────────── Imagem e vídeo próprios (GPU serverless, opcional) ─────────────────────────────
+//
+// Primeira opção de "Vertal Imagem" / "Vertal Vídeo" quando configurados por segredo; se falharem,
+// a cadeia segue para os modelos de sempre (VCA_IMAGE_MODELS / VCA_VIDEO_MODELS).
+//   VERTAL_OWN_IMAGE_URL / _TOKEN   POST {url}/generate {prompt,width,height,steps} → {image:"data:image/…"}
+//   VERTAL_OWN_VIDEO_URL / _TOKEN   POST {url}/submit {prompt,seconds} → {id}; GET {url}/status?id=; GET {url}/result?id= (mp4)
+//   VERTAL_OWN_IMAGE_COST (US$ por imagem) e VERTAL_OWN_VIDEO_COST (US$ por segundo): só estimativa.
+
+/** Prefixo dos jobs de vídeo do endpoint próprio (o resto é o id do provedor de sempre). */
+export const VCA_OWN_JOB_PREFIX = "own:";
+
+function ownMediaAt(env: VcaEnv, kind: "image" | "video"): VcaMediaModel | null {
+  const pre = kind === "image" ? "VERTAL_OWN_IMAGE" : "VERTAL_OWN_VIDEO";
+  const url = (env[`${pre}_URL`] ?? "").trim().replace(/\/+$/, "");
+  if (!/^https:\/\//i.test(url) || !(env[`${pre}_TOKEN`] ?? "").trim()) return null;
+  return kind === "image"
+    ? {
+      id: "vca-image-own",
+      label: "Vertal Imagem · Própria",
+      kind,
+      model: "vertal-image-gpu",
+      usdPerUnit: num(env.VERTAL_OWN_IMAGE_COST, 0.003),
+      provider: "own",
+      url,
+      keyEnv: `${pre}_TOKEN`,
+    }
+    : {
+      id: "vca-video-own",
+      label: "Vertal Vídeo · Própria",
+      kind,
+      model: "vertal-video-gpu",
+      usdPerUnit: num(env.VERTAL_OWN_VIDEO_COST, 0.02),
+      seconds: 4,
+      resolution: "480p",
+      provider: "own",
+      url,
+      keyEnv: `${pre}_TOKEN`,
+    };
+}
+
+/** Modelos de imagem na ordem de tentativa: própria (se configurada) → os de sempre. */
+export function imageModels(env: VcaEnv): VcaMediaModel[] {
+  const own = ownMediaAt(env, "image");
+  return own ? [own, ...VCA_IMAGE_MODELS] : [...VCA_IMAGE_MODELS];
+}
+
+/** Modelos de vídeo na ordem de tentativa: próprio (se configurado) → os de sempre. */
+export function videoModels(env: VcaEnv): VcaMediaModel[] {
+  const own = ownMediaAt(env, "video");
+  return own ? [own, ...VCA_VIDEO_MODELS] : [...VCA_VIDEO_MODELS];
+}
+
+/** Corpo do pedido de imagem ao endpoint próprio (só texto → imagem, 1024 px). */
+export function ownImageRequestBody(prompt: string): Record<string, unknown> {
+  return { prompt: prompt.slice(0, 2_000), width: 1024, height: 1024, steps: 4, format: "jpeg" };
+}
+
+/** Corpo do pedido de vídeo ao endpoint próprio. */
+export function ownVideoRequestBody(m: VcaMediaModel, prompt: string): Record<string, unknown> {
+  return { prompt: prompt.slice(0, 1_500), seconds: m.seconds ?? 4 };
+}
+
+/** Lê a imagem devolvida pelo endpoint próprio ({image:"data:image/…;base64,…"}). */
+export function extractOwnImage(resp: unknown): string | null {
+  const img = (resp as { image?: unknown } | null)?.image;
+  return typeof img === "string" && /^data:image\/(png|jpe?g|webp);base64,/.test(img) ? img : null;
+}
+
+/** Status do job próprio → status no formato que o app já entende. */
+export function ownVideoStatus(resp: unknown): "pending" | "completed" | "failed" | "expired" {
+  const s = (resp as { status?: unknown } | null)?.status;
+  return s === "completed" || s === "failed" || s === "expired" ? s : "pending";
 }

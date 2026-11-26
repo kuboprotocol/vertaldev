@@ -30,12 +30,17 @@ import {
   mediaCostUsd,
   parseVcaOption,
   retailCredits,
-  VCA_IMAGE_MODELS,
   VCA_MEDIA_OPTIONS,
   VCA_OPTION_LABEL,
   VCA_TEXT_OPTIONS,
-  VCA_VIDEO_MODELS,
   videoRequestBody,
+  extractOwnImage,
+  imageModels,
+  ownImageRequestBody,
+  ownVideoRequestBody,
+  ownVideoStatus,
+  VCA_OWN_JOB_PREFIX,
+  videoModels,
   isVcaEnabled,
   isVcaUserAllowed,
   publicModelInfo,
@@ -595,13 +600,51 @@ Deno.serve(async (req) => {
         .filter((u: unknown): u is string => typeof u === "string" && (/^data:image\/(png|jpe?g|webp);base64,/.test(u) || /^https:\/\//.test(u)) && u.length < 6_000_000)
         .slice(0, 2);
       const fails: string[] = [];
-      for (const m of VCA_IMAGE_MODELS) {
+      const imgStart = Date.now();
+      for (const m of imageModels(e)) {
         const t0 = Date.now();
+        if (m.provider === "own") {
+          // Própria (GPU): só texto → imagem; com imagem de referência vai direto para a de sempre.
+          if (refs.length) {
+            fails.push(`${m.id}:skip(refs)`);
+            continue;
+          }
+          try {
+            const r = await fetch(`${m.url}/generate`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${(e[m.keyEnv ?? ""] ?? "").trim()}`, "Content-Type": "application/json" },
+              signal: AbortSignal.timeout(Number(e.VERTAL_OWN_IMAGE_TIMEOUT_MS) || 70_000),
+              body: JSON.stringify(ownImageRequestBody(mprompt)),
+            });
+            if (!r.ok) {
+              fails.push(`${m.id}:${r.status}`);
+              await r.body?.cancel();
+              continue;
+            }
+            const img = extractOwnImage(await r.json());
+            if (!img) {
+              fails.push(`${m.id}:no_image`);
+              continue;
+            }
+            const usd = mediaCostUsd(m);
+            console.log(`[vertal-code-ai] image ok ${m.id} (${m.model}) ms=${Date.now() - t0} est_usd=${usd.toFixed(6)}`);
+            return json(200, {
+              images: [img],
+              text: "",
+              model: { id: m.id, label: m.label, cost: "self_hosted" },
+              estimate: { usd: Math.round(usd * 1e6) / 1e6, credits: retailCredits(usd), charged: false },
+            });
+          } catch (err) {
+            fails.push(`${m.id}:${err instanceof Error ? err.name : "err"}`);
+          }
+          continue;
+        }
         try {
           const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
             headers: orHeaders,
-            signal: AbortSignal.timeout(90_000),
+            // Se a própria já gastou tempo, a de sempre fica com o que sobra (nunca mais de 90 s).
+            signal: AbortSignal.timeout(Math.max(20_000, Math.min(90_000, 140_000 - (Date.now() - imgStart)))),
             body: JSON.stringify({ ...imageRequestBody(m, mprompt, refs), usage: { include: true } }),
           });
           if (!r.ok) {
@@ -634,7 +677,38 @@ Deno.serve(async (req) => {
     if (action === "video") {
       if (!mprompt) return json(400, { error: "empty_prompt" });
       const fails: string[] = [];
-      for (const m of VCA_VIDEO_MODELS) {
+      for (const m of videoModels(e)) {
+        if (m.provider === "own") {
+          try {
+            const r = await fetch(`${m.url}/submit`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${(e[m.keyEnv ?? ""] ?? "").trim()}`, "Content-Type": "application/json" },
+              signal: AbortSignal.timeout(30_000),
+              body: JSON.stringify(ownVideoRequestBody(m, mprompt)),
+            });
+            if (!r.ok) {
+              fails.push(`${m.id}:${r.status}`);
+              await r.body?.cancel();
+              continue;
+            }
+            const d = await r.json();
+            if (typeof d?.id !== "string" || !d.id) {
+              fails.push(`${m.id}:no_job`);
+              continue;
+            }
+            const usd = mediaCostUsd(m);
+            console.log(`[vertal-code-ai] video submitted ${m.id} (${m.model}) est_usd=${usd.toFixed(4)}`);
+            return json(202, {
+              job: await signJob(userId, `${VCA_OWN_JOB_PREFIX}${d.id}`),
+              status: "pending",
+              model: { id: m.id, label: m.label, cost: "self_hosted" },
+              estimate: { usd: Math.round(usd * 1e6) / 1e6, credits: retailCredits(usd), charged: false, seconds: m.seconds },
+            });
+          } catch (err) {
+            fails.push(`${m.id}:${err instanceof Error ? err.name : "err"}`);
+          }
+          continue;
+        }
         try {
           const r = await fetch("https://openrouter.ai/api/v1/videos", {
             method: "POST",
@@ -670,6 +744,33 @@ Deno.serve(async (req) => {
 
     const jobId = await verifyJob(userId, typeof body.job === "string" ? body.job : "");
     if (!jobId) return json(404, { error: "job_not_found" });
+    if (jobId.startsWith(VCA_OWN_JOB_PREFIX)) {
+      // Job do vídeo próprio (GPU): status e bytes vêm do endpoint próprio, sempre pelo nosso proxy.
+      const own = videoModels(e).find((m) => m.provider === "own");
+      if (!own?.url) return json(404, { error: "job_not_found" });
+      const ownId = encodeURIComponent(jobId.slice(VCA_OWN_JOB_PREFIX.length));
+      const ownHeaders = { Authorization: `Bearer ${(e[own.keyEnv ?? ""] ?? "").trim()}` };
+      if (action === "video_status") {
+        const r = await fetch(`${own.url}/status?id=${ownId}`, { headers: ownHeaders, signal: AbortSignal.timeout(20_000) });
+        if (!r.ok) {
+          await r.body?.cancel();
+          return json(502, { error: "vca_media_failed", status: r.status });
+        }
+        const status = ownVideoStatus(await r.json());
+        return json(200, {
+          status,
+          url: null,
+          needsProxy: status === "completed",
+          error: status === "failed" || status === "expired" ? "vca_media_failed" : undefined,
+        });
+      }
+      const r = await fetch(`${own.url}/result?id=${ownId}`, { headers: ownHeaders, signal: AbortSignal.timeout(60_000) });
+      if (!r.ok || !r.body) {
+        await r.body?.cancel();
+        return json(502, { error: "vca_media_failed", status: r.status });
+      }
+      return new Response(r.body, { headers: { ...corsHeaders, "Content-Type": "video/mp4", "Cache-Control": "private, max-age=3600" } });
+    }
     if (action === "video_status") {
       const r = await fetch(`https://openrouter.ai/api/v1/videos/${encodeURIComponent(jobId)}`, { headers: orHeaders, signal: AbortSignal.timeout(15_000) });
       if (!r.ok) {
