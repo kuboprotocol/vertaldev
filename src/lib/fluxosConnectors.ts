@@ -121,6 +121,7 @@ const FLUXOS_APP_LOGOS: Record<string, string> = {
   'better-stack': '/connectors/better-stack.webp',
   asana: '/connectors/asana.png',
   'google-admob': '/connectors/google-admob.png',
+  'google-ads': '/connectors/google-ads.jpg',
   gitlab: '/connectors/gitlab.webp',
   gitea: '/connectors/gitea.png',
   ghost: '/connectors/ghost.png',
