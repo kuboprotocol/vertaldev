@@ -140,6 +140,7 @@ const FLUXOS_APP_LOGOS: Record<string, string> = {
   'mistral-ai': '/connectors/mistral-ai.png',
   monday: '/connectors/monday.png',
   notion: '/connectors/notion.png',
+  ntfy: '/connectors/ntfy.png',
   gitlab: '/connectors/gitlab.webp',
   gitea: '/connectors/gitea.png',
   ghost: '/connectors/ghost.png',
