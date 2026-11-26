@@ -4,6 +4,7 @@ import {
   firstNameFrom,
   welcomeAppliesTo,
   welcomeConfig,
+  welcomeItems,
   WELCOME_DEFAULTS,
 } from '../../../../supabase/functions/_shared/vertalWelcome/welcomeEmail';
 
@@ -91,12 +92,30 @@ describe('welcome v2 · conteúdo', () => {
     expect(e.text.startsWith('Hi there,\n')).toBe(true);
   });
 
-  it('CRM e Vibe Pay: texto muda quando forem abertos ao público', () => {
+  it('CRM e Vibe Pay: "opening soon" enquanto fechados; versão aberta quando liberados', () => {
     const closed = buildWelcomeEmail({ firstName: 'Ana', cfg: cfgOn }).text;
-    expect(closed).toContain("It's opening soon, and you can join the waitlist today.");
-    expect(closed).toContain("payment links. It's opening soon.");
+    expect(closed).toContain('• Free CRM: opening soon');
+    expect(closed).toContain('• Vertal Vibe Pay: opening soon');
     const open = buildWelcomeEmail({ firstName: 'Ana', cfg: { ...cfgOn, crmOpen: true, vibePayOpen: true } }).text;
-    expect(open).toContain('Activate it from Connectors whenever you');
+    expect(open).toContain('• Free CRM: contacts and deals together');
+    expect(open).toContain('• Vertal Vibe Pay: get paid globally');
     expect(open).not.toContain('opening soon');
+  });
+
+  it('curto: ~120 palavras no corpo e 3–6 palavras por item, todas as vantagens presentes', () => {
+    for (const cfg of [cfgOn, { ...cfgOn, crmOpen: true, vibePayOpen: true }]) {
+      const items = welcomeItems(cfg);
+      expect(items.map((i) => i.label)).toEqual([
+        'Free CRM', 'Deploy and rendering', 'Vertal App', 'Vertal Run', 'Vertal Vibe Pay', 'Design, CAD, Office',
+      ]);
+      for (const i of items) {
+        const n = `${i.label} ${i.text}`.split(/\s+/).length;
+        expect(n).toBeGreaterThanOrEqual(3);
+        expect(n).toBeLessThanOrEqual(6);
+      }
+      const words = buildWelcomeEmail({ firstName: 'Ana', cfg }).text.replace(/^Explore the docs: .*$/m, 'Explore the docs').split(/\s+/).filter((w) => /\w/.test(w)).length;
+      expect(words).toBeLessThanOrEqual(130);
+    }
+    expect(buildWelcomeEmail({ firstName: 'Ana', cfg: cfgOn }).text).toContain('You only pay for Vertal AI, by the credit.');
   });
 });

@@ -3,6 +3,10 @@
 Pedido do Laércio (2026-11-26): ao criar conta no Vertal Dev, mandar um e-mail de boas-vindas em inglês, com o logo
 Vertal, caloroso e humano, convidando a ler a documentação. **Entregue desligado.**
 
+Versão curta (correção dele, mesmo dia): corpo com ~90–120 palavras, todas as vantagens numa lista de 3–6 palavras
+por item, uma linha de preço ("You only pay for Vertal AI, by the credit."), uma linha + botão para a documentação e
+assinatura curta. Um teste garante ≤130 palavras e 3–6 palavras por item.
+
 ## O que muda
 
 Já existia um e-mail de boas-vindas (`welcome`, pt-BR, marca antiga "KUBO VIBE"), enviado pela edge function

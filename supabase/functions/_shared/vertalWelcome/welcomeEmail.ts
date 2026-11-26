@@ -131,53 +131,27 @@ export function welcomeSubject(firstName: string | null): string {
   return firstName ? `Welcome to Vertal Dev, ${firstName}` : "Welcome to Vertal Dev";
 }
 
-/** Linhas dos produtos — cada uma conferida no repo/site (docs/VERTAL-WELCOME-EMAIL.md). */
+/** Linhas dos produtos (3–6 palavras cada, pedido do Laércio 2026-11-26) — conferidas no repo/site
+ * (docs/VERTAL-WELCOME-EMAIL.md). CRM e Vibe Pay dizem "opening soon" enquanto estiverem fechados ao público. */
 export function welcomeItems(cfg: WelcomeVars["cfg"]): WelcomeItem[] {
   const site = cfg.siteUrl;
   return [
-    cfg.crmOpen
-      ? {
-          label: "Free CRM",
-          text: "keep your contacts, companies and deals in one place, with no monthly fee. Activate it from Connectors whenever you're ready.",
-          href: `${site}/crm`,
-        }
-      : {
-          label: "Free CRM",
-          text: "keep your contacts, companies and deals in one place, with no monthly fee. It's opening soon, and you can join the waitlist today.",
-          href: `${site}/crm`,
-        },
-    {
-      label: "Deploy and rendering",
-      text: "put your projects online in a few clicks and watch them come to life as you build.",
-    },
-    {
-      label: "Vertal App",
-      text: "take a project from your repository to a live app, with AI that detects your stack and build, plus live status and logs.",
-      href: "https://vertal.app",
-    },
-    {
-      label: "Vertal Run",
-      text: "safe, isolated sandboxes where your AI agents run Python, JavaScript and Bash code.",
-      href: "https://vertalrun.com",
-    },
-    cfg.vibePayOpen
-      ? {
-          label: "Vertal Vibe Pay",
-          text: "a digital account to get paid in multiple currencies, with Pix, cards and payment links.",
-          href: `${site}/en/vibe-pay`,
-        }
-      : {
-          label: "Vertal Vibe Pay",
-          text: "a digital account to get paid in multiple currencies, with Pix, cards and payment links. It's opening soon.",
-          href: `${site}/en/vibe-pay`,
-        },
-    {
-      label: "Premium Design, CAD and Office tools",
-      text: "free whenever you use them manually.",
-      href: `${site}/creative`,
-    },
+    { label: "Free CRM", text: cfg.crmOpen ? "contacts and deals together" : "opening soon", href: `${site}/crm` },
+    { label: "Deploy and rendering", text: "go live fast" },
+    { label: "Vertal App", text: "repo to live app", href: "https://vertal.app" },
+    { label: "Vertal Run", text: "safe code sandboxes", href: "https://vertalrun.com" },
+    { label: "Vertal Vibe Pay", text: cfg.vibePayOpen ? "get paid globally" : "opening soon", href: `${site}/en/vibe-pay` },
+    { label: "Design, CAD, Office", text: "free manually", href: `${site}/creative` },
   ];
 }
+
+export const WELCOME_LINES = {
+  welcome: "Welcome to Vertal Dev. We're so glad you're here!",
+  intro: "Here's what's already in your account:",
+  pricing: "You only pay for Vertal AI, by the credit.",
+  docs: "Our docs are the quickest way to get started.",
+  reply: "Questions or ideas? Just reply, we'd love to hear from you.",
+} as const;
 
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -188,22 +162,21 @@ export function buildWelcomeEmail(v: WelcomeVars): WelcomeEmail {
   const items = welcomeItems(v.cfg);
   const subject = welcomeSubject(name);
 
+  const L = WELCOME_LINES;
   const text = [
     hi,
     "",
-    "Welcome to Vertal Dev. We're really glad you're here.",
+    L.welcome,
     "",
-    "Your account comes with a full set of tools to build, launch and run your projects, and most of them cost nothing. Here's what's waiting for you:",
+    L.intro,
+    ...items.map((i) => `• ${i.label}: ${i.text}`),
     "",
-    ...items.map((i) => `• ${i.label}: ${i.text}${i.href ? ` (${i.href})` : ""}`),
+    L.pricing,
     "",
-    "You only pay for Vertal AI, and only for what you use, with credits you control.",
-    "",
-    "The best way to get started is our documentation. Spend a few minutes there and you'll find guides, examples and shortcuts that make everything easier.",
-    "",
+    L.docs,
     `Explore the docs: ${v.cfg.docsUrl}`,
     "",
-    "If you have a question or an idea, just reply to this email. We'd love to hear from you.",
+    L.reply,
     "",
     "Welcome aboard,",
     "Laércio Borges",
@@ -218,8 +191,8 @@ export function buildWelcomeEmail(v: WelcomeVars): WelcomeEmail {
   const link = "color:#6d28d9;text-decoration:underline;";
   const li = items
     .map(
-      (i) => `<tr><td valign="top" style="padding:0 10px 12px 0;${font}font-size:16px;line-height:1.6;color:#7c3aed;">&#8226;</td>` +
-        `<td valign="top" style="padding:0 0 12px;${font}font-size:16px;line-height:1.6;color:#1f2330;">` +
+      (i) => `<tr><td valign="top" style="padding:0 10px 6px 0;${font}font-size:16px;line-height:1.6;color:#7c3aed;">&#8226;</td>` +
+        `<td valign="top" style="padding:0 0 6px;${font}font-size:16px;line-height:1.6;color:#1f2330;">` +
         (i.href
           ? `<a href="${esc(i.href)}" style="${link}font-weight:600;">${esc(i.label)}</a>`
           : `<strong style="font-weight:600;color:#1f2330;">${esc(i.label)}</strong>`) +
@@ -253,19 +226,19 @@ export function buildWelcomeEmail(v: WelcomeVars): WelcomeEmail {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr><td>
 <p style="${p}">${esc(hi)}</p>
-<p style="${p}">Welcome to Vertal Dev. We're really glad you're here.</p>
-<p style="${p}">Your account comes with a full set of tools to build, launch and run your projects, and most of them cost nothing. Here's what's waiting for you:</p>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 8px;">
+<p style="${p}">${esc(L.welcome)}</p>
+<p style="margin:0 0 10px;${font}font-size:16px;line-height:1.6;color:#1f2330;">${esc(L.intro)}</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 10px;">
 ${li}
 </table>
-<p style="${p}">You only pay for Vertal AI, and only for what you use, with credits you control.</p>
-<p style="${p}">The best way to get started is our documentation. Spend a few minutes there and you'll find guides, examples and shortcuts that make everything easier.</p>
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 24px;">
+<p style="${p}">${esc(L.pricing)}</p>
+<p style="margin:0 0 12px;${font}font-size:16px;line-height:1.6;color:#1f2330;">${esc(L.docs)}</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
 <tr><td align="center" bgcolor="#7c3aed" style="border-radius:12px;background:#7c3aed;">
 <a href="${esc(v.cfg.docsUrl)}" style="display:inline-block;padding:14px 28px;${font}font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:12px;">Explore the docs</a>
 </td></tr>
 </table>
-<p style="${p}">If you have a question or an idea, just reply to this email. We'd love to hear from you.</p>
+<p style="${p}">${esc(L.reply)}</p>
 <p style="margin:0;${font}font-size:16px;line-height:1.6;color:#1f2330;">Welcome aboard,<br>Laércio Borges<br><span class="v-muted" style="color:#5b5f6e;">Founder, Vertal</span></p>
 </td></tr>
 </table>
