@@ -363,10 +363,60 @@ export function compactContext(ctx: unknown, max = 6000): string {
   return s.length > max ? `${s.slice(0, max)}…` : s;
 }
 
+/** Rótulos dos valores técnicos que vão para o modelo (antes o resumo saía com "cold" em vez de "frio"). */
+export const AI_VALUE_LABELS: Record<CrmLang, { status: Record<string, string>; dealStatus: Record<string, string>; taskType: Record<string, string> }> = {
+  pt: {
+    status: { cold: "frio", warm: "morno", hot: "quente", "in-contract": "cliente (em contrato)" },
+    dealStatus: { open: "aberto", won: "ganho", lost: "perdido" },
+    taskType: { none: "tarefa", email: "e-mail", demo: "demonstração", lunch: "almoço", meeting: "reunião", "follow-up": "follow-up", "thank-you": "agradecimento", ship: "entrega", call: "ligação" },
+  },
+  es: {
+    status: { cold: "frío", warm: "tibio", hot: "caliente", "in-contract": "cliente (con contrato)" },
+    dealStatus: { open: "abierto", won: "ganado", lost: "perdido" },
+    taskType: { none: "tarea", email: "correo", demo: "demostración", lunch: "almuerzo", meeting: "reunión", "follow-up": "seguimiento", "thank-you": "agradecimiento", ship: "entrega", call: "llamada" },
+  },
+  en: {
+    status: { cold: "cold", warm: "warm", hot: "hot", "in-contract": "customer (in contract)" },
+    dealStatus: { open: "open", won: "won", lost: "lost" },
+    taskType: {},
+  },
+};
+
+/**
+ * Troca valores técnicos do registro pelos rótulos no idioma do usuário antes de mandar ao modelo
+ * (status do contato, status do negócio, tipo de tarefa). Não mexe em nada além dessas chaves.
+ */
+export function localizeAiContext(ctx: unknown, lang: CrmLang): unknown {
+  const L = AI_VALUE_LABELS[lang] ?? AI_VALUE_LABELS.pt;
+  const walk = (v: unknown, parentKey: string): unknown => {
+    if (Array.isArray(v)) return v.map((x) => walk(x, parentKey));
+    if (!v || typeof v !== "object") return v;
+    const o = v as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    const isDeal = parentKey === "deals" || ("stage" in o && "amount" in o);
+    for (const [k, x] of Object.entries(o)) {
+      if (k === "status" && typeof x === "string") out[k] = (isDeal ? L.dealStatus[x] : L.status[x] ?? L.dealStatus[x]) ?? x;
+      else if (k === "type" && typeof x === "string" && parentKey === "tasks") out[k] = L.taskType[x] ?? x;
+      else out[k] = walk(x, k);
+    }
+    return out;
+  };
+  return walk(ctx, "");
+}
+
+/** Rede de segurança no texto do resumo: valor cru que o modelo copiou ("cold") vira o rótulo do idioma. */
+export function localizeAiText(text: string, lang: CrmLang): string {
+  if (lang === "en") return text;
+  const L = AI_VALUE_LABELS[lang] ?? AI_VALUE_LABELS.pt;
+  return text.replace(/(["'“”`]?)\b(in-contract|cold|warm|hot)\b\1/gi, (_m, _q, w: string) => L.status[w.toLowerCase()] ?? w);
+}
+
 export function aiMessages(kind: CrmAiKind, ctx: unknown, lang: CrmLang, extra: { query?: string; goal?: string } = {}) {
   const L = LANG_NAME[lang];
-  const base = `Você é o assistente do Vertal CRM. Responda SEMPRE em ${L}. Use só os dados fornecidos; não invente fatos, valores nem e-mails.`;
-  const data = compactContext(ctx);
+  const base = `Você é o assistente do Vertal CRM. Responda SEMPRE em ${L}. Use só os dados fornecidos; não invente fatos, valores nem e-mails.` +
+    (kind === "search" ? "" : ` Nunca escreva valores técnicos crus (como cold, warm, hot, in-contract, open, won, lost): use palavras em ${L}.`);
+  // A busca precisa dos ids crus (status/etapas viram filtro); os outros usos recebem os rótulos no idioma.
+  const data = compactContext(kind === "search" ? ctx : localizeAiContext(ctx, lang));
   switch (kind) {
     case "summary":
       return [

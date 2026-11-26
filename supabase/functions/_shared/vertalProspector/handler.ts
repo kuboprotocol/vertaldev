@@ -10,7 +10,7 @@ import {
   buildOverpassQuery, buildOverpassQueryByName, candidateEmails, classifyEmail, classifyInbound, dailyCap, describeSignals, detectSignals,
   domainOf, extractCnpjs, extractEmails, extractJson, extractPhones, hasMxAnswer, htmlToText, icpMissing, inferPattern,
   isBlocked, isEmail, isPublicHost, isRoleAddress, isValidCnpj, meetingSlots, meetingText, normalizeDnc, normalizeWebsite,
-  onlyDigits, optOutFooter, overpassAreaId, parseArea, parseCompanyProfile, parseIcp, parseOverpassElements, parseSequence,
+  keepIcpCategories, onlyDigits, optOutFooter, overpassAreaId, parseArea, parseCompanyProfile, parseIcp, parseOverpassElements, parseSequence,
   pickInternalLinks, sendGate, slugName, textProblems, waLink,
   type DncKind, type EmailPattern, type Icp, type MessageKind, type ProspectorEnv, type Sender,
 } from "./core.ts";
@@ -253,7 +253,8 @@ export async function handleProspector(body: Record<string, Loose>, deps: Prospe
     }
 
     case "list_campaigns": {
-      const { data } = await deps.admin.from(T.c).select("id, company_name, cnpj, website, status, created_at, updated_at")
+      // "area" (cidade do ICP) diferencia campanhas com o mesmo nome no seletor da tela.
+      const { data } = await deps.admin.from(T.c).select("id, company_name, cnpj, website, status, created_at, updated_at, area:icp->>area")
         .eq("user_id", deps.userId).order("created_at", { ascending: false }).limit(50);
       return ok({ campaigns: data ?? [] });
     }
@@ -358,7 +359,8 @@ export async function handleProspector(body: Record<string, Loose>, deps: Prospe
       let placeName = icp.area;
       let areaId: number | null = null;
       if (fromBrowser) {
-        found = parseOverpassElements({ elements: (body.elements as unknown[]).slice(0, 400) }, icp.osmTags);
+        // Rede de segurança: só as categorias do ICP (o navegador já filtra município e categoria).
+        found = parseOverpassElements({ elements: keepIcpCategories((body.elements as unknown[]).slice(0, 400), icp.osmTags) }, icp.osmTags);
       } else {
         const geo = await fetchJson(deps.fetch, `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=br&q=${encodeURIComponent(icp.area)}`, {
           headers: { "User-Agent": UA, "Accept-Language": "pt-BR" },
@@ -390,7 +392,8 @@ export async function handleProspector(body: Record<string, Loose>, deps: Prospe
           // O front tenta pelo navegador do usuário com a mesma consulta.
           return err(503, "map_busy", { finding: "O mapa aberto não respondeu ao servidor agora.", query: q, diag });
         }
-        found = parseOverpassElements(over.data, icp.osmTags);
+        const overEls = ((over.data as { elements?: unknown[] } | null)?.elements ?? []) as unknown[];
+        found = parseOverpassElements({ elements: keepIcpCategories(overEls, icp.osmTags) }, icp.osmTags);
       }
       if (!areaId && !found.length) {
         return err(400, "area_not_found", { finding: `Não achei empresas em "${icp.area}" nessas categorias. Confira a cidade (com acento), a UF e as categorias.` });
@@ -427,7 +430,7 @@ export async function handleProspector(body: Record<string, Loose>, deps: Prospe
       if (!found.length) findings.push("O mapa não trouxe empresas com essas categorias nessa região. Tente outras categorias ou uma região maior.");
       if (skippedDup) findings.push(`${skippedDup} já estavam em campanhas suas.`);
       if (skippedDnc) findings.push(`${skippedDnc} estão na lista de não contatar.`);
-      return ok({ added: rows.length, found: found.length, findings, area: placeName, via: fromBrowser ? "navegador" : areaId ? "geocodificador" : "nome do município" });
+      return ok({ added: rows.length, found: found.length, findings, area: placeName, icpArea: icp.area, categories: icp.osmTags.map((t) => `${t.key}=${t.value}`), via: fromBrowser ? "navegador" : areaId ? "geocodificador" : "nome do município" });
     }
 
     case "enrich_lead": {

@@ -231,6 +231,74 @@ export function buildOverpassQueryByName(tags: OsmTag[], city: string, uf: strin
   return `[out:json][timeout:25];\n${scope}\nrel(area.s)["boundary"="administrative"]["admin_level"="8"]["name"="${name}"];\nmap_to_area->.a;\n(\n${lines.join("\n")}\n);\nout center tags ${Math.max(1, Math.min(limit, 300))};`;
 }
 
+// ─── Dentro do município (o retângulo pega cidades vizinhas) ─────────────
+
+/** Contorno do município em GeoJSON ([lon, lat]); Polygon ou MultiPolygon. */
+export type AreaGeometry = { type: "Polygon"; coordinates: number[][][] } | { type: "MultiPolygon"; coordinates: number[][][][] };
+
+const normName = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+
+/** Aceita só Polygon/MultiPolygon com números finitos (o resto vira null). */
+export function parseAreaGeometry(v: unknown): AreaGeometry | null {
+  const g = v as { type?: string; coordinates?: unknown } | null;
+  if (!g || typeof g !== "object") return null;
+  const ring = (r: unknown) => Array.isArray(r) && r.length >= 4 && r.every((p) => Array.isArray(p) && p.length >= 2 && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1])));
+  const poly = (p: unknown) => Array.isArray(p) && p.length >= 1 && p.every(ring);
+  if (g.type === "Polygon" && poly(g.coordinates)) return { type: "Polygon", coordinates: g.coordinates as number[][][] };
+  if (g.type === "MultiPolygon" && Array.isArray(g.coordinates) && g.coordinates.length && g.coordinates.every(poly)) {
+    return { type: "MultiPolygon", coordinates: g.coordinates as number[][][][] };
+  }
+  return null;
+}
+
+function inRing(lon: number, lat: number, ring: number[][]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if (yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi || 1e-12) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/** Ponto (lat, lon) dentro do contorno (respeita buracos do polígono). */
+export function pointInAreaGeometry(lat: number, lon: number, g: AreaGeometry): boolean {
+  const polys = g.type === "Polygon" ? [g.coordinates] : g.coordinates;
+  return polys.some(([outer, ...holes]) => inRing(lon, lat, outer) && !holes.some((h) => inRing(lon, lat, h)));
+}
+
+/** Coordenada do elemento do mapa: nó (lat/lon) ou centro (via/relação com "out center"). */
+export function elementLatLon(e: unknown): { lat: number; lon: number } | null {
+  const x = e as { lat?: unknown; lon?: unknown; center?: { lat?: unknown; lon?: unknown } } | null;
+  const lat = Number(x?.lat ?? x?.center?.lat);
+  const lon = Number(x?.lon ?? x?.center?.lon);
+  return x && Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+}
+
+/**
+ * Só empresas do município do ICP. Com contorno e coordenada, o contorno decide (distritos como "Barão Geraldo"
+ * ficam; Valinhos/Sumaré/São Paulo saem). Sem contorno ou sem coordenada: quem declara outra cidade sai.
+ */
+export function keepInsideMunicipality(elements: unknown[], opts: { city: string | null; geometry?: AreaGeometry | null }): unknown[] {
+  const want = opts.city ? normName(opts.city) : null;
+  return elements.filter((e) => {
+    const pt = opts.geometry ? elementLatLon(e) : null;
+    if (pt && opts.geometry) return pointInAreaGeometry(pt.lat, pt.lon, opts.geometry);
+    if (!want) return true;
+    const c = (e as { tags?: Record<string, string> })?.tags?.["addr:city"];
+    return !c || normName(c) === want;
+  });
+}
+
+/** Só elementos de uma das categorias do ICP (ex.: shop=computer) — nada de "office=company" numa campanha de lojas de informática. */
+export function keepIcpCategories(elements: unknown[], tags: OsmTag[]): unknown[] {
+  if (!tags.length) return elements;
+  return elements.filter((e) => {
+    const t = (e as { tags?: Record<string, string> })?.tags ?? {};
+    return tags.some((tg) => t[tg.key] === tg.value);
+  });
+}
+
 export interface LeadDraft {
   osmId: string;
   name: string;

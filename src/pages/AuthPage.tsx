@@ -10,6 +10,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { motion, AnimatePresence } from 'framer-motion'
 import { clearStoredReferralCode, getStoredReferralCode, storeReferralCode } from '@/lib/referral'
 import { crmBuildFlagOn, isCrmRedirect } from '@/lib/vertalCrm/redirect'
+import { authLang, authUi } from '@/lib/authI18n'
 
 // Google sign-in (Supabase Auth, provedor Google ligado; callback
 // https://sccizjlpwezsgaxkclot.supabase.co/auth/v1/callback no cliente OAuth).
@@ -23,6 +24,8 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
   const urlRefCode = searchParams.get('ref') || ''
   const refCode = urlRefCode || getStoredReferralCode()
   const redirectParam = searchParams.get('redirect') || ''
+  // Textos no idioma do usuário (só textos; a lógica de login é a mesma).
+  const T = authUi(authLang(searchParams.get('lang')))
 
   useEffect(() => {
     if (urlRefCode) storeReferralCode(urlRefCode)
@@ -62,15 +65,15 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
 
   const handleSignOut = async () => {
     setSigningOut(true)
-    const tId = toast.loading('Signing you out…')
+    const tId = toast.loading(T.signingYouOut)
     try {
       await signOut()
-      toast.success('Signed out successfully. You can sign in again below.', { id: tId })
+      toast.success(T.signedOut, { id: tId })
       const url = new URL(window.location.href)
       url.searchParams.delete('signout')
       window.history.replaceState({}, '', url.toString())
     } catch (err: any) {
-      toast.error(err?.message || 'Could not sign out', { id: tId })
+      toast.error(err?.message || T.couldNotSignOut, { id: tId })
     } finally {
       setSigningOut(false)
     }
@@ -79,36 +82,36 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
   const copyReferenceId = async (reqId: string) => {
     try {
       await navigator.clipboard.writeText(reqId)
-      toast.success('Reference ID copied to clipboard')
+      toast.success(T.refCopied)
     } catch {
-      toast.error('Could not copy reference ID')
+      toast.error(T.refCopyFailed)
     }
   }
 
   const handleGithubLogin = async () => {
     setGithubLoading(true)
-    const startingId = toast.loading('Starting GitHub sign-in…')
+    const startingId = toast.loading(T.startingGithub)
     try {
       const { data, error } = await supabase.functions.invoke('github-signin-initiate', {
         body: { returnUrl: safeRedirect, ...(refCode ? { referralCode: refCode } : {}) },
       })
       if (error) throw error
       if (data?.error === 'github_not_configured') {
-        toast.error('GitHub sign-in is not configured yet. Please use email or Google.', {
+        toast.error(T.githubNotConfigured, {
           id: startingId,
-          action: { label: 'Try again', onClick: () => handleGithubLogin() },
+          action: { label: T.tryAgain, onClick: () => handleGithubLogin() },
         })
         setGithubLoading(false)
         return
       }
       if (!data?.url) throw new Error('No authorization URL returned')
-      toast.success('Redirecting to GitHub…', { id: startingId })
+      toast.success(T.redirectingGithub, { id: startingId })
       // Small delay so user sees the toast before navigation
       setTimeout(() => { window.location.href = data.url }, 250)
     } catch (err: any) {
-      toast.error(err?.message || 'Could not start GitHub sign-in', {
+      toast.error(err?.message || T.couldNotStartGithub, {
         id: startingId,
-        action: { label: 'Try again', onClick: () => handleGithubLogin() },
+        action: { label: T.tryAgain, onClick: () => handleGithubLogin() },
       })
       setGithubLoading(false)
     }
@@ -119,23 +122,16 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
     const err = searchParams.get('auth_error')
     if (!err) return
     const reqId = searchParams.get('auth_req_id') || ''
-    const messages: Record<string, string> = {
-      github_not_configured: 'GitHub sign-in is temporarily unavailable. Please use email or Google.',
-      server_misconfigured: 'Sign-in service is not configured. Please try again later.',
-      github_email_unavailable: 'Your GitHub account has no verified email. Please add one and retry.',
-      invalid_state: 'Sign-in session expired. Please try again.',
-      missing_code_or_state: 'GitHub did not return a valid response. Please try again.',
-      oauth_denied: 'GitHub access was denied.',
-    }
-    const baseMsg = messages[err] || `GitHub sign-in failed: ${err}`
+    const messages: Record<string, string> = T.oauthErrors
+    const baseMsg = messages[err] || T.githubFailed(err)
     // Include the Reference ID in the main toast message so screen readers
     // announce it via sonner's aria-live region (description is not always read).
-    const announced = reqId ? `${baseMsg} Reference ID: ${reqId}.` : baseMsg
+    const announced = reqId ? `${baseMsg} ${T.referenceId}: ${reqId}.` : baseMsg
     toast.error(announced, {
-      description: reqId ? `Reference ID: ${reqId}` : undefined,
+      description: reqId ? `${T.referenceId}: ${reqId}` : undefined,
       duration: 10000,
-      action: { label: 'Try again', onClick: () => handleGithubLogin() },
-      cancel: reqId ? { label: 'Copy ID', onClick: () => copyReferenceId(reqId) } : undefined,
+      action: { label: T.tryAgain, onClick: () => handleGithubLogin() },
+      cancel: reqId ? { label: T.copyId, onClick: () => copyReferenceId(reqId) } : undefined,
     })
 
     // Try to auto-copy the Reference ID to the clipboard for quick log correlation.
@@ -146,23 +142,23 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
       if (auto && typeof (auto as Promise<void>).then === 'function') {
         ;(auto as Promise<void>)
           .then(() => {
-            toast.success('Reference ID copied to clipboard', {
+            toast.success(T.refCopied, {
               description: reqId,
               duration: 6000,
             })
           })
           .catch(() => {
-            toast('Copy Reference ID?', {
+            toast(T.copyRefQuestion, {
               description: reqId,
               duration: 12000,
-              action: { label: 'Copy Reference ID', onClick: () => copyReferenceId(reqId) },
+              action: { label: T.copyRef, onClick: () => copyReferenceId(reqId) },
             })
           })
       } else {
-        toast('Copy Reference ID?', {
+        toast(T.copyRefQuestion, {
           description: reqId,
           duration: 12000,
-          action: { label: 'Copy Reference ID', onClick: () => copyReferenceId(reqId) },
+          action: { label: T.copyRef, onClick: () => copyReferenceId(reqId) },
         })
       }
     }
@@ -186,7 +182,7 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
         queryParams: { prompt: 'select_account' },
       },
     })
-    if (error) toast.error('Error signing in with Google')
+    if (error) toast.error(T.googleError)
   }
 
 
@@ -198,10 +194,10 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
         redirectTo: `${window.location.origin}/reset-password`,
       })
       if (error) throw error
-      toast.success('Recovery email sent! Check your inbox.')
+      toast.success(T.recoverySent)
       setForgotPassword(false)
     } catch (err: any) {
-      toast.error(err.message || 'Error sending recovery email')
+      toast.error(err.message || T.recoveryError)
     } finally {
       setSubmitting(false)
     }
@@ -227,7 +223,7 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
         })
         if (error) throw error
         clearStoredReferralCode()
-        toast.success('Account created successfully!')
+        toast.success(T.accountCreated)
 
         // Send welcome email (fire-and-forget; recipient resolved server-side)
         supabase.functions.invoke('send-welcome-email', {
@@ -238,13 +234,13 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
         navigate(safeRedirect, { replace: true })
       }
     } catch (err: any) {
-      const msg = err.message || 'Authentication error'
+      const msg = err.message || T.authError
       if (msg.includes('Invalid login credentials')) {
-        toast.error('Incorrect email or password. Check your details or create an account.')
+        toast.error(T.wrongCredentials)
       } else if (msg.includes('User already registered')) {
-        toast.error('This email is already registered. Try logging in.')
+        toast.error(T.alreadyRegistered)
       } else if (msg.includes('security purposes')) {
-        toast.error('Please wait a few seconds before trying again.')
+        toast.error(T.waitSeconds)
       } else {
         toast.error(msg)
       }
@@ -294,15 +290,15 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <div className="h-14 w-14 rounded-2xl gradient-primary flex items-center justify-center mx-auto mb-5 shadow-glow">
                   <KeyRound className="h-7 w-7 text-primary-foreground" />
                 </div>
-                <h1 className="text-2xl font-display font-bold text-foreground">Recover password</h1>
-                <p className="text-sm text-muted-foreground mt-2">We will send a link to reset your password</p>
+                <h1 className="text-2xl font-display font-bold text-foreground">{T.recoverTitle}</h1>
+                <p className="text-sm text-muted-foreground mt-2">{T.recoverSubtitle}</p>
               </div>
               <form onSubmit={handleForgotPassword} className="space-y-5">
                 <div className="relative">
                   <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     type="email"
-                    placeholder="Your email"
+                    placeholder={T.yourEmail}
                     value={resetEmail}
                     onChange={(e) => setResetEmail(e.target.value)}
                     required
@@ -311,12 +307,12 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
                 </div>
                 <Button type="submit" data-testid="auth-recover-submit" variant="hero" className="w-full h-12 rounded-xl text-sm font-semibold gap-2" disabled={submitting}>
                   {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                  Send recovery link
+                  {T.sendRecovery}
                 </Button>
               </form>
               <p className="text-center text-sm text-muted-foreground mt-6">
                 <button onClick={() => setForgotPassword(false)} className="text-primary hover:text-primary/80 font-semibold transition-colors">
-                  ← Back to login
+                  {T.backToLogin}
                 </button>
               </p>
             </div>
@@ -344,10 +340,10 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
                   />
                 </div>
                 <h1 className="text-2xl font-display font-bold text-foreground">
-                  {isLogin ? 'Welcome back' : 'Create your account'}
+                  {isLogin ? T.welcomeBack : T.createYourAccount}
                 </h1>
                 <p className="text-sm text-muted-foreground mt-2">
-                  {isLogin ? `Access your projects on ${APP_NAME}` : 'Start building amazing apps'}
+                  {isLogin ? T.accessProjects(APP_NAME) : T.startBuilding}
                 </p>
               </div>
 
@@ -362,14 +358,14 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
                     onClick={handleSignOut}
                     disabled={signingOut}
                     aria-busy={signingOut}
-                    aria-label={signingOut ? 'Signing out' : 'Sign out'}
+                    aria-label={signingOut ? T.signingOut : T.signOut}
                     data-testid="auth-signout"
                     className="h-8 rounded-lg text-xs"
                   >
                     {signingOut ? (
-                      <Loader2 className="h-3 w-3 animate-spin" role="status" aria-label="Signing out" data-testid="auth-signout-spinner" />
+                      <Loader2 className="h-3 w-3 animate-spin" role="status" aria-label={T.signingOut} data-testid="auth-signout-spinner" />
                     ) : (
-                      'Sign out'
+                      T.signOut
                     )}
                   </Button>
                 </div>
@@ -387,15 +383,15 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
                   <div className="text-xs text-foreground/90 leading-relaxed">
                     {safeRedirect.startsWith('/connectors') ? (
                       <>
-                        The <span className="font-semibold text-primary">Connectors</span> area is protected.
-                        Log in to continue and we'll redirect you back to{' '}
+                        {T.connectorsProtectedA} <span className="font-semibold text-primary">{T.connectorsWord}</span> {T.connectorsProtectedB}
+                        {' '}{T.loginToContinue}{' '}
                         <code className="px-1 py-0.5 rounded bg-secondary/70 text-[11px] font-mono text-foreground">
                           {safeRedirect}
                         </code>.
                       </>
                     ) : (
                       <>
-                        This page is protected. Log in to continue and we'll redirect you back to{' '}
+                        {T.pageProtected}{' '}
                         <code className="px-1 py-0.5 rounded bg-secondary/70 text-[11px] font-mono text-foreground">
                           {safeRedirect}
                         </code>.
@@ -418,7 +414,7 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
                     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
                     <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                   </svg>
-                  Entrar com Google
+                  {T.google}
                 </Button>
               )}
 
@@ -434,13 +430,13 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
                 ) : (
                   <Github className="h-5 w-5" />
                 )}
-                Sign in with GitHub
+                {T.github}
               </Button>
 
 
               <div className="flex items-center gap-3 mb-4">
                 <div className="h-px flex-1 bg-border/50" />
-                <span className="text-xs text-muted-foreground">or use email</span>
+                <span className="text-xs text-muted-foreground">{T.orEmail}</span>
                 <div className="h-px flex-1 bg-border/50" />
               </div>
 
@@ -452,7 +448,7 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
                     isLogin ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  Sign In
+                  {T.tabSignIn}
                 </button>
                 <button
                   onClick={() => setIsLogin(false)}
@@ -460,7 +456,7 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
                     !isLogin ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  Sign Up
+                  {T.tabSignUp}
                 </button>
               </div>
 
@@ -478,7 +474,7 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
                       <div className="relative pb-1">
                         <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
-                          placeholder="Your name"
+                          placeholder={T.yourName}
                           value={displayName}
                           onChange={(e) => setDisplayName(e.target.value)}
                           required
@@ -492,7 +488,7 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
                   <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     type="email"
-                    placeholder="Email"
+                    placeholder={T.emailPlaceholder}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -503,7 +499,7 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     type="password"
-                    placeholder="Senha"
+                    placeholder={T.passwordPlaceholder}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
@@ -519,7 +515,7 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
                       onClick={() => setForgotPassword(true)}
                       className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
                     >
-                      Forgot my password
+                      {T.forgot}
                     </button>
                   </div>
                 )}
@@ -530,17 +526,17 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
                   ) : (
                     <ArrowRight className="h-4 w-4" />
                   )}
-                  {isLogin ? 'Sign In na conta' : 'Create my account'}
+                  {isLogin ? T.submitSignIn : T.submitSignUp}
                 </Button>
               </form>
 
               <p className="text-center text-sm text-muted-foreground mt-6">
-                {isLogin ? 'New here?' : 'Already have an account?'}{' '}
+                {isLogin ? T.newHere : T.haveAccount}{' '}
                 <button
                   onClick={() => setIsLogin(!isLogin)}
                   className="text-primary hover:text-primary/80 font-semibold transition-colors"
                 >
-                  {isLogin ? 'Create your free account' : 'Sign in'}
+                  {isLogin ? T.createFree : T.signIn}
                 </button>
               </p>
             </div>

@@ -7,11 +7,15 @@ import {
   buildOverpassQuery,
   buildOverpassQueryByName,
   isProspectCommand,
+  keepIcpCategories,
+  keepInsideMunicipality,
   overpassAreaId,
+  parseAreaGeometry,
   parseArea,
   parseIcp,
   parseProspectCommand,
   PROSPECTOR_NAME,
+  type AreaGeometry,
   type OsmTag,
 } from '../../../supabase/functions/_shared/vertalProspector/core';
 
@@ -347,7 +351,13 @@ export async function runMapQueryInBrowser(
   });
 }
 
-export interface MapPlace { areaId: number | null; bbox: [number, number, number, number] | null; name: string }
+export interface MapPlace {
+  areaId: number | null;
+  bbox: [number, number, number, number] | null;
+  name: string;
+  /** Contorno do município (GeoJSON). Com ele, empresas das cidades vizinhas que caem no retângulo saem da lista. */
+  geometry?: AreaGeometry | null;
+}
 
 const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
@@ -355,20 +365,25 @@ const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').t
 async function geocodeNominatim(area: string, fetchImpl: typeof fetch, ms: number, signal?: AbortSignal): Promise<MapPlace | null> {
   const r = await fetchJsonWithTimeout(
     fetchImpl,
-    `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=br&accept-language=pt-BR&q=${encodeURIComponent(area)}`,
+    `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=br&accept-language=pt-BR&polygon_geojson=1&polygon_threshold=0.001&q=${encodeURIComponent(area)}`,
     { method: 'GET' },
     ms,
     signal,
   );
-  const places = r.ok && Array.isArray(r.data) ? (r.data as Array<{ osm_type?: string; osm_id?: number; display_name?: string; boundingbox?: string[] }>) : [];
+  const places = r.ok && Array.isArray(r.data)
+    ? (r.data as Array<{ osm_type?: string; osm_id?: number; display_name?: string; boundingbox?: string[]; addresstype?: string; geojson?: unknown }>)
+    : [];
   if (!places.length) return null;
-  const p = places.find((x) => x.osm_type === 'relation') ?? places.find((x) => x.osm_type === 'way') ?? places[0];
+  // O município inteiro primeiro (ex.: "Sorocaba" devolve também o distrito-sede, menor que o município).
+  const p = places.find((x) => x.osm_type === 'relation' && x.addresstype === 'municipality')
+    ?? places.find((x) => x.osm_type === 'relation') ?? places.find((x) => x.osm_type === 'way') ?? places[0];
   const bb = (p.boundingbox ?? []).map(Number);
   return {
     areaId: overpassAreaId(String(p.osm_type ?? ''), Number(p.osm_id)),
     // Nominatim: [sul, norte, oeste, leste] → Overpass: (sul, oeste, norte, leste)
     bbox: bb.length === 4 && bb.every(Number.isFinite) ? [bb[0], bb[2], bb[1], bb[3]] : null,
     name: String(p.display_name ?? area),
+    geometry: parseAreaGeometry(p.geojson),
   };
 }
 
@@ -388,13 +403,20 @@ async function geocodeIbge(area: string, fetchImpl: typeof fetch, ms: number, si
   const want = norm(parsed.city);
   const hit = rows.find((m) => norm(String(m.nome ?? '')) === want);
   if (!hit?.id) return null;
-  const meta = await fetchJsonWithTimeout(
-    fetchImpl,
-    `https://servicodados.ibge.gov.br/api/v3/malhas/municipios/${Number(hit.id)}/metadados`,
-    { method: 'GET' },
-    Math.max(1, ms - (Date.now() - started)),
-    signal,
-  );
+  const left = Math.max(1, ms - (Date.now() - started));
+  // Retângulo (metadados) e contorno oficial (malha) ao mesmo tempo; o contorno é opcional.
+  const [meta, shape] = await Promise.all([
+    fetchJsonWithTimeout(fetchImpl, `https://servicodados.ibge.gov.br/api/v3/malhas/municipios/${Number(hit.id)}/metadados`, { method: 'GET' }, left, signal),
+    fetchJsonWithTimeout(
+      fetchImpl,
+      `https://servicodados.ibge.gov.br/api/v3/malhas/municipios/${Number(hit.id)}?formato=application/vnd.geo+json&qualidade=intermediaria`,
+      { method: 'GET' },
+      left,
+      signal,
+    ),
+  ]);
+  const feature = shape.ok ? (shape.data as { features?: Array<{ geometry?: unknown }>; geometry?: unknown } | null) : null;
+  const geometry = parseAreaGeometry(feature?.features?.[0]?.geometry ?? feature?.geometry);
   const m = meta.ok && Array.isArray(meta.data) ? (meta.data[0] as { 'regiao-limitrofe'?: Array<{ latitude?: number; longitude?: number }> }) : null;
   const pts = (m?.['regiao-limitrofe'] ?? []).map((p) => [Number(p.latitude), Number(p.longitude)] as const);
   if (pts.length < 2 || !pts.every(([la, lo]) => Number.isFinite(la) && Number.isFinite(lo))) return null;
@@ -404,6 +426,7 @@ async function geocodeIbge(area: string, fetchImpl: typeof fetch, ms: number, si
     areaId: null,
     bbox: [Math.min(...lats), Math.min(...lons), Math.max(...lats), Math.max(...lons)],
     name: `${hit.nome}${parsed.uf ? `, ${parsed.uf}` : ''}`,
+    geometry,
   };
 }
 
@@ -412,7 +435,8 @@ async function geocodeIbge(area: string, fetchImpl: typeof fetch, ms: number, si
  * Antes era só o Nominatim — quando ele recusava (bloqueio/limite), sobrava a consulta mais pesada do mapa e a busca estourava.
  */
 export async function geocodeAreaInBrowser(area: string, fetchImpl: typeof fetch = fetch, ms = GEOCODER_TIMEOUT_MS): Promise<MapPlace | null> {
-  const key = `vertal-prospector-geo:${area.trim().toLowerCase()}`;
+  // v2: o lugar guardado passou a trazer o contorno do município.
+  const key = `vertal-prospector-geo:v2:${area.trim().toLowerCase()}`;
   try {
     const hit = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(key) : null;
     if (hit) return JSON.parse(hit) as MapPlace;
@@ -436,7 +460,7 @@ export async function geocodeAreaInBrowser(area: string, fetchImpl: typeof fetch
   });
   ctrl?.abort();
   if (out) {
-    try { sessionStorage?.setItem(key, JSON.stringify(out)); } catch { /* sem cache */ }
+    try { sessionStorage?.setItem(key, JSON.stringify(out)); } catch { /* sem cache (contorno grande demais) */ }
   }
   return out;
 }
@@ -477,17 +501,21 @@ export async function searchCompaniesInBrowser(
   const parsed = parseArea(icp.area);
   const place = await geocodeAreaInBrowser(icp.area, fetchImpl, Math.min(opts.geocoderMs ?? GEOCODER_TIMEOUT_MS, Math.max(1, totalMs / 3)));
   if (!place && !parsed) throw new ProspectorError('area_not_found', { finding: `Não achei a região "${icp.area}" no mapa. Use "Cidade, UF" (ex.: "Campinas, SP").` });
+  // Só o município do ICP e só as categorias do ICP (o retângulo pega cidades vizinhas; nada de outra categoria).
+  // Consulta por área oficial já é exata: lá só o contorno (se houver) e a categoria filtram (distritos ficam).
+  const clean = (els: unknown[], exactArea = false) =>
+    keepIcpCategories(keepInsideMunicipality(els, { city: exactArea ? null : parsed?.city ?? null, geometry: place?.geometry ?? null }), icp.osmTags);
   if (place?.bbox) {
     const els = await run(buildOverpassQueryByBbox(icp.osmTags, place.bbox, 200));
-    if (els) return { elements: keepSameCity(els, parsed?.city ?? null), via: 'região do município' };
+    if (els) return { elements: clean(els), via: 'região do município' };
   }
   if (place?.areaId) {
     const els = await run(buildOverpassQuery(icp.osmTags, place.areaId, 200));
-    if (els) return { elements: els, via: 'área do município' };
+    if (els) return { elements: clean(els, true), via: 'área do município' };
   }
   if (!place && parsed) {
     const els = await run(buildOverpassQueryByName(icp.osmTags, parsed.city, parsed.uf, 200));
-    if (els) return { elements: els, via: 'nome do município' };
+    if (els) return { elements: clean(els, true), via: 'nome do município' };
   }
   throw new ProspectorError('map_timeout');
 }
@@ -513,4 +541,15 @@ export function downloadCsv(filename: string, csv: string): void {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1_000);
+}
+
+/**
+ * Rótulo do seletor de campanhas: com a cidade do ICP quando há mais de uma campanha com o mesmo nome
+ * (ex.: duas "Vertal Company", uma em Campinas e outra em São Paulo — antes ficavam iguais e confundiam a busca).
+ */
+export function campaignOptionLabel(c: { id: string; company_name: string; area?: string | null }, all: Array<{ id: string; company_name: string; area?: string | null }>): string {
+  const same = all.filter((o) => o.company_name.trim().toLowerCase() === c.company_name.trim().toLowerCase());
+  if (same.length < 2) return c.company_name;
+  if (c.area) return `${c.company_name} · ${c.area}`;
+  return `${c.company_name} (${same.findIndex((o) => o.id === c.id) + 1})`;
 }

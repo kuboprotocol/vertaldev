@@ -36,7 +36,7 @@ function writeReport() {
 async function login(page: Page) {
   await page.goto('/auth')
   await page.getByPlaceholder('Email').fill(TEST_EMAIL!)
-  await page.getByPlaceholder('Senha').fill(TEST_PASSWORD!)
+  await page.getByPlaceholder(/^(Senha|Password|Contraseña)$/).fill(TEST_PASSWORD!)
   await page.getByRole('button', { name: /entrar|login|sign in/i }).first().click()
   await page.waitForURL((u) => !u.pathname.startsWith('/auth'), { timeout: 20_000 })
 }
@@ -124,7 +124,7 @@ test.describe('ConnectorAboutPage — breadcrumb com sessão expirada + troca r�
 
     // 3) Relogin — deve voltar para o /about preservado
     await page.getByPlaceholder('Email').fill(TEST_EMAIL!)
-    await page.getByPlaceholder('Senha').fill(TEST_PASSWORD!)
+    await page.getByPlaceholder(/^(Senha|Password|Contraseña)$/).fill(TEST_PASSWORD!)
     await page.getByRole('button', { name: /entrar|login|sign in/i }).first().click()
     await page.waitForURL(new RegExp(`/connectors/${b}/about`), { timeout: 20_000 })
     await assertBreadcrumbForSlug(page, 'post-relogin', b)

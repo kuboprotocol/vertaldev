@@ -187,3 +187,21 @@ describe('Vertal Prospector · respostas e LGPD', () => {
     expect(startOfDaySp(new Date('2026-11-25T02:00:00Z'))).toBe('2026-11-24T03:00:00.000Z');
   });
 });
+
+describe('Vertal Prospector · categoria do ICP no servidor (reteste 26/11/2026)', () => {
+  it('elementos do navegador fora das categorias do ICP não viram leads', async () => {
+    const { db, deps } = setup();
+    const r = await handleProspector({
+      op: 'find_leads', campaignId: C, limit: 10,
+      elements: [
+        { type: 'node', id: 21, tags: { name: 'Clínica Sorriso Campinas', amenity: 'dentist' } },
+        { type: 'node', id: 22, tags: { name: 'AL Web Studio', office: 'company', 'addr:city': 'São Paulo' } },
+      ],
+    }, deps);
+    expect(r.status).toBe(200);
+    const names = db.tables.prospector_leads.map((l) => l.name);
+    expect(names).toContain('Clínica Sorriso Campinas');
+    expect(names).not.toContain('AL Web Studio');
+    expect(r.body.icpArea).toBeTruthy();
+  });
+});

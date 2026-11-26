@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import {
-  callProspector, downloadCsv, prospectorErrorText, PROSPECTOR_NAME, readProspectorHandoff, searchCompaniesInBrowser, useVertalProspectorAccess, withDeadline,
+  callProspector, campaignOptionLabel, downloadCsv, prospectorErrorText, PROSPECTOR_NAME, readProspectorHandoff, searchCompaniesInBrowser, useVertalProspectorAccess, withDeadline,
 } from '@/lib/vertalProspector/client';
 import {
   EMAIL_STATUS_LABEL, leadsToCsv, textProblems, type CsvLead, type EmailStatus, type Icp,
@@ -90,7 +90,7 @@ export function VertalProspectorScreen() {
 
   const [step, setStep] = useState<Step>('empresa');
   const [busy, setBusy] = useState<string | null>(null);
-  const [campaigns, setCampaigns] = useState<Array<Pick<Campaign, 'id' | 'company_name' | 'status'>>>([]);
+  const [campaigns, setCampaigns] = useState<Array<Pick<Campaign, 'id' | 'company_name' | 'status'> & { area?: string | null }>>([]);
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -357,7 +357,7 @@ export function VertalProspectorScreen() {
           <option value="">Nova campanha</option>
           {campaigns.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.company_name}
+              {campaignOptionLabel(c, campaigns)}
             </option>
           ))}
         </select>
@@ -470,6 +470,12 @@ export function VertalProspectorScreen() {
               </Button>
             </div>
             {campaign.status !== 'icp_confirmed' && <p className="text-xs text-amber-300">Confirme o ICP para buscar empresas.</p>}
+            {campaign.icp?.area && (
+              <p className="text-xs text-muted-foreground" data-testid="prospector-search-scope">
+                Busca em <span className="font-medium text-foreground">{campaign.icp.area}</span>
+                {campaign.icp.osmTags?.length ? <> · {campaign.icp.osmTags.map((t) => `${t.key}=${t.value}`).join(', ')}</> : null}
+              </p>
+            )}
             {searchError && !busy && <p role="alert" className="text-sm text-destructive">{searchError}</p>}
             {leads.length === 0 && !busy && <p className="text-sm text-muted-foreground">Nenhuma empresa ainda.</p>}
             <ul className="space-y-2">

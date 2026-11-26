@@ -53,7 +53,7 @@ export async function login(page: Page) {
   if (!email || !password) throw new Error('TEST_EMAIL/TEST_PASSWORD required')
   await page.goto('/auth')
   await page.getByPlaceholder('Email').fill(email)
-  await page.getByPlaceholder('Senha').fill(password)
+  await page.getByPlaceholder(/^(Senha|Password|Contraseña)$/).fill(password)
   await page.getByRole('button', { name: /entrar|login|sign in/i }).first().click()
   await page.waitForURL((u) => !u.pathname.startsWith('/auth'), { timeout: 20_000 })
 }

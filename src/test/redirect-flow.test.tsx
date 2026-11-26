@@ -137,7 +137,7 @@ describe('Redirect flow: /connectors/github → /auth → /connectors/github', (
     renderApp('/connectors/github')
 
     const emailInput = await screen.findByPlaceholderText('Email')
-    const passwordInput = screen.getByPlaceholderText('Senha')
+    const passwordInput = screen.getByPlaceholderText(/^(Senha|Password|Contraseña)$/)
 
     await user.type(emailInput, 'tester@example.com')
     await user.type(passwordInput, 'password123')
@@ -164,7 +164,7 @@ describe('Redirect flow: /connectors/github → /auth → /connectors/github', (
 
     const emailInput = await screen.findByPlaceholderText('Email')
     await user.type(emailInput, 'tester@example.com')
-    await user.type(screen.getByPlaceholderText('Senha'), 'password123')
+    await user.type(screen.getByPlaceholderText(/^(Senha|Password|Contraseña)$/), 'password123')
     await user.click(screen.getByTestId('auth-submit'))
 
     await waitFor(() => {

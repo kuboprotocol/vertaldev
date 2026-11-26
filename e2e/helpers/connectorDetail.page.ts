@@ -41,7 +41,7 @@ export class ConnectorDetailPage {
     await this.page.context().clearCookies()
     await this.page.goto('/auth')
     await this.page.getByPlaceholder('Email').fill(email)
-    await this.page.getByPlaceholder('Senha').fill(password)
+    await this.page.getByPlaceholder(/^(Senha|Password|Contraseña)$/).fill(password)
     await this.page.getByRole('button', { name: /entrar|login|sign in/i }).first().click()
     await this.page.waitForURL((u) => !u.pathname.startsWith('/auth'), { timeout: 20_000 })
   }

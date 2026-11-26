@@ -13,6 +13,7 @@ import { crmActivityText, crmDateTime, crmErrorText, crmSourceText, ellipsis } f
 import { CONTACT_STATUSES, TASK_TYPES, type CrmAiKind } from '../../../supabase/functions/_shared/vertalCrm/core';
 import { CrmAiDialog } from './CrmAiDialog';
 import { fullName, STATUS_COLORS, useCrm } from './crmState';
+import { LocaleDateInput } from './LocaleDateInput';
 
 export type RecordType = 'contact' | 'company' | 'deal';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -162,6 +163,8 @@ export function CrmRecordPanel({ type, id, onClose, onChanged, onDeleted }: Prop
       {label}
       {opts.textarea ? (
         <Textarea value={draft[k] ?? ''} onChange={(e) => set(k, e.target.value)} disabled={!canWrite} rows={3} />
+      ) : opts.type === 'date' ? (
+        <LocaleDateInput lang={lang} value={String(draft[k] ?? '').slice(0, 10)} onChange={(v) => set(k, v)} disabled={!canWrite} ariaLabel={label} />
       ) : (
         <Input type={opts.type ?? 'text'} value={draft[k] ?? ''} onChange={(e) => set(k, e.target.value)} disabled={!canWrite} />
       )}
@@ -313,7 +316,7 @@ export function CrmRecordPanel({ type, id, onClose, onChanged, onDeleted }: Prop
                   <select className="h-10 rounded-md border bg-background px-2 text-sm" value={task.type} onChange={(e) => setTask({ ...task, type: e.target.value })}>
                     {TASK_TYPES.map((tt) => <option key={tt} value={tt}>{t.taskTypes[tt]}</option>)}
                   </select>
-                  <Input type="datetime-local" value={task.due} onChange={(e) => setTask({ ...task, due: e.target.value })} aria-label={t.due} />
+                  <LocaleDateInput withTime lang={lang} value={task.due} onChange={(v) => setTask((cur) => ({ ...cur, due: v }))} ariaLabel={t.due} />
                   <Button size="sm" onClick={addTask} disabled={!task.text.trim()}>{t.addTask}</Button>
                 </div>
               )}
