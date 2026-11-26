@@ -17,3 +17,4 @@ create index if not exists meta_data_requests_user_idx on public.meta_data_reque
 
 alter table public.meta_data_requests enable row level security;
 revoke all on public.meta_data_requests from anon, authenticated;
+grant select, insert, update, delete on public.meta_data_requests to service_role;
