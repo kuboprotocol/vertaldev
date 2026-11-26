@@ -56,13 +56,13 @@ function featuresFor(plan: string): string[] {
 
   if (plan === 'free') {
     feats.push(`✓ ${cfg.signupCredits} créditos no cadastro (1x)`)
-    feats.push(`✓ Até 5 créditos/mês via shortlinks`)
+    feats.push(`✓ Créditos extras no painel de recompensas`)
   } else {
     feats.push(`✓ ${monthlyCredits} créditos por mês`)
-    feats.push(`✓ Inclui 5 créditos/dia + bônus shortlinks`)
+    feats.push(`✓ Inclui 5 créditos/dia`)
   }
 
-  feats.push('✓ 10 shortlinks/dia (+9.5 créditos)')
+  feats.push('✓ Recompensas opcionais (vídeo premiado, TERRA ADS, Vertal Node)')
   if (cfg.adFrequencyHours === null) {
     feats.push('✓ Sem anúncios interruptivos')
   } else {
@@ -381,8 +381,7 @@ export default function PricingPage() {
                 {[
                   ['Preço/mês', '$0', '$4.99', '$19.99', '$49.99'],
                   ['Créditos/mês', '5', '50', '200', '650'],
-                  ['Shortlinks/dia (opcional)', '10', '10', '10', '10'],
-                  ['Bonus shortlinks/dia', 'até +9.5', 'até +9.5', 'até +9.5', 'até +9.5'],
+                  ['Recompensas (opcional)', '✓', '✓', '✓', '✓'],
                   ['Anúncios', 'A cada 6h', 'A cada 12h', 'Sem anúncios', 'Sem anúncios'],
                   ['Suporte', '—', '—', 'Email', 'Email'],
                 ].map((row) => (
@@ -414,7 +413,7 @@ export default function PricingPage() {
               <AccordionItem value="q1">
                 <AccordionTrigger className="px-4 text-left">O que são créditos na {APP_NAME}?</AccordionTrigger>
                 <AccordionContent className="px-4 text-muted-foreground">
-                  Créditos são a moeda interna que alimenta gerações de IA, deploys e ações premium. Cada plano oferece um volume diário, e você pode acumular créditos extras completando shortlinks e convidando amigos.
+                  Créditos são a moeda interna que alimenta gerações de IA, deploys e ações premium. Cada plano oferece um volume diário, e você pode acumular créditos extras no painel de recompensas e convidando amigos.
                 </AccordionContent>
               </AccordionItem>
               <AccordionItem value="q2">
@@ -424,15 +423,15 @@ export default function PricingPage() {
                 </AccordionContent>
               </AccordionItem>
               <AccordionItem value="q3">
-                <AccordionTrigger className="px-4 text-left">O que são os shortlinks e como ganho créditos?</AccordionTrigger>
+                <AccordionTrigger className="px-4 text-left">Como ganho créditos extras?</AccordionTrigger>
                 <AccordionContent className="px-4 text-muted-foreground">
-                  Todo dia você pode completar até 10 shortlinks TERRA ADS na página /shortlinks. Cada um libera +0,5 crédito e o 10º libera +5 bônus, totalizando +9,5 créditos por dia.
+                  No painel de recompensas (/recompensas) você ganha créditos assistindo a vídeos premiados, vendo anúncios TERRA ADS e ativando o Vertal Node. Tudo é opcional e os créditos caem no seu saldo.
                 </AccordionContent>
               </AccordionItem>
               <AccordionItem value="q4">
                 <AccordionTrigger className="px-4 text-left">Quais planos têm anúncios?</AccordionTrigger>
                 <AccordionContent className="px-4 text-muted-foreground">
-                  Só o Free (a cada 6h) e o Starter de $4.99 (a cada 12h). Pro e Premium 1 não exibem anúncios. Os shortlinks são opcionais em todos os planos: você só vê o anúncio deles se decidir ganhar créditos extras.
+                  Só o Free (a cada 6h) e o Starter de $4.99 (a cada 12h). Pro e Premium 1 não exibem anúncios. As recompensas são opcionais em todos os planos: você só vê esses anúncios se decidir ganhar créditos extras.
                 </AccordionContent>
               </AccordionItem>
               <AccordionItem value="q5">

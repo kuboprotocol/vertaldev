@@ -1,8 +1,8 @@
-// Edge function: calcular recompensas diárias de shortlinks
-// POST /functions/v1/calculate-shortlink-rewards
-// Deve ser chamado uma vez por dia (meia-noite) via cron
-
-import { createClient } from "npm:@supabase/supabase-js@2";
+// Edge function: recompensas diárias de shortlinks — DESATIVADA em 2026-11-26.
+// O sistema de shortlinks saiu do painel de recompensas (/recompensas). O cron
+// `calculate-shortlink-rewards-daily` foi removido (migration 20261126230000) e esta
+// função não credita mais nada; responde 410 para qualquer chamada antiga.
+// Tabelas e dados de shortlinks continuam no banco, intactos.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,83 +10,10 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
-
-Deno.serve(async (req) => {
+Deno.serve((req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-
-  try {
-    const db = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
-
-    // Get all users with active shortlinks
-    const { data: usersWithShortlinks, error: usersError } = await db
-      .from("shortlinks")
-      .select("user_id")
-      .eq("status", "active");
-
-    if (usersError) throw usersError;
-
-    if (!usersWithShortlinks || usersWithShortlinks.length === 0) {
-      return json({
-        success: true,
-        processed: 0,
-        message: "No users with active shortlinks",
-      });
-    }
-
-    // Get unique user IDs
-    // O PostgREST não tem DISTINCT; a deduplicação é feita aqui.
-    const uniqueUserIds = [...new Set(usersWithShortlinks.map((u: { user_id: string }) => u.user_id))];
-
-    const results: any[] = [];
-    let processed = 0;
-    let errors = [];
-
-    // Calculate rewards for each user
-    for (const userId of uniqueUserIds) {
-      try {
-        const { data, error } = await db.rpc("calculate_shortlink_rewards", {
-          _user_id: userId,
-          _reward_date: new Date().toISOString().split('T')[0],
-        });
-
-        if (error) {
-          errors.push({ userId, error: error.message });
-          continue;
-        }
-
-        if (data && data.length > 0) {
-          const reward = data[0];
-          results.push({
-            userId,
-            base_reward: reward.base_reward,
-            bonus_reward: reward.bonus_reward,
-            total_reward: reward.total_reward,
-            user_balance_after: reward.user_balance_after,
-          });
-          processed++;
-        }
-      } catch (e: any) {
-        errors.push({ userId, error: e.message });
-      }
-    }
-
-    return json({
-      success: true,
-      processed,
-      results,
-      errors: errors.length > 0 ? errors : undefined,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (e: any) {
-    return json({ error: e.message }, 500);
-  }
+  return new Response(
+    JSON.stringify({ success: false, processed: 0, error: "shortlinks_discontinued" }),
+    { status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  );
 });

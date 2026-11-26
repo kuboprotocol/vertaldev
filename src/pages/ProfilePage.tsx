@@ -298,11 +298,11 @@ export default function ProfilePage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => navigate('/shortlinks')}
+                  onClick={() => navigate('/recompensas')}
                   className="gap-2"
                 >
                   <Video className="h-3.5 w-3.5" />
-                  Shortlinks
+                  Recompensas
                 </Button>
                 <Button
                   variant="outline"

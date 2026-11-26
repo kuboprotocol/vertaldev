@@ -17,7 +17,7 @@ export default function Navbar() {
         </Link>
 
         <div className="hidden xl:flex items-center gap-1">
-          {['Home', 'Ecossistema', 'Vibe Pay', 'Download', 'Pricing', 'Alternativas', 'Docs', 'Shortlinks', 'Support'].map((item) => (
+          {['Home', 'Ecossistema', 'Vibe Pay', 'Download', 'Pricing', 'Alternativas', 'Docs', 'Recompensas', 'Support'].map((item) => (
             <Button
               key={item}
               variant="ghost"

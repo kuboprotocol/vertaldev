@@ -23,7 +23,7 @@ export function useDailyCredits() {
         if (data.type === 'signup') {
           toast.success(`🎉 Welcome to ${APP_NAME}! You got ${data.credits_granted} credits to get started!`, {
             duration: 6000,
-            description: 'Complete daily shortlinks to earn more credits.',
+            description: 'Watch rewarded videos on the Rewards page to earn more credits.',
           })
         } else if (data.type === 'daily') {
           toast.success(`+${data.credits_granted} credits from ${data.plan} plan 🚀`, { duration: 3000 })
