@@ -76,3 +76,47 @@ export const keysApi = {
   create: (name: string, monthlyCapCredits: number | null) => call<{ key: string; record: ApiKeyRecord }>('vertal-ai-api/keys', { action: 'create', name, monthlyCapCredits }),
   revoke: (id: string) => call<{ ok: boolean }>('vertal-ai-api/keys', { action: 'revoke', id }),
 };
+
+/** Linha do extrato (cobrança v2): créditos gastos por tipo e markup aplicado. */
+export interface UsageStatementLine {
+  channel: 'retail' | 'wholesale';
+  kind: string;
+  requests: number;
+  freeRequests: number;
+  credits: number;
+  markupPct: number | null;
+}
+
+export interface UsageStatement {
+  since: string;
+  available: boolean;
+  lines: UsageStatementLine[];
+  totalCredits: number;
+  requests: number;
+}
+
+export interface BillingNotice {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  locale: string;
+  created_at: string;
+  read_at: string | null;
+}
+
+/** Extrato e avisos da conta (só com a cobrança v2 ligada para a conta; senão 404). */
+export const billingApi = {
+  statement: (days = 30) => call<UsageStatement>('vertal-code-ai', { action: 'usage_statement', days }),
+  notices: () => call<{ notices: BillingNotice[] }>('vertal-code-ai', { action: 'billing_notices' }),
+  markRead: (id: string) => call<{ ok: boolean }>('vertal-code-ai', { action: 'billing_notice_read', id }),
+};
+
+export const USAGE_KIND_LABEL: Record<string, string> = {
+  chat: 'Chat',
+  code: 'Código',
+  image: 'Imagem',
+  video: 'Vídeo',
+  clone: 'Clonagem de app',
+  scrape: 'Raspagem de dados',
+};

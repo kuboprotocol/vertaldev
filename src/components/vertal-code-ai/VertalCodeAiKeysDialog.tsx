@@ -5,21 +5,24 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { keysApi, type ApiKeyRecord } from "@/lib/vertalCodeAi/platformApi";
+import { billingApi, keysApi, USAGE_KIND_LABEL, type ApiKeyRecord, type UsageStatement } from "@/lib/vertalCodeAi/platformApi";
 
 /** Chaves da API VERTAL (compatível com OpenAI) do próprio desenvolvedor. */
-export function VertalCodeAiKeysDialog({ open, onOpenChange, api = keysApi }: { open: boolean; onOpenChange: (v: boolean) => void; api?: typeof keysApi }) {
+export function VertalCodeAiKeysDialog({ open, onOpenChange, api = keysApi, billing = billingApi }: { open: boolean; onOpenChange: (v: boolean) => void; api?: typeof keysApi; billing?: Pick<typeof billingApi, "statement"> }) {
   const [keys, setKeys] = useState<ApiKeyRecord[]>([]);
   const [name, setName] = useState("");
   const [cap, setCap] = useState("100");
   const [fresh, setFresh] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [statement, setStatement] = useState<UsageStatement | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setFresh(null);
     api.list().then((r) => setKeys(r.keys)).catch((e) => setError(e instanceof Error ? e.message : "Indisponível."));
-  }, [open, api]);
+    // Extrato (cobrança v2). Desligado para a conta = some sem erro.
+    billing.statement(30).then(setStatement).catch(() => setStatement(null));
+  }, [open, api, billing]);
 
   const create = async () => {
     try {
@@ -78,6 +81,29 @@ export function VertalCodeAiKeysDialog({ open, onOpenChange, api = keysApi }: { 
             </li>
           ))}
         </ul>
+        {statement && (
+          <section aria-label="Extrato de uso" className="rounded-md border border-border/60 p-2 text-sm">
+            <p className="mb-1 font-medium">Extrato · últimos 30 dias</p>
+            {statement.lines.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Nenhum uso no período.</p>
+            ) : (
+              <ul className="space-y-1 text-xs">
+                {statement.lines.map((l) => (
+                  <li key={`${l.channel}:${l.kind}`} className="flex justify-between gap-2">
+                    <span>
+                      {USAGE_KIND_LABEL[l.kind] ?? l.kind} · {l.channel === "wholesale" ? "API / seus apps" : "no Vertal"} · {l.requests} pedido(s)
+                      {l.freeRequests ? ` (${l.freeRequests} grátis)` : ""}
+                    </span>
+                    <span className="tabular-nums">
+                      {l.credits.toFixed(3)} créditos{l.markupPct !== null ? ` · +${l.markupPct}% sobre o custo` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-1 text-xs text-muted-foreground">Total: {statement.totalCredits.toFixed(3)} créditos</p>
+          </section>
+        )}
         <div className="grid gap-2">
           <Label htmlFor="vcai-key-name">Nome da chave</Label>
           <Input id="vcai-key-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="meu-app" />

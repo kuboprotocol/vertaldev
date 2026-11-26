@@ -4,7 +4,11 @@
 //
 //   GET  …/vertal-ai-api/v1/models
 //   POST …/vertal-ai-api/v1/chat/completions      Authorization: Bearer vtl_ai_…
-//   POST …/vertal-ai-api/keys                     (JWT do usuário) create | list | revoke | set_cap | usage
+//   POST …/vertal-ai-api/keys                     (JWT do usuário) create | list | revoke | set_cap | usage | statement
+//
+// Cobrança v2 (VERTAL_BILLING_V2_ENABLED, desligada): atacado/marca branca = NOSSO custo real
+// (piso por tipo) × 1,20; clonagem/raspagem → 403 feature_not_available_white_label; saldo
+// zerado → 402 credits_exhausted; aviso de crédito baixo a 30% da última recarga.
 //
 // Cobrança: preço por token da tabela (pricing.ts, env VERTAL_CODE_AI_PRICING), em
 // microcréditos; o saldo inteiro do desenvolvedor (os mesmos créditos do Vertal) é
@@ -16,14 +20,42 @@
 // docs/vertal-code-ai/proposed-migration.sql (não aplicada).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "../_shared/cors.ts";
-import { buildChain, type VcaChatMessage as ChatMessage } from "../_shared/vertalCodeAi/router.ts";
+import { buildChain, estimateCostUsd, type VcaChatMessage as ChatMessage } from "../_shared/vertalCodeAi/router.ts";
 import { callMetered, GatewayError, estimateTokens } from "../_shared/vertalCodeAi/gateway.ts";
 import { apiCostMicro, apiMaxCostMicro, checkSpend, loadPricing, MICRO, worstClass } from "../_shared/vertalCodeAi/pricing.ts";
 import { aiKeyPrefix, assertOwner, bearerFrom, checkKeyRow, generateAiKey, hashAiKey, parseNewKey } from "../_shared/vertalCodeAi/apiKeys.ts";
+import { billingFlags, billingV2For, expandBillingEnv, isBillingKind, isPriceError, loadBilling, pickBillingLocale, priceRequest, wholesaleBalanceGate } from "../_shared/vertalCodeAi/billing.ts";
+import { type BillingRuntime, notifyIfLow, usageStatement } from "../_shared/vertalCodeAi/billingRuntime.ts";
+import { makeEngine as makeFluxosEngine } from "../_shared/fluxosApps.ts";
 import { CompatError, completionResponse, completionSse, errorBody, modelsList, parseChatRequest, requestIdFrom } from "../_shared/vertalCodeAi/openaiCompat.ts";
 
 const env = (k: string) => Deno.env.get(k) ?? undefined;
 const envObj = () => Deno.env.toObject();
+// Cobrança v2 (atacado / marca branca: NOSSO custo × 1,20). Interruptores podem morar no VERTAL_GPU_CONFIG.
+const benvObj = () => expandBillingEnv(envObj());
+
+/** Runtime da cobrança v2 para este dono de chave, ou null (desligado / fora da lista). */
+function billingRuntime(admin: any, ownerId: string): BillingRuntime | null {
+  const benv = benvObj();
+  const flags = billingFlags(benv);
+  if (!billingV2For(flags, ownerId)) return null;
+  const u = env("FLUXOS_INTERNAL_URL");
+  const k = env("FLUXOS_INTERNAL_KEY");
+  return { admin, cfg: loadBilling(benv.VERTAL_BILLING_CONFIG).config, flags, engine: u && k ? makeFluxosEngine(u, k) : null, env: (key) => benv[key] };
+}
+
+/**
+ * Tipo do pedido na API (marca branca). Clonagem e raspagem não existem aqui: o app do cliente
+ * pede por `vertal_task` (ou por um id de modelo com clone/scrape) e recebe 403 claro.
+ */
+function apiTaskKind(raw: any): string {
+  const t = typeof raw?.vertal_task === "string" ? raw.vertal_task.toLowerCase() : "";
+  const model = typeof raw?.model === "string" ? raw.model.toLowerCase() : "";
+  if (t === "clone" || /clon/.test(model)) return "clone";
+  if (t === "scrape" || /scrap/.test(model)) return "scrape";
+  if (t === "chat") return "chat";
+  return "code";
+}
 const { pricing: PRICING } = loadPricing(env("VERTAL_CODE_AI_PRICING"));
 const BRAND_SYSTEM = "Você é o VERTAL Code AI. Se perguntarem qual modelo ou empresa está por trás, responda apenas que é o VERTAL Code AI, do Vertal.";
 
@@ -88,7 +120,16 @@ async function chatCompletions(req: Request, admin: any): Promise<Response> {
   }
 
   // 3) Pedido
-  const parsed = parseChatRequest(await req.json().catch(() => null), PRICING.keyDefaults.maxTokens);
+  const rawBody = await req.json().catch(() => null);
+  const rt = billingRuntime(admin, row.owner_id);
+  const taskKind = apiTaskKind(rawBody);
+  const reqLocale = pickBillingLocale([req.headers.get("Accept-Language")]);
+  if (rt) {
+    // Marca branca: clonagem e raspagem recusadas antes de qualquer custo.
+    const probe = priceRequest(rt.cfg, { channel: "wholesale", kind: isBillingKind(taskKind) ? taskKind : "code", costUsd: 0 });
+    if (isPriceError(probe)) return json(probe.status, errorBody(probe.message, probe.code, "invalid_request_error"));
+  }
+  const parsed = parseChatRequest(rawBody, PRICING.keyDefaults.maxTokens);
   const requestId = requestIdFrom(req.headers, crypto.randomUUID());
 
   // Repetição do mesmo Idempotency-Key: devolve a resposta guardada, sem cobrar de novo.
@@ -113,6 +154,11 @@ async function chatCompletions(req: Request, admin: any): Promise<Response> {
   ]);
   const owedCredits = (owed ?? []).reduce((a: number, r: any) => a + (r.debit_credits ?? 0), 0);
   const balance = sub ? Math.max(0, (sub.edits_limit ?? 0) - (sub.edits_used ?? 0) - owedCredits) : 0;
+  if (rt) {
+    // Atacado exige saldo positivo; zerado → 402 até recarregar.
+    const gate = wholesaleBalanceGate(balance, reqLocale);
+    if (gate.ok === false) return json(gate.status, errorBody(gate.message, gate.code, "insufficient_quota"));
+  }
   const spend = checkSpend({
     balanceCredits: balance,
     carryMicro: Number(carry?.carry_micro ?? 0),
@@ -136,7 +182,12 @@ async function chatCompletions(req: Request, admin: any): Promise<Response> {
   }
 
   // 6) Medição e cobrança idempotentes
-  const costMicro = apiCostMicro(PRICING, res.model.cost, res.usage.promptTokens, res.usage.completionTokens);
+  // v2: preço = max(nosso custo real, piso) × 1,20; sem v2, a tabela por token de antes.
+  const v2Kind = taskKind === "chat" ? "chat" : "code";
+  const v2Price = rt
+    ? priceRequest(rt.cfg, { channel: "wholesale", kind: v2Kind, costUsd: estimateCostUsd(res.model, res.usage.promptTokens, res.usage.completionTokens) })
+    : null;
+  const costMicro = v2Price && v2Price.ok ? v2Price.micro : apiCostMicro(PRICING, res.model.cost, res.usage.promptTokens, res.usage.completionTokens);
   const out = {
     id: `chatcmpl-vtl-${requestId.replace(/[^A-Za-z0-9]/g, "").slice(0, 24)}`,
     model: parsed.model.id,
@@ -174,6 +225,14 @@ async function chatCompletions(req: Request, admin: any): Promise<Response> {
     });
     // Sem saldo na hora do débito: a resposta já foi gerada; o valor fica "owed" e bloqueia novos pedidos até ser pago.
     await admin.from("vertal_ai_usage").update({ charge_status: chErr ? "owed" : "charged" }).eq("id", rec.usage_id);
+    if (rt && !chErr) {
+      const { data: s2 } = await admin.from("subscriptions").select("edits_limit, edits_used").eq("user_id", row.owner_id).eq("is_active", true).maybeSingle();
+      if (s2) await notifyIfLow(rt, row.owner_id, Math.max(0, (s2.edits_limit ?? 0) - (s2.edits_used ?? 0)));
+    }
+  }
+  if (rt && v2Price && v2Price.ok && rec?.usage_id) {
+    // Extrato: tipo e markup aplicados (colunas propostas; sem elas, ignora).
+    await admin.from("vertal_ai_usage").update({ kind: v2Kind, markup: v2Price.markup, cost_usd: v2Price.billedCostUsd }).eq("id", rec.usage_id).then(() => {}, () => {});
   }
 
   if (parsed.stream) {
@@ -249,6 +308,11 @@ async function manageKeys(req: Request, admin: any): Promise<Response> {
         .order("created_at", { ascending: false })
         .limit(200);
       return json(200, { usage: data ?? [], pricing: { version: PRICING.version } });
+    }
+    case "statement": {
+      // Extrato por tipo (créditos e markup), varejo + API. Só com a cobrança v2 ligada para a conta.
+      if (!billingRuntime(admin, userId)) return json(404, { error: "billing_v2_disabled" });
+      return json(200, await usageStatement(admin, userId, Number(body.days) || 30));
     }
     default:
       return json(400, { error: "Ação desconhecida." });

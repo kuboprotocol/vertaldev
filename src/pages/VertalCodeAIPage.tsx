@@ -42,6 +42,7 @@ import {
 } from '@/lib/vertalCodeAi/session';
 import { opsApi } from '@/lib/vertalCodeAi/platformApi';
 import { VertalCodeAiKeysDialog } from '@/components/vertal-code-ai/VertalCodeAiKeysDialog';
+import { VertalCreditNoticeBanner } from '@/components/vertal-code-ai/VertalCreditNoticeBanner';
 import { VertalCodeAiOpsPanel } from '@/components/vertal-code-ai/VertalCodeAiOpsPanel';
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
@@ -369,6 +370,7 @@ function VertalCodeAIScreen() {
         )}
       </header>
       <VertalCodeAiKeysDialog open={keysOpen} onOpenChange={setKeysOpen} />
+      <VertalCreditNoticeBanner />
       {opsView && operator && (
         <div className="max-h-[60dvh] shrink-0 overflow-y-auto border-b border-border/50 px-3 py-3">
           <VertalCodeAiOpsPanel />

@@ -655,3 +655,7 @@ pede cartão — basta **um** destino de fora; escrita em CRM **sempre** pede ca
 5. E-mail próprio: qual provedor SMTP (IONOS, Zoho, Google Workspace…) e endereço (`ops@vertal.dev`?).
 6. Pipedrive/HubSpot: confirmar as chaves das ações no Fluxos (ou ajustar `VERTAL_CRM_MAP`).
 7. Quem mais conta como "você" nos canais (`VERTAL_OPERATOR_EMAILS`, `VERTAL_OPERATOR_SLACK_IDS`).
+
+## Cobrança v2 (custo real × markup) — desligada
+
+Preço = max(nosso custo real, piso por tipo) × markup: varejo 1,69 (chat, código, imagem, vídeo), 2,59 (clonagem), 5,50 (raspagem); atacado/marca branca 1,20, sem clonagem/raspagem, saldo zero → 402. Crédito US$0,03. 5 mensagens de chat grátis por dia (configurável). Aviso único a 30% da última recarga (in-app, e-mail, CRM do Fluxos) e extrato por tipo. Detalhes, tabela, flags e o que falta aprovar: [docs/vertal-code-ai/BILLING-V2.md](vertal-code-ai/BILLING-V2.md). SQL proposto (não aplicado): [docs/vertal-code-ai/proposed-migration-billing-v2.sql](vertal-code-ai/proposed-migration-billing-v2.sql).

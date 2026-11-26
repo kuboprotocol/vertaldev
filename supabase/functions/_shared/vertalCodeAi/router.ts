@@ -17,6 +17,8 @@
 import { freeTierModels } from "./freeQuota.ts";
 
 export type VcaProvider = "openrouter" | "gemini" | "groq" | "ollama" | "ollama_cloud" | "cerebras" | "deepseek" | "extra";
+import { type BillingKind, retailCreditsV2 } from "./billing.ts";
+
 export type VcaCost = "free" | "self_hosted" | "paid";
 export type VcaEffort = "auto" | "low" | "high" | "max";
 export type VcaMode = "plan" | "build";
@@ -638,13 +640,13 @@ export function estimateCostUsd(m: VcaModel, inputTokens: number, outputTokens: 
 }
 
 /**
- * Preço de varejo em créditos (fórmula do config do VERTAL Code AI):
- *   (custo + US$0,05) × 1,5 ÷ US$0,03 por crédito. Só informativo: a cobrança segue DESLIGADA.
+ * Preço de varejo em créditos (cobrança v2, billing.ts): NOSSO custo real × markup do tipo
+ * (chat/código/imagem/vídeo 1,69; clonagem 2,59; raspagem 5,50), com piso de custo por tipo
+ * para modelos próprios/grátis (nunca zero), ÷ US$0,03 por crédito. Substitui a fórmula antiga
+ * (custo + US$0,05) × 1,5. Aqui é só estimativa informativa: a cobrança segue DESLIGADA.
  */
-export const VCA_RETAIL = { feeUsd: 0.05, markup: 1.5, usdPerCredit: 0.03 } as const;
-export function retailCredits(costUsd: number): number {
-  const c = ((Math.max(0, costUsd) + VCA_RETAIL.feeUsd) * VCA_RETAIL.markup) / VCA_RETAIL.usdPerCredit;
-  return Math.round(c * 100) / 100;
+export function retailCredits(costUsd: number, kind: BillingKind = "code"): number {
+  return retailCreditsV2(costUsd, kind);
 }
 
 /**
