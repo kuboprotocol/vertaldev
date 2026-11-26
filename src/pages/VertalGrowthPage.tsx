@@ -72,6 +72,14 @@ export function VertalGrowthScreen() {
   }, [langReady]);
   const t = GROWTH_UI[lang] ?? GROWTH_UI.pt;
   useDocumentLang(uiLocale(lang), uiDir(lang));
+  useEffect(() => {
+    // <title> da aba no idioma da tela (antes ficava o título da home do Vertal Dev).
+    const prev = document.title;
+    document.title = `${t.title} | Vertal Dev`;
+    return () => {
+      document.title = prev;
+    };
+  }, [t.title]);
   const errText = (e: unknown) => {
     const code = e instanceof GrowthError ? e.code : e instanceof Error ? e.message : String(e);
     const extra = e instanceof GrowthError && Array.isArray(e.detail.problems) ? ` ${(e.detail.problems as string[]).join('; ')}` : '';

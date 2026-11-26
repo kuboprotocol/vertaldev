@@ -6,7 +6,7 @@ import { callCrm, crmDb } from '@/lib/vertalCrm/client';
 import { crmUi, crmLocale, uiDir, uiLangFrom, browserLang } from '@/lib/vertalCrm/i18n';
 import { useDocumentLang } from '@/lib/useDocumentLang';
 import { rememberUiLang, storedUiLang } from '@/lib/vertalUiLang';
-import type { CrmPipeline } from '../../../supabase/functions/_shared/vertalCrm/core';
+import { localizePipeline, type CrmPipeline } from '../../../supabase/functions/_shared/vertalCrm/core';
 import { CrmCtx, type CrmCosts, type CrmCtxValue, type CrmField, type CrmMember, type CrmTag, type CrmWorkspace } from './crmState';
 
 export function CrmProvider({ children, langHint }: { children: ReactNode; langHint?: string | null }) {
@@ -93,9 +93,12 @@ export function CrmProvider({ children, langHint }: { children: ReactNode; langH
     }
   }, [lang, workspace?.currency]);
 
+  // Etapas e nome padrão do funil no idioma da tela (o funil gravado em pt aparece traduzido; nomes próprios ficam).
+  const shownPipelines = useMemo(() => pipelines.map((p) => localizePipeline(p, lang)), [pipelines, lang]);
+
   const role = workspace?.role ?? 'viewer';
   const value = useMemo<CrmCtxValue>(() => ({
-    ready, error, userId, workspace, workspaces, setWorkspaceId, pipelines, tags, fields, members, costs, lang, t,
+    ready, error, userId, workspace, workspaces, setWorkspaceId, pipelines: shownPipelines, tags, fields, members, costs, lang, t,
     canWrite: role === 'owner' || role === 'admin' || role === 'member', isAdmin: role === 'owner' || role === 'admin',
     reload: async () => {
       if (!workspace) return;
@@ -104,7 +107,7 @@ export function CrmProvider({ children, langHint }: { children: ReactNode; langH
       await loadMeta(workspace.id);
     },
     money,
-  }), [ready, error, userId, workspace, workspaces, setWorkspaceId, pipelines, tags, fields, members, costs, lang, t, role, loadMeta, money]);
+  }), [ready, error, userId, workspace, workspaces, setWorkspaceId, shownPipelines, tags, fields, members, costs, lang, t, role, loadMeta, money]);
 
   return <CrmCtx.Provider value={value}>{children}</CrmCtx.Provider>;
 }

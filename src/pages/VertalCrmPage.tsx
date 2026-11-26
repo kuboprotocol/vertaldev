@@ -14,6 +14,7 @@ import { CrmSettings } from '@/components/vertal-crm/CrmSettings';
 import { CrmWaitlist } from '@/components/vertal-crm/CrmWaitlist';
 import { isCrmWaitlistEnabled } from '@/lib/vertalCrm/waitlist';
 import { crmLocale, uiDir } from '@/lib/vertalCrm/i18n';
+import { localizedWorkspaceName } from '../../supabase/functions/_shared/vertalCrm/core';
 
 const NotFound = lazy(() => import('@/pages/NotFound'));
 
@@ -41,7 +42,7 @@ function CrmShell() {
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3">
           <Button variant="ghost" size="icon" onClick={() => navigate('/connectors')} aria-label={t.back}><ArrowLeft className="h-5 w-5 rtl:rotate-180" /></Button>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-display text-xl font-bold">{t.title}{workspace ? <span className="ml-2 text-sm font-normal text-muted-foreground">{' · '}{workspace.name}</span> : null}</h1>
+            <h1 className="truncate font-display text-xl font-bold">{t.title}{workspace ? <span className="ml-2 text-sm font-normal text-muted-foreground">{' · '}{localizedWorkspaceName(workspace.name, lang)}</span> : null}</h1>
             <p className="truncate text-xs text-muted-foreground">{t.subtitle}</p>
           </div>
         </div>
