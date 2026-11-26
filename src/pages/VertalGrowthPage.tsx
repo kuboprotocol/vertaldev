@@ -15,9 +15,10 @@ import { callScheduler } from '@/lib/chatScheduler/client';
 import {
   buildTeam, callGrowth, forwardEvents, GrowthError, launchGrowth, matchProjectByName, newIdempotencyKey, readGrowthHandoff, useVertalGrowthAccess,
 } from '@/lib/vertalGrowth/client';
-import { GROWTH_UI, preferredUiLang, rememberUiLang, storedUiLang, uiLangFrom } from '@/lib/vertalGrowth/i18n';
+import { useDocumentLang } from '@/lib/useDocumentLang';
+import { GROWTH_UI, growthServerLang, preferredUiLang, rememberUiLang, storedUiLang, uiDir, uiLangFrom, uiLocale } from '@/lib/vertalGrowth/i18n';
 import { VERTAL_PROSPECTOR_ROUTE } from '@/lib/vertalProspector/client';
-import { stageLabels, type BusinessModel, type GrowthKind, type TeamPreset } from '../../supabase/functions/_shared/vertalGrowth/core';
+import { type BusinessModel, type GrowthKind, type TeamPreset } from '../../supabase/functions/_shared/vertalGrowth/core';
 
 const NotFound = lazy(() => import('@/pages/NotFound'));
 
@@ -69,7 +70,8 @@ export function VertalGrowthScreen() {
     const timer = setTimeout(() => setLangReady(true), 2_500);
     return () => clearTimeout(timer);
   }, [langReady]);
-  const t = GROWTH_UI[lang];
+  const t = GROWTH_UI[lang] ?? GROWTH_UI.pt;
+  useDocumentLang(uiLocale(lang), uiDir(lang));
   const errText = (e: unknown) => {
     const code = e instanceof GrowthError ? e.code : e instanceof Error ? e.message : String(e);
     const extra = e instanceof GrowthError && Array.isArray(e.detail.problems) ? ` ${(e.detail.problems as string[]).join('; ')}` : '';
@@ -170,7 +172,7 @@ export function VertalGrowthScreen() {
     if (!projectId) return;
     const r = await run(t.reading, () => callGrowth<{
       prefill: { name: string; description: string; website: string }; inference: { model: BusinessModel; subscription: boolean; confidence: number };
-    }>('analyze_project', { projectId, lang }));
+    }>('analyze_project', { projectId, lang: growthServerLang(lang) }));
     if (!r) return;
     setForm((f) => ({
       ...f, name: r.prefill.name || f.name, description: r.prefill.description || f.description, website: r.prefill.website || f.website,
@@ -187,7 +189,7 @@ export function VertalGrowthScreen() {
     // Resposta pode demorar (perfil + cliente ideal com IA): repete com a mesma chave até a campanha existir,
     // sem cobrar de novo. Antes a conexão caía em ~60 s e a tela sumia sem campanha nem erro.
     const r = await run(t.launching, () => launchGrowth<{ growth: Growth; replayed?: boolean }>({
-      ...form, projectId: projectId || undefined, acceptCost: true, idempotencyKey: launchKey, lang,
+      ...form, projectId: projectId || undefined, acceptCost: true, idempotencyKey: launchKey, lang: growthServerLang(lang),
     }));
     if (!r) {
       await loadList();
@@ -296,8 +298,7 @@ export function VertalGrowthScreen() {
   };
   const addReminder = async () => {
     if (!g) return;
-    const titles = { pt: `Vertal Growth · ${g.project_name}: revisar aprovações e atualizar etapas`, en: `Vertal Growth · ${g.project_name}: review approvals and update stages`, es: `Vertal Growth · ${g.project_name}: revisar aprobaciones y actualizar etapas` };
-    const r = await callScheduler('create', { spec: { kind: 'reminder', title: titles[lang], repeat: { every: 'weekdays', time: '09:00' }, lang: lang === 'pt' ? 'pt-BR' : lang } });
+    const r = await callScheduler('create', { spec: { kind: 'reminder', title: t.reminderTitle(g.project_name), repeat: { every: 'weekdays', time: '09:00' }, lang: uiLocale(lang) } });
     if (r.ok) toast.success(t.reminderCreated);
     else toast.error(r.message);
   };
@@ -311,10 +312,11 @@ export function VertalGrowthScreen() {
   };
 
   // Nomes das etapas no idioma da tela (o servidor manda no idioma da campanha: "Lead generation" numa tela em pt).
-  const stageNames: Record<string, string> = g ? { ...stages, ...stageLabels(g.model, lang) } : stages;
+  // Nomes das etapas no idioma da tela (o servidor só tem pt/en/es).
+  const stageNames: Record<string, string> = g ? { ...stages, ...t.stageNames[g.model === 'nonprofit' ? 'donor' : 'business'] } : stages;
   const drafts = msgs.filter((m) => ['draft', 'approved'].includes(m.status));
   const donors = g?.model === 'nonprofit';
-  const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(lang === 'pt' ? 'pt-BR' : lang) : '');
+  const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(uiLocale(lang)) : '');
 
   if (!langReady) {
     return (
@@ -325,10 +327,10 @@ export function VertalGrowthScreen() {
   }
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-background text-foreground">
+    <div className="flex min-h-[100dvh] flex-col bg-background text-foreground" lang={uiLocale(lang)} dir={uiDir(lang)}>
       <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b border-border/50 bg-background/80 px-3 backdrop-blur">
         <button type="button" onClick={() => navigate(-1)} aria-label={t.back} className="rounded-lg p-2 text-muted-foreground hover:bg-secondary">
-          <ArrowLeft className="h-5 w-5" />
+          <ArrowLeft className="h-5 w-5 rtl:rotate-180" />
         </button>
         <Rocket className="h-5 w-5 text-primary" aria-hidden />
         <h1 className="flex-1 truncate text-sm font-semibold">{t.title}</h1>
@@ -460,7 +462,7 @@ export function VertalGrowthScreen() {
                 return (
                   <div key={m.id} className="space-y-1.5 rounded-lg border border-border/50 p-2">
                     <p className="text-xs text-muted-foreground">
-                      {t.kinds[m.kind]} · {c?.name || c?.email} · {m.status === 'approved' ? t.approve + ' ✓' : 'draft'}
+                      {t.kinds[m.kind]} · {c?.name || c?.email} · {m.status === 'approved' ? t.approve + ' ✓' : t.draftLabel}
                       {m.send_after && new Date(m.send_after) > new Date() ? ` · ${t.readyAt(fmt(m.send_after))}` : ''}
                     </p>
                     <Input value={e?.subject ?? m.subject ?? ''} onChange={(ev) => setEdits({ ...edits, [m.id]: { subject: ev.target.value, body: e?.body ?? m.body } })} aria-label="subject" />

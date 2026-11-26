@@ -1,17 +1,14 @@
-// Vertal CRM · textos da tela em pt-BR (padrão), en e es — idioma nativo do usuário
-// (Ajuste do workspace → idioma do navegador → pt-BR).
+// Vertal CRM · textos da tela nos 21 idiomas das páginas de SEO do CRM grátis (pt-BR padrão, en e es aqui;
+// os outros 18 em ./locales). Idioma nativo do usuário: ?lang → ajuste do workspace → idioma do workspace → salvo → navegador → pt-BR.
 import type { CrmLang } from '../../../supabase/functions/_shared/vertalCrm/core';
+import { resolveUiLang, uiLocale, uiDir, UI_LANG_NAMES, UI_LANGS } from '../../../supabase/functions/_shared/vertalUiLang';
+import { CRM_LOCALE_SOURCES } from './locales';
 
 export type { CrmLang };
+export { uiDir, UI_LANGS };
 
 export function uiLangFrom(...hints: Array<string | null | undefined>): CrmLang {
-  for (const h of hints) {
-    const s = (h ?? '').toLowerCase();
-    if (s.startsWith('pt')) return 'pt';
-    if (s.startsWith('es')) return 'es';
-    if (s.startsWith('en')) return 'en';
-  }
-  return 'pt';
+  return resolveUiLang(...hints);
 }
 export const browserLang = (): CrmLang => uiLangFrom(typeof navigator !== 'undefined' ? navigator.language : 'pt-BR');
 
@@ -60,6 +57,7 @@ const pt = {
     copy: 'Copiar', copied: 'Copiado.', createTask: 'Criar a tarefa sugerida', saveAsNote: 'Salvar como nota',
     charged: (n: number) => (n ? `${n} crédito usado.` : 'Sem custo nesta conta.'), refunded: 'A IA falhou e o crédito foi devolvido.',
     noCredits: 'Créditos insuficientes.',
+    results: (n: number) => `${n} resultado${n === 1 ? '' : 's'}`,
     slow: 'A IA ainda está trabalhando… (pode levar até 2 minutos)',
     slowGaveUp: 'A IA está demorando demais. Se o resultado não vier, o crédito volta sozinho em até 10 minutos.',
     planRequired: 'A IA do CRM faz parte de qualquer plano pago do Vertal Dev. O resto do CRM continua grátis. Veja os planos em vertal.dev/pricing.',
@@ -90,7 +88,7 @@ const pt = {
   you: 'você',
   openDealsN: (n: number) => `${n} ${n === 1 ? 'negócio aberto' : 'negócios abertos'}`,
   exported: (n: number) => `CSV baixado: ${n} contato(s).`,
-  languageNames: { pt: 'Português (Brasil)', en: 'English', es: 'Español' } as Record<string, string>,
+  languageNames: UI_LANG_NAMES as Record<string, string>,
   activity: {
     'contact.created': 'Contato criado', 'contact.updated': 'Contato atualizado', 'contact.deleted': 'Contato apagado',
     'company.created': 'Empresa criada', 'company.updated': 'Empresa atualizada', 'company.deleted': 'Empresa apagada',
@@ -132,7 +130,7 @@ const en: CrmUi = {
     summary: 'AI summary', email: 'AI follow-up email', score: 'AI lead score', next_action: 'AI next best action', search: 'AI search',
     goal: 'Email goal (optional)', draftOnly: 'Draft only: copy it and send it yourself. The CRM sends nothing.', copy: 'Copy', copied: 'Copied.',
     createTask: 'Create the suggested task', saveAsNote: 'Save as note', charged: (n: number) => (n ? `${n} credit used.` : 'No charge on this account.'),
-    refunded: 'AI failed and the credit was refunded.', noCredits: 'Not enough credits.',
+    refunded: 'AI failed and the credit was refunded.', noCredits: 'Not enough credits.', results: (n: number) => `${n} result${n === 1 ? '' : 's'}`,
     slow: 'The AI is still working… (can take up to 2 minutes)', slowGaveUp: 'The AI is taking too long. If no result arrives, the credit comes back automatically within 10 minutes.',
     planRequired: 'CRM AI is included in any paid Vertal Dev plan. The rest of the CRM stays free. See plans at vertal.dev/pricing.',
   },
@@ -196,7 +194,7 @@ const es: CrmUi = {
     summary: 'Resumen con IA', email: 'Correo de seguimiento con IA', score: 'Puntuar lead con IA', next_action: 'Próxima acción con IA', search: 'Buscar con IA',
     goal: 'Objetivo del correo (opcional)', draftOnly: 'Es solo un borrador: cópialo y envíalo tú. El CRM no envía nada.', copy: 'Copiar', copied: 'Copiado.',
     createTask: 'Crear la tarea sugerida', saveAsNote: 'Guardar como nota', charged: (n: number) => (n ? `${n} crédito usado.` : 'Sin costo en esta cuenta.'),
-    refunded: 'La IA falló y el crédito fue devuelto.', noCredits: 'Créditos insuficientes.',
+    refunded: 'La IA falló y el crédito fue devuelto.', noCredits: 'Créditos insuficientes.', results: (n: number) => `${n} resultado${n === 1 ? '' : 's'}`,
     slow: 'La IA sigue trabajando… (puede tardar hasta 2 minutos)', slowGaveUp: 'La IA está tardando demasiado. Si no llega el resultado, el crédito vuelve solo en hasta 10 minutos.',
     planRequired: 'La IA del CRM está incluida en cualquier plan de pago de Vertal Dev. El resto del CRM sigue siendo gratis. Mira los planes en vertal.dev/pricing.',
   },
@@ -238,16 +236,70 @@ const es: CrmUi = {
   },
 };
 
-export const CRM_UI: Record<CrmLang, CrmUi> = { pt, en, es };
+// ─── Os outros 18 idiomas: textos simples + modelos com {marcadores} (./locales) ─────────────
+type Fn = (...a: never[]) => unknown;
+/** CrmUi sem as funções (as frases com números/nomes ficam em `fx`) e sem os nomes dos idiomas (iguais em todos). */
+export type StripFns<T> = {
+  [K in keyof T as T[K] extends Fn ? never : K]: T[K] extends string ? string : StripFns<T[K]>;
+};
+export interface CrmFx {
+  /** {n} */ aiCost: string; aiCharged: string; aiChargedFree: string; aiResults: string;
+  /** {n} */ emailCaptured: string;
+  /** {n} e {skipped} (= csvSkipped com {s}, ou vazio) */ csvImported: string; csvSkipped: string;
+  /** {n} */ activate: string; syncAi: string; syncPlain: string; syncPlainFree: string; imported: string; openDealsN: string; exported: string;
+  /** {deal} / {stage} */ dndStart: string; dndOver: string; dndEnd: string; dndCancel: string;
+}
+export type CrmLocaleSource = Omit<StripFns<CrmUi>, 'languageNames'> & { fx: CrmFx };
+
+/** Troca {chave} pelo valor. */
+export const fill = (tpl: string, vars: Record<string, string | number>): string =>
+  tpl.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
+
+export function buildCrmUi(src: CrmLocaleSource): CrmUi {
+  const { fx, ...rest } = src;
+  return {
+    ...rest,
+    languageNames: UI_LANG_NAMES as Record<string, string>,
+    ai: {
+      ...rest.ai,
+      cost: (n: number) => fill(fx.aiCost, { n }),
+      charged: (n: number) => (n ? fill(fx.aiCharged, { n }) : fx.aiChargedFree),
+      results: (n: number) => fill(fx.aiResults, { n }),
+    },
+    emailCaptured: (n: number) => fill(fx.emailCaptured, { n }),
+    csv: { ...rest.csv, imported: (n: number, s: number) => fill(fx.csvImported, { n, skipped: s ? fill(fx.csvSkipped, { s }) : '' }) },
+    settings: {
+      ...rest.settings,
+      activate: (n: number) => fill(fx.activate, { n }),
+      syncAi: (n: number) => fill(fx.syncAi, { n }),
+      syncPlain: (n: number) => (n ? fill(fx.syncPlain, { n }) : fx.syncPlainFree),
+      imported: (n: number) => fill(fx.imported, { n }),
+    },
+    openDealsN: (n: number) => fill(fx.openDealsN, { n }),
+    exported: (n: number) => fill(fx.exported, { n }),
+    dnd: {
+      ...rest.dnd,
+      start: (deal: string) => fill(fx.dndStart, { deal }),
+      over: (deal: string, stage: string) => fill(fx.dndOver, { deal, stage }),
+      end: (deal: string, stage: string) => fill(fx.dndEnd, { deal, stage }),
+      cancel: (deal: string) => fill(fx.dndCancel, { deal }),
+    },
+  } as CrmUi;
+}
+
+export const CRM_UI: Record<CrmLang, CrmUi> = {
+  pt, en, es,
+  ...(Object.fromEntries(Object.entries(CRM_LOCALE_SOURCES).map(([k, v]) => [k, buildCrmUi(v)])) as Record<Exclude<CrmLang, 'pt' | 'en' | 'es'>, CrmUi>),
+};
 export const crmUi = (lang: CrmLang = browserLang()) => CRM_UI[lang] ?? pt;
 
-/** Locale de datas/números: pt → pt-BR (dd/mm/aaaa, 24 h), es → es-ES, en → en-US. */
-export const crmLocale = (lang: CrmLang): string => (lang === 'pt' ? 'pt-BR' : lang === 'es' ? 'es-ES' : 'en-US');
+/** Locale de datas/números: pt → pt-BR (dd/mm/aaaa, 24 h), es → es-ES, en → en-US, os outros pelo próprio código. */
+export const crmLocale = (lang: CrmLang): string => uiLocale(lang);
 export function crmDateTime(iso: string | null | undefined, lang: CrmLang): string {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString(crmLocale(lang), { dateStyle: 'short', timeStyle: 'short', hour12: lang === 'en' });
+  return d.toLocaleString(crmLocale(lang), { dateStyle: 'short', timeStyle: 'short', hour12: lang === 'en' ? true : lang === 'pt' || lang === 'es' ? false : undefined });
 }
 /** Data sem hora (ex.: previsão de fechamento "2026-12-01" → "01/12/2026" em pt-BR), sem deslocar o dia pelo fuso. */
 export function crmDate(isoDate: string | null | undefined, lang: CrmLang): string {
