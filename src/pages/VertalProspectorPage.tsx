@@ -7,7 +7,7 @@ import {
   ArrowLeft, Ban, Check, Download, ExternalLink, Loader2, Mail, MapPin, MessageCircle, Phone, RefreshCw, Search, Send, Settings2, Target, Trash2, X,
 } from 'lucide-react';
 import { LEAD_CARD_TEXT, leadAddressLine, leadMapUrl, leadTelHref } from '@/lib/vertalProspector/leadCard';
-import { preferredUiLang, uiDir, uiLocale } from '@/lib/vertalUiLang';
+import { resolveUiLang, uiDir, uiLocale, type UiLang } from '@/lib/vertalUiLang';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -127,8 +127,7 @@ function AreasEditor({ areas, categories, disabled, onSave }: { areas: string[];
 }
 
 /** Endereço (rua, número, bairro, cidade/UF), link do mapa, telefone e site — compacto, só o que existir. */
-function LeadPlaceInfo({ lead, areas }: { lead: Lead; areas: string[] }) {
-  const lang = preferredUiLang();
+function LeadPlaceInfo({ lead, areas, lang }: { lead: Lead; areas: string[]; lang: UiLang }) {
   const L = LEAD_CARD_TEXT[lang] ?? LEAD_CARD_TEXT.pt;
   const line = leadAddressLine(lead, areas);
   const map = leadMapUrl(lead, areas);
@@ -177,6 +176,8 @@ export function VertalProspectorScreen() {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   // Áreas da campanha ("São Paulo, SP; Campinas, SP") dão o estado ao lado da cidade no cartão do lead.
   const leadAreas = useMemo(() => parseAreas(campaign?.icp?.area ?? ''), [campaign?.icp?.area]);
+  // A tela do Prospector é em pt-BR: o bloco de endereço segue a tela, salvo ?lang explícito.
+  const cardLang = useMemo(() => resolveUiLang(new URLSearchParams(location.search).get('lang'), 'pt'), [location.search]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [findings, setFindings] = useState<string[]>([]);
@@ -596,7 +597,7 @@ export function VertalProspectorScreen() {
                         {[l.category, l.city, STATUS_LABEL[l.status ?? 'new']].filter(Boolean).join(' · ')}
                         {l.fit !== null && l.fit !== undefined && <> · aderência {l.fit}/10</>}
                       </p>
-                      <LeadPlaceInfo lead={l} areas={leadAreas} />
+                      <LeadPlaceInfo lead={l} areas={leadAreas} lang={cardLang} />
                     </div>
                     <button type="button" aria-label="Apagar lead" onClick={() => deleteLead(l)} className="rounded p-1 text-muted-foreground hover:text-rose-300">
                       <Trash2 className="h-4 w-4" />

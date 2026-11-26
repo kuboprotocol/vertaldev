@@ -124,6 +124,31 @@ const PIPELINE_NAME: Record<CrmLang, string> = {
 };
 export const defaultPipelineName = (lang: CrmLang = "pt") => PIPELINE_NAME[lang] ?? PIPELINE_NAME.pt;
 
+/**
+ * Rótulos padrão no idioma da tela: um funil criado em pt mostra "Qualifiziert" para quem abre em alemão.
+ * Só troca o que ainda é o texto padrão (em qualquer um dos 21 idiomas); nome que o usuário escreveu fica como está.
+ */
+const STAGE_POS: Record<string, number> = Object.fromEntries(
+  (Object.values(STAGE_IDS) as ReadonlyArray<readonly string[]>).flatMap((ids) => ids.map((id, i) => [id, i] as [string, number])),
+);
+const norm = (s: string) => String(s ?? "").trim().toLowerCase();
+export function localizedStageLabel(stage: { id: string; label: string }, lang: CrmLang): string {
+  const i = STAGE_POS[stage.id];
+  if (i === undefined) return stage.label;
+  const isDefault = Object.values(STAGE_LABELS).some((labels) => norm(labels[i]) === norm(stage.label));
+  return isDefault ? (STAGE_LABELS[lang] ?? STAGE_LABELS.pt)[i] : stage.label;
+}
+export function localizedPipelineName(name: string, lang: CrmLang): string {
+  return Object.values(PIPELINE_NAME).some((n) => norm(n) === norm(name)) ? (PIPELINE_NAME[lang] ?? name) : name;
+}
+export function localizedWorkspaceName(name: string, lang: CrmLang): string {
+  return Object.values(CRM_DEFAULT_WS_NAME).some((n) => norm(n) === norm(name)) ? (CRM_DEFAULT_WS_NAME[lang] ?? name) : name;
+}
+/** Funil com nome e etapas padrão no idioma da tela (ids, probabilidades e etapas personalizadas intactos). */
+export function localizePipeline<P extends { name: string; stages: Array<{ id: string; label: string }> }>(p: P, lang: CrmLang): P {
+  return { ...p, name: localizedPipelineName(p.name, lang), stages: p.stages.map((st) => ({ ...st, label: localizedStageLabel(st, lang) })) };
+}
+
 export const slugify = (s: string) =>
   (s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
 

@@ -13,6 +13,7 @@ import { authLang } from './authI18n';
 import { resolveUiLang, uiDir, uiLocale, UI_LANGS, UI_LANG_AI_NAME, UI_LANG_NAMES } from '../../supabase/functions/_shared/vertalUiLang';
 import {
   aiMessages, AI_VALUE_LABELS, CRM_DEFAULT_CURRENCY, CRM_DEFAULT_WS_NAME, crmLang, defaultPipelineName, defaultStages,
+  localizePipeline, localizedWorkspaceName,
 } from '../../supabase/functions/_shared/vertalCrm/core';
 
 type Tree = Record<string, unknown>;
@@ -134,6 +135,17 @@ describe('servidor do CRM nos 21 idiomas', () => {
     expect(defaultStages('de')[3].label).toBe('In Verhandlung');
     expect(defaultStages('pt').map((s) => s.id)).toEqual(['lead', 'qualificado', 'proposta', 'negociacao', 'ganho', 'perdido']);
     expect(defaultStages('ja').map((s) => s.id)).toEqual(['lead', 'qualified', 'proposal', 'negotiation', 'won', 'lost']);
+  });
+  it('funil gravado em pt aparece no idioma da tela; nomes próprios ficam', () => {
+    const p = { id: 'x', name: 'Vendas', stages: [...defaultStages('pt'), { id: 'demo-feita', label: 'Demo feita', probability: 60, kind: 'open' as const }] };
+    const de = localizePipeline(p, 'de');
+    expect(de.name).toBe('Vertrieb');
+    expect(de.stages.map((s) => s.label)).toEqual(['Lead', 'Qualifiziert', 'Angebot gesendet', 'In Verhandlung', 'Gewonnen', 'Verloren', 'Demo feita']);
+    expect(de.stages.map((s) => s.id)).toEqual(p.stages.map((s) => s.id));
+    expect(localizePipeline({ ...p, stages: [{ id: 'proposta', label: 'Proposta assinada' }] }, 'ja').stages[0].label).toBe('Proposta assinada');
+    expect(localizePipeline(p, 'ar').stages[1].label).toBe('مؤهَّل');
+    expect(localizedWorkspaceName('Meu CRM', 'ja')).toBe('マイCRM');
+    expect(localizedWorkspaceName('Loja do Zé', 'ja')).toBe('Loja do Zé');
   });
   it('IA responde no idioma do usuário', () => {
     const msgs = aiMessages('summary', { contact: { status: 'hot' } }, 'de');
