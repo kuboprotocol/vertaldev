@@ -132,6 +132,7 @@ const FLUXOS_APP_LOGOS: Record<string, string> = {
   instagram: '/connectors/instagram.png',
   'invoice-ninja': '/connectors/invoice-ninja.png',
   jotform: '/connectors/jotform.jpg',
+  libretranslate: '/connectors/libretranslate.png',
   gitlab: '/connectors/gitlab.webp',
   gitea: '/connectors/gitea.png',
   ghost: '/connectors/ghost.png',
