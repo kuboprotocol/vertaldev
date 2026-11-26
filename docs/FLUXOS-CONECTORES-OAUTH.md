@@ -129,16 +129,24 @@ App da Meta **Vertal Dev**, App ID `1145586658064572` (modo Desenvolvimento), se
   Para clientes reais: verificação da empresa + App Review (acesso avançado) de cada permissão + modo Ao vivo.
 
 ### Instagram (`/connectors/instagram`)
-- Caminho escolhido: **Instagram API com login do Facebook** (Instagram Graph API + Messenger Platform),
-  pelo mesmo app da Meta. Motivo: funciona com os segredos META já salvos (nenhum segredo novo), usa a mesma
-  revisão de app dos outros conectores da Meta e cobre publicação, métricas e DMs. Exige conta profissional
-  ligada a uma Página do Facebook. A alternativa "Instagram API com login do Instagram" (sem Página) usa um
-  Instagram App ID/Secret separado e outra API (`graph.instagram.com`); fica como evolução futura.
+- O app "Vertal Dev" é do tipo **Empresa** (o diálogo da Meta volta com `is_business_login=1`): nele vale o
+  **Facebook Login for Business**, em que a configuração (`config_id`) substitui `scope`. Sem configuração o login
+  ainda usa `scope`, o que funciona para quem tem papel no app, mas a Meta recomenda `config_id`.
+- Caminho escolhido: **Instagram API with Unified Login** (configuração do Facebook Login for Business criada em
+  Casos de uso → "Gerenciar mensagens e conteúdo no Instagram" → "Configuração da API com login unificado").
+  O cliente entra com **Instagram ou Facebook**, não precisa de Página, e o token é da empresa (usuário de sistema,
+  BISU) trocado com o App ID/Secret da Meta → funciona com `FLUXOS_OAUTH_META_*` + `FLUXOS_OAUTH_INSTAGRAM_CONFIG`.
+  O motor também aceita o login do Facebook clássico (token de usuário + Página), usado enquanto não houver configuração.
+  Não usamos a "Instagram API with Instagram Login" porque exige um Instagram App ID/Secret separado e outra API
+  (`graph.instagram.com`).
+- Motor: contas por `/me/assigned_instagram_accounts` (login unificado) e `/me/accounts` (Páginas); DMs em
+  `/{ig-id}/conversations|messages` (sem Página) ou `/{page-id}/…` com token da Página; com `config_id` o login
+  manda `prompt=login` (mostra as opções Instagram e Facebook).
 - Topo da página: `FluxosConnectPanel` do app `instagram` ("Entrar com Instagram"); depois do login volta para
   `/connectors/instagram` (`RETURN_PATH_KEY`, só caminhos internos de /connectors).
 - O canal antigo do operador (webhook `virtual-chat-instagram-webhook`, segredos `INSTAGRAM_*`, respostas por IA)
   continua igual, recolhido em "Avançado: canal do operador".
-- Escopos: `public_profile, instagram_basic, instagram_content_publish, instagram_manage_insights,
+- Escopos (só quando não há configuração): `public_profile, instagram_basic, instagram_content_publish, instagram_manage_insights,
   instagram_manage_messages, pages_show_list, pages_manage_metadata, pages_read_engagement, business_management`.
 - Ações (aprovação, 2 créditos): publicar foto, publicar Reel, responder DM (`sendMessage`, só até 24 h depois da
   última mensagem do contato). Buscas: contas, mídias, métricas, conversas de DM, mensagens de uma conversa.

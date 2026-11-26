@@ -371,7 +371,7 @@ const baseConnectors: ConnectorConfig[] = [
     authType: 'oauth',
     category: 'communication',
     description: 'Entre com a sua conta profissional do Instagram e use pelo Vertal Chat: posts, Reels, métricas e DMs.',
-    longDescription: 'Conta profissional do Instagram (Empresa ou Criador) pela API oficial da Meta. Toque em "Entrar com Instagram", faça login na Meta e escolha as Páginas e contas que o Vertal Dev pode usar. O Vertal Chat publica fotos e Reels, lê métricas e mídias e lê e responde DMs, sempre com a sua confirmação. A Meta só permite texto livre até 24 h depois da última mensagem do contato. O canal do operador (webhook com segredos do servidor) continua em "Avançado".',
+    longDescription: 'Conta profissional do Instagram (Empresa ou Criador) pela API oficial da Meta. Toque em "Entrar com Instagram", faça login na Meta (com Instagram ou Facebook) e escolha as contas que o Vertal Dev pode usar. O Vertal Chat publica fotos e Reels, lê métricas e mídias e lê e responde DMs, sempre com a sua confirmação. A Meta só permite texto livre até 24 h depois da última mensagem do contato. O canal do operador (webhook com segredos do servidor) continua em "Avançado".',
     features: ['Entrar com Instagram (login oficial da Meta)', 'Publicar fotos e Reels pelo chat, com confirmação', 'Métricas e mídias da conta', 'Ler e responder DMs (janela de 24 h da Meta)', 'Avançado: canal do operador por webhook'],
     docsUrl: 'https://developers.facebook.com/docs/instagram-platform',
     status: 'available',
@@ -380,7 +380,7 @@ const baseConnectors: ConnectorConfig[] = [
     apiKeyPlaceholder: '',
     apiKeyHelp: 'Os segredos ficam no servidor (Edge Functions → Secrets). Veja a página do conector para o passo a passo.',
     setupSteps: [
-      { title: 'Conta profissional', description: 'Use uma conta profissional do Instagram (Empresa ou Criador) vinculada a uma Página do Facebook.' },
+      { title: 'Conta profissional', description: 'Use uma conta profissional do Instagram (Empresa ou Criador). Entrando pelo Facebook, ela precisa estar ligada a uma Página.' },
       { title: 'Entrar com Instagram', description: 'Na página do Instagram, toque em "Entrar com Instagram", faça login na Meta e libere a Página e a conta.' },
       { title: 'Use no chat', description: 'Peça no Vertal Chat para publicar, ver métricas ou responder DMs. Toda ação pede a sua confirmação.' },
     ],
