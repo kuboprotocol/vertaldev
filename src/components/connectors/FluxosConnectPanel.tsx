@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CheckCircle2, Loader2, LogIn, Plug, XCircle } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronRight, KeyRound, Loader2, LogIn, Plug, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { callFluxosApps, PENDING_APP_KEY, RETURN_PATH_KEY, type FluxosDescribe, type FluxosField } from '@/lib/fluxos/apps'
+import { fluxosSetupHelp } from '@/lib/fluxos/setupHelp'
 
 const SECRET_HINT = /token|secret|password|senha|key|chave/i
 
@@ -29,6 +30,8 @@ export function FluxosConnectPanel({ app, name, returnPath, intro }: {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [values, setValues] = useState<Record<string, string>>({})
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const help = fluxosSetupHelp(app)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -57,13 +60,24 @@ export function FluxosConnectPanel({ app, name, returnPath, intro }: {
   const connected = info.connection?.status === 'connected'
   const oauthReady = info.app.oauth && info.platformClient === true
   // O servidor já tira os campos que o Vertal fornece (cliente OAuth); sem cliente, o usuário informa o próprio.
-  const formFields = info.fields
+  // Campos "advanced" (token pessoal) ficam em "Avançado", como alternativa ao login.
+  const formFields = info.fields.filter((f) => !f.advanced)
+  const advancedFields = info.fields.filter((f) => f.advanced)
 
-  const connect = async () => {
+  const connect = async (mode: 'login' | 'token' = 'login') => {
     setBusy(true)
     setError(null)
     const fields: Record<string, string> = {}
-    for (const f of formFields) if (values[f.key]) fields[f.key] = values[f.key]
+    // Modo token: campos comuns (ex.: URL da instância) + token; sem client id/secret.
+    const sendFields = mode === 'token'
+      ? [...formFields.filter((f) => !f.oauthOnly), ...advancedFields]
+      : formFields
+    for (const f of sendFields) if (values[f.key]) fields[f.key] = values[f.key]
+    if (mode === 'token' && !advancedFields.some((f) => values[f.key]?.trim())) {
+      setBusy(false)
+      setError('Cole o token em Avançado.')
+      return
+    }
     const res = await callFluxosApps<{ mode: 'oauth' | 'connected'; url?: string }>({ op: 'start', app, fields })
     if (!res.ok || !res.data) {
       setBusy(false)
@@ -115,7 +129,7 @@ export function FluxosConnectPanel({ app, name, returnPath, intro }: {
             <Button variant="outline" onClick={disconnect} disabled={busy}>
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />} Desconectar
             </Button>
-            <Button variant="ghost" onClick={connect} disabled={busy}>Reconectar</Button>
+            <Button variant="ghost" onClick={() => connect('login')} disabled={busy}>Reconectar</Button>
           </div>
         </div>
       ) : (
@@ -125,13 +139,28 @@ export function FluxosConnectPanel({ app, name, returnPath, intro }: {
               <p className="text-sm text-muted-foreground">Você entra na sua conta {name} e autoriza o Vertal Dev. Nenhuma senha passa por aqui.</p>
               {intro && <p className="text-xs text-muted-foreground">{intro}</p>}
             </>
+          ) : info.app.oauth && help?.ownClient ? (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">{`O ${name} roda no seu próprio servidor, então o login usa um cliente OAuth criado por você na sua instância (fica só na sua conexão):`}</p>
+              <ol className="list-decimal pl-5 space-y-1 text-xs text-muted-foreground">
+                {help.ownClient.map((s) => <li key={s}>{s}</li>)}
+              </ol>
+            </div>
           ) : info.app.oauth ? (
             <p className="text-sm text-muted-foreground">
               {`O login direto com ${name} ainda não está liberado. Se você tem um app próprio no ${name}, informe o client ID e o secret abaixo (endereço de retorno: https://vertal.dev/fluxos/oauth/${app}).`}
             </p>
           ) : (
-            <p className="text-sm text-muted-foreground">Informe os dados de acesso do {name}. Ficam guardados criptografados no servidor do Vertal Fluxos e nunca voltam para o navegador.</p>
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Informe os dados de acesso do {name}. Ficam guardados criptografados no servidor e nunca voltam para o navegador.</p>
+              {help?.fields && (
+                <ol className="list-decimal pl-5 space-y-1 text-xs text-muted-foreground">
+                  {help.fields.map((s) => <li key={s}>{s}</li>)}
+                </ol>
+              )}
+            </div>
           )}
+          {oauthReady && help?.login && !intro && <p className="text-xs text-muted-foreground">{help.login}</p>}
 
           {formFields.map((f) => (
             <div key={f.key} className="space-y-1.5">
@@ -163,11 +192,49 @@ export function FluxosConnectPanel({ app, name, returnPath, intro }: {
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <div className="flex flex-wrap gap-2">
-            <Button onClick={connect} disabled={busy}>
-              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : oauthReady ? <LogIn className="w-4 h-4" /> : <Plug className="w-4 h-4" />}
-              {oauthReady ? `Entrar com ${name}` : 'Conectar'}
+            <Button onClick={() => connect('login')} disabled={busy}>
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : info.app.oauth ? <LogIn className="w-4 h-4" /> : <Plug className="w-4 h-4" />}
+              {info.app.oauth && (oauthReady || help?.ownClient) ? `Entrar com ${name}` : 'Conectar'}
             </Button>
           </div>
+
+          {advancedFields.length > 0 && (
+            <div className="border-t pt-3 space-y-3" data-testid="fluxos-advanced">
+              <button
+                type="button"
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => setShowAdvanced((v) => !v)}
+                aria-expanded={showAdvanced}
+              >
+                {showAdvanced ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                Avançado: usar token pessoal em vez do login
+              </button>
+              {showAdvanced && (
+                <div className="space-y-3">
+                  {help?.advanced && (
+                    <ol className="list-decimal pl-5 space-y-1 text-xs text-muted-foreground">
+                      {help.advanced.map((s) => <li key={s}>{s}</li>)}
+                    </ol>
+                  )}
+                  {advancedFields.map((f) => (
+                    <div key={f.key} className="space-y-1.5">
+                      <Label htmlFor={`fx-${f.key}`}>{fieldLabel(f)}</Label>
+                      <Input
+                        id={`fx-${f.key}`}
+                        type="password"
+                        autoComplete="off"
+                        value={values[f.key] ?? ''}
+                        onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                      />
+                    </div>
+                  ))}
+                  <Button variant="outline" onClick={() => connect('token')} disabled={busy}>
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />} Conectar com token
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </Card>

@@ -6,8 +6,9 @@
 // uso interno desses provedores pelo backend de IA do Vertal.
 export const HIDDEN_FLUXOS_APPS: ReadonlySet<string> = new Set([
   "flickr", "strava",
-  // Sem uso para o público do Vertal Dev ou sem função real (auditoria de conectores sem OAuth, 26/11/2026):
-  "airbrake", "flowers-software", "freescout", "placetel", "virtualq", "firefly-iii",
+  // Sem uso para o público do Vertal Dev ou sem função real (auditoria de conectores sem OAuth, 26/11/2026).
+  // FreeScout, Firefly III, VirtualQ e Airbrake voltaram (Laércio, 26/11/2026: páginas de nicho para SEO).
+  "flowers-software", "placetel",
   // Fornecedores de modelos de IA (white-label):
   "openai", "openrouter", "azure-openai", "anthropic", "mistral-ai", "together-ai", "perplexity", "helix",
 ]);

@@ -16,8 +16,9 @@ tráfego orgânico de quem pesquisa "<App> integração", "<App> API automação
   conector escondido (`HIDDEN_FLUXOS_APPS`) ou `coming_soon` não ganha.
   Instagram Business e WhatsApp Business (cartões `fluxos-*`) usam a mesma página de
   Instagram e WhatsApp, para não ter duas páginas quase iguais competindo na busca.
-- `src/config/integrations/content.ts`: o que é o app (1 linha), exemplos de uso e
-  nomes alternativos. Conector sem entrada recebe texto padrão da categoria — escreva
+- `src/config/integrations/content.ts`: o que é o app (1 linha), exemplos de uso,
+  nomes alternativos e, para apps de nicho, perguntas próprias (`faq`, ex.: "O FreeScout tem OAuth?"),
+  que entram no FAQ da página, no JSON-LD e nas traduções (`c.<slug>.faq.<n>.q/a`). Conector sem entrada recebe texto padrão da categoria — escreva
   uma entrada ao adicionar conector (o teste avisa).
 - `src/config/integrations/engineApps.ts`: ações e gatilhos de cada app do motor do
   Vertal Fluxos (traduzidos) e o tipo de conexão (`vertal-oauth` = botão "Entrar com …";

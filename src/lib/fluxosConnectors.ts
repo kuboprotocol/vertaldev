@@ -66,7 +66,7 @@ export const FLUXOS_NATIVE_APPS: FluxosApp[] = [
   { app: "microsoft-teams", name: "Microsoft Teams", category: "communication", docsUrl: "https://learn.microsoft.com/graph/teams-concept-overview" },
   { app: "miro", name: "Miro", category: "design", docsUrl: "https://miro.com" },
   { app: "mistral-ai", name: "Mistral AI", category: "development", docsUrl: "https://mistral.ai" },
-  { app: "monday", name: "Monday", category: "development", docsUrl: "https://monday.com" },
+  { app: "monday", name: "monday.com", category: "development", docsUrl: "https://monday.com" },
   { app: "notion", name: "Notion", category: "development", docsUrl: "https://notion.com" },
   { app: "ntfy", name: "Ntfy", category: "communication", docsUrl: "https://ntfy.sh" },
   { app: "odoo", name: "Odoo", category: "development", docsUrl: "https://odoo.com" },
@@ -135,11 +135,11 @@ const FLUXOS_APP_LOGOS: Record<string, string> = {
   ebay: '/connectors/ebay.png',
   eventbrite: '/connectors/eventbrite.png',
   facebook: '/connectors/facebook.png',
-  'firefly-iii': '/connectors/firefly-iii.jpg',
+  'firefly-iii': '/connectors/firefly-iii.png',
   flickr: '/connectors/flickr.jpg',
   'flowers-software': '/connectors/flowers-software.png',
   frappe: '/connectors/frappe.png',
-  freescout: '/connectors/freescout.jpg',
+  freescout: '/connectors/freescout.png',
   ghost: '/connectors/ghost.png',
   gitea: '/connectors/gitea.png',
   gitlab: '/connectors/gitlab.png',
@@ -191,6 +191,7 @@ const FLUXOS_APP_LOGOS: Record<string, string> = {
   twitter: '/connectors/twitter.png',
   typeform: '/connectors/typeform.png',
   'vtiger-crm': '/connectors/vtiger-crm.png',
+  virtualq: '/connectors/virtualq.png',
   whatsapp: '/connectors/whatsapp.png',
   wordpress: '/connectors/wordpress.png',
   xero: '/connectors/xero.png',
@@ -216,14 +217,18 @@ const FLUXOS_APP_LOGOS: Record<string, string> = {
  *   Flowers Software (BPM alemão de nicho, só 1 gatilho), FreeScout (helpdesk auto-hospedado, só 1 gatilho),
  *   Placetel (telefonia alemã, só 1 gatilho), VirtualQ (fila de ligações alemã) e Firefly III
  *   (finanças pessoais auto-hospedadas, só gatilhos): fora do público de devs Brasil/global.
+ *   Depois (Laércio, 26/11/2026) FreeScout, Firefly III, VirtualQ e Airbrake voltaram ao catálogo, cada um com
+ *   página própria de SEO para buscas de nicho, ações novas e OAuth onde o provedor oferece (Firefly III, por
+ *   cliente do próprio usuário). Flowers Software e Placetel continuam fora.
  * Antes de esconder: conferir que nenhum usuário tem conexão (tabela fluxos_connections) — com conexão, a
  * conexão continua funcionando pelo chat/fluxos (o servidor só esconde para quem não tem conexão; ver
  * supabase/functions/_shared/hiddenFluxosApps.ts, mantenha as duas listas iguais).
  */
 export const HIDDEN_FLUXOS_APPS = new Set([
   'flickr', 'strava',
-  // Sem uso para o público do Vertal Dev ou sem função real (auditoria de conectores sem OAuth, 26/11/2026):
-  'airbrake', 'flowers-software', 'freescout', 'placetel', 'virtualq', 'firefly-iii',
+  // Sem uso para o público do Vertal Dev ou sem função real (auditoria de conectores sem OAuth, 26/11/2026).
+  // FreeScout, Firefly III, VirtualQ e Airbrake voltaram (Laércio, 26/11/2026: páginas de nicho para SEO).
+  'flowers-software', 'placetel',
   // Fornecedores de modelos de IA (white-label):
   'openai', 'openrouter', 'azure-openai', 'anthropic', 'mistral-ai', 'together-ai', 'perplexity', 'helix',
 ])

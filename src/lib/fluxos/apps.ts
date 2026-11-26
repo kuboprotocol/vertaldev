@@ -13,6 +13,10 @@ export interface FluxosField {
   placeholder?: string
   value?: unknown
   options?: Array<{ label?: string; value?: unknown }>
+  /** Token pessoal em "Avançado" (alternativa ao login OAuth). */
+  advanced?: boolean
+  /** Só para o login OAuth (client id/secret); não vale no modo token. */
+  oauthOnly?: boolean
 }
 
 export interface FluxosDescribe {

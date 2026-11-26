@@ -8,6 +8,8 @@ export interface IntegrationContent {
   uses: string[]
   /** Outros nomes que as pessoas pesquisam. */
   aliases?: string[]
+  /** Perguntas de nicho próprias do app (entram no FAQ da página e no JSON-LD). */
+  faq?: { q: string; a: string }[]
 }
 
 export const INTEGRATION_CONTENT: Record<string, IntegrationContent> = {
@@ -206,11 +208,18 @@ export const INTEGRATION_CONTENT: Record<string, IntegrationContent> = {
     ],
   },
   airbrake: {
-    about: 'Serviço de monitoramento de erros e performance de aplicações.',
+    about: 'Serviço de monitoramento de erros e performance de aplicações (error tracking e APM) para web, mobile e back-end.',
+    aliases: ['Airbrake API', 'Airbrake webhook', 'Airbrake automation', 'Airbrake error monitoring', 'Airbrake.io'],
     uses: [
-      'Avisar o time no Slack ou no Telegram quando um erro novo aparecer.',
-      'Abrir uma issue no GitHub para cada erro novo em produção.',
-      'Registrar os erros numa planilha para a revisão semanal.',
+      'Avisar o time no Slack ou no Telegram quando um erro novo aparecer em produção.',
+      'Pedir ao Vertal Chat “quais os erros mais frequentes desta semana?” e receber o resumo com arquivo e linha.',
+      'Abrir uma issue no GitHub para cada erro novo, com a mensagem e o trecho do backtrace.',
+      'Silenciar pelo chat um erro conhecido enquanto a correção não sai, e reativar depois.',
+      'Registrar os erros numa planilha para a revisão semanal de qualidade.',
+    ],
+    faq: [
+      { q: 'O Airbrake tem OAuth?', a: 'Não. A API do Airbrake usa a User API key de cada usuário (Profile → User API key). Você cola a chave no Vertal Dev, ela fica cifrada no servidor e só é enviada para a API do Airbrake.' },
+      { q: 'Dá para resolver erros do Airbrake pelo Vertal Dev?', a: 'A API pública do Airbrake permite listar e silenciar (mute) grupos de erro; o Vertal Dev faz as duas coisas. Marcar como resolvido continua no painel do Airbrake.' },
     ],
   },
   airtable: {
@@ -335,11 +344,18 @@ export const INTEGRATION_CONTENT: Record<string, IntegrationContent> = {
     ],
   },
   'firefly-iii': {
-    about: 'Gerenciador de finanças pessoais open source e auto-hospedado.',
+    about: 'Gerenciador de finanças pessoais open source e auto-hospedado, com contas, orçamentos, categorias, regras e API REST.',
+    aliases: ['Firefly III API', 'Firefly III automation', 'Firefly III webhook', 'Firefly III OAuth', 'FireflyIII'],
     uses: [
-      'Registrar cada transação nova numa planilha ou avisar no Telegram.',
-      'Acompanhar edições e exclusões de lançamentos para auditoria.',
-      'Juntar os gastos do mês num resumo enviado por e-mail.',
+      'Lançar uma despesa no Firefly III só dizendo no chat “gastei 49,90 no mercado, categoria Casa”.',
+      'Registrar automaticamente cada venda paga do seu app como receita no Firefly III.',
+      'Avisar no Telegram quando uma transação acima de um valor for lançada ou apagada.',
+      'Mandar todo mês um resumo dos saldos das contas por e-mail.',
+      'Guardar numa planilha um histórico das transações editadas, para auditoria.',
+    ],
+    faq: [
+      { q: 'O Firefly III tem OAuth?', a: 'Sim, pelo OAuth do próprio servidor (Laravel Passport). Como cada pessoa tem a sua instância, você cria um cliente OAuth no seu Firefly III (Options → Profile → OAuth) com o endereço de retorno mostrado no Vertal Dev e entra com a sua conta. O cliente fica só na sua conexão; também dá para usar um Personal Access Token em “Avançado”.' },
+      { q: 'Funciona com Firefly III em subpasta ou atrás de proxy?', a: 'Funciona com qualquer endereço https da sua instância, inclusive em subpasta (ex.: https://seudominio.com/firefly). O Vertal Dev chama a API REST oficial (/api/v1) da instância.' },
     ],
   },
   'flowers-software': {
@@ -360,11 +376,18 @@ export const INTEGRATION_CONTENT: Record<string, IntegrationContent> = {
     ],
   },
   freescout: {
-    about: 'Central de atendimento (help desk) open source, alternativa auto-hospedada.',
+    about: 'Help desk e caixa de entrada compartilhada open source e auto-hospedada, alternativa gratuita ao Help Scout e ao Zendesk.',
+    aliases: ['FreeScout API', 'FreeScout webhook', 'FreeScout automação', 'FreeScout helpdesk', 'FreeScout integration'],
     uses: [
-      'Avisar no Slack quando chegar uma conversa nova de cliente.',
-      'Registrar os atendimentos numa planilha para métricas.',
-      'Criar uma tarefa para o time técnico quando o atendimento pedir.',
+      'Abrir uma conversa no FreeScout para cada mensagem do formulário de contato do site ou do app.',
+      'Responder um atendimento pelo Vertal Chat com a sua aprovação, ou deixar uma nota interna para o time.',
+      'Fechar ou passar para outro agente os atendimentos resolvidos, sem abrir o painel.',
+      'Avisar no Slack ou no Telegram quando um cliente responder ou uma conversa nova chegar.',
+      'Levar as conversas do mês para uma planilha e medir volume por mailbox.',
+    ],
+    faq: [
+      { q: 'O FreeScout tem OAuth?', a: 'Não oficialmente. A API do FreeScout usa chave, pelo módulo “API & Webhooks”: você ativa o módulo, copia a chave (global ou pessoal, em “My API Keys”) e informa o endereço da sua instância. A chave fica cifrada no servidor.' },
+      { q: 'Preciso do módulo API & Webhooks do FreeScout?', a: 'Sim. Sem ele o FreeScout não expõe a API nem os webhooks. Com o módulo ativo, o Vertal Dev cria e responde conversas e recebe eventos como conversa criada, resposta do cliente e mudança de status.' },
     ],
   },
   ghost: {
@@ -578,11 +601,18 @@ export const INTEGRATION_CONTENT: Record<string, IntegrationContent> = {
     ],
   },
   monday: {
-    about: 'Plataforma de gestão de trabalho com quadros, colunas e automações.',
+    about: 'Plataforma de gestão de trabalho (Work OS) com quadros, itens, colunas, grupos e atualizações para times.',
+    aliases: ['monday', 'Monday', 'monday CRM', 'monday API', 'monday work management'],
     uses: [
-      'Criar um item no quadro para cada pedido de cliente.',
-      'Montar quadros e colunas de um projeto pelo chat.',
-      'Avisar quando alguém novo entrar na conta.',
+      'Criar um item no quadro do monday.com para cada pedido, lead ou chamado que chegar pelo formulário do site.',
+      'Pedir ao Vertal Chat para montar o quadro de um projeto novo, com grupos e colunas, em português.',
+      'Comentar no item do monday.com quando o deploy do app terminar ou um pagamento for confirmado.',
+      'Criar subitens com o checklist de cada entrega a partir de uma conversa.',
+      'Avisar o time no Slack ou no Telegram quando um quadro novo for criado na conta.',
+    ],
+    faq: [
+      { q: 'O monday.com conecta por OAuth?', a: 'Sim. O botão “Entrar com monday.com” abre o login oficial do monday.com e você autoriza o app Vertal Dev na sua conta; na primeira vez o monday pede para instalar o app. Quem prefere pode colar um token pessoal da API em “Avançado”.' },
+      { q: 'Quais permissões o Vertal Dev pede no monday.com?', a: 'Ler e alterar quadros e itens, ler e publicar atualizações (comentários), ler workspaces, usuários e o seu perfil. Nada é alterado sem a sua aprovação no Vertal Chat.' },
     ],
   },
   notion: {
@@ -772,11 +802,16 @@ export const INTEGRATION_CONTENT: Record<string, IntegrationContent> = {
     ],
   },
   virtualq: {
-    about: 'Sistema de fila virtual e retorno de chamadas para centrais de atendimento.',
+    about: 'Plataforma alemã de fila virtual, retorno de chamada (callback) e agendamento para centrais de atendimento.',
+    aliases: ['VirtualQ API', 'virtualQ callback', 'VirtualQ fila virtual', 'virtualq.io'],
     uses: [
-      'Colocar um cliente na fila de retorno a partir de um formulário.',
-      'Consultar e atualizar quem está esperando.',
-      'Tirar alguém da fila quando o atendimento for resolvido por outro canal.',
+      'Colocar um cliente na fila de retorno da central a partir de um formulário ou do chat do site.',
+      'Consultar pelo Vertal Chat quem está esperando e em qual linha de atendimento.',
+      'Atualizar telefone ou dados de quem está na fila sem abrir o painel.',
+      'Tirar alguém da fila quando o atendimento for resolvido por outro canal, como WhatsApp ou e-mail.',
+    ],
+    faq: [
+      { q: 'O VirtualQ tem OAuth?', a: 'Não. A API do VirtualQ usa token: no painel (dashboard.virtualq.tech) vá em Contact Center → API Tokens → New token, copie na hora e cole no Vertal Dev. O token fica cifrado no servidor.' },
     ],
   },
   'vtiger-crm': {
