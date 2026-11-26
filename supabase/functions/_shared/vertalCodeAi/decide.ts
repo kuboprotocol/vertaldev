@@ -9,6 +9,7 @@
 // Interface única: decide(state, questions). Provedores, nesta ordem (o 1º que responder vence):
 //   1. "own"  → modelo de decisão próprio (Vertal Decide na GPU própria), se VERTAL_DECIDE_URL estiver configurado.
 //               Contrato: POST {model?, state, questions} → {answers} no MESMO formato da Decisions API.
+//               (Kit da GPU própria: POST https://…modal.run/v1/systemone, Bearer VERTAL_DECIDE_TOKEN.)
 //   2. "jev"  → modelo de decisão via OpenRouter (POST /api/alpha/decisions), com a OPENROUTER_API_KEY que já existe.
 //               É pago por token de entrada → só com VERTAL_CODE_AI_ALLOW_PAID=true. Modelo: VERTAL_DECIDE_JEV_MODEL.
 //   3. "llm"  → a cadeia barata/própria de sempre, pedindo JSON com probabilidades (reserva, sempre disponível).

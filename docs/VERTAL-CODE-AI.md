@@ -246,7 +246,7 @@ O projeto está no limite de 100 segredos: todas as chaves `VERTAL_CODE_AI_TEAM_
 **Vertal Decide** (`_shared/vertalCodeAi/decide.ts`): camada de decisão rápida e tipada para bifurcações simples, no
 lugar de uma chamada de LLM inteira. Perguntas `noul` (sim/não), `choice` e `score`, cada uma com probabilidade.
 Interface única `decide(state, questions)`; provedores: **própria** (`VERTAL_DECIDE_URL`, contrato = corpo e resposta da
-Decisions API: `POST {model?, state, questions}` → `{answers}`) → **OpenRouter Decisions API** (`/api/alpha/decisions`,
+Decisions API: `POST {model?, state, questions}` → `{answers}`; o kit da GPU própria `infra/vertal-gpu-modal/vertal_decide.py`, feito em paralelo, já responde assim em `/v1/systemone` → use `VERTAL_DECIDE_URL=https://…modal.run/v1/systemone`) → **OpenRouter Decisions API** (`/api/alpha/decisions`,
 chave `OPENROUTER_API_KEY` que já existe; cobrado por token de entrada, por isso só com `ALLOW_PAID`) → **LLM barata** com
 JSON (confiança limitada abaixo de "alta") → nenhum (padrão seguro). Regra: **alta age, média sobe para modelo maior,
 baixa pergunta ao usuário** (as perguntas aparecem no pacote final).
