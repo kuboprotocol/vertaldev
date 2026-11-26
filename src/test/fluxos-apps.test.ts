@@ -6,7 +6,7 @@ vi.mock('@/integrations/supabase/client', () => ({ supabase: { functions: { invo
 
 import {
   compactResult, describeForAgent, oauthClientFields, oauthSecretGroup, parseFluxosOp, platformOAuthData,
-  userAuthFields, whiteLabel, type FluxosAppDef,
+  userAuthFields, whiteLabel, PUBLIC_OAUTH_CLIENT_IDS, type FluxosAppDef,
 } from '../../supabase/functions/_shared/fluxosApps'
 import {
   buildAgentSystemPrompt, fluxosAppsInConversation, parseAgentOutput,
@@ -146,5 +146,26 @@ describe('Google Ads, AdMob e AdSense', () => {
     expect(platformOAuthData('google-ads', env({ ...base, FLUXOS_OAUTH_GOOGLE_ADS_DEVELOPER_TOKEN: 'dt' })))
       .toEqual({ clientId: 'gid', clientSecret: 'gsec', developerToken: 'dt' })
     expect(platformOAuthData('google-admob', env({ FLUXOS_OAUTH_GOOGLE_ID: 'gid' }))).toBeNull()
+  })
+})
+
+describe('IDs públicos dos clientes OAuth (limite de 100 segredos do Supabase)', () => {
+  const env = (o: Record<string, string>) => (k: string) => o[k]
+  it('usa o ID público quando o segredo _ID não existe, mas sempre exige o _SECRET', () => {
+    expect(platformOAuthData('salesforce', env({ FLUXOS_OAUTH_SALESFORCE_SECRET: 's' })))
+      .toEqual({ consumerKey: PUBLIC_OAUTH_CLIENT_IDS.SALESFORCE, consumerSecret: 's' })
+    expect(platformOAuthData('salesforce', env({}))).toBeNull()
+    expect(platformOAuthData('disqus', env({ FLUXOS_OAUTH_DISQUS_SECRET: 's' })))
+      .toEqual({ apiKey: PUBLIC_OAUTH_CLIENT_IDS.DISQUS, apiSecret: 's' })
+    expect(platformOAuthData('youtube', env({ FLUXOS_OAUTH_GOOGLE_SECRET: 'g' })))
+      .toEqual({ clientId: PUBLIC_OAUTH_CLIENT_IDS.GOOGLE, clientSecret: 'g' })
+  })
+  it('o segredo _ID vale mais que o ID público', () => {
+    expect(platformOAuthData('microsoft-outlook', env({ FLUXOS_OAUTH_MICROSOFT_ID: 'x', FLUXOS_OAUTH_MICROSOFT_SECRET: 's' })))
+      .toEqual({ clientId: 'x', clientSecret: 's' })
+  })
+  it('GitLab do Vertal é o gitlab.com', () => {
+    expect(platformOAuthData('gitlab', env({ FLUXOS_OAUTH_GITLAB_SECRET: 's' })))
+      .toEqual({ clientId: PUBLIC_OAUTH_CLIENT_IDS.GITLAB, clientSecret: 's', instanceUrl: 'https://gitlab.com' })
   })
 })
