@@ -9,6 +9,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { lazy, Suspense, forwardRef } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ClockRinger } from "@/components/clock/ClockRinger";
+import { WelcomeEmailTrigger } from "@/components/vertal-welcome/WelcomeEmailTrigger";
 import AdGate from "@/components/AdGate";
 import { CreativeEconomyGate } from "@/components/creative/CreativeEconomyComingSoon";
 import { shouldRedirect, buildTarget } from "@/lib/canonicalRedirect";
@@ -226,6 +227,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
           <Toaster />
           <Sonner />
           <ClockRinger />
+          <WelcomeEmailTrigger />
           <BrowserRouter>
             <AdGate />
             <ErrorBoundary global resourceName="App">
