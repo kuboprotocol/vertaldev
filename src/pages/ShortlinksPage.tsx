@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
+import { fetchCreditBalance } from '@/lib/creditBalance'
 import AnimatedLogo from '@/components/branding/AnimatedLogo'
 import ShortlinksList from '@/components/shortlinks/ShortlinksList'
 import TerraRewardsPanel from '@/components/shortlinks/TerraRewardsPanel'
@@ -52,7 +53,7 @@ export default function ShortlinksPage() {
 
   const loadData = async () => {
     try {
-      const [shortlinksRes, limitsRes, profileRes] = await Promise.all([
+      const [shortlinksRes, limitsRes, profileRes, balance] = await Promise.all([
         supabase.functions.invoke('shortlinks?action=list', {
           method: 'POST',
           body: {},
@@ -61,7 +62,10 @@ export default function ShortlinksPage() {
           method: 'POST',
           body: {},
         }),
-        supabase.from('user_credits').select('balance, debt').eq('user_id', user!.id).single(),
+        // user_credits é a carteira legada: só o débito ainda vem dela.
+        supabase.from('user_credits').select('debt').eq('user_id', user!.id).maybeSingle(),
+        // Saldo = assinatura ativa (mesma fonte do cabeçalho e do extrato).
+        fetchCreditBalance(user!.id),
       ])
 
       if (shortlinksRes.error) throw shortlinksRes.error
@@ -70,8 +74,8 @@ export default function ShortlinksPage() {
       setShortlinks(shortlinksRes.data.shortlinks || [])
       setLimits(limitsRes.data)
 
+      setUserBalance(balance ?? 0)
       if (!profileRes.error && profileRes.data) {
-        setUserBalance(profileRes.data.balance || 0)
         setUserDebt(profileRes.data.debt || 0)
       }
     } catch (e: any) {
@@ -175,8 +179,9 @@ export default function ShortlinksPage() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-2xl font-display font-bold text-foreground">
-                    {userBalance}
+                    {userBalance.toLocaleString('pt-BR')}
                   </p>
+                  <p className="text-xs text-muted-foreground mt-1">créditos disponíveis</p>
                   {userDebt > 0 && (
                     <p className="text-xs text-destructive mt-1">
                       Débito: {userDebt} créditos

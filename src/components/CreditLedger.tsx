@@ -1,6 +1,7 @@
 // Realtime credit ledger panel — live CDC from Supabase.
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchCreditBalance } from '@/lib/creditBalance';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Coins, TrendingDown, TrendingUp } from 'lucide-react';
@@ -27,10 +28,11 @@ export default function CreditLedger({ userId }: { userId: string }) {
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(25);
-      if (alive && data) {
-        setTxs(data as Tx[]);
-        if (data[0]) setBalance(data[0].balance_after);
-      }
+      if (alive && data) setTxs(data as Tx[]);
+      // O saldo vem da assinatura (fonte única), não do último balance_after:
+      // créditos diários do plano entram em edits_limit sem linha no extrato.
+      const current = await fetchCreditBalance(userId);
+      if (alive) setBalance(current ?? (data?.[0]?.balance_after ?? null));
     })();
 
     const channel = supabase
