@@ -216,6 +216,7 @@ Config (arquivo `supabase/functions/_shared/vertalCodeAi/freeQuota.ts`):
 | --- | --- | --- |
 | segredo avulso | `VERTAL_CEREBRAS_KEY` | chave da Cerebras; sem ela o provedor fica fora |
 | segredo avulso | `VERTAL_GEMINI_KEY` | chave do AI Studio; sem ela o provedor fica fora (nome próprio para não ligar o `GEMINI_API_KEY` de outras funções) |
+| `VERTAL_GPU_CONFIG` | `VERTAL_FREE_KEYS_OWNER` | uuid da conta dona: chave que não couber como segredo da função (limite de 100 do projeto) é lida do cofre de segredos dessa conta (`/secrets`, `kubo_secrets`, auditado como "inject", destino `vertal_code_ai_free_tier`). Em produção o `VERTAL_GEMINI_KEY` está lá |
 | `VERTAL_GPU_CONFIG` | `VERTAL_FREE_CEREBRAS_MODELS` | `qwen-3.8-27b,gpt-oss-120b` (450 RPM e 1,08 B tokens/dia; 5 RPM) |
 | `VERTAL_GPU_CONFIG` | `VERTAL_FREE_GEMINI_MODELS` | `gemini-3.5-flash-lite` (15 RPM / 500 RPD) |
 | `VERTAL_GPU_CONFIG` | `VERTAL_FREE_CEREBRAS_CONTEXT` / `_GEMINI_CONTEXT` | 32 000 / 200 000 |

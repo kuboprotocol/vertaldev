@@ -122,8 +122,31 @@ const ORIGINS = ["vertal_code_ai", "vibe_code", "vertal_chat"] as const;
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
+// Chaves dos grátis extras (VERTAL_GEMINI_KEY / VERTAL_CEREBRAS_KEY) que não couberem como segredo da função
+// (o projeto está no limite de 100): lidas do cofre de segredos da conta dona (kubo_secrets, auditado como
+// "inject"), dona = VERTAL_FREE_KEYS_OWNER no VERTAL_GPU_CONFIG. Segredo avulso com o mesmo nome sempre vence.
+const FREE_KEY_NAMES = ["VERTAL_GEMINI_KEY", "VERTAL_CEREBRAS_KEY"];
+let freeKeys: { at: number; env: Record<string, string> } | null = null;
+async function loadFreeKeys(admin: Loose): Promise<void> {
+  if (freeKeys && Date.now() - freeKeys.at < 600_000) return;
+  const base = expandVcaEnv(Deno.env.toObject());
+  const owner = (base.VERTAL_FREE_KEYS_OWNER ?? "").trim();
+  const missing = FREE_KEY_NAMES.filter((k) => !(base[k] ?? "").trim());
+  if (!UUID_RE.test(owner) || !missing.length) {
+    freeKeys = { at: Date.now(), env: {} };
+    return;
+  }
+  try {
+    const r = await resolveEnvForRun(admin, owner, missing, { target: "vertal_code_ai_free_tier" });
+    freeKeys = { at: Date.now(), env: r.env };
+  } catch (e) {
+    console.warn(`[vertal-code-ai] free keys: ${e instanceof Error ? e.message : "err"}`);
+    freeKeys = { at: Date.now() - 540_000, env: freeKeys?.env ?? {} }; // tenta de novo em ~1 min
+  }
+}
+
 // VERTAL_GPU_CONFIG (um só segredo) expande só as chaves da GPU própria; o resto do ambiente fica igual.
-const env = () => expandVcaEnv(Deno.env.toObject());
+const env = () => expandVcaEnv({ ...(freeKeys?.env ?? {}), ...Deno.env.toObject() });
 
 // Catálogo grátis ao vivo do OpenRouter (cache por isolate, 1 h). Falha = mantém a lista configurada.
 let liveFree: { at: number; ids: string[] } | null = null;
@@ -454,6 +477,7 @@ Deno.serve(async (req) => {
   const admin: Loose = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
     auth: { persistSession: false },
   });
+  await loadFreeKeys(admin);
 
   let body: Record<string, Loose>;
   try {
