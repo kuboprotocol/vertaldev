@@ -129,6 +129,7 @@ const FLUXOS_APP_LOGOS: Record<string, string> = {
   'google-sheets': '/connectors/google-sheets.jpg',
   'google-tasks': '/connectors/google-tasks.webp',
   helix: '/connectors/helix.png',
+  instagram: '/connectors/instagram.png',
   gitlab: '/connectors/gitlab.webp',
   gitea: '/connectors/gitea.png',
   ghost: '/connectors/ghost.png',
