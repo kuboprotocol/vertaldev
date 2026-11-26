@@ -8,6 +8,8 @@
 //   POST {action:"image", prompt, images?}        → {images:[dataUrl], text, model, estimate}  (só com VERTAL_CODE_AI_MEDIA_ENABLED)
 //   POST {action:"video", prompt}                 → {job, model, estimate}; depois {action:"video_status", job}
 //   POST {action:"video_content", job}            → bytes do vídeo (quando o provedor não devolve link assinado)
+//   POST {action:"senses", op:"status|decide|photo|frames|hear|speak"} → Vertal Decide / Visão / Ouvir (só com mídia ligada e endpoint próprio)
+//   POST {action:"novela", op:"submit|status|result"}  → Vertal Novela (~2 min); job assinado como o vídeo
 //   POST {action:"prospector", op, ...}           → Vertal Prospector (só com VERTAL_PROSPECTOR_ENABLED e o usuário em VERTAL_PROSPECTOR_USER_IDS)
 //   POST {action:"growth", op, ...}               → Vertal Growth Team (só com VERTAL_GROWTH_TEAM_ENABLED e o mesmo usuário liberado no Prospector)
 //   POST ?app=crm {op, ...}                       → Vertal CRM (só com VERTAL_CRM_ENABLED e o usuário em VERTAL_CRM_USER_IDS;
@@ -51,6 +53,8 @@ import {
 import { isSafePath } from "../_shared/vibeAgentCore.ts";
 import { type ModelReply, runVertalCodeAi, type VcaEvent, type VcaPlan } from "../_shared/vertalCodeAi/core.ts";
 import { runChain } from "../_shared/vertalCodeAi/chainRunner.ts";
+import { sensesConfig } from "../_shared/vertalCodeAi/senses.ts";
+import { handleNovela, handleSenses, type SensesHandlerDeps } from "../_shared/vertalCodeAi/sensesHandler.ts";
 // Vertal Prospector (aditivo, desligado por padrão: VERTAL_PROSPECTOR_ENABLED + VERTAL_PROSPECTOR_USER_IDS).
 import { isProspectorEnabled } from "../_shared/vertalProspector/core.ts";
 import { handleProspector } from "../_shared/vertalProspector/handler.ts";
@@ -679,6 +683,24 @@ Deno.serve(async (req) => {
       return json(502, { error: "vca_media_failed", status: r.status });
     }
     return new Response(r.body, { headers: { ...corsHeaders, "Content-Type": r.headers.get("Content-Type") ?? "video/mp4", "Cache-Control": "private, max-age=3600" } });
+  }
+
+  if (action === "senses" || action === "novela") {
+    // Vertal Decide / Visão / Ouvir / Novela: aditivo; sem endpoint próprio configurado responde 404 (desligado).
+    const deps: SensesHandlerDeps = {
+      fetch: (u, i) => fetch(u, i),
+      rawFetch: (u, i) => fetch(u, i),
+      signJob: (id) => signJob(userId, id),
+      verifyJob: (t) => verifyJob(userId, t),
+      log: (m) => console.log(m),
+    };
+    const r = action === "senses" ? await handleSenses(body, sensesConfig(env()), deps) : await handleNovela(body, sensesConfig(env()), deps);
+    if ("response" in r) {
+      const h = new Headers(r.response.headers);
+      for (const [k, v] of Object.entries(corsHeaders)) h.set(k, v);
+      return new Response(r.response.body, { status: r.response.status, headers: h });
+    }
+    return json(r.status, r.body);
   }
 
   if (action !== "run") return json(400, { error: "unknown_action" });
