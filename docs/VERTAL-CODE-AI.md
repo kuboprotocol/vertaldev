@@ -317,7 +317,67 @@ os erros ao loop; embeddings do repositório; botão "Publicar" usando o `deploy
 - GPU própria (kit `infra/vertal-gpu-modal/`): vLLM (Apache-2.0), Diffusers (Apache-2.0); pesos Qwen2.5-Coder-14B-
   Instruct-AWQ, FLUX.1-schnell e Wan2.1-T2V-1.3B, todos **Apache-2.0** (baixados do Hugging Face no deploy, não
   versionados aqui).
+- Sentidos (26/11/2026): Intern-Decision-4B (**Apache-2.0**, internlm/Intern-Decision-4B; arquivo LICENSE-QWEN do
+  Qwen3.5 preservado no próprio repositório do modelo), Qwen2.5-Omni-7B (**Apache-2.0**, arquivo LICENSE do repositório
+  Qwen/Qwen2.5-Omni-7B), Kokoro-82M (**Apache-2.0**, hexgrad/Kokoro-82M; usa espeak-ng, GPL-3.0, só como programa
+  separado dentro do contêiner, sem link), flash-linear-attention (MIT), causal-conv1d (BSD-3-Clause), ffmpeg (LGPL/GPL,
+  pacote do Debian dentro do contêiner). Conferidos e **não usados**: OpenJev 27B (pesos **CC BY-NC 4.0**, proibido uso
+  comercial); Kev-4B (Apache-2.0, conferido no card `jaredpalmer/kev-4b`, mas só texto e abaixo do Intern-Decision-4B
+  nas tabelas publicadas); V-JEPA 2 (descartado a pedido; não foi implantado).
 - Modelo padrão do servidor próprio: Qwen2.5-Coder-7B-Instruct, **Apache-2.0**. Alternativas leves: Qwen3-4B e
   Qwen2.5-Coder-1.5B (Apache-2.0). **Evitar Qwen2.5-Coder-3B** (licença Qwen Research, restringe uso comercial).
 - Nomes de provedores aparecem só nesta documentação e no código do servidor; a interface mostra apenas nomes Vertal.
 - Fora de escopo por política: rotação de IP para burlar cotas grátis e catálogos de "jailbreak/sem censura" (violam os termos dos provedores).
+
+## 13. Sentidos: Vertal Decide, Vertal Visão, Vertal Ouvir e Vertal Novela (26/11/2026)
+
+Tudo **aditivo** e **desligado** sem configuração: as ações novas `senses` e `novela` da edge function só existem com
+`VERTAL_CODE_AI_MEDIA_ENABLED=true` **e** a URL própria do recurso (`VERTAL_OWN_DECIDE_URL`, `VERTAL_OWN_OMNI_URL`,
+`VERTAL_OWN_NOVELA_URL`, cada uma com `_TOKEN`, dentro do segredo JSON `VERTAL_GPU_CONFIG`). Sem a URL respondem 404
+como "desligado". Como a função inteira já é só para quem está em `VERTAL_CODE_AI_USER_IDS`, ninguém além da lista vê.
+Reservas pagas só entram com `VERTAL_CODE_AI_ALLOW_PAID=true`. Cobrança: **desligada** (a resposta traz só a estimativa).
+
+| Nome na tela | O que faz | Própria (Modal, scale-to-zero, 1 contêiner) | Reserva |
+|---|---|---|---|
+| Vertal Decide | Decisões tipadas rápidas no formato `/v1/systemone` (estilo Jev): `noul` (sim/não), `choice`, `score`, com probabilidades calibradas | `vertal-decide`: Intern-Decision-4B (Apache-2.0), L4 (alternativa A10G) | Decisions API do OpenRouter, `typesafe/jev-1.14` (pago por token de entrada) |
+| Vertal Visão | Foto de produto → Decide classifica (é produto? categoria, qualidade, impróprio?) → descrição de venda em JSON (nome, tipo, características, cores, faixa de preço em R$, título, texto, tags). Vídeo: quadros amostrados **no navegador** → decisão por quadro (cenas-chave, moderação) | `vertal-omni`: Qwen2.5-Omni-7B no vLLM, L40S | `google/gemini-3.1-flash-lite` (OpenRouter) |
+| Vertal Ouvir | Áudio curto (até 30 s) → transcrição + entendimento + resposta; "Ouvir resposta" lê em voz pt-BR | `vertal-omni` + voz Kokoro-82M (`vertal-novela`, `/tts`) | mesma reserva multimodal (sem reserva para a voz) |
+| Vertal Novela | Premissa → novelinha vertical 720×1280 com narração pt-BR, legendas, zoom/pan e transições | `vertal-novela` (CPU) orquestrando LLM própria, FLUX, (opcional) Wan e Kokoro | LLM do roteiro cai para o `vertal-omni` |
+
+Ações (POST na função `vertal-code-ai`):
+- `{action:"senses", op:"status"}` → quais recursos estão ligados.
+- `{action:"senses", op:"decide", state, images?, questions}` → respostas tipadas.
+- `{action:"senses", op:"photo", image, note?}` → `{decision, route, product, estimate}`. A rota não chama o modelo
+  grande se a foto for imprópria, não for produto ou estiver inutilizável.
+- `{action:"senses", op:"frames", frames:[{t,image}], questions, rank_by?}` → decisão por quadro + `top` (até 24 quadros).
+- `{action:"senses", op:"hear", audio}` (WAV 16 kHz gerado no navegador) → transcrição/resposta.
+- `{action:"senses", op:"speak", text, voice?}` → `audio/wav`.
+- `{action:"novela", op:"submit", premise, voice?, scenes?, clips?}` → job assinado (HMAC, como o vídeo);
+  `op:"status"` → etapa/título/duração/custo; `op:"result"` → `video/mp4`.
+
+Decisões com imagem: por padrão vão direto à reserva (medido: própria quente ~15 s por foto vs reserva ~0,3 s);
+`VERTAL_OWN_DECIDE_IMAGES=true` força a própria. Texto na própria: ~0,2 s. Sem `ALLOW_PAID`, tudo fica na própria.
+
+Tela: botão de olho no cabeçalho do `/vertal-code-ai` abre o painel "Visão · Ouvir · Novela" (`VertalSensesPanel`).
+
+### Câmera, microfone e LGPD
+
+- O consentimento de coleta de dados já existe no Vertal Dev (banner de cookies e painel de recompensas) — **não** há
+  tela de consentimento separada.
+- Câmera e microfone só abrem quando a pessoa toca em "Usar câmera"/"Gravar"; o **navegador pede a permissão dele a cada
+  uso**; um indicador vermelho ("Câmera ligada"/"Gravando") fica visível enquanto estão ligados.
+- As trilhas são **desligadas** logo após a captura, ao parar a gravação (máx. 30 s), ao trocar de aba do painel, ao
+  fechar o painel e quando a aba do navegador vai para o fundo. Nada é gravado em segundo plano.
+- Foto/áudio vão uma vez para a análise e só a resposta volta; a edge function não grava mídia em banco nem em
+  storage. Os apps próprios processam em memória/arquivos temporários do contêiner (apagados ao fim); o vídeo da
+  Novela fica no resultado do job do Modal (expira) e no navegador de quem pediu.
+- Vídeos para "Analisar vídeo" não sobem inteiros: o navegador tira até 12 quadros (640 px) e manda só eles.
+- Base legal sugerida (LGPD art. 7º, V — execução do serviço pedido pelo titular); rosto/voz podem ser dado pessoal
+  sensível (biometria) só se usados para identificar alguém, o que **não** fazemos. Ao ligar para mais gente, revisar
+  a política de privacidade para citar os subprocessadores (Modal e, na reserva, OpenRouter/TypeSafe/Google).
+
+### Custos medidos (26/11/2026, preços Modal: L4 US$0,80/h, A10G US$1,10/h, L40S US$1,95/h, CPU US$0,047/núcleo·h)
+
+Ver `work/vmllm/NOTES.md` (fora do repo) para os números da rodada de testes; resumo no PR.
+Preço de varejo (só proposta; cobrança desligada): créditos = (custo real + US$0,05) × 1,5 ÷ US$0,03.
+

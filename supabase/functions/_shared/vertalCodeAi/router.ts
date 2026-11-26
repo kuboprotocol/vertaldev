@@ -241,10 +241,11 @@ const truthy = (v: string | undefined) => /^(1|true|yes|on|sim)$/i.test((v ?? ""
  * Config compacta da GPU própria num ÚNICO segredo (o projeto tem limite de 100 segredos):
  *   VERTAL_GPU_CONFIG='{"VERTAL_OLLAMA_URL_2":"https://…","VERTAL_OLLAMA_TOKEN_2":"…","VERTAL_OWN_IMAGE_URL":"…",…}'
  * Só aceita chaves do 2º endpoint próprio (VERTAL_OLLAMA_*_2, VERTAL_OLLAMA_2_FIRST_ABOVE_TOKENS) e de
- * imagem/vídeo próprios (VERTAL_OWN_IMAGE_* / VERTAL_OWN_VIDEO_*). Segredo avulso com o mesmo nome vence.
+ * imagem/vídeo próprios (VERTAL_OWN_IMAGE_* / VERTAL_OWN_VIDEO_*) e dos sentidos próprios (VERTAL_OWN_DECIDE_* /
+ * VERTAL_OWN_OMNI_* / VERTAL_OWN_NOVELA_*). Segredo avulso com o mesmo nome vence.
  * Nunca toca em liga/desliga, lista de liberação ou chaves de provedores.
  */
-const GPU_CONFIG_KEY = /^VERTAL_(OLLAMA_[A-Z_]+_2|OLLAMA_2_FIRST_ABOVE_TOKENS|OWN_(IMAGE|VIDEO)_[A-Z_]+)$/;
+const GPU_CONFIG_KEY = /^VERTAL_(OLLAMA_[A-Z_]+_2|OLLAMA_2_FIRST_ABOVE_TOKENS|OWN_(IMAGE|VIDEO|DECIDE|OMNI|NOVELA)_[A-Z_]+)$/;
 export function expandVcaEnv(env: VcaEnv): VcaEnv {
   const raw = (env.VERTAL_GPU_CONFIG ?? "").trim();
   if (!raw) return env;
