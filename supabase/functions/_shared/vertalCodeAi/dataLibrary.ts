@@ -459,8 +459,11 @@ export class VcaRunTracker {
     }, true);
   }
 
+  /** Jobs deste pedido em ordem (o run.started entra na fila antes do flush do run.finished). */
+  private chain: Promise<void> = Promise.resolve();
+
   private queue(build: (ref: string, d: VcaConsentDecision) => Promise<VcaDlRecord[]>, flush: boolean): void {
-    const job = (async () => {
+    const job = this.chain.then(async () => {
       try {
         const d = await this.deps.consent;
         if (!d.send || !d.source) return;
@@ -470,7 +473,8 @@ export class VcaRunTracker {
       } catch {
         /* telemetria nunca derruba nada */
       }
-    })();
+    });
+    this.chain = job;
     try {
       this.deps.defer?.(job);
     } catch {
