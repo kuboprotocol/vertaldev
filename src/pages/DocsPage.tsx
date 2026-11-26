@@ -1,4 +1,5 @@
 import { APP_NAME } from '@/config/brand'
+import { INTEGRATIONS, INTEGRATIONS_PATH, integrationGroups, integrationPath } from '@/config/integrations'
 import AnimatedLogo from '@/components/branding/AnimatedLogo'
 import { useState, useMemo, useEffect } from 'react'
 import { Link } from 'react-router-dom'
@@ -291,7 +292,7 @@ testimonials and a waitlist form.`}</Pre>
           The hub at <Code>/connectors</Code> exposes first-party integrations that
           generated apps can call out of the box.
         </P>
-        <H3>Available connectors</H3>
+        <H3>Highlights</H3>
         <UL>
           <li>
             <strong>GitHub</strong> — real OAuth, repo listing, commits and CI status.
@@ -316,6 +317,30 @@ testimonials and a waitlist form.`}</Pre>
             <strong>IPFS</strong> — one-click deploy of static apps via web3.storage.
           </li>
         </UL>
+        <H3>All connectors ({INTEGRATIONS.length})</H3>
+        <P>
+          Every connector in the catalog has its own public page (in Portuguese) with what it can
+          do, its actions and triggers, how to connect it and examples:{' '}
+          <Link to={INTEGRATIONS_PATH} className="text-primary hover:underline">
+            Integrações
+          </Link>
+          . The list below is generated from the catalog, so new connectors show up here automatically.
+        </P>
+        {integrationGroups().map((g) => (
+          <div key={g.id} className="mb-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">{g.label}</p>
+            <p className="text-sm leading-relaxed">
+              {g.items.map((i, idx) => (
+                <span key={i.slug}>
+                  {idx > 0 ? ' · ' : ''}
+                  <Link to={integrationPath(i)} className="text-primary hover:underline">
+                    {i.name}
+                  </Link>
+                </span>
+              ))}
+            </p>
+          </div>
+        ))}
         <H3>Security</H3>
         <P>
           All credentials are encrypted at rest with AES-256 and scoped per user. RLS
