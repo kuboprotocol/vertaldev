@@ -7,9 +7,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
-import { ArrowLeft, Copy, Inbox, RefreshCw, Send } from 'lucide-react'
+import { ArrowLeft, ChevronDown, Copy, Inbox, RefreshCw, Send, Settings2 } from 'lucide-react'
 import { functionErrorCode } from '@/lib/functionError'
 import { WhatsAppConnectPanel } from '@/components/connectors/WhatsAppConnectPanel'
+import { FluxosConnectPanel } from '@/components/connectors/FluxosConnectPanel'
 
 export type ChannelId = 'instagram' | 'whatsapp'
 
@@ -25,7 +26,7 @@ interface ChannelSpec {
 const SPEC: Record<ChannelId, ChannelSpec> = {
   instagram: {
     label: 'Instagram',
-    subtitle: 'DMs da conta profissional, pela API oficial da Meta',
+    subtitle: 'Sua conta profissional do Instagram, pela API oficial da Meta',
     webhookFn: 'virtual-chat-instagram-webhook',
     subscribeHint: 'No app da Meta, em Instagram → Webhooks, assine o campo "messages".',
     secrets: ['INSTAGRAM_VERIFY_TOKEN', 'INSTAGRAM_APP_SECRET', 'INSTAGRAM_ACCESS_TOKEN', 'INSTAGRAM_ACCOUNT_ID', 'INSTAGRAM_ALLOWED_IG_IDS'],
@@ -70,6 +71,10 @@ export default function ConnectorChannelPage({ channel }: { channel: ChannelId }
   const [to, setTo] = useState('')
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
+  // Instagram: o login por usuário é o caminho principal; o canal do operador fica em "Avançado".
+  const operatorCollapsible = channel === 'instagram'
+  const [showOperator, setShowOperator] = useState(false)
+  const operatorVisible = !operatorCollapsible || showOperator
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -86,7 +91,7 @@ export default function ConnectorChannelPage({ channel }: { channel: ChannelId }
     setLoading(false)
   }, [channel])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { if (operatorVisible) load() }, [load, operatorVisible])
 
   const send = async () => {
     if (!to.trim() || !text.trim()) {
@@ -130,14 +135,14 @@ export default function ConnectorChannelPage({ channel }: { channel: ChannelId }
               <p className="text-xs text-muted-foreground">{spec.subtitle}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          {operatorVisible && <div className="flex items-center gap-2">
             {configured === null && <Badge variant="outline">Verificando…</Badge>}
             {configured === true && <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30" variant="outline">Conectado</Badge>}
             {configured === false && <Badge variant="outline" className="border-amber-500/40 text-amber-400">Falta configurar</Badge>}
             <Button size="sm" variant="outline" onClick={load} disabled={loading}>
               <RefreshCw className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Atualizar
             </Button>
-          </div>
+          </div>}
         </div>
       </div>
 
@@ -149,7 +154,35 @@ export default function ConnectorChannelPage({ channel }: { channel: ChannelId }
         </div>
       )}
 
-      <div className="max-w-5xl mx-auto px-4 py-6 grid gap-4 lg:grid-cols-[1fr_1fr]">
+      {channel === 'instagram' && (
+        <div className="max-w-5xl mx-auto px-4 pt-6 space-y-4" data-testid="instagram-oauth-panel">
+          {/* Conexão do próprio cliente: "Entrar com Instagram" (login da Meta, app do Vertal). */}
+          <FluxosConnectPanel
+            app="instagram"
+            name="Instagram"
+            returnPath="/connectors/instagram"
+            intro="Use uma conta profissional do Instagram (Empresa ou Criador de conteúdo) vinculada a uma Página do Facebook. O login é feito na Meta e você escolhe quais Páginas e contas liberar. Depois, peça no Vertal Chat para publicar fotos e Reels, ver métricas ou ler e responder DMs (sempre com a sua confirmação)."
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowOperator((v) => !v)}
+            aria-expanded={showOperator}
+            data-testid="instagram-advanced-toggle"
+          >
+            <Settings2 className="w-4 h-4 mr-1" />
+            {showOperator ? 'Ocultar avançado' : 'Avançado: canal do operador (webhook e segredos do servidor)'}
+            <ChevronDown className={`w-4 h-4 ml-1 transition ${showOperator ? 'rotate-180' : ''}`} />
+          </Button>
+          {showOperator && (
+            <p className="text-xs text-muted-foreground">
+              Só para o dono do Vertal: a conta do Instagram do próprio Vertal, configurada por segredos do servidor, com respostas automáticas por IA.
+            </p>
+          )}
+        </div>
+      )}
+
+      {operatorVisible && <div className="max-w-5xl mx-auto px-4 py-6 grid gap-4 lg:grid-cols-[1fr_1fr]">
         <Card className="bg-card/30">
           <CardHeader><CardTitle className="text-base">Conexão com a Meta</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
@@ -214,7 +247,7 @@ export default function ConnectorChannelPage({ channel }: { channel: ChannelId }
             </ul>
           </CardContent>
         </Card>
-      </div>
+      </div>}
     </div>
   )
 }

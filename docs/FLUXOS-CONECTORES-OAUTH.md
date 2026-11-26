@@ -114,3 +114,33 @@ fica desabilitada com "Em breve" até existirem `FLUXOS_OAUTH_META_ID/_SECRET` (
 - OAuth real (Embedded Signup): app da Meta do Vertal + verificação da empresa + App Review de
   `whatsapp_business_management`/`whatsapp_business_messaging` + configuração do Facebook Login for
   Business (`FLUXOS_OAUTH_WHATSAPP_CONFIG`). Com os segredos salvos, a aba "Entrar com Facebook" liga sozinha.
+
+## App da Meta "Vertal Dev" e Instagram por usuário (nov/2026)
+App da Meta **Vertal Dev**, App ID `1145586658064572` (modo Desenvolvimento), segredos
+`FLUXOS_OAUTH_META_ID` / `_SECRET` nas Edge Functions (desde 25/11/2026). Serve os quatro apps da Meta
+(`facebook`, `instagram`, `whatsapp`, `meta-ads`). URIs de redirecionamento válidos no app:
+`https://vertal.dev/fluxos/oauth/facebook`, `/instagram`, `/whatsapp`, `/meta-ads`.
+
+- O botão "Entrar com …" de cada um abre `https://www.facebook.com/v23.0/dialog/oauth` com esse App ID,
+  o retorno do conector e a lista de escopos (ou `config_id`, se existir `FLUXOS_OAUTH_<APP>_CONFIG`).
+  O usuário final não vê App ID, App Secret nem o ID de configuração.
+- Em modo Desenvolvimento só quem tem papel no app (admin, desenvolvedor, testador) consegue autorizar;
+  cada permissão pedida precisa estar no caso de uso do app, senão a Meta responde "Invalid Scopes".
+  Para clientes reais: verificação da empresa + App Review (acesso avançado) de cada permissão + modo Ao vivo.
+
+### Instagram (`/connectors/instagram`)
+- Caminho escolhido: **Instagram API com login do Facebook** (Instagram Graph API + Messenger Platform),
+  pelo mesmo app da Meta. Motivo: funciona com os segredos META já salvos (nenhum segredo novo), usa a mesma
+  revisão de app dos outros conectores da Meta e cobre publicação, métricas e DMs. Exige conta profissional
+  ligada a uma Página do Facebook. A alternativa "Instagram API com login do Instagram" (sem Página) usa um
+  Instagram App ID/Secret separado e outra API (`graph.instagram.com`); fica como evolução futura.
+- Topo da página: `FluxosConnectPanel` do app `instagram` ("Entrar com Instagram"); depois do login volta para
+  `/connectors/instagram` (`RETURN_PATH_KEY`, só caminhos internos de /connectors).
+- O canal antigo do operador (webhook `virtual-chat-instagram-webhook`, segredos `INSTAGRAM_*`, respostas por IA)
+  continua igual, recolhido em "Avançado: canal do operador".
+- Escopos: `public_profile, instagram_basic, instagram_content_publish, instagram_manage_insights,
+  instagram_manage_messages, pages_show_list, pages_manage_metadata, pages_read_engagement, business_management`.
+- Ações (aprovação, 2 créditos): publicar foto, publicar Reel, responder DM (`sendMessage`, só até 24 h depois da
+  última mensagem do contato). Buscas: contas, mídias, métricas, conversas de DM, mensagens de uma conversa.
+- Para DMs, a conta do Instagram precisa de "Permitir acesso às mensagens" (Configurações → Privacidade → Mensagens →
+  Ferramentas conectadas) ligado.
