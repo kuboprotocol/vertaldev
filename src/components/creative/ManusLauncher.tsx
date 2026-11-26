@@ -7,6 +7,11 @@ import {
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { PENDING_IMAGE_KEY } from "./toolRequests";
+import { setPendingOfficeFile } from "@/lib/office/pendingFile";
+
+/** Arquivos que o botão "Arquivo" aceita: imagens vão ao Editor; o resto abre no Vertal Office. */
+const FILE_ACCEPT =
+  "image/*,.pdf,.doc,.docx,.odt,.rtf,.txt,.md,.html,.htm,.xlsx,.xlsm,.xls,.ods,.csv,.tsv,.pptx,.odp,.json,.xml";
 
 type Item = {
   key: string;
@@ -62,6 +67,13 @@ export function ManusLauncher({ setActive }: Props) {
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f) return;
+    // Planilhas, PDFs, documentos e slides abrem no Vertal Office.
+    if (!f.type.startsWith("image/")) {
+      setPendingOfficeFile(f);
+      toast.success(`${kind}: ${f.name}`, { description: "Abrindo no Vertal Office..." });
+      setActive("office");
+      return;
+    }
     try {
       sessionStorage.setItem(PENDING_IMAGE_KEY, URL.createObjectURL(f));
     } catch {
@@ -76,7 +88,7 @@ export function ManusLauncher({ setActive }: Props) {
     <div className="space-y-4">
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={handleFile("Foto capturada")} />
       <input ref={imageRef} type="file" accept="image/*" hidden onChange={handleFile("Imagem selecionada")} />
-      <input ref={fileRef} type="file" accept="image/*" hidden onChange={handleFile("Arquivo carregado")} />
+      <input ref={fileRef} type="file" accept={FILE_ACCEPT} hidden onChange={handleFile("Arquivo carregado")} />
 
       <div className="grid grid-cols-3 gap-3">
         {tiles.map((t) => (

@@ -336,6 +336,11 @@ const BuilderPage = forwardRef<HTMLDivElement, any>((props, ref) => {
     if (attachedFiles.length > 0) {
       const fileRefs = attachedFiles.map(f => `[${f.category}: ${f.name}](${f.url})`).join('\n')
       content = `${input}\n\nAttached files:\n${fileRefs}`
+      const sheetData = attachedFiles
+        .filter(f => f.textPreview)
+        .map(f => `--- ${f.name} (CSV) ---\n${f.textPreview}`)
+        .join('\n\n')
+      if (sheetData) content += `\n\nSpreadsheet data:\n${sheetData}`
     }
     const userMsg: Msg = { role: 'user', content }
     const newMessages = [...messages, userMsg]
