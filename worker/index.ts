@@ -5,7 +5,8 @@
 // Também atende a API do conector Spotify em /api/spotify/* (docs/SPOTIFY_CONNECTOR.md)
 // e o navegador na nuvem do Vertal Chat em /api/browser/* (docs/BROWSER_FORM_AGENT.md)
 // e o Vertal Navigator em /api/navigator/* (docs/VERTAL_NAVIGATOR.md)
-// e a busca de vídeos do YouTube do chat em /api/media/* (docs/VERTAL_NAVIGATOR.md, fase 3).
+// e a busca de vídeos do YouTube do chat em /api/media/* (docs/VERTAL_NAVIGATOR.md, fase 3)
+// e o callback OAuth do conector Gmail em /oauth/gmail/callback (worker/gmailOAuthCallback.ts).
 import { crawlPriceFor, formatCrawlerPrice, isInBandPricing } from './payPerCrawl';
 import { isPaidPath, parsePaidPrefixes, verifyPaymentContext } from './monetizationGateway';
 import { siteVerificationResponse } from './siteVerification';
@@ -14,8 +15,9 @@ import { handleSpotify, SPOTIFY_API_PREFIX, type SpotifyRoutesEnv } from './spot
 import { BROWSER_API_PREFIX, handleBrowserForm, type BrowserFormEnv } from './browserFormRoutes';
 import { NAVIGATOR_API_PREFIX, handleNavigator, type NavigatorEnv } from './navigatorRoutes';
 import { MEDIA_API_PREFIX, handleMedia, type MediaEnv } from './mediaRoutes';
+import { handleGmailOAuthCallback, isGmailOAuthCallback, type GmailOAuthEnv } from './gmailOAuthCallback';
 
-export interface Env extends SpotifyRoutesEnv, BrowserFormEnv, NavigatorEnv, MediaEnv {
+export interface Env extends SpotifyRoutesEnv, BrowserFormEnv, NavigatorEnv, MediaEnv, GmailOAuthEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
   /** Prefixos protegidos pelo Monetization Gateway, separados por vírgula. */
   MONETIZATION_GATEWAY_PATHS?: string;
@@ -54,6 +56,11 @@ export default {
     // Rotas antigas do Vertal Vibe Pay (/vibe-bank, /<idioma>/vibe-bank, /bank…) → 301.
     const moved = legacyRedirect(url);
     if (moved) return moved;
+
+    // Callback OAuth do conector Gmail (redirect_uri no domínio vertal.dev).
+    if (isGmailOAuthCallback(url.pathname)) {
+      return handleGmailOAuthCallback(request, env, url);
+    }
 
     if (url.pathname === SPOTIFY_API_PREFIX || url.pathname.startsWith(`${SPOTIFY_API_PREFIX}/`)) {
       const res = await handleSpotify(request, env, url);

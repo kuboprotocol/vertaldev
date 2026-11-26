@@ -5,6 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 import { encryptSecret } from '../_shared/gmailCrypto.ts'
+import { gmailRedirectUriForCallback } from '../_shared/gmailOAuthRedirect.ts'
 
 const DEFAULT_ORIGIN = Deno.env.get('APP_ORIGIN') || 'https://vertal.dev'
 
@@ -24,6 +25,8 @@ Deno.serve(async (req) => {
   const code = url.searchParams.get('code')
   const nonce = url.searchParams.get('state')
   const errorParam = url.searchParams.get('error')
+  // via=vertal: chegou pela rota https://vertal.dev/oauth/gmail/callback do Worker.
+  const via = url.searchParams.get('via')
 
   const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
 
@@ -51,7 +54,7 @@ Deno.serve(async (req) => {
   try {
     const clientId = Deno.env.get('GMAIL_OAUTH_CLIENT_ID')!
     const clientSecret = Deno.env.get('GMAIL_OAUTH_CLIENT_SECRET')!
-    const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/gmail-oauth-callback`
+    const redirectUri = gmailRedirectUriForCallback((k) => Deno.env.get(k), via)
 
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
