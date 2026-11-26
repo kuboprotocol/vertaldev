@@ -203,37 +203,35 @@ async function checkSyntax(path: string, content: string): Promise<string[]> {
 const selfHostedCooldown = new Map<string, number>();
 
 // ── Monitor de cota grátis (freeQuota.ts). Contadores do dia/mês e esperas na tabela JÁ EXISTENTE
-// rate_limit_counters (sem migração): bucket_key "vcaq:…", user_id = zero (sistema), window_start = fim da
-// janela (no futuro, então a limpeza do bump_rate_limit — que apaga janelas com mais de 1 h — não os toca).
-const QUOTA_SYSTEM_USER = "00000000-0000-0000-0000-000000000000";
+// ai_gateway_cache (chave/valor com validade, sem gatilhos; sem migração): key "vcaq:…", content = contagem,
+// task_kind "vca_quota", expires_at = fim da janela. (rate_limit_counters não serve: o gatilho de INSERT dela
+// referencia uma coluna created_at que não existe, então todo INSERT/UPSERT falha.)
 let quotaAdmin: Loose = null;
 const quotaDb = (): Loose =>
   (quotaAdmin ??= createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } }));
 const quotaStore: QuotaStore = {
   async load() {
     const { data, error } = await quotaDb()
-      .from("rate_limit_counters")
-      .select("bucket_key, count, window_start")
-      .eq("user_id", QUOTA_SYSTEM_USER)
-      .like("bucket_key", `${QUOTA_BUCKET_PREFIX}%`)
-      .gte("window_start", new Date(Date.now() - 3_600_000).toISOString())
+      .from("ai_gateway_cache")
+      .select("key, content, expires_at")
+      .eq("task_kind", "vca_quota")
+      .like("key", `${QUOTA_BUCKET_PREFIX}%`)
+      .gte("expires_at", new Date(Date.now() - 3_600_000).toISOString())
       .limit(500);
     if (error) throw new Error(error.message);
-    return ((data ?? []) as Array<{ bucket_key: string; count: number; window_start: string }>).map((r) => ({
-      bucket: r.bucket_key,
-      count: Number(r.count) || 0,
-      until: Date.parse(r.window_start),
+    return ((data ?? []) as Array<{ key: string; content: string; expires_at: string }>).map((r) => ({
+      bucket: r.key,
+      count: Number(r.content) || 0,
+      until: Date.parse(r.expires_at),
     }));
   },
   async add(bucket, until, delta) {
-    const window_start = new Date(until).toISOString();
     const db = quotaDb();
-    const { data } = await db.from("rate_limit_counters").select("count")
-      .eq("bucket_key", bucket).eq("user_id", QUOTA_SYSTEM_USER).eq("window_start", window_start).maybeSingle();
-    const count = Math.min(2_000_000_000, (Number(data?.count) || 0) + delta);
-    const { error } = await db.from("rate_limit_counters").upsert(
-      { bucket_key: bucket, user_id: QUOTA_SYSTEM_USER, window_start, count },
-      { onConflict: "bucket_key,user_id,window_start" },
+    const { data } = await db.from("ai_gateway_cache").select("content").eq("key", bucket).maybeSingle();
+    const count = Math.min(9e15, (Number(data?.content) || 0) + delta);
+    const { error } = await db.from("ai_gateway_cache").upsert(
+      { key: bucket, content: String(count), task_kind: "vca_quota", model: "vertal-code-ai", expires_at: new Date(until).toISOString() },
+      { onConflict: "key" },
     );
     if (error) throw new Error(error.message);
   },
