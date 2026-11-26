@@ -84,7 +84,7 @@ export default function LeaderboardPage() {
       <header className="sticky top-0 z-50 glass glass-border">
         <div className="max-w-lg mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/shortlinks')} className="rounded-xl">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/recompensas')} className="rounded-xl">
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <AnimatedLogo size={20} />
@@ -119,7 +119,7 @@ export default function LeaderboardPage() {
         ) : entries.length === 0 ? (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12">
             <p className="text-muted-foreground">No streaks registered yet.</p>
-            <Button variant="hero" className="mt-4" onClick={() => navigate('/shortlinks')}>
+            <Button variant="hero" className="mt-4" onClick={() => navigate('/recompensas')}>
               🔥 Start my streak
             </Button>
           </motion.div>
@@ -187,7 +187,7 @@ export default function LeaderboardPage() {
           <Button
             variant="outline"
             className="rounded-full gap-2 px-6"
-            onClick={() => navigate('/shortlinks')}
+            onClick={() => navigate('/recompensas')}
           >
             <Flame className="h-4 w-4" />
             🔥 Back to earn credits

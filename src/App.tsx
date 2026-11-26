@@ -67,7 +67,7 @@ const ConnectorChannelPage = lazy(() => import("./pages/ConnectorChannelPage"));
 const ConnectorRenderPage = lazy(() => import("./pages/ConnectorRenderPage"));
 const ConnectorEcosystemPage = lazy(() => import("./pages/ConnectorEcosystemPage"));
 const EcosystemPage = lazy(() => import("./pages/EcosystemPage"));
-const ShortlinksPage = lazy(() => import("./pages/ShortlinksPage"));
+const RewardsPage = lazy(() => import("./pages/RewardsPage"));
 const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
 const PublicAppPage = lazy(() => import("./pages/PublicAppPage"));
 const EmailDashboardPage = lazy(() => import("./pages/EmailDashboardPage"));
@@ -290,7 +290,9 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/connectors/:slug/about" element={<ProtectedRoute><ConnectorAboutPage /></ProtectedRoute>} />
                 <Route path="/connectors/:slug" element={<ProtectedRoute><ConnectorDetailPage /></ProtectedRoute>} />
                 
-                <Route path="/shortlinks" element={<ProtectedRoute><ShortlinksPage /></ProtectedRoute>} />
+                <Route path="/recompensas" element={<ProtectedRoute><RewardsPage /></ProtectedRoute>} />
+                {/* O sistema de shortlinks foi desativado; links antigos caem no painel de recompensas. */}
+                <Route path="/shortlinks" element={<Navigate to="/recompensas" replace />} />
                 <Route path="/leaderboard" element={<ProtectedRoute><LeaderboardPage /></ProtectedRoute>} />
                 <Route path="/emails" element={<ProtectedRoute><EmailDashboardPage /></ProtectedRoute>} />
                 <Route path="/plan/:id" element={<ProtectedRoute><PlanPage /></ProtectedRoute>} />

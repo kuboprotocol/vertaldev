@@ -1,3 +1,5 @@
+> **DESATIVADO (2026-11-26):** o sistema de shortlinks foi removido do painel de recompensas, que agora fica em `/recompensas` (`/shortlinks` redireciona). Criação, listagem e recompensas respondem 410 e o cron diário foi removido (migration `20261126230000_disable_shortlinks.sql`). Tabelas e dados foram mantidos. Este documento fica só como histórico.
+
 # 🎬 Shortlinks System - Complete Documentation
 
 ## Overview

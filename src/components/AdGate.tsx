@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { useAdGate } from '@/hooks/useAdGate'
 import { useDailyCredits } from '@/hooks/useDailyCredits'
 
-const EXCLUDED_ROUTES = ['/auth', '/login', '/shortlinks', '/pricing', '/checkout', '/partner-agreement']
+const EXCLUDED_ROUTES = ['/auth', '/login', '/recompensas', '/shortlinks', '/pricing', '/checkout', '/partner-agreement']
 
 const AdGate = forwardRef<any, any>((props, ref) => {
   const location = useLocation()

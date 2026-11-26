@@ -1,7 +1,7 @@
 /**
  * vertal.js (Vertal DePIN) no Vertal Dev.
  *
- * O aceite que o usuário já deu no Vertal Node (painel de recompensas em /shortlinks, consentimento
+ * O aceite que o usuário já deu no Vertal Node (painel de recompensas em /recompensas, consentimento
  * do parceiro dentro do app nativo) vale como consentimento para o script. Este módulo só LÊ esse
  * aceite: `public.vertal_nodes.opted_in` (gravado pela Edge Function `vertal-node-heartbeat`; RLS
  * deixa o usuário ler só as próprias linhas). O painel (`VertalNodeCard`) não é tocado.

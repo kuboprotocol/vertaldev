@@ -93,7 +93,7 @@ Regra da recompensa por anúncio (decisão do dono do produto, 2026-11-10):
 
 Onde está:
 
-- **Tela:** `src/components/shortlinks/TerraRewardsPanel.tsx`, dentro de `/shortlinks`.
+- **Tela:** `src/components/shortlinks/TerraRewardsPanel.tsx`, dentro de `/recompensas` (antigo `/shortlinks`, que agora redireciona).
 - **Servidor:** ações `ad-status`, `ad-click` e `ad-withdraw` da função `shortlinks`
   (`supabase/functions/shortlinks/index.ts`). A regra fica em
   `supabase/functions/_shared/adRewardsCore.ts` e é o servidor que decide a espera
