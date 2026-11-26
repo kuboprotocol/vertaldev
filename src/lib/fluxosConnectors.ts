@@ -179,11 +179,18 @@ const FLUXOS_APP_LOGOS: Record<string, string> = {
  * - OpenAI, OpenRouter e Azure OpenAI: o Vertal vende a própria IA (white-label) para devs, então marcas de
  *   fornecedores de IA não aparecem como conectores (Laércio, 26/11/2026). Só o catálogo público: o backend de
  *   IA do Vertal (vertal-code-ai etc.) segue usando esses provedores por dentro. Na data, 0 conexões de usuário.
+ * - Anthropic, Mistral AI, Together AI, Perplexity e Helix (tryhelix.ai): mesma regra (Laércio, 26/11/2026),
+ *   0 conexões de usuário na data. Ficam: Self-hosted LLM (genérico, sem marca), DeepL/LibreTranslate
+ *   (tradução), Remove.bg (imagem) e Brave Search (busca), que não são fornecedores de modelos de IA.
  * Antes de esconder: conferir que nenhum usuário tem conexão (tabela fluxos_connections) — com conexão, a
  * conexão continua funcionando pelo chat/fluxos (o servidor só esconde para quem não tem conexão; ver
  * supabase/functions/_shared/hiddenFluxosApps.ts, mantenha as duas listas iguais).
  */
-export const HIDDEN_FLUXOS_APPS = new Set(['flickr', 'strava', 'openai', 'openrouter', 'azure-openai'])
+export const HIDDEN_FLUXOS_APPS = new Set([
+  'flickr', 'strava',
+  // Fornecedores de modelos de IA (white-label):
+  'openai', 'openrouter', 'azure-openai', 'anthropic', 'mistral-ai', 'together-ai', 'perplexity', 'helix',
+])
 
 export const fluxosConnectors: ConnectorConfig[] = FLUXOS_NATIVE_APPS.filter(a => !HIDDEN_FLUXOS_APPS.has(a.app)).map(a => ({
   name: a.name,

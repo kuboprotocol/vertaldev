@@ -29,10 +29,10 @@ describe('catálogo unificado Vertal Dev ↔ Vertal Fluxos', () => {
     expect(airtable?.name).toBe('Airtable')
     expect(airtable?.logoUrl).toBe('/connectors/airtable.png')
   })
-  it('Anthropic mostra o logo oficial no catálogo', () => {
-    const anthropic = getConnectorBySlug('fluxos-anthropic')
-    expect(anthropic?.name).toBe('Anthropic')
-    expect(anthropic?.logoUrl).toBe('/connectors/anthropic.png')
+  it('DeepL mostra o logo oficial no catálogo', () => {
+    const deepl = getConnectorBySlug('fluxos-deepl')
+    expect(deepl?.name).toBe('DeepL')
+    expect(deepl?.logoUrl).toBe('/connectors/deepl.png')
   })
   it('Appwrite mostra o logo oficial no catálogo', () => {
     const appwrite = getConnectorBySlug('fluxos-appwrite')
@@ -65,6 +65,18 @@ describe('apps escondidos do catálogo', () => {
     const text = JSON.stringify(connectors.map(c => [c.slug, c.name, c.description, c.longDescription, c.logoUrl, c.fluxosApp]))
     expect(text).not.toMatch(/openai|openrouter|open router/i)
     expect(fluxosConnectors.some(c => /openai|openrouter/i.test(c.slug))).toBe(false)
+  })
+  it('Anthropic, Mistral AI, Together AI, Perplexity e Helix fora do catálogo e da busca', async () => {
+    const { fluxosConnectors, HIDDEN_FLUXOS_APPS } = await import('@/lib/fluxosConnectors')
+    for (const app of ['anthropic', 'mistral-ai', 'together-ai', 'perplexity', 'helix']) {
+      expect(HIDDEN_FLUXOS_APPS.has(app)).toBe(true)
+      expect(getConnectorBySlug(`fluxos-${app}`)).toBeUndefined()
+    }
+    const text = JSON.stringify(connectors.map(c => [c.slug, c.name, c.description, c.longDescription, c.logoUrl, c.fluxosApp, c.setupSteps]))
+    expect(text).not.toMatch(/anthropic|claude|chatgpt|mistral|together ai|together-ai|perplexity|tryhelix|gemini|deepseek|groq|cohere|hugging ?face|replicate|stability ai/i)
+    expect(fluxosConnectors.some(c => c.slug === 'fluxos-helix')).toBe(false)
+    // genéricos/não-fornecedores de IA continuam
+    for (const app of ['self-hosted-llm', 'deepl', 'notion']) expect(getConnectorBySlug(`fluxos-${app}`)).toBeDefined()
   })
   it('card do Slack não cita o gateway de terceiros', () => {
     const slack = getConnectorBySlug('slack')

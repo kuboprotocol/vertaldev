@@ -60,7 +60,7 @@ const baseConnectors: ConnectorConfig[] = [
     apiKeyHelp: 'A conexão MCP usa OAuth: o cliente abre o login do Vertal.app sozinho.',
     setupSteps: [
       { title: 'Abra o Vertal.app', description: 'Use o botão “Abrir aqui” para acessar o painel sem sair do Vertal Dev.' },
-      { title: 'Conecte via MCP', description: 'Copie a URL https://vertal.app/mcp no seu cliente MCP (Claude, ChatGPT, Cursor).' },
+      { title: 'Conecte via MCP', description: 'Copie a URL https://vertal.app/mcp no seu cliente MCP (o Vertal Chat ou qualquer cliente compatível).' },
       { title: 'Faça login', description: 'Autorize o acesso com a sua conta Vertal.app.' },
     ],
   },

@@ -358,7 +358,7 @@ export default function ConnectorAboutPage({ navLockMs = DEFAULT_NAV_LOCK_MS }: 
               <h3 className="font-semibold">Servidor MCP</h3>
             </div>
             <p className="text-sm text-muted-foreground">
-              Cole esta URL no seu cliente MCP (Claude, ChatGPT, Cursor ou o Vertal Chat).
+              Cole esta URL no seu cliente MCP (o Vertal Chat ou qualquer cliente compatível).
             </p>
             <div className="flex items-center gap-2">
               <code className="flex-1 min-w-0 truncate rounded-md border border-border bg-muted/30 px-3 py-2 font-mono text-xs">
