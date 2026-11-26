@@ -55,6 +55,12 @@ export interface VcaBudget {
   maxInputTokens: number;
   /** Teto de tokens de saída pedidos a ela. */
   maxOutputTokens: number;
+  /**
+   * true = o prazo do 1º token conta desde o ENVIO do pedido (inclui subir a máquina a frio e esperar
+   * os cabeçalhos), não desde a chegada dos cabeçalhos. Padrão: true no 2º endpoint (GPU serverless,
+   * que pode estar desligada), false no 1º (VM sempre ligada, comportamento de antes).
+   */
+  firstTokenFromStart?: boolean;
 }
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -313,8 +319,19 @@ function selfHostedAt(env: VcaEnv, n: 1 | 2): VcaModel | null {
       totalMs: num(env[`VERTAL_OLLAMA_TOTAL_MS${sfx}`], b.totalMs),
       maxInputTokens: num(env[`VERTAL_OLLAMA_MAX_INPUT_TOKENS${sfx}`], b.maxInputTokens),
       maxOutputTokens: num(env[`VERTAL_OLLAMA_MAX_OUTPUT_TOKENS${sfx}`], b.maxOutputTokens),
+      // Só aparece quando ligado (o orçamento da VM continua idêntico ao de antes).
+      ...(flag(env[`VERTAL_OLLAMA_FIRST_TOKEN_FROM_START${sfx}`], n === 2) ? { firstTokenFromStart: true } : {}),
     },
   };
+}
+
+/** Liga/desliga com padrão: vazio = padrão; "true/1/sim…" = true; "false/0/não…" = false. */
+function flag(v: string | undefined, d: boolean): boolean {
+  const t = (v ?? "").trim();
+  if (!t) return d;
+  if (truthy(t)) return true;
+  if (/^(0|false|no|off|nao|não)$/i.test(t)) return false;
+  return d;
 }
 
 /** Servidor próprio principal (VERTAL_OLLAMA_URL), se configurado. URL base sem /v1. */
@@ -328,12 +345,14 @@ export function selfHostedModels(env: VcaEnv): VcaModel[] {
 }
 
 /**
- * Ordem dos endpoints próprios para um pedido: 1 (VM) → 2 (GPU). Pedidos grandes
- * (> VERTAL_OLLAMA_2_FIRST_ABOVE_TOKENS, padrão 3 000 tokens) vão primeiro ao 2º endpoint,
- * que é o mais forte. Sem tamanho conhecido, mantém 1 → 2.
+ * Ordem dos endpoints próprios para um pedido: 1 (VM) → 2 (GPU). Pedidos grandes demais para a VM
+ * (> VERTAL_OLLAMA_2_FIRST_ABOVE_TOKENS; sem ele, > VERTAL_OLLAMA_MAX_INPUT_TOKENS da VM; sem os dois,
+ * 3 000 tokens) vão primeiro ao 2º endpoint, que é o mais forte. Sem tamanho conhecido, mantém 1 → 2.
+ * Vale para TODAS as opções de texto (Auto, Code, Livre, Turbo, Pro): a própria entra antes dos grátis
+ * e dos pagos em buildChain e buildOptionChain.
  */
 export function orderSelfHosted(env: VcaEnv, list: VcaModel[], promptTokens?: number): VcaModel[] {
-  const above = num(env.VERTAL_OLLAMA_2_FIRST_ABOVE_TOKENS, 3_000);
+  const above = num(env.VERTAL_OLLAMA_2_FIRST_ABOVE_TOKENS, num(env.VERTAL_OLLAMA_MAX_INPUT_TOKENS, 3_000));
   if (!promptTokens || promptTokens <= above) return list;
   return [...list.filter((m) => m.id === "vca-self-hosted-2"), ...list.filter((m) => m.id !== "vca-self-hosted-2")];
 }
@@ -346,6 +365,28 @@ export function estimateTokens(messages: VcaChatMessage[]): number {
     else for (const p of m.content) chars += p.type === "text" ? p.text.length : 3_500;
   }
   return Math.ceil(chars / 3.5);
+}
+
+/**
+ * Folga da estimativa de tokens (≈3,5 caracteres/token). Medido em 26/11/2026 com o tokenizer real do
+ * Qwen2.5-Coder: texto em português ≈ 1,0–1,1× a estimativa; TS/JSON/CSS ≈ 1,3× em média (até 1,5× por
+ * arquivo). Usada só para não estourar o contexto da LLM própria (estouro = erro 400 do servidor).
+ */
+export const VCA_TOKEN_SAFETY = 1.35;
+/** Menor saída que vale a pena pedir à LLM própria; abaixo disso, pula para o próximo modelo. */
+export const VCA_MIN_SELF_HOSTED_OUTPUT = 1_024;
+
+/**
+ * Tokens de saída a pedir à LLM própria sem estourar o contexto dela:
+ *   min(pedido, teto do orçamento, contexto − entrada × folga − 256).
+ * 0 = não cabe uma resposta útil (a cadeia pula este modelo em vez de tomar um 400).
+ * Modelos sem orçamento: devolve o pedido (sem mudança).
+ */
+export function selfHostedOutputTokens(m: VcaModel, inputTokens: number, requested: number): number {
+  if (!m.budget) return requested;
+  const room = Math.floor(m.context - Math.ceil(inputTokens * VCA_TOKEN_SAFETY) - 256);
+  const out = Math.min(requested, m.budget.maxOutputTokens, room);
+  return out >= Math.min(VCA_MIN_SELF_HOSTED_OUTPUT, requested) ? out : 0;
 }
 
 /** A LLM própria aguenta esta chamada? (entrada pequena o bastante e tempo suficiente no prazo) */
