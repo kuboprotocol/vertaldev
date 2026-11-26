@@ -172,3 +172,23 @@ App da Meta **Vertal Dev**, App ID `1145586658064572` (modo Desenvolvimento), se
   have been reached" — novos clientes da Data API dependem de aprovação do Reddit), HubSpot (apps OAuth só pela
   HubSpot CLI, `hs project create/upload`), Discord (login do portal pede confirmação por e-mail), eBay (conta
   de desenvolvedor em análise), Trello (login Atlassian).
+
+## LinkedIn, X e limpeza do catálogo (26/11/2026)
+- **X (Twitter)**: app "Vertal Dev" (ID 33675462) no console do X, Read+write, OAuth 1.0a com retorno
+  `https://vertal.dev/fluxos/oauth/twitter` (e `/x`). "Entrar com X (Twitter)" chega à tela "Autorizar o acesso de
+  Vertal Dev". A conta do X está no plano **Pay Per Use com US$ 0 de crédito** (o X não tem mais nível grátis): o
+  login funciona, mas chamadas da API (postar, ler) falham com 402/403 até alguém comprar créditos no console.
+  No catálogo o card agora se chama "X (Twitter)" (mesmo slug `fluxos-twitter`, mesmo app `twitter`).
+- **LinkedIn**: app `linkedin` no motor (fork PR #15): OAuth 2.0 + OpenID Connect, escopos
+  `openid profile email w_member_social`, retorno `https://vertal.dev/fluxos/oauth/linkedin`; ações "Get my profile",
+  "Create post" e "Create post with link" (Posts API `/rest/posts`, cabeçalho `LinkedIn-Version` = mês atual − 2).
+  Card `fluxos-linkedin` no catálogo. **Sem cliente do Vertal ainda**: o portal de desenvolvedor exige uma
+  LinkedIn Page para criar o app, e a conta kuboprotocol@gmail.com não pode criar Page ("Você não tem conexões
+  suficientes"). Enquanto isso o card mostra o formulário de app próprio. Quando houver Page: criar o app "Vertal Dev",
+  produtos "Sign In with LinkedIn using OpenID Connect" + "Share on LinkedIn", retorno acima, Client ID em
+  `PUBLIC_OAUTH_CLIENT_IDS.LINKEDIN` e só `FLUXOS_OAUTH_LINKEDIN_SECRET` no Supabase.
+- **Escondidos** (`HIDDEN_FLUXOS_APPS`, só catálogo; motor, fluxos e dados ficam): Flickr, Strava (API só com
+  assinatura paga; fora do público do Vertal Dev). Regra: antes de esconder, conferir `fluxos_connections` — app com
+  conexão de usuário continua visível.
+- **Pendentes que ficam** (formulário de app próprio enquanto o cliente do Vertal não sai): LinkedIn, eBay (conta em
+  análise), Amazon Ads (acesso à Ads API pedido), TikTok Ads, Kwai Ads, Discord, Reddit, HubSpot, Trello.
