@@ -10,6 +10,8 @@
 //   POST {action:"video_content", job}            → bytes do vídeo (quando o provedor não devolve link assinado)
 //   POST {action:"senses", op:"status|decide|photo|frames|hear|speak"} → Vertal Decide / Visão / Ouvir (só com mídia ligada e endpoint próprio)
 //   POST {action:"novela", op:"submit|status|result"}  → Vertal Novela (~2 min); job assinado como o vídeo
+//   POST {action:"free_quota", op?:"status"|"probe"} → monitor de cota grátis (só admin; uso vs limite por provedor, quem está pulado)
+//   run aceita skipModels:[id|provedor|custo] só de admin (teste de queda da cadeia)
 //   POST {action:"prospector", op, ...}           → Vertal Prospector (só com VERTAL_PROSPECTOR_ENABLED e o usuário em VERTAL_PROSPECTOR_USER_IDS)
 //   POST {action:"growth", op, ...}               → Vertal Growth Team (só com VERTAL_GROWTH_TEAM_ENABLED e o mesmo usuário liberado no Prospector)
 //   POST ?app=crm {op, ...}                       → Vertal CRM (só com VERTAL_CRM_ENABLED e o usuário em VERTAL_CRM_USER_IDS;
@@ -53,6 +55,14 @@ import {
 import { isSafePath } from "../_shared/vibeAgentCore.ts";
 import { type ModelReply, runVertalCodeAi, type VcaEvent, type VcaPlan } from "../_shared/vertalCodeAi/core.ts";
 import { runChain } from "../_shared/vertalCodeAi/chainRunner.ts";
+import {
+  CEREBRAS_MODELS_URL,
+  FreeQuotaMonitor,
+  freeTierModels,
+  GEMINI_MODELS_URL,
+  QUOTA_BUCKET_PREFIX,
+  type QuotaStore,
+} from "../_shared/vertalCodeAi/freeQuota.ts";
 import { sensesConfig } from "../_shared/vertalCodeAi/senses.ts";
 import { handleNovela, handleSenses, type SensesHandlerDeps } from "../_shared/vertalCodeAi/sensesHandler.ts";
 // Equipe Vertal (3 núcleos + 5 papéis), memória expansiva e Vertal Decide — aditivo, desligado por padrão:
@@ -112,8 +122,31 @@ const ORIGINS = ["vertal_code_ai", "vibe_code", "vertal_chat"] as const;
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
+// Chaves dos grátis extras (VERTAL_GEMINI_KEY / VERTAL_CEREBRAS_KEY) que não couberem como segredo da função
+// (o projeto está no limite de 100): lidas do cofre de segredos da conta dona (kubo_secrets, auditado como
+// "inject"), dona = VERTAL_FREE_KEYS_OWNER no VERTAL_GPU_CONFIG. Segredo avulso com o mesmo nome sempre vence.
+const FREE_KEY_NAMES = ["VERTAL_GEMINI_KEY", "VERTAL_CEREBRAS_KEY"];
+let freeKeys: { at: number; env: Record<string, string> } | null = null;
+async function loadFreeKeys(admin: Loose): Promise<void> {
+  if (freeKeys && Date.now() - freeKeys.at < 600_000) return;
+  const base = expandVcaEnv(Deno.env.toObject());
+  const owner = (base.VERTAL_FREE_KEYS_OWNER ?? "").trim();
+  const missing = FREE_KEY_NAMES.filter((k) => !(base[k] ?? "").trim());
+  if (!UUID_RE.test(owner) || !missing.length) {
+    freeKeys = { at: Date.now(), env: {} };
+    return;
+  }
+  try {
+    const r = await resolveEnvForRun(admin, owner, missing, { target: "vertal_code_ai_free_tier" });
+    freeKeys = { at: Date.now(), env: r.env };
+  } catch (e) {
+    console.warn(`[vertal-code-ai] free keys: ${e instanceof Error ? e.message : "err"}`);
+    freeKeys = { at: Date.now() - 540_000, env: freeKeys?.env ?? {} }; // tenta de novo em ~1 min
+  }
+}
+
 // VERTAL_GPU_CONFIG (um só segredo) expande só as chaves da GPU própria; o resto do ambiente fica igual.
-const env = () => expandVcaEnv(Deno.env.toObject());
+const env = () => expandVcaEnv({ ...(freeKeys?.env ?? {}), ...Deno.env.toObject() });
 
 // Catálogo grátis ao vivo do OpenRouter (cache por isolate, 1 h). Falha = mantém a lista configurada.
 let liveFree: { at: number; ids: string[] } | null = null;
@@ -169,19 +202,101 @@ async function checkSyntax(path: string, content: string): Promise<string[]> {
 // LLM própria que falhou por erro/tempo fica de fora por um minuto (por isolate), para não atrasar cada turno.
 const selfHostedCooldown = new Map<string, number>();
 
+// ── Monitor de cota grátis (freeQuota.ts). Contadores do dia/mês e esperas na tabela JÁ EXISTENTE
+// rate_limit_counters (sem migração): bucket_key "vcaq:…", user_id = zero (sistema), window_start = fim da
+// janela (no futuro, então a limpeza do bump_rate_limit — que apaga janelas com mais de 1 h — não os toca).
+const QUOTA_SYSTEM_USER = "00000000-0000-0000-0000-000000000000";
+let quotaAdmin: Loose = null;
+const quotaDb = (): Loose =>
+  (quotaAdmin ??= createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } }));
+const quotaStore: QuotaStore = {
+  async load() {
+    const { data, error } = await quotaDb()
+      .from("rate_limit_counters")
+      .select("bucket_key, count, window_start")
+      .eq("user_id", QUOTA_SYSTEM_USER)
+      .like("bucket_key", `${QUOTA_BUCKET_PREFIX}%`)
+      .gte("window_start", new Date(Date.now() - 3_600_000).toISOString())
+      .limit(500);
+    if (error) throw new Error(error.message);
+    return ((data ?? []) as Array<{ bucket_key: string; count: number; window_start: string }>).map((r) => ({
+      bucket: r.bucket_key,
+      count: Number(r.count) || 0,
+      until: Date.parse(r.window_start),
+    }));
+  },
+  async add(bucket, until, delta) {
+    const window_start = new Date(until).toISOString();
+    const db = quotaDb();
+    const { data } = await db.from("rate_limit_counters").select("count")
+      .eq("bucket_key", bucket).eq("user_id", QUOTA_SYSTEM_USER).eq("window_start", window_start).maybeSingle();
+    const count = Math.min(2_000_000_000, (Number(data?.count) || 0) + delta);
+    const { error } = await db.from("rate_limit_counters").upsert(
+      { bucket_key: bucket, user_id: QUOTA_SYSTEM_USER, window_start, count },
+      { onConflict: "bucket_key,user_id,window_start" },
+    );
+    if (error) throw new Error(error.message);
+  },
+};
+const freeQuota = new FreeQuotaMonitor({
+  env: () => env(),
+  store: /^(0|false|off|no)$/i.test(Deno.env.get("VERTAL_FREE_QUOTA_STORE") ?? "") ? null : quotaStore,
+  defer: (p) => (globalThis as Loose).EdgeRuntime?.waitUntil?.(p),
+  log: (m) => console.warn(m),
+});
+
 /** Executa a cadeia (lógica em _shared/vertalCodeAi/chainRunner.ts, testada no Vitest). */
-function callChain(
+async function callChain(
   chain: VcaModel[],
   messages: VcaChatMessage[],
   opts: { json: boolean; maxTokens: number; effort: VcaEffort; deadline: number },
 ): Promise<ModelReply> {
+  // Retrato do banco (cache de 20 s por isolate; falha = segue só com a memória). Teto de 1,5 s.
+  await Promise.race([freeQuota.refresh(), new Promise((r) => setTimeout(r, 1_500))]);
   return runChain(chain, messages, opts, {
     fetch: (url, init) => fetch(url, init),
     env: env(),
     cooldown: selfHostedCooldown,
+    quota: freeQuota,
     log: (m) => console.log(m),
     warn: (m) => console.warn(m),
   });
+}
+
+/** Lista os ids de modelo que a chave de cada provedor grátis enxerga (só ids; para conferir a config). */
+async function probeFreeModels(e: Record<string, string | undefined>): Promise<Record<string, unknown>> {
+  const out: Record<string, unknown> = {};
+  const get = async (url: string, headers: Record<string, string>) => {
+    const r = await fetch(url, { headers, signal: AbortSignal.timeout(8_000) });
+    if (!r.ok) return { status: r.status };
+    return { status: r.status, body: await r.json() };
+  };
+  const ck = (e.VERTAL_CEREBRAS_KEY ?? "").trim();
+  if (ck) {
+    try {
+      const r = await get(CEREBRAS_MODELS_URL, { Authorization: `Bearer ${ck}` });
+      out.cerebras = { status: r.status, ids: ((r as Loose).body?.data ?? []).map((m: Loose) => m.id).filter((x: unknown) => typeof x === "string").slice(0, 60) };
+    } catch (err) {
+      out.cerebras = { error: err instanceof Error ? err.name : "err" };
+    }
+  } else out.cerebras = { configured: false };
+  const gk = (e.VERTAL_GEMINI_KEY ?? "").trim();
+  if (gk) {
+    try {
+      const r = await get(`${GEMINI_MODELS_URL}?pageSize=200`, { "x-goog-api-key": gk });
+      out.gemini = {
+        status: r.status,
+        ids: ((r as Loose).body?.models ?? [])
+          .filter((m: Loose) => (m.supportedGenerationMethods ?? []).includes("generateContent"))
+          .map((m: Loose) => String(m.name ?? "").replace(/^models\//, ""))
+          .filter((x: string) => /flash|lite|gemma/i.test(x))
+          .slice(0, 80),
+      };
+    } catch (err) {
+      out.gemini = { error: err instanceof Error ? err.name : "err" };
+    }
+  } else out.gemini = { configured: false };
+  return out;
 }
 
 // ── VERTAL Code AI → Data Library (Vertaldephin). Sem config = null = nada muda (nem consulta ao banco). ──
@@ -362,6 +477,7 @@ Deno.serve(async (req) => {
   const admin: Loose = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
     auth: { persistSession: false },
   });
+  await loadFreeKeys(admin);
 
   let body: Record<string, Loose>;
   try {
@@ -471,6 +587,23 @@ Deno.serve(async (req) => {
     const mediaEnabled = isVcaMediaEnabled(env());
     const options = [...VCA_TEXT_OPTIONS, ...(mediaEnabled ? VCA_MEDIA_OPTIONS : [])].map((id) => ({ id, label: VCA_OPTION_LABEL[id] }));
     return json(200, { models: chain.map(publicModelInfo), paidEnabled: chain.some((m) => m.cost === "paid"), options, mediaEnabled });
+  }
+
+  // ─── Monitor de cota grátis: só leitura, só admin (is_admin). op "status" (padrão) ou "probe". ───
+  if (action === "free_quota") {
+    const { data: isAdm } = await admin.rpc("is_admin", { p_user_id: userId });
+    if (!isAdm) return json(404, { error: "unknown_action" });
+    const e = env();
+    if (body.op === "probe") return json(200, { probe: await probeFreeModels(e) });
+    await freeQuota.refresh(true);
+    const tracked = [
+      ...freeTierModels(e),
+      ...buildChain(e, { effort: "auto", liveFreeIds: await liveFreeIds() }),
+    ];
+    return json(200, {
+      ...freeQuota.snapshot(tracked),
+      chainAuto: buildChain(e, { effort: "auto", liveFreeIds: await liveFreeIds() }).map((m) => ({ id: m.id, provider: m.provider, model: m.model, cost: m.cost })),
+    });
   }
 
   // ─── Equipe Vertal: status e memória (só para quem está na lista da Equipe; os demais, 404) ───
@@ -979,7 +1112,16 @@ Deno.serve(async (req) => {
     liveFreeIds: await liveFreeIds(),
   };
   // Sem opção/modelo fixo: exatamente a cadeia de antes.
-  const chain = option === "auto" && !modelId ? buildChain(env(), chainOpts) : buildOptionChain(env(), { ...chainOpts, option, modelId });
+  let chain = option === "auto" && !modelId ? buildChain(env(), chainOpts) : buildOptionChain(env(), { ...chainOpts, option, modelId });
+  // Teste (só admin): skipModels pula ids, provedores ("ollama", "ollama_cloud"…) ou custos ("self_hosted")
+  // para provar que a cadeia cai para o próximo. Ignorado para quem não é admin.
+  if (Array.isArray(body.skipModels) && body.skipModels.length) {
+    const { data: isAdm } = await admin.rpc("is_admin", { p_user_id: userId });
+    if (isAdm) {
+      const skip = new Set((body.skipModels as unknown[]).slice(0, 20).map((x) => String(x)));
+      chain = chain.filter((m) => !skip.has(m.id) && !skip.has(m.provider) && !skip.has(m.cost));
+    }
+  }
   if (!chain.length) return json(503, { error: "no_model_configured" });
 
   // VERTAL Code AI → Data Library: null sem config (padrão). Consentimento consultado em paralelo; o pedido não espera.

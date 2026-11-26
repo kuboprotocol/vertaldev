@@ -325,13 +325,16 @@ export interface DeciderDeps {
   timeoutMs?: number;
   /**
    * Prazo só da própria (Modal, pode estar fria). Padrão: VERTAL_OWN_DECIDE_TIMEOUT_MS (aceito dentro do
-   * VERTAL_GPU_CONFIG) ou 30 s. O prazo do Jev não muda.
+   * VERTAL_GPU_CONFIG) ou 45 s. O prazo do Jev não muda.
    */
   ownTimeoutMs?: number;
 }
 
-/** Prazo padrão da própria no Vertal Decide da Equipe (aprovado em 26/11/2026: 15 s → 30 s; frio do L4 > 15 s). */
-export const OWN_DECIDE_TIMEOUT_MS = 30_000;
+/**
+ * Prazo padrão da própria no Vertal Decide da Equipe (26/11/2026: 15 s → 30 s; depois 30 s → 45 s, aprovado
+ * pelo Laércio às 09:18, porque o frio do L4 ainda passava de 30 s). O Jev continua com 15 s.
+ */
+export const OWN_DECIDE_TIMEOUT_MS = 45_000;
 
 function validQuestions(questions: DecisionQuestions): DecisionQuestions {
   const out: DecisionQuestions = {};
