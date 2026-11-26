@@ -194,7 +194,11 @@ App da Meta **Vertal Dev**, App ID `1145586658064572` (modo Desenvolvimento), se
   `HIDDEN_FLUXOS_APPS`, porque o Vertal vende a própria IA white-label para devs. O servidor espelha a lista em
   `supabase/functions/_shared/hiddenFluxosApps.ts`: o Vertal Chat não lista esses apps (`list_apps`) nem abre conexão
   nova com eles; quem já tiver conexão continua usando. Não mexe no uso interno desses provedores pelo backend de IA
-  do Vertal (vertal-code-ai etc.).
+  do Vertal (vertal-code-ai etc.). Depois (#284) também Anthropic, Mistral AI, Together AI, Perplexity e Helix
+  (tryhelix.ai), todos com 0 conexões. Ficam por não serem fornecedores de modelos: Self-hosted LLM (genérico), DeepL,
+  LibreTranslate, Remove.bg, Brave Search. Passos MCP dos cards não citam Claude/ChatGPT/Cursor.
+- **Lovable** (26/11/2026): sem conector. Os escopos de projeto/workspace do OAuth da Lovable (e tokens de API) exigem
+  plano Business/Enterprise; o workspace Kubo Protocol é Pro. Free/Pro só dão openid/profile/email/offline.
 - **Pendentes que ficam** (formulário de app próprio enquanto o cliente do Vertal não sai): LinkedIn, eBay (conta em
   análise), Amazon Ads (acesso à Ads API pedido), TikTok Ads, Kwai Ads, Discord, Reddit, HubSpot, Trello.
 
