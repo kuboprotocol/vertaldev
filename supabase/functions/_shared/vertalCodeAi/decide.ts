@@ -7,14 +7,20 @@
 // e age pelo nível de confiança: ALTA age sozinha, MÉDIA sobe para um modelo maior, BAIXA pergunta ao usuário.
 //
 // Interface única: decide(state, questions). Provedores, nesta ordem (o 1º que responder vence):
-//   1. "own"  → modelo de decisão próprio (Vertal Decide na GPU própria), se VERTAL_DECIDE_URL estiver configurado.
+//   1. "own"  → modelo de decisão próprio (Vertal Decide na GPU própria, infra/vertal-gpu-modal/vertal_decide.py).
+//               Config ÚNICA para a Equipe e os Sentidos: VERTAL_OWN_DECIDE_URL + _TOKEN (+ _MODEL opcional);
+//               VERTAL_DECIDE_URL/_TOKEN/_MODEL é só um apelido antigo e resolve para o MESMO endpoint.
+//               URL = base do app (o cliente acrescenta /v1/systemone) ou o endpoint completo (…/v1/<algo>).
 //               Contrato: POST {model?, state, questions} → {answers} no MESMO formato da Decisions API.
-//               (Kit da GPU própria: POST https://…modal.run/v1/systemone, Bearer VERTAL_DECIDE_TOKEN.)
+//               Com FOTO no estado, a própria é pulada quando a reserva paga existe (foto na própria ~15 s vs
+//               ~0,3 s na reserva), a menos que VERTAL_OWN_DECIDE_IMAGES=true.
 //   2. "jev"  → modelo de decisão via OpenRouter (POST /api/alpha/decisions), com a OPENROUTER_API_KEY que já existe.
-//               É pago por token de entrada → só com VERTAL_CODE_AI_ALLOW_PAID=true. Modelo: VERTAL_DECIDE_JEV_MODEL.
+//               É pago por token de entrada → só com VERTAL_CODE_AI_ALLOW_PAID=true. Modelo: VERTAL_DECIDE_JEV_MODEL
+//               (ou VERTAL_OWN_DECIDE_FALLBACK_MODEL).
 //   3. "llm"  → a cadeia barata/própria de sempre, pedindo JSON com probabilidades (reserva, sempre disponível).
 //   4. "none" → nenhuma resposta: devolve answers vazio; quem chamou usa o padrão seguro.
 // Nomes de fornecedor ficam só aqui no servidor; a tela mostra "Vertal Decide".
+// O cliente HTTP (requestDecision) é o ÚNICO do projeto: os Sentidos (senses.ts) também passam por ele.
 
 import { repairAgentJson } from "../chatOrchestrator.ts";
 import type { VcaChatMessage, VcaEnv } from "./router.ts";
@@ -51,7 +57,7 @@ export interface DecisionResult {
   ms: number;
 }
 
-export type DecideFn = (state: Record<string, unknown>, questions: DecisionQuestions) => Promise<DecisionResult>;
+export type DecideFn = (state: unknown, questions: DecisionQuestions) => Promise<DecisionResult>;
 
 // ───────────────────────────── Configuração ─────────────────────────────
 
@@ -80,13 +86,140 @@ export function tierFor(confidence: number, t: DecideThresholds): DecisionTier {
   return "ask";
 }
 
-/** Própria configurada? (URL https + token) */
+export interface OwnDecideEndpoint {
+  /** Base do app (sem barra final) ou endpoint completo. */
+  url: string;
+  token: string;
+  model?: string;
+}
+
+export interface DecideProviders {
+  own: OwnDecideEndpoint | null;
+  jev: { key: string; model: string } | null;
+  /** Mandar decisões COM foto para a própria mesmo havendo reserva paga. */
+  imagesOwn: boolean;
+}
+
+const httpsUrl = (v: string | undefined) => {
+  const s = (v ?? "").trim().replace(/\/+$/, "");
+  return /^https:\/\//i.test(s) ? s : "";
+};
+
+/** Própria: VERTAL_OWN_DECIDE_* (canônico) e, se ausente, o apelido VERTAL_DECIDE_*. URL https + token. */
+export function ownDecideFromEnv(env: VcaEnv): OwnDecideEndpoint | null {
+  for (const p of ["VERTAL_OWN_DECIDE", "VERTAL_DECIDE"]) {
+    const url = httpsUrl(env[`${p}_URL`]);
+    const token = (env[`${p}_TOKEN`] ?? "").trim();
+    if (!url || !token) continue;
+    const model = (env[`${p}_MODEL`] ?? "").trim();
+    return model ? { url, token, model } : { url, token };
+  }
+  return null;
+}
+
+/** Endpoint real: base → base + /v1/systemone; URL que já termina em /v1/<algo> fica como está. */
+export function ownDecideEndpointUrl(url: string): string {
+  let path = "";
+  try {
+    path = new URL(url).pathname;
+  } catch {
+    /* URL estranha: trata como base */
+  }
+  return /\/v1\/[A-Za-z0-9_\-/]+$/.test(path) ? url : `${url.replace(/\/+$/, "")}/v1/systemone`;
+}
+
+/** Própria configurada? (URL https + token, por qualquer um dos dois nomes) */
 export function ownDecideConfigured(env: VcaEnv): boolean {
-  return /^https:\/\//.test((env.VERTAL_DECIDE_URL ?? "").trim()) && !!(env.VERTAL_DECIDE_TOKEN ?? "").trim();
+  return !!ownDecideFromEnv(env);
 }
 /** Decisões via OpenRouter: chave existente + pago liberado (é cobrado por token de entrada). */
 export function jevConfigured(env: VcaEnv): boolean {
   return !!(env.OPENROUTER_API_KEY ?? "").trim() && truthy(env.VERTAL_CODE_AI_ALLOW_PAID) && !/^(0|false|off|no)$/i.test((env.VERTAL_DECIDE_JEV ?? "").trim());
+}
+export function jevModel(env: VcaEnv): string {
+  return (env.VERTAL_DECIDE_JEV_MODEL ?? "").trim() || (env.VERTAL_OWN_DECIDE_FALLBACK_MODEL ?? "").trim() || DEFAULT_JEV_MODEL;
+}
+
+export function decideProviders(env: VcaEnv): DecideProviders {
+  return {
+    own: ownDecideFromEnv(env),
+    jev: jevConfigured(env) ? { key: (env.OPENROUTER_API_KEY ?? "").trim(), model: jevModel(env) } : null,
+    imagesOwn: truthy(env.VERTAL_OWN_DECIDE_IMAGES) || truthy(env.VERTAL_DECIDE_IMAGES),
+  };
+}
+
+// ───────────────────────────── Cliente HTTP único ─────────────────────────────
+
+export type DecideFetch = (
+  url: string,
+  init: { method: string; headers: Record<string, string>; body: string; signal?: AbortSignal },
+) => Promise<{ ok: boolean; status: number; json(): Promise<unknown>; body?: { cancel?: () => Promise<unknown> } | null }>;
+
+/** O estado traz foto? (formato do Jev: lista com partes {type:"image_url", image_url:{url}}) */
+export function stateHasImage(state: unknown): boolean {
+  return Array.isArray(state) && state.some((p) => !!p && typeof p === "object" && (p as { type?: unknown }).type === "image_url");
+}
+
+export interface DecisionCall {
+  source: "own" | "jev";
+  /** Envelope bruto da resposta ({answers, usage?, …}). */
+  data: unknown;
+  costUsd?: number;
+}
+
+/**
+ * A ÚNICA chamada de rede do Vertal Decide: própria → OpenRouter, com o mesmo corpo {state, questions}.
+ * `accept` diz se a resposta serve (formato/completude); se não servir, tenta o próximo. Nunca lança.
+ */
+export async function requestDecision(
+  p: DecideProviders,
+  f: DecideFetch,
+  state: unknown,
+  questions: unknown,
+  opts: { accept: (data: unknown) => boolean; timeoutMs?: number; jevTimeoutMs?: number; log?: (m: string) => void },
+): Promise<DecisionCall | null> {
+  const post = async (which: "own" | "jev", url: string, headers: Record<string, string>, body: unknown, timeoutMs: number): Promise<unknown> => {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(new DOMException("timeout", "TimeoutError")), timeoutMs);
+    try {
+      const r = await f(url, { method: "POST", signal: ac.signal, headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });
+      if (!r.ok) {
+        opts.log?.(`[vertal-decide] ${which} http ${r.status}`);
+        try {
+          await r.body?.cancel?.();
+        } catch {
+          /* ignora */
+        }
+        return null;
+      }
+      return await r.json();
+    } catch (err) {
+      opts.log?.(`[vertal-decide] ${which} falhou: ${err instanceof Error ? err.name : "err"}`);
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  const timeoutMs = opts.timeoutMs ?? 15_000;
+  const image = stateHasImage(state);
+  if (p.own && (!image || p.imagesOwn || !p.jev)) {
+    const d = await post("own", ownDecideEndpointUrl(p.own.url), { Authorization: `Bearer ${p.own.token}` }, { model: p.own.model, state, questions }, timeoutMs);
+    if (d != null && opts.accept(d)) return { source: "own", data: d };
+  }
+  if (p.jev) {
+    const d = await post("jev", DECISIONS_URL, {
+      Authorization: `Bearer ${p.jev.key}`,
+      "HTTP-Referer": "https://vertal.dev",
+      "X-Title": "VERTAL Code AI",
+    }, { model: p.jev.model, state, questions }, opts.jevTimeoutMs ?? 15_000);
+    if (d != null && opts.accept(d)) {
+      const cost = (d as { usage?: { cost?: unknown } })?.usage?.cost;
+      const costUsd = typeof cost === "number" ? cost : undefined;
+      opts.log?.(`[vertal-decide] ok jev cost_usd=${(costUsd ?? 0).toFixed(6)}`);
+      return { source: "jev", data: d, costUsd };
+    }
+  }
+  return null;
 }
 
 // ───────────────────────────── Normalização das respostas ─────────────────────────────
@@ -161,7 +294,7 @@ export function normalizeAnswers(raw: unknown, questions: DecisionQuestions, t: 
 
 // ───────────────────────────── Reserva: LLM barata com JSON ─────────────────────────────
 
-export function llmDecisionPrompt(state: Record<string, unknown>, questions: DecisionQuestions): VcaChatMessage[] {
+export function llmDecisionPrompt(state: unknown, questions: DecisionQuestions): VcaChatMessage[] {
   const spec = Object.entries(questions).map(([k, q]) => {
     if (q.type === "noul") return `- "${k}" (sim/não): ${q.instructions}${q.criteria ? ` [sim: ${q.criteria.true}] [não: ${q.criteria.false}]` : ""} → {"type":"noul","noul":<probabilidade do sim 0-1>}`;
     if (q.type === "choice") return `- "${k}" (escolha): ${q.instructions} Opções: ${Object.entries(q.criteria).map(([o, d]) => `"${o}" = ${d}`).join("; ")} → {"type":"choice","choice":"<opção>","probabilities":{"<opção>":<0-1>,...}}`;
@@ -209,56 +342,26 @@ function validQuestions(questions: DecisionQuestions): DecisionQuestions {
 /** Cria o decide(state, questions) com a ordem própria → OpenRouter → LLM barata → nenhum. Nunca lança. */
 export function makeDecider(deps: DeciderDeps): DecideFn {
   const t = decideThresholds(deps.env);
+  const providers = decideProviders(deps.env);
   const now = deps.now ?? Date.now;
   const timeoutMs = deps.timeoutMs ?? 15_000;
-
-  const post = async (url: string, headers: Record<string, string>, body: unknown): Promise<{ answers: unknown; cost?: number } | null> => {
-    const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(new DOMException("timeout", "TimeoutError")), timeoutMs);
-    try {
-      const r = await deps.fetch(url, { method: "POST", signal: ac.signal, headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });
-      if (!r.ok) {
-        deps.log?.(`[vertal-decide] ${url.includes("openrouter") ? "jev" : "own"} http ${r.status}`);
-        await r.body?.cancel().catch(() => {});
-        return null;
-      }
-      const d = await r.json();
-      return { answers: d?.answers, cost: typeof d?.usage?.cost === "number" ? d.usage.cost : undefined };
-    } catch (err) {
-      deps.log?.(`[vertal-decide] falhou: ${err instanceof Error ? err.name : "err"}`);
-      return null;
-    } finally {
-      clearTimeout(timer);
-    }
-  };
 
   return async (state, questionsIn) => {
     const start = now();
     const questions = validQuestions(questionsIn);
     if (!Object.keys(questions).length) return { source: "none", answers: {}, ms: 0 };
     const complete = (a: Record<string, DecisionAnswer>) => Object.keys(questions).every((k) => k in a);
-    const e = deps.env;
+    const read = (d: unknown) => normalizeAnswers((d as { answers?: unknown } | null)?.answers, questions, t);
 
-    if (ownDecideConfigured(e)) {
-      const r = await post(e.VERTAL_DECIDE_URL!.trim(), { Authorization: `Bearer ${e.VERTAL_DECIDE_TOKEN!.trim()}` }, {
-        model: (e.VERTAL_DECIDE_MODEL ?? "").trim() || undefined,
-        state,
-        questions,
-      });
-      const answers = r ? normalizeAnswers(r.answers, questions, t) : {};
-      if (r && complete(answers)) return { source: "own", answers, ms: now() - start };
-    }
-    if (jevConfigured(e)) {
-      const r = await post(DECISIONS_URL, {
-        Authorization: `Bearer ${e.OPENROUTER_API_KEY!.trim()}`,
-        "HTTP-Referer": "https://vertal.dev",
-        "X-Title": "VERTAL Code AI",
-      }, { model: (e.VERTAL_DECIDE_JEV_MODEL ?? "").trim() || DEFAULT_JEV_MODEL, state, questions });
-      const answers = r ? normalizeAnswers(r.answers, questions, t) : {};
-      if (r && complete(answers)) {
-        deps.log?.(`[vertal-decide] ok jev cost_usd=${(r.cost ?? 0).toFixed(6)}`);
-        return { source: "jev", answers, costUsd: r.cost, ms: now() - start };
-      }
+    const r = await requestDecision(providers, deps.fetch as unknown as DecideFetch, state, questions, {
+      accept: (d) => complete(read(d)),
+      timeoutMs,
+      jevTimeoutMs: timeoutMs,
+      log: deps.log,
+    });
+    if (r) {
+      const answers = read(r.data);
+      return r.source === "jev" ? { source: "jev", answers, costUsd: r.costUsd, ms: now() - start } : { source: "own", answers, ms: now() - start };
     }
     if (deps.callLlm) {
       try {

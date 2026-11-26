@@ -13,6 +13,7 @@
 // VERTAL_CODE_AI_ALLOW_PAID=true. Nomes de fornecedor/modelo ficam só aqui no servidor; a tela mostra nomes Vertal.
 
 import type { VcaEnv } from "./router.ts";
+import { type DecideFetch, jevConfigured, jevModel, ownDecideFromEnv, requestDecision } from "./decide.ts";
 
 const truthy = (v: string | undefined) => /^(1|true|yes|on|sim)$/i.test((v ?? "").trim());
 const httpsBase = (v: string | undefined) => {
@@ -34,6 +35,8 @@ export interface SensesConfig {
   omni: OwnEndpoint | null;
   novela: OwnEndpoint | null;
   openrouterKey: string;
+  /** Reserva paga de decisão ligada? (ALLOW_PAID + chave; VERTAL_DECIDE_JEV=false desliga) */
+  decideJev: boolean;
   /** Modelo de decisão da reserva paga (Decisions API do OpenRouter). */
   jevModel: string;
   /**
@@ -45,7 +48,7 @@ export interface SensesConfig {
   visionFallbackModel: string;
 }
 
-function endpoint(env: VcaEnv, name: "DECIDE" | "OMNI" | "NOVELA"): OwnEndpoint | null {
+function endpoint(env: VcaEnv, name: "OMNI" | "NOVELA"): OwnEndpoint | null {
   const url = httpsBase(env[`VERTAL_OWN_${name}_URL`]);
   const token = (env[`VERTAL_OWN_${name}_TOKEN`] ?? "").trim();
   return url && token ? { url, token } : null;
@@ -55,12 +58,17 @@ export function sensesConfig(env: VcaEnv): SensesConfig {
   return {
     media: truthy(env.VERTAL_CODE_AI_MEDIA_ENABLED),
     allowPaid: truthy(env.VERTAL_CODE_AI_ALLOW_PAID),
-    decide: endpoint(env, "DECIDE"),
+    // Mesmo endpoint da Equipe (decide.ts): VERTAL_OWN_DECIDE_* ou o apelido VERTAL_DECIDE_*.
+    decide: (() => {
+      const o = ownDecideFromEnv(env);
+      return o ? { url: o.url, token: o.token } : null;
+    })(),
     omni: endpoint(env, "OMNI"),
     novela: endpoint(env, "NOVELA"),
     openrouterKey: (env.OPENROUTER_API_KEY ?? "").trim(),
-    jevModel: (env.VERTAL_OWN_DECIDE_FALLBACK_MODEL ?? "").trim() || "typesafe/jev-1.14",
-    decideImagesOwn: truthy(env.VERTAL_OWN_DECIDE_IMAGES),
+    decideJev: jevConfigured(env),
+    jevModel: jevModel(env),
+    decideImagesOwn: truthy(env.VERTAL_OWN_DECIDE_IMAGES) || truthy(env.VERTAL_DECIDE_IMAGES),
     visionFallbackModel: (env.VERTAL_OWN_OMNI_FALLBACK_MODEL ?? "").trim() || "google/gemini-3.1-flash-lite",
   };
 }
@@ -199,29 +207,23 @@ async function postJson(deps: SensesDeps, url: string, headers: Record<string, s
  * formato). Devolve null se nenhuma responder (quem chamou segue o caminho seguro padrão).
  */
 export async function decide(cfg: SensesConfig, deps: SensesDeps, state: string | StatePart[], questions: DecisionQuestions): Promise<DecideResult | null> {
+  // Rede pelo cliente ÚNICO do Vertal Decide (decide.ts); aqui só o formato de resposta dos Sentidos.
   const now = deps.now ?? Date.now;
   const t0 = now();
-  const timeout = deps.timeoutMs ?? 25_000;
-  const hasImage = Array.isArray(state) && state.some((p) => typeof p !== "string");
-  const paidOk = cfg.allowPaid && !!cfg.openrouterKey;
-  if (cfg.decide && (!hasImage || cfg.decideImagesOwn || !paidOk)) {
-    const r = await postJson(deps, `${cfg.decide.url}/v1/systemone`, { Authorization: `Bearer ${cfg.decide.token}` }, { state, questions }, timeout);
-    const answers = r.ok ? normalizeAnswers(r.data, questions) : null;
-    if (answers) return { answers, source: "own", ms: now() - t0, costUsd: 0 };
-  }
-  if (paidOk) {
-    const r = await postJson(deps, "https://openrouter.ai/api/alpha/decisions", {
-      Authorization: `Bearer ${cfg.openrouterKey}`,
-      "HTTP-Referer": "https://vertal.dev",
-      "X-Title": "VERTAL Code AI",
-    }, { model: cfg.jevModel, state, questions }, 15_000);
-    const answers = r.ok ? normalizeAnswers(r.data, questions) : null;
-    if (answers) {
-      const cost = (r.data as { usage?: { cost?: unknown } })?.usage?.cost;
-      return { answers, source: "fallback", ms: now() - t0, costUsd: typeof cost === "number" ? cost : 0 };
-    }
-  }
-  return null;
+  const r = await requestDecision(
+    {
+      own: cfg.decide,
+      jev: cfg.decideJev && cfg.allowPaid && cfg.openrouterKey ? { key: cfg.openrouterKey, model: cfg.jevModel } : null,
+      imagesOwn: cfg.decideImagesOwn,
+    },
+    deps.fetch as unknown as DecideFetch,
+    state,
+    questions,
+    { accept: (d) => normalizeAnswers(d, questions) !== null, timeoutMs: deps.timeoutMs ?? 25_000, jevTimeoutMs: 15_000 },
+  );
+  if (!r) return null;
+  const answers = normalizeAnswers(r.data, questions)!;
+  return r.source === "own" ? { answers, source: "own", ms: now() - t0, costUsd: 0 } : { answers, source: "fallback", ms: now() - t0, costUsd: r.costUsd ?? 0 };
 }
 
 // ───────────────────────────── Vertal Visão (produto) ─────────────────────────────

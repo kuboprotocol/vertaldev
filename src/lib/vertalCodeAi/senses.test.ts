@@ -120,6 +120,17 @@ describe('Vertal Decide', () => {
     expect((await decide(sensesConfig(OWN), { fetch: c.f }, img, PRODUCT_QUESTIONS))?.source).toBe('own');
   });
 
+  it('aceita o apelido VERTAL_DECIDE_* (mesmo endpoint da Equipe) e VERTAL_DECIDE_JEV=false desliga a reserva', async () => {
+    const cfg = sensesConfig({ VERTAL_CODE_AI_MEDIA_ENABLED: 'true', VERTAL_DECIDE_URL: 'https://decide.example.run/v1/systemone', VERTAL_DECIDE_TOKEN: 'd' });
+    expect(isSensesFeatureOn(cfg, 'decide')).toBe(true);
+    const { f, calls } = fakeFetch(() => ({ json: productAnswers }));
+    expect((await decide(cfg, { fetch: f }, 'x', PRODUCT_QUESTIONS))?.source).toBe('own');
+    expect(calls[0].url).toBe('https://decide.example.run/v1/systemone');
+    const off = fakeFetch((c) => (c.url.includes('decide.example') ? { ok: false, status: 503 } : { json: productAnswers }));
+    expect(await decide(sensesConfig({ ...OWN, ...PAID, VERTAL_DECIDE_JEV: 'false' }), { fetch: off.f }, 'x', PRODUCT_QUESTIONS)).toBeNull();
+    expect(off.calls).toHaveLength(1);
+  });
+
   it('própria respondendo: custo zero de API e Bearer próprio', async () => {
     const { f, calls } = fakeFetch(() => ({ json: productAnswers }));
     const r = await decide(sensesConfig({ ...OWN, ...PAID }), { fetch: f }, 'x', PRODUCT_QUESTIONS);

@@ -219,8 +219,9 @@ Modo novo, **ao lado** do `run` de sempre (ação `team_run`; o `run` não mudou
 | `VERTAL_CODE_AI_TEAM_MEMORY` | ligada (precisa da migração) | `false` desliga a memória |
 | `VERTAL_CODE_AI_TEAM_EMBEDDINGS` | ligado | `false` = memória só por palavras |
 | `VERTAL_CODE_AI_TEAM_E2B` (+ `E2B_API_KEY`) / `_E2B_TIMEOUT_MS` | desligado / 45 000 | Revisor testa no sandbox |
-| `VERTAL_DECIDE_URL` / `_TOKEN` / `_MODEL` | — | Modelo de decisão próprio (GPU) |
-| `VERTAL_DECIDE_JEV_MODEL` / `VERTAL_DECIDE_JEV` | `typesafe/jev-1.14` / ligado | Decisões via OpenRouter (só com `VERTAL_CODE_AI_ALLOW_PAID`) |
+| `VERTAL_OWN_DECIDE_URL` / `_TOKEN` / `_MODEL` (apelido antigo: `VERTAL_DECIDE_URL` / `_TOKEN` / `_MODEL`) | — | Modelo de decisão próprio (GPU) — **o mesmo** para a Equipe e os Sentidos (§13). URL = base do app (o cliente acrescenta `/v1/systemone`) ou endpoint completo `…/v1/<algo>`. Se os dois nomes existirem, `VERTAL_OWN_DECIDE_*` vence |
+| `VERTAL_DECIDE_JEV_MODEL` (ou `VERTAL_OWN_DECIDE_FALLBACK_MODEL`) / `VERTAL_DECIDE_JEV` | `typesafe/jev-1.14` / ligado | Decisões via OpenRouter (só com `VERTAL_CODE_AI_ALLOW_PAID`) |
+| `VERTAL_OWN_DECIDE_IMAGES` | desligado | Decisão **com foto** vai à reserva paga (padrão, ~0,3 s) em vez da própria (~15 s); `true` força a própria |
 | `VERTAL_DECIDE_HIGH` / `_MEDIUM` | 0,80 / 0,55 | Limites de confiança |
 
 O projeto está no limite de 100 segredos: todas as chaves `VERTAL_CODE_AI_TEAM_*` e `VERTAL_DECIDE_*` também podem ir
@@ -245,8 +246,9 @@ O projeto está no limite de 100 segredos: todas as chaves `VERTAL_CODE_AI_TEAM_
 
 **Vertal Decide** (`_shared/vertalCodeAi/decide.ts`): camada de decisão rápida e tipada para bifurcações simples, no
 lugar de uma chamada de LLM inteira. Perguntas `noul` (sim/não), `choice` e `score`, cada uma com probabilidade.
-Interface única `decide(state, questions)`; provedores: **própria** (`VERTAL_DECIDE_URL`, contrato = corpo e resposta da
-Decisions API: `POST {model?, state, questions}` → `{answers}`; o kit da GPU própria `infra/vertal-gpu-modal/vertal_decide.py`, feito em paralelo, já responde assim em `/v1/systemone` → use `VERTAL_DECIDE_URL=https://…modal.run/v1/systemone`) → **OpenRouter Decisions API** (`/api/alpha/decisions`,
+Interface única `decide(state, questions)`; **um só cliente HTTP** (`requestDecision` em `decide.ts`), usado também pelos
+Sentidos (§13). Provedores: **própria** (`VERTAL_OWN_DECIDE_URL` + `_TOKEN`, ou o apelido `VERTAL_DECIDE_*`; contrato = corpo e resposta da
+Decisions API: `POST {model?, state, questions}` → `{answers}`, servido por `infra/vertal-gpu-modal/vertal_decide.py` em `/v1/systemone`) → **OpenRouter Decisions API** (`/api/alpha/decisions`,
 chave `OPENROUTER_API_KEY` que já existe; cobrado por token de entrada, por isso só com `ALLOW_PAID`) → **LLM barata** com
 JSON (confiança limitada abaixo de "alta") → nenhum (padrão seguro). Regra: **alta age, média sobe para modelo maior,
 baixa pergunta ao usuário** (as perguntas aparecem no pacote final).
@@ -428,6 +430,7 @@ Ações (POST na função `vertal-code-ai`):
 
 Decisões com imagem: por padrão vão direto à reserva (medido: própria quente ~15 s por foto vs reserva ~0,3 s);
 `VERTAL_OWN_DECIDE_IMAGES=true` força a própria. Texto na própria: ~0,2 s. Sem `ALLOW_PAID`, tudo fica na própria.
+A rede do Decide passa pelo mesmo cliente da Equipe (`requestDecision` em `decide.ts`): mesma URL, token e reserva.
 
 Tela: botão de olho no cabeçalho do `/vertal-code-ai` abre o painel "Visão · Ouvir · Novela" (`VertalSensesPanel`).
 

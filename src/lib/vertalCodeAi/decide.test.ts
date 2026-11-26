@@ -8,6 +8,8 @@ import {
   makeDecider,
   normalizeAnswers,
   ownDecideConfigured,
+  ownDecideEndpointUrl,
+  ownDecideFromEnv,
   tierFor,
   type DecisionQuestions,
 } from '../../../supabase/functions/_shared/vertalCodeAi/decide';
@@ -177,5 +179,36 @@ describe('Vertal Decide · ferramenta de análise (causa principal + risco + con
     const none = await analyzeWithDecide({ dossier: 'x' }, { decide: async () => ({ source: 'none', answers: {}, ms: 0 }) });
     expect(none.mainCause).toBeNull();
     expect(none.tier).toBe('ask');
+  });
+});
+
+describe('Vertal Decide · cliente único (Equipe e Sentidos no mesmo endpoint)', () => {
+  const API = { answers: API_ANSWERS };
+  it('VERTAL_OWN_DECIDE_* (dos Sentidos) e o apelido VERTAL_DECIDE_* resolvem para o mesmo endpoint', () => {
+    const a = ownDecideFromEnv({ VERTAL_OWN_DECIDE_URL: 'https://kuboprotocol--vertal-decide-decide-web.us-east.modal.run/', VERTAL_OWN_DECIDE_TOKEN: 't' });
+    const b = ownDecideFromEnv({ VERTAL_DECIDE_URL: 'https://kuboprotocol--vertal-decide-decide-web.us-east.modal.run/v1/systemone', VERTAL_DECIDE_TOKEN: 't' });
+    expect(ownDecideEndpointUrl(a!.url)).toBe('https://kuboprotocol--vertal-decide-decide-web.us-east.modal.run/v1/systemone');
+    expect(ownDecideEndpointUrl(b!.url)).toBe(ownDecideEndpointUrl(a!.url));
+    // O nome canônico vence o apelido.
+    expect(ownDecideFromEnv({ VERTAL_OWN_DECIDE_URL: 'https://own.example', VERTAL_OWN_DECIDE_TOKEN: 'o', VERTAL_DECIDE_URL: 'https://old.example', VERTAL_DECIDE_TOKEN: 'x' })?.token).toBe('o');
+    expect(ownDecideConfigured({ VERTAL_OWN_DECIDE_URL: 'https://own.example', VERTAL_OWN_DECIDE_TOKEN: 'o' })).toBe(true);
+  });
+
+  it('a Equipe usa a config dos Sentidos (VERTAL_OWN_DECIDE_*) e chama /v1/systemone', async () => {
+    const { f, calls } = fakeFetch({ 'https://own.example/v1/systemone': () => ({ json: API }) });
+    const r = await makeDecider({ fetch: f, env: { VERTAL_OWN_DECIDE_URL: 'https://own.example', VERTAL_OWN_DECIDE_TOKEN: 'o' } })({ a: 1 }, Q);
+    expect(r.source).toBe('own');
+    expect(calls[0].url).toBe('https://own.example/v1/systemone');
+    expect(calls[0].headers.Authorization).toBe('Bearer o');
+  });
+
+  it('foto no estado: com reserva paga vai à reserva (padrão), a menos que VERTAL_OWN_DECIDE_IMAGES=true', async () => {
+    const img = ['foto', { type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } }];
+    const env = { VERTAL_OWN_DECIDE_URL: 'https://own.example', VERTAL_OWN_DECIDE_TOKEN: 'o', OPENROUTER_API_KEY: 'k', VERTAL_CODE_AI_ALLOW_PAID: 'true' };
+    const a = fakeFetch({ 'https://own.example': () => ({ json: API }), 'https://openrouter.ai/api/alpha/decisions': () => ({ json: API }) });
+    expect((await makeDecider({ fetch: a.f, env })(img, Q)).source).toBe('jev');
+    expect(a.calls.map((c) => c.url)).toEqual(['https://openrouter.ai/api/alpha/decisions']);
+    const b = fakeFetch({ 'https://own.example': () => ({ json: API }) });
+    expect((await makeDecider({ fetch: b.f, env: { ...env, VERTAL_OWN_DECIDE_IMAGES: 'true' } })(img, Q)).source).toBe('own');
   });
 });
