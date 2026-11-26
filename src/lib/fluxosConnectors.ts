@@ -135,6 +135,7 @@ const FLUXOS_APP_LOGOS: Record<string, string> = {
   libretranslate: '/connectors/libretranslate.png',
   mailchimp: '/connectors/mailchimp.png',
   mailerlite: '/connectors/mailerlite.png',
+  'meta-ads': '/connectors/meta-ads.png',
   gitlab: '/connectors/gitlab.webp',
   gitea: '/connectors/gitea.png',
   ghost: '/connectors/ghost.png',
