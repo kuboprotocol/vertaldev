@@ -237,32 +237,3 @@ class Decide:
             }
 
         return api
-
-
-@app.function(image=image, gpu=["L4", "A10G"], volumes={"/cache/hf": hf_vol}, timeout=600)
-def selftest():
-    """Diagnóstico: carrega o modelo e decide uma frase; grava o resultado no Dict "vertal-diag"."""
-    import sys
-    import time
-    import traceback
-
-    diag = modal.Dict.from_name("vertal-diag", create_if_missing=True)
-    log = []
-    try:
-        from huggingface_hub import snapshot_download
-
-        t0 = time.time()
-        path = snapshot_download(REPO, local_files_only=True)
-        sys.path.insert(0, path)
-        from inference import DecisionEngine
-
-        eng = DecisionEngine(checkpoint=path, media_root="/tmp", device="cuda")
-        log.append(f"load_s {round(time.time() - t0, 1)}")
-        for _ in range(2):
-            t = time.time()
-            r = eng.predict({"state": "I was charged twice, please refund.", "questions": {"refund": {"type": "noul", "instructions": "Is the customer asking for money back?"}}})
-            log.append(f"{round((time.time() - t) * 1000)} ms {r['answers']}")
-    except Exception:
-        log.append(traceback.format_exc()[-3000:])
-    diag["decide"] = "\n".join(log)
-    print("\n".join(log))
