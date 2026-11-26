@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, AlertCircle, Loader2, Wallet } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -11,11 +11,16 @@ import AnimatedLogo from '@/components/branding/AnimatedLogo'
 import TerraRewardsPanel from '@/components/shortlinks/TerraRewardsPanel'
 import RewardedVideoPanel from '@/components/shortlinks/RewardedVideoPanel'
 import VertalNodeCard from '@/components/shortlinks/VertalNodeCard'
+import KuboMusicPanel from '@/components/shortlinks/KuboMusicPanel'
+import DailyChecklistCard from '@/components/shortlinks/DailyChecklistCard'
+import { fetchDailyChecklist, type DailyChecklist } from '@/lib/dailyRewards'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 
 /**
- * Painel de recompensas (/recompensas): vídeo premiado, Vertal Node, TERRA ADS e saldo.
+ * Painel de recompensas (/recompensas): checklist do dia, vídeo premiado, músicas do Kubo,
+ * TERRA ADS, Vertal Node (bônus opcional) e saldo. As recompensas do dia só vão para o saldo
+ * quando as 3 atividades obrigatórias (vídeo, 5 músicas, TERRA ADS) estão feitas.
  * O antigo sistema de shortlinks (vídeos curtos com crédito diário) foi desativado;
  * /shortlinks redireciona para cá.
  */
@@ -25,6 +30,8 @@ export default function RewardsPage() {
   const [loading, setLoading] = useState(true)
   const [userBalance, setUserBalance] = useState(0)
   const [userDebt, setUserDebt] = useState(0)
+  const [checklist, setChecklist] = useState<DailyChecklist | null>(null)
+  const completedRef = useRef<boolean | null>(null)
 
   const loadData = useCallback(async () => {
     if (!user) return
@@ -49,6 +56,41 @@ export default function RewardsPage() {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  // Checklist do dia: recebe o estado do servidor (status ou resposta de uma atividade).
+  const applyChecklist = useCallback(
+    (next: DailyChecklist | null | undefined) => {
+      if (!next || typeof next.completed !== 'boolean') return
+      setChecklist((prev) => ({ ...prev, ...next, music_min_seconds: next.music_min_seconds ?? prev?.music_min_seconds }))
+      const wasCompleted = completedRef.current
+      completedRef.current = next.completed
+      if (next.just_completed || (wasCompleted === false && next.completed)) {
+        toast.success('Recompensas liberadas!', {
+          description: 'Você completou todas as atividades do dia. Os créditos foram para o seu saldo.',
+        })
+        loadData()
+      }
+    },
+    [loadData],
+  )
+
+  const refreshChecklist = useCallback(async () => {
+    if (!user) return
+    try {
+      applyChecklist(await fetchDailyChecklist())
+    } catch {
+      /* o checklist é recalculado na próxima atividade */
+    }
+  }, [user, applyChecklist])
+
+  useEffect(() => {
+    refreshChecklist()
+  }, [refreshChecklist])
+
+  const onActivity = useCallback(() => {
+    loadData()
+    refreshChecklist()
+  }, [loadData, refreshChecklist])
 
   if (loading) {
     return (
@@ -80,6 +122,15 @@ export default function RewardsPage() {
           transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           className="space-y-8"
         >
+          {/* Checklist do dia (obrigatório para liberar as recompensas) */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.05 }}
+          >
+            <DailyChecklistCard checklist={checklist} />
+          </motion.div>
+
           {/* Saldo */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
@@ -128,24 +179,37 @@ export default function RewardsPage() {
             </motion.div>
           )}
 
-          {/* Vídeo premiado (AppLixir) e Vertal Node (SDKs de banda) */}
+          {/* 1. Vídeo premiado (AppLixir) e 2. Músicas do Kubo (Spotify) */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
             className="grid gap-4 md:grid-cols-2"
           >
-            <RewardedVideoPanel onCredited={loadData} />
-            <VertalNodeCard />
+            <RewardedVideoPanel onCredited={onActivity} />
+            <KuboMusicPanel checklist={checklist} onProgress={applyChecklist} />
           </motion.div>
 
-          {/* Recompensa por anúncio TERRA ADS */}
+          {/* 3. Recompensa por anúncio TERRA ADS */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.25 }}
           >
-            <TerraRewardsPanel onWithdrawn={loadData} />
+            <TerraRewardsPanel onWithdrawn={loadData} onActivity={refreshChecklist} />
+          </motion.div>
+
+          {/* Bônus opcional: Vertal Node (app desktop/Android), fora do checklist */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            className="space-y-2"
+          >
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Bônus opcional</p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <VertalNodeCard />
+            </div>
           </motion.div>
         </motion.div>
       </main>

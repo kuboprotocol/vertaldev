@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AdminTeamsPanel from "@/components/admin/AdminTeamsPanel";
+import AdminRewardsActivity from "@/components/admin/AdminRewardsActivity";
 import { Input } from "@/components/ui/input";
 import { Loader2, Shield, Users, Bot, FileText, ArrowLeft, ScrollText } from "lucide-react";
 
@@ -99,7 +100,12 @@ export default function AdminPage() {
             <TabsTrigger value="agents">Agentes ({agents.length})</TabsTrigger>
             <TabsTrigger value="teams">Teams</TabsTrigger>
             <TabsTrigger value="audits">Auditoria ({filteredAudits.length})</TabsTrigger>
+            <TabsTrigger value="rewards">Recompensas</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="rewards">
+            <AdminRewardsActivity />
+          </TabsContent>
 
           <TabsContent value="jobs">
             <Card>

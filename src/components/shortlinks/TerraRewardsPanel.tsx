@@ -32,6 +32,10 @@ interface AdRewardStatus {
   /** Presente quando a ação foi aceita. */
   success?: boolean;
   credits_withdrawn?: number;
+  /** Checklist diário: cliques de hoje esperando as 3 atividades do dia (opcionais em respostas antigas). */
+  clicks_today?: number;
+  pending_today?: number;
+  expired?: number;
 }
 
 const credits = (n: number) =>
@@ -159,8 +163,11 @@ function WatchableAd({ onReady }: { onReady: (ready: boolean) => void }) {
 
 export default function TerraRewardsPanel({
   onWithdrawn,
+  onActivity,
 }: {
   onWithdrawn?: () => void;
+  /** Chamado depois de um anúncio aceito (atualiza o checklist do dia). */
+  onActivity?: () => void;
 }) {
   const [status, setStatus] = useState<AdRewardStatus | null>(null);
   const [failed, setFailed] = useState(false);
@@ -201,6 +208,7 @@ export default function TerraRewardsPanel({
       setAdReady(false);
       if (next.success) {
         toast.success(`+${credits(next.reward_per_click)} crédito`);
+        onActivity?.();
       } else {
         toast.info("Ainda não deu 1 hora desde o último anúncio.");
       }
@@ -297,6 +305,11 @@ export default function TerraRewardsPanel({
               </p>
             </div>
             <Progress value={progress} className="mt-2 h-2" />
+            {(status.pending_today ?? 0) > 0 && (
+              <p className="mt-2 text-xs text-muted-foreground" data-testid="terra-rewards-pending-today">
+                +{credits(status.pending_today ?? 0)} de hoje aguardando as atividades do dia.
+              </p>
+            )}
           </div>
 
           {status.can_click ? (

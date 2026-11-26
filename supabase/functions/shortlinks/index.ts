@@ -8,6 +8,7 @@ import {
   AD_TYPE_CLICK,
   AD_TYPE_WITHDRAWAL,
   handleAdReward,
+  type AdGating,
   type AdRewardAction,
   type AdRewardRow,
   type AdRewardStore,
@@ -74,6 +75,23 @@ function adRewardStore(): AdRewardStore {
         _idempotency_key: idempotencyKey,
       });
       if (error) throw error;
+    },
+    // Checklist diário: dias completos e início da regra (public.terra_reward_gating).
+    async gating(userId): Promise<AdGating | null> {
+      const { data, error } = await admin.rpc("terra_reward_gating", { _user_id: userId, _tz: "America/Sao_Paulo" });
+      if (error || !data) {
+        console.error("[shortlinks] terra_reward_gating failed:", error);
+        return null;
+      }
+      const g = data as { gating_started_at: string | null; completed_days: string[] };
+      const startMs = g.gating_started_at ? Date.parse(g.gating_started_at) : NaN;
+      if (!Number.isFinite(startMs)) return null;
+      return { startMs, completedDays: g.completed_days ?? [] };
+    },
+    async afterClick(userId) {
+      const { data, error } = await admin.rpc("release_daily_rewards", { _user_id: userId, _tz: "America/Sao_Paulo" });
+      if (error) throw error;
+      return data as Record<string, unknown>;
     },
   };
 }

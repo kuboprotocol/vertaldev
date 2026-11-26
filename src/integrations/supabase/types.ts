@@ -4991,6 +4991,23 @@ export type Database = {
           user_id: string
         }[]
       }
+      admin_reward_daily_activity: {
+        Args: { _days?: number; _tz?: string }
+        Returns: {
+          completed: boolean
+          completed_at: string | null
+          email: string | null
+          expired_credits: number
+          music_tracks_counted: number
+          music_tracks_total: number
+          pending_credits: number
+          released_credits: number
+          reward_day: string
+          terra_ads: number
+          user_id: string
+          videos: number
+        }[]
+      }
       apply_credit_debt: {
         Args: { _reward_amount: number; _user_id: string }
         Returns: {

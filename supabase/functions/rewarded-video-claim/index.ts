@@ -6,6 +6,8 @@
 //   claim  -> { nonce } depois do "complete" (AppLixir) / rewardedSlotGranted (GAM); marca o nonce
 //             como usado e credita. Recusa (too_soon) se o resgate vier antes do tempo mínimo de vídeo.
 //
+// Checklist diário: o crédito do vídeo entra como pendente (reward_events.status='pending') e só vai
+// para o saldo quando o usuário completa vídeo + 5 músicas do Kubo + TERRA ADS no dia (função daily-rewards).
 // Idempotência: o nonce só credita uma vez (claim_rewarded_video trava e marca na mesma
 // transação; o crédito usa a chave "rewarded_video:<nonce>" em credit_transactions).
 // Cooldown e limite diário são conferidos de novo no Postgres, com o dia em America/Sao_Paulo.
@@ -111,13 +113,27 @@ Deno.serve(async (req) => {
         _tz: REWARDS_TZ,
       });
       if (error) throw error;
-      const result = data as { ok: boolean; error?: string; credits?: number };
+      const result = data as {
+        ok: boolean;
+        error?: string;
+        credits?: number;
+        pending?: boolean;
+        checklist?: Record<string, unknown>;
+      };
       const status = await loadStatus();
       if (!result.ok) {
         const code = result.error ?? "claim_failed";
         return json({ error: code, ...status }, CLAIM_ERRORS[code] ?? 400);
       }
-      return json({ success: true, credits_earned: result.credits, ...status });
+      // Desde o checklist diário (2026-11-26) o crédito fica pendente até o usuário completar todas as
+      // atividades do dia; `pending` diz se ainda está pendente e `checklist` traz o estado do dia.
+      return json({
+        success: true,
+        credits_earned: result.credits,
+        pending: result.pending ?? false,
+        checklist: result.checklist ?? null,
+        ...status,
+      });
     }
 
     return json({ error: "unknown_action" }, 400);

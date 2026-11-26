@@ -33,6 +33,8 @@ export interface RewardedVideoStatus {
   nonce?: string;
   success?: boolean;
   credits_earned?: number;
+  /** true quando o crédito ficou pendente até o checklist do dia fechar. */
+  pending?: boolean;
   error?: string;
 }
 
@@ -147,8 +149,11 @@ export default function RewardedVideoPanel({
           setStatus(claimed);
           setNow(Date.now());
           if (claimed.success) {
+            const n = claimed.credits_earned ?? 1;
             toast.success(
-              `+${claimed.credits_earned} crédito${claimed.credits_earned === 1 ? "" : "s"} pelo vídeo!`,
+              claimed.pending
+                ? `Vídeo concluído! +${n} crédito${n === 1 ? "" : "s"} pendente${n === 1 ? "" : "s"}: complete as atividades do dia para liberar.`
+                : `+${n} crédito${n === 1 ? "" : "s"} pelo vídeo!`,
             );
             onCredited?.();
           } else {
