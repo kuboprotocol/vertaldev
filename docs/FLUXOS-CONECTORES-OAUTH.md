@@ -214,3 +214,16 @@ a assinatura do `signed_request` (HMAC-SHA256) é conferida com `FLUXOS_OAUTH_ME
   apagado e como pedir.
 - `pending_review`: rodar de novo a busca quando o motor voltar (ou apagar à mão) e atualizar o status.
 - Não cobre o canal do operador (`virtual-chat-instagram-webhook`, conta do próprio Vertal).
+
+## Cloudflare (26/11/2026)
+
+- A Cloudflare abriu o **OAuth self-managed** para todos os planos (03/06/2026). Cliente **Vertal Dev** criado na conta
+  `43233355e2f598902aab32fce90d2edd` (Manage Account → OAuth clients): client ID `00d74ade9c1be1bfb6b998f7d47d46d7`
+  (em `PUBLIC_OAUTH_CLIENT_IDS.CLOUDFLARE`), segredo em `FLUXOS_OAUTH_CLOUDFLARE_SECRET`, `client_secret_post`,
+  `authorization_code` + `refresh_token`, retorno `https://vertal.dev/fluxos/oauth/cloudflare`.
+- Escopos: `user-details.read account-settings.read memberships.read zone.read dns.read dns.write workers-scripts.read
+  workers-scripts.write workers-routes.write` + opcionais `workers-kv-storage.write page.write cache.purge` + `offline_access`.
+- Visibilidade: clientes novos nascem **private** (só membros da conta autorizam). Para qualquer usuário: verificar o
+  domínio do client URL (TXT `cloudflare_oauth_client_publisher=…` em vertal.dev) e promover a **public** (permanente).
+- Motor: app `cloudflare` (fork PR #17). Tela: `/connectors/cloudflare/setup` abre com "Entrar com Cloudflare";
+  o API token (link com permissões pré-marcadas) fica em "Avançado".

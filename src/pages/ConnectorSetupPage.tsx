@@ -258,6 +258,30 @@ export default function ConnectorSetupPage() {
           </Card>
         )}
 
+        {slug === 'cloudflare' && (
+          <div className="space-y-3" data-testid="cloudflare-oauth-panel">
+            {/* Conexão do próprio cliente: "Entrar com Cloudflare" (OAuth da Cloudflare, app Vertal Dev). */}
+            <FluxosConnectPanel
+              app="cloudflare"
+              name="Cloudflare"
+              returnPath="/connectors/cloudflare/setup"
+              intro="Você entra na Cloudflare, escolhe a conta e confirma as permissões (domínios, DNS, Workers e, se quiser, Pages, KV e limpeza de cache). Depois, peça no Vertal Chat para listar domínios, criar registros DNS, ver Workers ou limpar o cache (sempre com a sua confirmação). Dá para revogar quando quiser na Cloudflare ou aqui."
+            />
+            {!existing && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowToken((v) => !v)}
+                aria-expanded={showToken}
+                data-testid="cloudflare-token-toggle"
+              >
+                <KeyRound className="h-4 w-4 mr-2" />
+                {showToken ? 'Ocultar avançado' : 'Avançado: usar API token'}
+              </Button>
+            )}
+          </div>
+        )}
+
         {slug === 'github' && githubProfile && (
           <Card className="p-5 border-emerald-500/40 bg-emerald-500/5">
             <div className="flex items-center gap-4">
@@ -337,7 +361,7 @@ export default function ConnectorSetupPage() {
           </Card>
         )}
 
-        {(slug !== 'github' || showToken || Boolean(existing)) && (<>
+        {((slug !== 'github' && slug !== 'cloudflare') || showToken || Boolean(existing)) && (<>
         {/* Steps */}
         <div className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
@@ -375,9 +399,9 @@ export default function ConnectorSetupPage() {
               <KeyRound className="h-5 w-5 text-primary" />
               <h2 className="font-semibold">Connect à Vertal</h2>
             </div>
-            {connector.slug === 'github' && (
+            {(connector.slug === 'github' || connector.slug === 'cloudflare') && (
               <Badge variant="outline" className="text-[10px] uppercase font-bold text-primary border-primary/40">
-                Avançado · token pessoal
+                {connector.slug === 'cloudflare' ? 'Avançado · API token' : 'Avançado · token pessoal'}
               </Badge>
             )}
           </div>

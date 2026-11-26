@@ -212,6 +212,7 @@ export const PUBLIC_OAUTH_CLIENT_IDS: Record<string, string> = {
   SALESFORCE: "3MVG91oqviqJKoEGlsDbC_qpa6kxtDvqHmT1RB8m9ZgtVuXobIRB7lnwbiv_kMwKsrbRHfEKA_DvK3zqWgZWf",
   DISQUS: "g2xONmGKzLvMczFI9qH0ehpRecS5W8WXCjgyFtftmC8AvpkarI6XMYHQ2yPKUe4s",
   GITLAB: "6f676bf3b29c5b4d9d645ba7411c9d8d52711b08d0e42d6dd4a837bd083adca6",
+  CLOUDFLARE: "00d74ade9c1be1bfb6b998f7d47d46d7",
 };
 
 /**
