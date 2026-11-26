@@ -1,44 +1,31 @@
-// Vertal Growth Team · textos da tela em pt-BR, en e es (idioma do dev: navegador, ou o do pedido no chat).
-import type { GrowthLang } from '../../../supabase/functions/_shared/vertalGrowth/core';
+// Vertal Growth Team · textos da tela nos 21 idiomas das páginas de SEO do CRM grátis (pt-BR, en e es aqui;
+// os outros 18 em ./locales). Idioma do dev: ?lang / pedido no chat → idioma salvo → navegador → pt-BR.
+// O servidor (rascunhos para leads, rodapés legais) continua em pt/en/es: `growthServerLang` escolhe o mais próximo.
+import { baseUiLang, resolveUiLang, uiDir, uiLocale, type UiLang } from '../../../supabase/functions/_shared/vertalUiLang';
+import { GROWTH_LOCALE_SOURCES } from './locales';
 
-export function uiLangFrom(...hints: Array<string | null | undefined>): GrowthLang {
-  for (const h of hints) {
-    const s = (h ?? '').toLowerCase();
-    if (s.startsWith('pt')) return 'pt';
-    if (s.startsWith('es')) return 'es';
-    if (s.startsWith('en')) return 'en';
-  }
-  return 'pt';
+export type { UiLang };
+export { uiDir, uiLocale };
+/** Idioma do conteúdo gerado no servidor (só pt/en/es): pt-PT → pt, es → es, os demais → en. */
+export const growthServerLang = (lang: UiLang): 'pt' | 'en' | 'es' => baseUiLang(lang);
+
+export function uiLangFrom(...hints: Array<string | null | undefined>): UiLang {
+  return resolveUiLang(...hints);
 }
 
-export function browserLang(): GrowthLang {
+export function browserLang(): UiLang {
   return uiLangFrom(typeof navigator !== 'undefined' ? navigator.language : 'pt-BR');
 }
 
-/**
- * Idioma nativo do usuário guardado pelo Vertal CRM/Growth (idioma do workspace do CRM ou o que o servidor
- * devolveu), para que as telas não caiam no idioma do navegador (ex.: navegador em inglês de um usuário brasileiro).
- */
-export const VERTAL_UI_LANG_KEY = 'vertal-ui-lang';
-export function storedUiLang(): string | null {
-  try {
-    return typeof localStorage !== 'undefined' ? localStorage.getItem(VERTAL_UI_LANG_KEY) : null;
-  } catch {
-    return null;
-  }
-}
-export function rememberUiLang(lang: string | null | undefined): void {
-  if (!lang) return;
-  try {
-    if (typeof localStorage !== 'undefined') localStorage.setItem(VERTAL_UI_LANG_KEY, lang);
-  } catch { /* modo privado */ }
-}
-/** Ordem: pedido explícito (?lang / comando do chat) → idioma salvo do usuário → navegador → pt-BR. */
-export function preferredUiLang(explicit?: string | null): GrowthLang {
-  return uiLangFrom(explicit, storedUiLang(), typeof navigator !== 'undefined' ? navigator.language : null);
-}
+export { VERTAL_UI_LANG_KEY, storedUiLang, rememberUiLang, preferredUiLang } from '../vertalUiLang';
 
 const pt = {
+  entryLabel: 'Buscar clientes',
+  stageNames: {
+    business: { captacao: 'Captação', conversao: 'Conversão', retencao: 'Retenção' },
+    donor: { captacao: 'Captação de doadores', conversao: 'Primeira doação', retencao: 'Doação recorrente' },
+  },
+  reminderTitle: (project: string) => `Vertal Growth · ${project}: revisar aprovações e atualizar etapas`,
   title: 'Vertal Growth · equipe de crescimento',
   subtitle: 'Captação, conversão e retenção para o seu projeto. Nada é enviado sem a sua aprovação.',
   back: 'Voltar',
@@ -70,7 +57,7 @@ const pt = {
   launched: 'Equipe lançada. Agora confirme o cliente ideal na Captação.',
   stage: 'Etapa',
   leads: 'Leads', contacted: 'Contatados', replies: 'Respostas', optedOut: 'Não contatar',
-  engaged: 'Interessados', conversions: 'Conversões', drafts: 'Rascunhos',
+  engaged: 'Interessados', conversions: 'Conversões', drafts: 'Rascunhos', draftLabel: 'rascunho',
   activeCustomers: 'Clientes ativos', activeDonors: 'Doadores ativos', atRisk: 'Em risco', churned: 'Cancelaram', wonBack: 'Recuperados',
   openCapture: 'Abrir a Captação (ICP, leads e 1º contato)',
   icpPending: 'Confirme o cliente ideal antes de buscar leads.',
@@ -157,6 +144,12 @@ type Dict = typeof pt;
 
 const en: Dict = {
   ...pt,
+  entryLabel: 'Find customers',
+  stageNames: {
+    business: { captacao: 'Lead generation', conversao: 'Conversion', retencao: 'Retention' },
+    donor: { captacao: 'Donor outreach', conversao: 'First donation', retencao: 'Recurring giving' },
+  },
+  reminderTitle: (project: string) => `Vertal Growth · ${project}: review approvals and update stages`,
   title: 'Vertal Growth · growth team',
   subtitle: 'Lead generation, conversion and retention for your project. Nothing is sent without your approval.',
   back: 'Back', campaigns: 'Campaigns', newCampaign: 'New campaign', project: 'Project', pickProject: 'Pick a project…',
@@ -175,7 +168,7 @@ const en: Dict = {
   launchConfirm: (n: number) => `Launch the growth team? ${n} credits will be debited once.`,
   launching: 'Setting up the team… (can take up to 2 minutes)', launched: 'Team launched. Now confirm the ideal customer in Lead generation.',
   stage: 'Stage', leads: 'Leads', contacted: 'Contacted', replies: 'Replies', optedOut: 'Do not contact',
-  engaged: 'Interested', conversions: 'Conversions', drafts: 'Drafts',
+  engaged: 'Interested', conversions: 'Conversions', drafts: 'Drafts', draftLabel: 'draft',
   activeCustomers: 'Active customers', activeDonors: 'Active donors', atRisk: 'At risk', churned: 'Cancelled', wonBack: 'Won back',
   openCapture: 'Open Lead generation (ICP, leads and first contact)', icpPending: 'Confirm the ideal customer before searching for leads.',
   sync: 'Update stages', syncing: 'Updating…',
@@ -222,6 +215,12 @@ const en: Dict = {
 
 const es: Dict = {
   ...pt,
+  entryLabel: 'Buscar clientes',
+  stageNames: {
+    business: { captacao: 'Captación', conversao: 'Conversión', retencao: 'Retención' },
+    donor: { captacao: 'Captación de donantes', conversao: 'Primera donación', retencao: 'Donación recurrente' },
+  },
+  reminderTitle: (project: string) => `Vertal Growth · ${project}: revisar aprobaciones y actualizar etapas`,
   title: 'Vertal Growth · equipo de crecimiento',
   subtitle: 'Captación, conversión y retención para su proyecto. Nada se envía sin su aprobación.',
   back: 'Volver', campaigns: 'Campañas', newCampaign: 'Nueva campaña', project: 'Proyecto', pickProject: 'Elija el proyecto…',
@@ -240,7 +239,7 @@ const es: Dict = {
   launchConfirm: (n: number) => `¿Lanzar el equipo de crecimiento? Se descontarán ${n} créditos una vez.`,
   launching: 'Armando el equipo… (puede tardar hasta 2 minutos)', launched: 'Equipo lanzado. Ahora confirme el cliente ideal en Captación.',
   stage: 'Etapa', leads: 'Leads', contacted: 'Contactados', replies: 'Respuestas', optedOut: 'No contactar',
-  engaged: 'Interesados', conversions: 'Conversiones', drafts: 'Borradores',
+  engaged: 'Interesados', conversions: 'Conversiones', drafts: 'Borradores', draftLabel: 'borrador',
   activeCustomers: 'Clientes activos', activeDonors: 'Donantes activos', atRisk: 'En riesgo', churned: 'Cancelaron', wonBack: 'Recuperados',
   openCapture: 'Abrir Captación (ICP, leads y 1er contacto)', icpPending: 'Confirme el cliente ideal antes de buscar leads.',
   sync: 'Actualizar etapas', syncing: 'Actualizando…',
@@ -285,5 +284,50 @@ const es: Dict = {
   },
 };
 
-export const GROWTH_UI: Record<GrowthLang, Dict> = { pt, en, es };
+// ─── Os outros 18 idiomas: textos simples + modelos com {marcadores} (./locales) ─────────────
+type Fn = (...a: never[]) => unknown;
+type StripFns<T> = { [K in keyof T as T[K] extends Fn ? never : K]: T[K] extends string ? string : StripFns<T[K]> };
+export interface GrowthFx {
+  /** {n} = porcentagem */ confidence: string;
+  /** {n} */ costLaunch: string; costRun: string; launch: string; launchConfirm: string; forwarded: string; teamReady: string;
+  /** {newLeads} {engaged} {customers} {atRisk} {drafts} {auto} (= syncAuto com {n}, ou vazio) */ syncDone: string; syncAuto: string;
+  /** {n} {c} */ forwardConfirm: string; teamConfirm: string;
+  /** {to} */ sendConfirm: string;
+  /** {d} */ readyAt: string;
+  /** {f} */ needsField: string;
+  /** {s} {c} */ dailyCap: string;
+  /** {project} */ reminderTitle: string;
+}
+export type GrowthLocaleSource = StripFns<Dict> & { fx: GrowthFx };
+
+const fill = (tpl: string, vars: Record<string, string | number>): string =>
+  tpl.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
+
+export function buildGrowthUi(src: GrowthLocaleSource): Dict {
+  const { fx, ...rest } = src;
+  return {
+    ...rest,
+    confidence: (n: number) => fill(fx.confidence, { n: Math.round(n * 100) }),
+    costLaunch: (n: number) => fill(fx.costLaunch, { n }),
+    costRun: (n: number) => fill(fx.costRun, { n }),
+    launch: (n: number) => fill(fx.launch, { n }),
+    launchConfirm: (n: number) => fill(fx.launchConfirm, { n }),
+    syncDone: (s: { newLeads: number; engaged: number; customers: number; atRisk: number; drafts: number; autoSent: number }) =>
+      fill(fx.syncDone, { ...s, auto: s.autoSent ? fill(fx.syncAuto, { n: s.autoSent }) : '' }),
+    forwardConfirm: (n: number, c: number) => fill(fx.forwardConfirm, { n, c }),
+    forwarded: (n: number) => fill(fx.forwarded, { n }),
+    sendConfirm: (to: string) => fill(fx.sendConfirm, { to }),
+    readyAt: (d: string) => fill(fx.readyAt, { d }),
+    teamConfirm: (n: number, c: number) => fill(fx.teamConfirm, { n, c }),
+    teamReady: (n: number) => fill(fx.teamReady, { n }),
+    needsField: (f: string) => fill(fx.needsField, { f }),
+    dailyCap: (s: number, c: number) => fill(fx.dailyCap, { s, c }),
+    reminderTitle: (project: string) => fill(fx.reminderTitle, { project }),
+  } as Dict;
+}
+
+export const GROWTH_UI: Record<UiLang, Dict> = {
+  pt, en, es,
+  ...(Object.fromEntries(Object.entries(GROWTH_LOCALE_SOURCES).map(([k, v]) => [k, buildGrowthUi(v)])) as Record<Exclude<UiLang, 'pt' | 'en' | 'es'>, Dict>),
+};
 export type GrowthDict = Dict;

@@ -4,8 +4,10 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Ban, Check, Download, ExternalLink, Loader2, Mail, MessageCircle, RefreshCw, Search, Send, Settings2, Target, Trash2, X,
+  ArrowLeft, Ban, Check, Download, ExternalLink, Loader2, Mail, MapPin, MessageCircle, Phone, RefreshCw, Search, Send, Settings2, Target, Trash2, X,
 } from 'lucide-react';
+import { LEAD_CARD_TEXT, leadAddressLine, leadMapUrl, leadTelHref } from '@/lib/vertalProspector/leadCard';
+import { preferredUiLang, uiDir, uiLocale } from '@/lib/vertalUiLang';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -124,6 +126,46 @@ function AreasEditor({ areas, categories, disabled, onSave }: { areas: string[];
   );
 }
 
+/** Endereço (rua, número, bairro, cidade/UF), link do mapa, telefone e site — compacto, só o que existir. */
+function LeadPlaceInfo({ lead, areas }: { lead: Lead; areas: string[] }) {
+  const lang = preferredUiLang();
+  const L = LEAD_CARD_TEXT[lang] ?? LEAD_CARD_TEXT.pt;
+  const line = leadAddressLine(lead, areas);
+  const map = leadMapUrl(lead, areas);
+  const tel = leadTelHref(lead.phone);
+  if (!line && !lead.phone && !lead.website) return null;
+  return (
+    <div className="mt-1 space-y-0.5 text-xs" data-testid="lead-place" lang={uiLocale(lang)} dir={uiDir(lang)}>
+      {line && (
+        <p className="flex items-start gap-1 text-muted-foreground" data-testid="lead-address">
+          <MapPin className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+          <span className="sr-only">{L.address}: </span>
+          <span className="min-w-0 break-words">{line}</span>
+          {map && (
+            <a href={map} target="_blank" rel="noreferrer" className="ml-1 shrink-0 text-primary hover:underline" data-testid="lead-map">{L.map}</a>
+          )}
+        </p>
+      )}
+      {(lead.phone || lead.website) && (
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+          {lead.phone && (
+            <span className="inline-flex items-center gap-1 text-muted-foreground">
+              <Phone className="h-3 w-3" aria-hidden />
+              <span className="sr-only">{L.phone}: </span>
+              {tel ? <a href={tel} className="hover:underline">{lead.phone}</a> : lead.phone}
+            </span>
+          )}
+          {lead.website && (
+            <a href={lead.website} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary" aria-label={`${L.site}: ${lead.domain ?? lead.website}`}>
+              {lead.domain ?? lead.website} <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function VertalProspectorScreen() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -133,6 +175,8 @@ export function VertalProspectorScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [campaigns, setCampaigns] = useState<Array<Pick<Campaign, 'id' | 'company_name' | 'status'> & { area?: string | null }>>([]);
   const [campaign, setCampaign] = useState<Campaign | null>(null);
+  // Áreas da campanha ("São Paulo, SP; Campinas, SP") dão o estado ao lado da cidade no cartão do lead.
+  const leadAreas = useMemo(() => parseAreas(campaign?.icp?.area ?? ''), [campaign?.icp?.area]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [findings, setFindings] = useState<string[]>([]);
@@ -552,11 +596,7 @@ export function VertalProspectorScreen() {
                         {[l.category, l.city, STATUS_LABEL[l.status ?? 'new']].filter(Boolean).join(' · ')}
                         {l.fit !== null && l.fit !== undefined && <> · aderência {l.fit}/10</>}
                       </p>
-                      {l.website && (
-                        <a href={l.website} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary">
-                          {l.domain ?? l.website} <ExternalLink className="h-3 w-3" />
-                        </a>
-                      )}
+                      <LeadPlaceInfo lead={l} areas={leadAreas} />
                     </div>
                     <button type="button" aria-label="Apagar lead" onClick={() => deleteLead(l)} className="rounded p-1 text-muted-foreground hover:text-rose-300">
                       <Trash2 className="h-4 w-4" />

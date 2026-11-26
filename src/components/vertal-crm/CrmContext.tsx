@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { callCrm, crmDb } from '@/lib/vertalCrm/client';
-import { crmUi, crmLocale, uiLangFrom, browserLang } from '@/lib/vertalCrm/i18n';
-import { rememberUiLang, storedUiLang } from '@/lib/vertalGrowth/i18n';
+import { crmUi, crmLocale, uiDir, uiLangFrom, browserLang } from '@/lib/vertalCrm/i18n';
+import { useDocumentLang } from '@/lib/useDocumentLang';
+import { rememberUiLang, storedUiLang } from '@/lib/vertalUiLang';
 import type { CrmPipeline } from '../../../supabase/functions/_shared/vertalCrm/core';
 import { CrmCtx, type CrmCosts, type CrmCtxValue, type CrmField, type CrmMember, type CrmTag, type CrmWorkspace } from './crmState';
 
@@ -25,6 +26,7 @@ export function CrmProvider({ children, langHint }: { children: ReactNode; langH
   // Antes o idioma do workspace era ignorado e um navegador em inglês deixava a tela em inglês com etapas em português.
   const lang = uiLangFrom(langHint, (workspace?.settings?.uiLang as string) ?? null, workspace?.lang ?? null, storedUiLang(), browserLang());
   const t = crmUi(lang);
+  useDocumentLang(crmLocale(lang), uiDir(lang));
   useEffect(() => {
     if (workspace) rememberUiLang(lang);
   }, [workspace, lang]);

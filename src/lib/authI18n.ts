@@ -1,7 +1,7 @@
 // Textos da tela de login (/auth) em pt-BR, en e es — antes eram fixos e misturados ("Sign In na conta",
 // "Welcome back" com placeholder "Senha"). Só textos: a lógica de login não muda.
 // Idioma: ?lang → idioma salvo do usuário (Vertal CRM/Growth) → navegador → pt-BR.
-import { preferredUiLang } from '@/lib/vertalGrowth/i18n';
+import { baseUiLang, preferredUiLang } from '@/lib/vertalUiLang';
 
 export type AuthLang = 'pt' | 'en' | 'es';
 
@@ -206,6 +206,7 @@ export const AUTH_UI: Record<AuthLang, AuthUi> = { pt, en, es };
 
 /** Idioma da tela de login: ?lang → idioma salvo do usuário → navegador → pt-BR. */
 export function authLang(explicit?: string | null): AuthLang {
-  return preferredUiLang(explicit);
+  // A tela de login só tem pt/en/es: os outros 18 idiomas do CRM/Growth caem no mais próximo (pt-PT → pt, demais → en).
+  return baseUiLang(preferredUiLang(explicit));
 }
 export const authUi = (lang: AuthLang): AuthUi => AUTH_UI[lang] ?? pt;

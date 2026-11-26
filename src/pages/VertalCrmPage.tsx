@@ -13,6 +13,7 @@ import { CrmDeals } from '@/components/vertal-crm/CrmDeals';
 import { CrmSettings } from '@/components/vertal-crm/CrmSettings';
 import { CrmWaitlist } from '@/components/vertal-crm/CrmWaitlist';
 import { isCrmWaitlistEnabled } from '@/lib/vertalCrm/waitlist';
+import { crmLocale, uiDir } from '@/lib/vertalCrm/i18n';
 
 const NotFound = lazy(() => import('@/pages/NotFound'));
 
@@ -27,7 +28,7 @@ const TABS = [
 type TabId = (typeof TABS)[number]['id'];
 
 function CrmShell() {
-  const { ready, error, workspace, t } = useCrm();
+  const { ready, error, workspace, t, lang } = useCrm();
   const navigate = useNavigate();
   const [sp, setSp] = useSearchParams();
   const tab = (TABS.find((x) => x.id === sp.get('aba'))?.id ?? 'dashboard') as TabId;
@@ -35,10 +36,10 @@ function CrmShell() {
     setSp((p) => { const n = new URLSearchParams(p); n.set('aba', id); return n; }, { replace: true });
   };
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground" lang={crmLocale(lang)} dir={uiDir(lang)} data-testid="crm-root">
       <header className="sticky top-0 z-10 border-b bg-card/70 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/connectors')} aria-label={t.back}><ArrowLeft className="h-5 w-5" /></Button>
+          <Button variant="ghost" size="icon" onClick={() => navigate('/connectors')} aria-label={t.back}><ArrowLeft className="h-5 w-5 rtl:rotate-180" /></Button>
           <div className="min-w-0 flex-1">
             <h1 className="truncate font-display text-xl font-bold">{t.title}{workspace ? <span className="ml-2 text-sm font-normal text-muted-foreground">{' · '}{workspace.name}</span> : null}</h1>
             <p className="truncate text-xs text-muted-foreground">{t.subtitle}</p>
