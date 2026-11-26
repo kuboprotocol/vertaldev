@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,6 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowLeft, Mail, CheckCircle2, XCircle, AlertTriangle, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
+import MailboxPanel from "@/components/vertal-mailbox/MailboxPanel";
+import { callMailbox, isVertalMailboxEnabled, type MailStatus } from "@/lib/vertalMailbox/client";
+import { mailUi } from "@/lib/vertalMailbox/i18n";
 
 const TIME_RANGES = [
   { label: "Últimas 24h", value: "24h", hours: 24 },
@@ -55,7 +58,7 @@ interface EmailLog {
   metadata: Record<string, unknown> | null;
 }
 
-export default function EmailDashboardPage() {
+function EmailSendLogView() {
   const navigate = useNavigate();
   const [timeRange, setTimeRange] = useState("7d");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -295,4 +298,38 @@ export default function EmailDashboardPage() {
       </div>
     </div>
   );
+}
+
+/**
+ * /emails — com o Vertal Mail liberado (VITE_VERTAL_MAILBOX + servidor), vira a caixa de e-mail;
+ * o registro de envios continua a um clique. Desligado (padrão): exatamente o registro de envios de antes.
+ */
+export default function EmailDashboardPage() {
+  const flag = isVertalMailboxEnabled();
+  const [status, setStatus] = useState<MailStatus | null>(null);
+  const [checked, setChecked] = useState(!flag);
+  const [view, setView] = useState<"mail" | "log">("mail");
+
+  const reload = () => {
+    callMailbox<MailStatus>("status")
+      .then((s) => setStatus(s))
+      .catch(() => setStatus(null))
+      .finally(() => setChecked(true));
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (flag) reload(); }, [flag]);
+
+  if (!flag || (checked && !status)) return <EmailSendLogView />;
+  if (!checked) return <div className="min-h-screen grid place-items-center text-muted-foreground">{mailUi().loading}</div>;
+  if (view === "log") {
+    return (
+      <div>
+        <div className="fixed bottom-4 right-4 z-50">
+          <Button size="sm" className="gap-2 shadow-lg" onClick={() => setView("mail")}><Mail className="h-4 w-4" />{mailUi().backToMail}</Button>
+        </div>
+        <EmailSendLogView />
+      </div>
+    );
+  }
+  return <MailboxPanel status={status!} onReload={reload} onShowLog={() => setView("log")} />;
 }

@@ -463,6 +463,56 @@ async function captureEmail(deps: CrmDeps, ws: string, body: Loose): Promise<Res
   return ok({ found: ids.length, added, account: acc.email });
 }
 
+// ─── Vertal Mail → CRM (sem IA, sem crédito) ───────────────────────────────
+// Caixa profissional e contas Gmail/Outlook que o cliente marcou com "Alimentar o CRM":
+// cria/atualiza o contato (nome, e-mail, empresa pelo domínio) e registra o e-mail como nota.
+// Dedupe por external_ref "<origem>:<id da mensagem>" (índice único crm_notes_external_ref_uq).
+export interface MailCrmItem {
+  ref: string;
+  source: "mailbox" | "gmail" | "outlook";
+  counterpart: { name: string; email: string };
+  first_name: string;
+  last_name: string;
+  company: { name: string; domain: string } | null;
+  note: string;
+  date: string;
+}
+
+export async function feedMailToCrm(deps: CrmDeps, items: MailCrmItem[]): Promise<{ ok: boolean; error?: string; contactsCreated: number; notesAdded: number; skipped: number }> {
+  const out = { ok: true, contactsCreated: 0, notesAdded: 0, skipped: 0 };
+  let w = await resolveWorkspace(deps, {});
+  if (!w) {
+    // Primeiro uso: cria o CRM grátis do usuário (o mesmo que o bootstrap da tela faria).
+    const lang = crmLang(null);
+    const ws = await createWorkspace(deps, "", lang);
+    w = { ws: ws.id, role: "owner" };
+  }
+  if (!canWrite(w.role)) return { ...out, ok: false, error: "read_only_role" };
+  const ws = w.ws;
+  for (const it of items.slice(0, 100)) {
+    const extRef = `${it.source}:${it.ref}`.slice(0, 400);
+    const { data: exists } = await deps.admin.from("crm_notes").select("id").eq("workspace_id", ws).eq("external_ref", extRef).maybeSingle();
+    if (exists) { out.skipped++; continue; }
+    const companyId = it.company
+      ? await upsertCompany(deps, ws, { name: it.company.name, website: `https://${it.company.domain}`, source: "email", external_ids: { email_domain: it.company.domain } }, `email_domain=${it.company.domain}`)
+      : null;
+    const c = await upsertContact(deps, ws, {
+      first_name: it.first_name, last_name: it.last_name, emails: [{ email: it.counterpart.email, type: "Work" }], phones: [],
+      status: "cold", source: "email", external_ids: {}, company_id: companyId,
+    } as CrmContactInput & { company_id?: string | null });
+    if (c.created) out.contactsCreated++;
+    const { error } = await deps.admin.from("crm_notes").insert({
+      workspace_id: ws, contact_id: c.id, text: it.note, source: "email", external_ref: extRef,
+      meta: { mail_source: it.source, ref: it.ref, date: it.date }, author_id: deps.userId,
+    });
+    if (!error) {
+      out.notesAdded++;
+      await deps.admin.from("crm_contacts").update({ last_seen: it.date }).eq("id", c.id);
+    } else out.skipped++;
+  }
+  return out;
+}
+
 // ─── sincronização com CRMs externos ───────────────────────────────────────
 async function fluxosConnection(deps: CrmDeps, app: string) {
   const { data } = await deps.admin.from("fluxos_connections").select("app_key, status, fluxos_connection_id, screen_name").eq("user_id", deps.userId).eq("app_key", app).maybeSingle();
