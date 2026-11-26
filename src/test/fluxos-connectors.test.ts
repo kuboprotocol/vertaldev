@@ -56,6 +56,24 @@ describe('apps escondidos do catálogo', () => {
     expect(HIDDEN_FLUXOS_APPS.has('strava')).toBe(true)
     expect(fluxosConnectors.some(c => c.slug === 'fluxos-strava')).toBe(false)
   })
+  it('OpenAI, OpenRouter e Azure OpenAI fora do catálogo, da busca e das páginas de setup', async () => {
+    const { fluxosConnectors, HIDDEN_FLUXOS_APPS } = await import('@/lib/fluxosConnectors')
+    for (const app of ['openai', 'openrouter', 'azure-openai']) {
+      expect(HIDDEN_FLUXOS_APPS.has(app)).toBe(true)
+      expect(getConnectorBySlug(`fluxos-${app}`)).toBeUndefined()
+    }
+    const text = JSON.stringify(connectors.map(c => [c.slug, c.name, c.description, c.longDescription, c.logoUrl, c.fluxosApp]))
+    expect(text).not.toMatch(/openai|openrouter|open router/i)
+    expect(fluxosConnectors.some(c => /openai|openrouter/i.test(c.slug))).toBe(false)
+  })
+  it('lista do servidor igual à do catálogo', async () => {
+    const { HIDDEN_FLUXOS_APPS } = await import('@/lib/fluxosConnectors')
+    const server = await import('../../supabase/functions/_shared/hiddenFluxosApps.ts')
+    expect([...server.HIDDEN_FLUXOS_APPS].sort()).toEqual([...HIDDEN_FLUXOS_APPS].sort())
+    expect(server.isHiddenFluxosApp('OpenAI')).toBe(true)
+    expect(server.isHiddenFluxosApp('notion')).toBe(false)
+    expect(server.withoutHiddenApps([{ key: 'openrouter' }, { key: 'notion' }])).toEqual([{ key: 'notion' }])
+  })
   it('pendentes importantes continuam no catálogo', () => {
     for (const app of ['linkedin', 'ebay', 'tiktok-ads', 'kwai-ads', 'amazon-ads', 'reddit', 'hubspot', 'trello']) {
       expect(getConnectorBySlug(`fluxos-${app}`)?.fluxosApp).toBe(app)

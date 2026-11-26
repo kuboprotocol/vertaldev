@@ -190,6 +190,11 @@ App da Meta **Vertal Dev**, App ID `1145586658064572` (modo Desenvolvimento), se
 - **Escondidos** (`HIDDEN_FLUXOS_APPS`, só catálogo; motor, fluxos e dados ficam): Flickr, Strava (API só com
   assinatura paga; fora do público do Vertal Dev). Regra: antes de esconder, conferir `fluxos_connections` — app com
   conexão de usuário continua visível.
+- **Marcas de IA de terceiros fora do catálogo** (26/11/2026): OpenAI, OpenRouter e Azure OpenAI também em
+  `HIDDEN_FLUXOS_APPS`, porque o Vertal vende a própria IA white-label para devs. O servidor espelha a lista em
+  `supabase/functions/_shared/hiddenFluxosApps.ts`: o Vertal Chat não lista esses apps (`list_apps`) nem abre conexão
+  nova com eles; quem já tiver conexão continua usando. Não mexe no uso interno desses provedores pelo backend de IA
+  do Vertal (vertal-code-ai etc.).
 - **Pendentes que ficam** (formulário de app próprio enquanto o cliente do Vertal não sai): LinkedIn, eBay (conta em
   análise), Amazon Ads (acesso à Ads API pedido), TikTok Ads, Kwai Ads, Discord, Reddit, HubSpot, Trello.
 

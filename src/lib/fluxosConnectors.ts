@@ -70,6 +70,8 @@ export const FLUXOS_NATIVE_APPS: FluxosApp[] = [
   { app: "notion", name: "Notion", category: "development", docsUrl: "https://notion.com" },
   { app: "ntfy", name: "Ntfy", category: "communication", docsUrl: "https://ntfy.sh" },
   { app: "odoo", name: "Odoo", category: "development", docsUrl: "https://odoo.com" },
+  { app: "openai", name: "OpenAI", category: "development", docsUrl: "https://openai.com" },
+  { app: "openrouter", name: "OpenRouter", category: "development", docsUrl: "https://openrouter.ai" },
   { app: "pdfmonkey", name: "PDFMonkey", category: "design", docsUrl: "https://pdfmonkey.io" },
   { app: "perplexity", name: "Perplexity", category: "development", docsUrl: "https://perplexity.ai" },
   { app: "pipedrive", name: "Pipedrive", category: "development", docsUrl: "https://www.pipedrive.com" },
@@ -174,9 +176,14 @@ const FLUXOS_APP_LOGOS: Record<string, string> = {
  *   OAuth (decisão do Laércio, 26/11/2026).
  * - Strava: criar app da API exige assinatura paga do Strava (para o Vertal e para quem quisesse usar app
  *   próprio) e dados de treino não servem ao público do Vertal Dev (26/11/2026).
- * Antes de esconder: conferir que nenhum usuário tem conexão (tabela fluxos_connections) — com conexão, fica.
+ * - OpenAI, OpenRouter e Azure OpenAI: o Vertal vende a própria IA (white-label) para devs, então marcas de
+ *   fornecedores de IA não aparecem como conectores (Laércio, 26/11/2026). Só o catálogo público: o backend de
+ *   IA do Vertal (vertal-code-ai etc.) segue usando esses provedores por dentro. Na data, 0 conexões de usuário.
+ * Antes de esconder: conferir que nenhum usuário tem conexão (tabela fluxos_connections) — com conexão, a
+ * conexão continua funcionando pelo chat/fluxos (o servidor só esconde para quem não tem conexão; ver
+ * supabase/functions/_shared/hiddenFluxosApps.ts, mantenha as duas listas iguais).
  */
-export const HIDDEN_FLUXOS_APPS = new Set(['flickr', 'strava'])
+export const HIDDEN_FLUXOS_APPS = new Set(['flickr', 'strava', 'openai', 'openrouter', 'azure-openai'])
 
 export const fluxosConnectors: ConnectorConfig[] = FLUXOS_NATIVE_APPS.filter(a => !HIDDEN_FLUXOS_APPS.has(a.app)).map(a => ({
   name: a.name,

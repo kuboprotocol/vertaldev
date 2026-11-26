@@ -18,6 +18,7 @@ import {
   whatsappTest,
   whiteLabel,
 } from "./fluxosApps.ts";
+import { isHiddenFluxosApp } from "./hiddenFluxosApps.ts";
 
 type User = { id: string; email?: string | null };
 
@@ -100,6 +101,9 @@ export async function handleFluxosApps(
 
   const { data: row } = await admin.from("fluxos_connections").select("*")
     .eq("user_id", user.id).eq("app_key", op.app).maybeSingle();
+
+  // App fora do catálogo: só segue para quem já tem conexão (que continua funcionando).
+  if (isHiddenFluxosApp(op.app) && !row) return json(404, { error: "app_not_found" });
 
   if (op.op === "describe") {
     const needs = userAuthFields(def, platform);

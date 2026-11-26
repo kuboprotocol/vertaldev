@@ -245,6 +245,23 @@ describe('runAutomatischOp (fetch falso)', () => {
   });
 });
 
+describe('list_apps sem marcas de IA de terceiros', () => {
+  it('não lista OpenAI, OpenRouter nem Azure OpenAI no Vertal Chat', async () => {
+    const { fetchFn } = fakeAutomatisch({
+      'POST /access-tokens': LOGIN,
+      [`DELETE /access-tokens/${TOKEN}`]: REVOKE,
+      'GET /apps': { status: 200, body: { data: [
+        { key: 'openai', name: 'OpenAI', supportsConnections: true },
+        { key: 'openrouter', name: 'OpenRouter', supportsConnections: true },
+        { key: 'azure-openai', name: 'Azure OpenAI', supportsConnections: true },
+        { key: 'webhook', name: 'Webhook', supportsConnections: false },
+      ], meta: meta('Object', { isArray: true }) } },
+    });
+    const apps = await runAutomatischOp({ op: 'list_apps' }, CREDS, { fetch: fetchFn });
+    expect(apps.ok && apps.data).toEqual({ apps: [{ key: 'webhook', name: 'Webhook', supportsConnections: false }] });
+  });
+});
+
 describe('scrubSecrets e wantsAutomatisch', () => {
   it('scrubSecrets troca valores (inclusive com aspas) e ignora strings curtas', () => {
     expect(scrubSecrets({ a: 'x "abc"def y' }, ['"abc"def'])).toEqual({ a: 'x [segredo] y' });
