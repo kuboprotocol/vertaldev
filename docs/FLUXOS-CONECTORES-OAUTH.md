@@ -236,3 +236,19 @@ a assinatura do `signed_request` (HMAC-SHA256) é conferida com `FLUXOS_OAUTH_ME
   domínio do client URL (TXT `cloudflare_oauth_client_publisher=…` em vertal.dev) e promover a **public** (permanente).
 - Motor: app `cloudflare` (fork PR #17). Tela: `/connectors/cloudflare/setup` abre com "Entrar com Cloudflare";
   o API token (link com permissões pré-marcadas) fica em "Avançado".
+
+## Auditoria dos conectores sem OAuth (26/11/2026)
+
+Pedido do Laércio: ver cada conector que não conecta por OAuth (chave/token, app próprio, pendente) e decidir se
+serve ao público do Vertal Dev (devs que criam apps e automações com IA, Brasil e global); útil fica e ganha logo
+oficial; inútil ou sem função real sai do catálogo (só esconde, nada é apagado).
+
+- **Escondidos** (`HIDDEN_FLUXOS_APPS` + `supabase/functions/_shared/hiddenFluxosApps.ts`, 0 conexões de usuário):
+  Airbrake (só 1 gatilho, monitoramento de nicho), Flowers Software (BPM alemão, só 1 gatilho), FreeScout (helpdesk
+  auto-hospedado, só 1 gatilho), Placetel (telefonia alemã, só 1 gatilho), VirtualQ (fila de ligações alemã),
+  Firefly III (finanças pessoais auto-hospedadas, só gatilhos). As páginas /integracoes e as entradas de sitemap
+  somem sozinhas (geradas do catálogo); textos e traduções ficam guardados para quando o app voltar.
+- **Logos**: todo cartão de marca tem logo próprio em `public/connectors/` (128×128, asset oficial da marca: ícone
+  do site oficial, ícone de produto do Google/Microsoft ou a marca oficial em quadrado na cor da marca). Teste em
+  `src/test/fluxos-connectors.test.ts` falha se faltar logo, se o arquivo não existir ou se duas marcas dividirem o
+  mesmo logo. Sem marca (ícone genérico): Vertal Fluxos, Vertal Agentes, Custom RPC, Web Wallet, Self-hosted LLM, SMTP.
