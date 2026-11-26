@@ -38,24 +38,24 @@ import {
 // ─── Busca e leitura na web ──────────────────────────────────────────────
 
 describe('busca na web (Firecrawl)', () => {
-  it('monta o corpo da busca com limite, recência e idioma válidos', () => {
+  it('monta o corpo da busca (v2) com limite e recência; `lang` não existe mais na v2', () => {
     expect(buildFirecrawlSearchBody({ query: '  selic hoje  ', max: 99, recency: 'semana', lang: 'pt' })).toEqual({
-      query: 'selic hoje', limit: WEB_LIMITS.maxResults, tbs: 'qdr:w', lang: 'pt',
+      query: 'selic hoje', limit: WEB_LIMITS.maxResults, tbs: 'qdr:w',
     });
     expect(buildFirecrawlSearchBody({ query: 'x', lang: 'português' })).toEqual({ query: 'x', limit: WEB_LIMITS.defaultResults });
     expect(recencyToTbs('dia')).toBe('qdr:d');
     expect(recencyToTbs(undefined)).toBeUndefined();
   });
 
-  it('lê os resultados do /v1/search, descarta repetidos e não-http', () => {
+  it('lê os resultados do /v2/search ({ data: { web } }), descarta repetidos e não-http', () => {
     const results = parseFirecrawlSearch({
       success: true,
-      data: [
+      data: { web: [
         { url: 'https://g1.globo.com/a', title: ' Copom  mantém\nSelic ', description: 'Taxa em 15%', metadata: { publishedTime: '2026-11-05' } },
         { url: 'https://g1.globo.com/a', title: 'repetido' },
         { url: 'javascript:alert(1)', title: 'malicioso' },
         { url: 'https://bcb.gov.br/x', markdown: '# Selic\n\n![img](a.png)\nTexto [link](https://y.com) útil.' },
-      ],
+      ] },
     });
     expect(results).toHaveLength(2);
     expect(results[0]).toEqual({ title: 'Copom mantém Selic', url: 'https://g1.globo.com/a', description: 'Taxa em 15%', published: '2026-11-05' });
@@ -63,8 +63,9 @@ describe('busca na web (Firecrawl)', () => {
     expect(results[1].content).toBe('# Selic\n\nTexto link útil.');
   });
 
-  it('aceita o formato novo { data: { web: [...] } }', () => {
-    expect(parseFirecrawlSearch({ data: { web: [{ url: 'https://a.com', title: 'A' }] } })).toHaveLength(1);
+  it('ainda aceita o formato antigo da v1 { data: [...] } e ignora entradas vazias', () => {
+    expect(parseFirecrawlSearch({ data: [{ url: 'https://a.com', title: 'A' }] })).toHaveLength(1);
+    expect(parseFirecrawlSearch({ success: true, data: { web: [] } })).toEqual([]);
     expect(parseFirecrawlSearch(null)).toEqual([]);
   });
 
@@ -83,7 +84,7 @@ describe('busca na web (Firecrawl)', () => {
     expect(formatSearchResults('xyz', [], 'hoje')).toMatch(/nenhum resultado.*não invente/i);
   });
 
-  it('lê a página do /v1/scrape e corta em quebra natural', () => {
+  it('lê a página do /v2/scrape e corta em quebra natural', () => {
     const md = `${'Primeira frase longa. '.repeat(50)}\n${'z'.repeat(5_000)}`;
     const page = parseFirecrawlScrape({ data: { markdown: md, metadata: { title: 'Artigo', sourceURL: 'https://a.com/x' } } }, 'https://a.com', 600);
     expect(page?.title).toBe('Artigo');
@@ -104,7 +105,7 @@ describe('busca na web (Firecrawl)', () => {
     expect(normalizeWebUrl('ftp://x.com')).toBeNull();
     expect(normalizeWebUrl('https://user:senha@x.com')).toBeNull();
     expect(normalizeWebUrl('não é url')).toBeNull();
-    expect(buildFirecrawlScrapeBody('https://a.com')).toMatchObject({ url: 'https://a.com', formats: ['markdown'], onlyMainContent: true });
+    expect(buildFirecrawlScrapeBody('https://a.com')).toMatchObject({ url: 'https://a.com', formats: ['markdown'], onlyMainContent: true, maxAge: 0 });
   });
 });
 

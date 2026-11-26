@@ -41,23 +41,35 @@ export interface WebSearchRequest {
   query: string;
   max?: number;
   recency?: WebRecency;
-  /** Idioma preferido (ex.: "pt"). */
+  /**
+   * Idioma preferido (ex.: "pt"). Ignorado: a API v2 do Firecrawl não tem mais
+   * o parâmetro `lang` na busca (só `country`/`location`). Mantido para não
+   * quebrar quem já passa o campo.
+   */
   lang?: string;
 }
 
-/** Corpo do POST https://api.firecrawl.dev/v1/search (sem scrape: as páginas são lidas à parte). */
+/** Endereço base da API do Firecrawl (v2; a v1 responde 410 a partir de 10/12/2026). */
+export const FIRECRAWL_API_BASE = "https://api.firecrawl.dev/v2";
+
+/**
+ * Corpo do POST https://api.firecrawl.dev/v2/search (sem scrape: as páginas são lidas à parte).
+ * `limit` vai sempre explícito (o padrão da v2 passou de 5 para 10).
+ */
 export function buildFirecrawlSearchBody(req: WebSearchRequest): Record<string, unknown> {
   const limit = clampInt(req.max, 1, WEB_LIMITS.maxResults, WEB_LIMITS.defaultResults);
   const body: Record<string, unknown> = { query: req.query.trim().slice(0, WEB_LIMITS.queryChars), limit };
   const tbs = recencyToTbs(req.recency);
   if (tbs) body.tbs = tbs;
-  if (req.lang && /^[a-z]{2}$/.test(req.lang)) body.lang = req.lang;
   return body;
 }
 
-/** Corpo do POST https://api.firecrawl.dev/v1/scrape: só o conteúdo principal em markdown. */
+/**
+ * Corpo do POST https://api.firecrawl.dev/v2/scrape: só o conteúdo principal em markdown.
+ * `maxAge: 0` mantém o comportamento da v1 (sempre página fresca; a v2 usa cache de 2 dias por padrão).
+ */
 export function buildFirecrawlScrapeBody(url: string): Record<string, unknown> {
-  return { url, formats: ["markdown"], onlyMainContent: true, removeBase64Images: true, blockAds: true, timeout: 20_000 };
+  return { url, formats: ["markdown"], onlyMainContent: true, removeBase64Images: true, blockAds: true, timeout: 20_000, maxAge: 0 };
 }
 
 export interface WebResult {
@@ -70,14 +82,14 @@ export interface WebResult {
   content?: string;
 }
 
-/** Lê a resposta do /v1/search. Descarta itens sem URL http(s) e repetidos. */
+/** Lê a resposta do /v2/search. Descarta itens sem URL http(s) e repetidos. */
 export function parseFirecrawlSearch(raw: unknown): WebResult[] {
   const data = raw && typeof raw === "object" ? (raw as Record<string, unknown>).data : null;
-  // v1 devolve { data: [...] }; versões novas podem devolver { data: { web: [...] } }.
-  const list = Array.isArray(data)
-    ? data
-    : data && typeof data === "object" && Array.isArray((data as Record<string, unknown>).web)
+  // v2 devolve { data: { web: [...], news?: [...] } }; a v1 devolvia { data: [...] } (aceito por compatibilidade).
+  const list = data && typeof data === "object" && !Array.isArray(data) && Array.isArray((data as Record<string, unknown>).web)
     ? (data as Record<string, unknown>).web as unknown[]
+    : Array.isArray(data)
+    ? data
     : [];
   const seen = new Set<string>();
   const out: WebResult[] = [];
@@ -108,7 +120,7 @@ export interface WebPage {
   published?: string;
 }
 
-/** Lê a resposta do /v1/scrape. */
+/** Lê a resposta do /v2/scrape (mesmo formato da v1: { data: { markdown, metadata } }). */
 export function parseFirecrawlScrape(raw: unknown, fallbackUrl: string, maxChars: number = WEB_LIMITS.readChars): WebPage | null {
   const data = raw && typeof raw === "object" ? (raw as Record<string, unknown>).data : null;
   if (!data || typeof data !== "object") return null;
