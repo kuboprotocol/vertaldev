@@ -215,22 +215,29 @@ def make(job: str, premise: str, voice: str = "pf_dora", n: int = 12, clips: int
             }, 240)
             script = parse_script(r["choices"][0]["message"]["content"], n)
             if script_words(script) < MIN_WORDS:
-                # Modelos pequenos encurtam: 1 pedido de expansão (mesmo JSON, narrações mais longas).
-                msgs2 = msgs + [
-                    {"role": "assistant", "content": json.dumps(script, ensure_ascii=False)},
-                    {"role": "user", "content": f"Ficou curto ({script_words(script)} palavras). Reescreva com EXATAMENTE {n} cenas e "
-                     "cada narração com 36 a 42 palavras, mantendo a história e o mesmo formato JSON."},
-                ]
-                r2 = _post(_env(url_k) + "/v1/chat/completions", _env(tok_k), {
-                    "model": model, "messages": msgs2, "temperature": 0.7, "max_tokens": 3200,
-                    "response_format": {"type": "json_object"},
-                }, 240)
-                try:
-                    longer = parse_script(r2["choices"][0]["message"]["content"], n)
-                    if script_words(longer) > script_words(script):
-                        script = longer
-                except ValueError:
-                    pass
+                # Modelos pequenos encurtam o roteiro inteiro; reescrever CENA A CENA (pedidos curtos, em paralelo) segura o tamanho.
+                resumo = " ".join(c["narracao"] for c in script["cenas"])[:2500]
+
+                def grow(i):
+                    try:
+                        r2 = _post(_env(url_k) + "/v1/chat/completions", _env(tok_k), {
+                            "model": model, "temperature": 0.7, "max_tokens": 220,
+                            "messages": [
+                                {"role": "system", "content": "Você é narrador de novelas em português do Brasil. Responda só com o texto da narração, sem aspas nem rótulos."},
+                                {"role": "user", "content": f"História '{script['titulo']}': {resumo}\n\nReescreva a narração da cena {i + 1} de {len(script['cenas'])} "
+                                 f"com 3 frases curtas e 38 a 44 palavras no total, mantendo os fatos: {script['cenas'][i]['narracao']}"},
+                            ],
+                        }, 120)
+                        t2 = re.sub(r"\s+", " ", r2["choices"][0]["message"]["content"]).strip().strip('"')[:400]
+                        if len(t2.split()) > len(script["cenas"][i]["narracao"].split()):
+                            script["cenas"][i]["narracao"] = t2
+                    except Exception as e:  # noqa: BLE001
+                        print("grow failed", i, e)
+
+                import concurrent.futures as _cf
+
+                with _cf.ThreadPoolExecutor(6) as _ex:
+                    list(_ex.map(grow, range(len(script["cenas"]))))
                 tm["script_expanded"] = True
             tm["script_words"] = script_words(script)
             gpu_s[gpu] += time.time() - t1
