@@ -123,6 +123,7 @@ const FLUXOS_APP_LOGOS: Record<string, string> = {
   'google-admob': '/connectors/google-admob.png',
   'google-ads': '/connectors/google-ads.jpg',
   'google-adsense': '/connectors/google-adsense.png',
+  'google-calendar': '/connectors/google-calendar.png',
   gitlab: '/connectors/gitlab.webp',
   gitea: '/connectors/gitea.png',
   ghost: '/connectors/ghost.png',
