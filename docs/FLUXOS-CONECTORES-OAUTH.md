@@ -167,6 +167,7 @@ App da Meta **Vertal Dev**, App ID `1145586658064572` (modo Desenvolvimento), se
 - **YouTube**: mesmo cliente Google ("Vertal Fluxos"); YouTube Data API v3 ativada, retorno
   `https://vertal.dev/fluxos/oauth/youtube` e escopos do YouTube em Acesso a dados (sensíveis → só testadores
   enquanto o app estiver em Teste).
+- Flickr escondido do catálogo (`HIDDEN_FLUXOS_APPS` em `src/lib/fluxosConnectors.ts`); o app continua no motor.
 - Bloqueados: Strava (API só para assinantes pagos), Flickr (chave de API só no Flickr Pro), Reddit ("Max clients
   have been reached" — novos clientes da Data API dependem de aprovação do Reddit), HubSpot (apps OAuth só pela
   HubSpot CLI, `hs project create/upload`), Discord (login do portal pede confirmação por e-mail), eBay (conta

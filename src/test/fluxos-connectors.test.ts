@@ -44,3 +44,11 @@ describe('catálogo unificado Vertal Dev ↔ Vertal Fluxos', () => {
     expect(ui).not.toMatch(/automatisch|huginn|railway/i)
   })
 })
+
+describe('apps escondidos do catálogo', () => {
+  it('Flickr não aparece em /connectors', async () => {
+    const { fluxosConnectors, HIDDEN_FLUXOS_APPS } = await import('@/lib/fluxosConnectors')
+    expect(HIDDEN_FLUXOS_APPS.has('flickr')).toBe(true)
+    expect(fluxosConnectors.some(c => c.slug === 'fluxos-flickr')).toBe(false)
+  })
+})
