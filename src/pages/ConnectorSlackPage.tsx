@@ -128,7 +128,7 @@ export default function ConnectorSlackPage() {
             <div>
               <h1 className="text-lg font-bold font-orbitron">Slack Connector</h1>
               <p className="text-xs text-muted-foreground">
-                {team ? `${team.name} · ${team.domain}.slack.com` : 'Workspace connected via Lovable Gateway'}
+                {team ? `${team.name} · ${team.domain}.slack.com` : 'Workspace conectado ao Vertal'}
               </p>
             </div>
           </div>

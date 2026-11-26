@@ -66,6 +66,10 @@ describe('apps escondidos do catálogo', () => {
     expect(text).not.toMatch(/openai|openrouter|open router/i)
     expect(fluxosConnectors.some(c => /openai|openrouter/i.test(c.slug))).toBe(false)
   })
+  it('card do Slack não cita o gateway de terceiros', () => {
+    const slack = getConnectorBySlug('slack')
+    expect(JSON.stringify([slack?.longDescription, slack?.apiKeyHelp, slack?.setupSteps])).not.toMatch(/lovable/i)
+  })
   it('lista do servidor igual à do catálogo', async () => {
     const { HIDDEN_FLUXOS_APPS } = await import('@/lib/fluxosConnectors')
     const server = await import('../../supabase/functions/_shared/hiddenFluxosApps.ts')
