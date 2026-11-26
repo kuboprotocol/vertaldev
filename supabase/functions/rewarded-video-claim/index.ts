@@ -1,16 +1,18 @@
-// Vídeo premiado (Google Ad Manager GPT rewarded) na página /shortlinks.
+// Vídeo premiado (AppLixir web SDK; Google Ad Manager GPT rewarded como alternativa) na página /shortlinks.
 //
 // Ações (query ?action= ou campo "action" no corpo):
 //   status -> estado do usuário (quantos hoje, cooldown, valor)
-//   start  -> emite um nonce de uso único ANTES do anúncio (recusa se em cooldown/limite)
-//   claim  -> { nonce } depois do rewardedSlotGranted; marca o nonce como usado e credita
+//   start  -> { provider? } emite um nonce de uso único ANTES do anúncio (recusa se em cooldown/limite)
+//   claim  -> { nonce } depois do "complete" (AppLixir) / rewardedSlotGranted (GAM); marca o nonce
+//             como usado e credita. Recusa (too_soon) se o resgate vier antes do tempo mínimo de vídeo.
 //
 // Idempotência: o nonce só credita uma vez (claim_rewarded_video trava e marca na mesma
 // transação; o crédito usa a chave "rewarded_video:<nonce>" em credit_transactions).
 // Cooldown e limite diário são conferidos de novo no Postgres, com o dia em America/Sao_Paulo.
 //
 // Env (todos opcionais): REWARDED_VIDEO_CREDITS (1), REWARDED_VIDEO_COOLDOWN_SECONDS (60),
-// REWARDED_VIDEO_DAILY_CAP (10), REWARDED_VIDEO_NONCE_TTL_SECONDS (1800).
+// REWARDED_VIDEO_DAILY_CAP (10), REWARDED_VIDEO_NONCE_TTL_SECONDS (1800),
+// REWARDED_VIDEO_MIN_WATCH_SECONDS (5): tempo mínimo entre o start e o claim do mesmo nonce.
 import { sanitizeError } from "../_shared/cors.ts";
 import { adminClient, authUserId, json, readJson, rewardsCors } from "../_shared/rewardsHttp.ts";
 import {
@@ -28,7 +30,15 @@ const CLAIM_ERRORS: Record<string, number> = {
   nonce_already_used: 409,
   daily_cap_reached: 429,
   cooldown: 429,
+  too_soon: 425,
 };
+
+const PROVIDERS = new Set(["applixir", "gam"]);
+
+function minWatchSeconds(): number {
+  const n = Number.parseInt(Deno.env.get("REWARDED_VIDEO_MIN_WATCH_SECONDS") ?? "", 10);
+  return Number.isFinite(n) && n >= 0 && n <= 600 ? n : 5;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: rewardsCors });
@@ -66,9 +76,10 @@ Deno.serve(async (req) => {
 
       const nonce = newNonce();
       const expiresAt = new Date(Date.now() + cfg.nonceTtlSeconds * 1000).toISOString();
+      const provider = PROVIDERS.has(String(body.provider)) ? String(body.provider) : "gam";
       const { error } = await admin
         .from("rewarded_video_sessions")
-        .insert({ nonce, user_id: userId, expires_at: expiresAt });
+        .insert({ nonce, user_id: userId, expires_at: expiresAt, provider });
       if (error) throw error;
       return json({ nonce, expires_at: expiresAt, ...status });
     }
@@ -76,6 +87,20 @@ Deno.serve(async (req) => {
     if (action === "claim") {
       if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
       if (!isValidNonce(body.nonce)) return json({ error: "invalid_nonce" }, 400);
+
+      // Tempo mínimo de vídeo: o nonce nasce antes do anúncio; um resgate imediato é recusado
+      // sem gastar o nonce (o usuário ainda pode resgatá-lo depois de assistir).
+      const { data: session, error: sessionError } = await admin
+        .from("rewarded_video_sessions")
+        .select("created_at")
+        .eq("nonce", body.nonce)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (sessionError) throw sessionError;
+      const minWatch = minWatchSeconds();
+      if (session && Date.now() - Date.parse(session.created_at as string) < minWatch * 1000) {
+        return json({ error: "too_soon", ...(await loadStatus()) }, CLAIM_ERRORS.too_soon);
+      }
 
       const { data, error } = await admin.rpc("claim_rewarded_video", {
         _user_id: userId,
