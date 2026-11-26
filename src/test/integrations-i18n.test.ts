@@ -84,9 +84,22 @@ describe('Integrações em 22 idiomas', () => {
 
   it('app escondido do catálogo não tem página nem entra nos sitemaps', () => {
     const maps = renderIntegrationSitemaps(ORIGIN, '2026-11-26')
-    for (const app of ['airbrake', 'placetel', 'virtualq', 'flowers-software', 'freescout', 'firefly-iii', 'strava', 'flickr']) {
+    for (const app of ['placetel', 'flowers-software', 'strava', 'flickr']) {
       for (const [file] of pages) expect(file.includes(`/${app}.html`), file).toBe(false)
       for (const [name, xml] of maps) expect(xml.includes(`/${app}</loc>`), `${name}: ${app}`).toBe(false)
+    }
+  })
+
+  it('FreeScout, Firefly III, VirtualQ e Airbrake voltaram: página em todos os idiomas e nos 22 sitemaps', () => {
+    const maps = renderIntegrationSitemaps(ORIGIN, '2026-11-26')
+    for (const app of ['freescout', 'firefly-iii', 'virtualq', 'airbrake']) {
+      const files = [...pages.keys()].filter((f) => f.endsWith(`/${app}.html`))
+      expect(files.length, app).toBe(INTEGRATION_LOCALES.length)
+      for (const [name, xml] of maps) expect(xml.includes(`/${app}</loc>`), `${name}: ${app}`).toBe(true)
+      const en = pages.get(files.find((f) => f.startsWith('en/'))!)!
+      // Pergunta de nicho "X tem OAuth?" traduzida, no FAQ e no JSON-LD.
+      expect(en, app).toMatch(/OAuth\?/)
+      expect(en, app).not.toMatch(/\{(name|app|n|a|t|list|fields)\}/)
     }
   })
 

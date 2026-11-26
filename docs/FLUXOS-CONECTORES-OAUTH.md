@@ -252,3 +252,31 @@ oficial; inútil ou sem função real sai do catálogo (só esconde, nada é apa
   do site oficial, ícone de produto do Google/Microsoft ou a marca oficial em quadrado na cor da marca). Teste em
   `src/test/fluxos-connectors.test.ts` falha se faltar logo, se o arquivo não existir ou se duas marcas dividirem o
   mesmo logo. Sem marca (ícone genérico): Vertal Fluxos, Vertal Agentes, Custom RPC, Web Wallet, Self-hosted LLM, SMTP.
+
+## monday.com, FreeScout, Firefly III, VirtualQ e Airbrake (26/11/2026)
+
+- **monday.com (OAuth)**: app **Vertal Dev** (ID 12877465) no Developer Center da conta `vertal-company-company.monday.com`
+  (kuboprotocol@gmail.com), versão v1 **Live** e **Published** com permissão "All accounts" (qualquer conta monday instala
+  pelo OAuth; listagem no marketplace é outra revisão, não feita). Client ID `da03aca0085dc80432eeac8ebab9ed85` em
+  `PUBLIC_OAUTH_CLIENT_IDS.MONDAY`; segredo em `FLUXOS_OAUTH_MONDAY_SECRET`. Retorno `https://vertal.dev/fluxos/oauth/monday`.
+  Escopos: `me:read boards:read boards:write workspaces:read users:read updates:read updates:write`. O motor manda
+  `force_install_if_needed=true` (conta sem o app instalado vê a instalação antes do consentimento). Token do OAuth não expira.
+  O Developer Center não tem campo de política de privacidade/termos (só no formulário do marketplace).
+- **Limite de 100 segredos**: o projeto já estava em 100/100 antes do Monday. Para abrir a vaga, os IDs públicos de
+  Pipedrive e Typeform foram para `PUBLIC_OAUTH_CLIENT_IDS` (valores conferidos por SHA-256 com o segredo) e
+  `FLUXOS_OAUTH_TYPEFORM_ID` saiu dos segredos depois do deploy. Para um cliente novo: mova outro `_ID` público do mesmo jeito.
+- **Modo token ("Avançado")**: campo do motor com `advanced: true` (token pessoal) e `oauthOnly: true` (client id/secret).
+  Com o token preenchido, o `start` não usa o cliente do Vertal, tira os campos `oauthOnly` e verifica direto (sem login).
+  Tela: `FluxosConnectPanel` mostra "Entrar com …" e, recolhido, "Avançado: usar token pessoal em vez do login".
+  Passos por app: `src/lib/fluxos/setupHelp.ts`.
+- **Firefly III (OAuth por instância)**: cada usuário cria o cliente na própria instância (Options → Profile → OAuth →
+  Create new client, confidencial, retorno `https://vertal.dev/fluxos/oauth/firefly-iii`) e informa URL + client ID/secret;
+  tudo fica na conexão dele (nenhum segredo no Supabase). Personal Access Token em "Avançado". Ações: criar transação,
+  listar contas; gatilhos de transação criada/alterada/apagada.
+- **FreeScout**: sem OAuth oficial (API do módulo API & Webhooks só por chave). Ações: criar conversa, responder/nota,
+  mudar status ou responsável, listar conversas; gatilho de eventos por webhook.
+- **Airbrake**: sem OAuth (User API key). Ações: listar erros, silenciar/reativar erro (a API v4 não documenta "resolver").
+  A chave só vai para hosts `*.airbrake.io` (padrão `https://api.airbrake.io`).
+- **VirtualQ**: sem OAuth (token do painel → Contact Center → API Tokens). Ações de fila (entrar, ver, atualizar, sair).
+- Os quatro voltaram ao catálogo com logo oficial (128×128) e páginas `/integracoes/<slug>` em 22 idiomas com FAQ de
+  nicho ("X tem OAuth?"). Flowers Software e Placetel continuam escondidos.

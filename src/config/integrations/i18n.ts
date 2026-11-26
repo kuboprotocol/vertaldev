@@ -114,6 +114,8 @@ export function integrationSourceStrings(): Dict {
     const p = `c.${i.slug}`
     out[`${p}.about`] = i.about
     i.uses.forEach((u, idx) => (out[`${p}.use.${idx}`] = u))
+    const extraFaq = INTEGRATION_CONTENT[i.slug]?.faq ?? []
+    extraFaq.forEach((f, idx) => { out[`${p}.faq.${idx}.q`] = f.q; out[`${p}.faq.${idx}.a`] = f.a })
     if (!i.fluxosCard) {
       out[`${p}.summary`] = i.summary
       out[`${p}.details`] = i.details
@@ -123,7 +125,6 @@ export function integrationSourceStrings(): Dict {
     }
   }
   // Conteúdo escrito à mão para conectores que ainda não estão no catálogo não entra.
-  void INTEGRATION_CONTENT
   return out
 }
 
@@ -227,6 +228,7 @@ export function localizeIntegration(
         ? T('fa2Engine', { a: actions.length, t: triggers.length, list: listFormat(l.lang, all.slice(0, 4)) })
         : `${summary} ${T('fa2Base', { list: listFormat(l.lang, features) })}`,
     },
+    ...(INTEGRATION_CONTENT[i.slug]?.faq ?? []).map((_, idx) => ({ q: tr(`${p}.faq.${idx}.q`), a: tr(`${p}.faq.${idx}.a`) })),
     { q: T('fq3'), a: T('fa3') },
     { q: T('fq4'), a: `${T('fa4', { n: CHAT_ACTION_CREDITS })}${i.own ? '' : ` ${T('fa4Third')}`}` },
     i.own ? { q: T('fq5Own'), a: T('fa5Own') } : { q: T('fq5'), a: T('fa5') },

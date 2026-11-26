@@ -18,14 +18,22 @@ export const ENGINE_APPS: Record<string, EngineAppInfo> = {
   "airbrake": {
     "auth": "fields",
     "fields": [
-      "URL da instância",
-      "token de autenticação"
+      "User API key"
     ],
-    "actions": [],
+    "actions": [
+      [
+        "Listar erros",
+        "Mostra os grupos de erro mais recentes, com mensagem, arquivo e quantidade."
+      ],
+      [
+        "Silenciar ou reativar erro",
+        "Para (ou volta) os avisos de um erro sem apagar o histórico."
+      ]
+    ],
     "triggers": [
       [
         "Novo erro",
-        "Dispara quando um erro novo é registrado."
+        "Dispara quando um erro novo é registrado no projeto."
       ]
     ]
   },
@@ -488,7 +496,16 @@ export const ENGINE_APPS: Record<string, EngineAppInfo> = {
       "client ID",
       "client secret"
     ],
-    "actions": [],
+    "actions": [
+      [
+        "Criar transação",
+        "Lança uma despesa, receita ou transferência, com categoria e tags."
+      ],
+      [
+        "Listar contas",
+        "Mostra as contas com o saldo atual."
+      ]
+    ],
     "triggers": [
       [
         "Transação criada",
@@ -556,11 +573,28 @@ export const ENGINE_APPS: Record<string, EngineAppInfo> = {
       "URL da instância",
       "chave de API"
     ],
-    "actions": [],
+    "actions": [
+      [
+        "Criar conversa",
+        "Abre um atendimento no mailbox, como mensagem do cliente ou e-mail do agente."
+      ],
+      [
+        "Responder conversa",
+        "Envia uma resposta ao cliente ou adiciona uma nota interna."
+      ],
+      [
+        "Mudar status ou responsável",
+        "Fecha, deixa pendente ou passa o atendimento para outro agente."
+      ],
+      [
+        "Listar conversas",
+        "Mostra os atendimentos recentes por mailbox, status, cliente ou assunto."
+      ]
+    ],
     "triggers": [
       [
         "Novo evento",
-        "Dispara a cada evento novo da central de atendimento."
+        "Dispara a cada evento da central: conversa criada, resposta do cliente, nota, mudança de status e mais."
       ]
     ]
   },
@@ -1387,10 +1421,8 @@ export const ENGINE_APPS: Record<string, EngineAppInfo> = {
     "triggers": []
   },
   "monday": {
-    "auth": "fields",
-    "fields": [
-      "token de API"
-    ],
+    "auth": "vertal-oauth",
+    "fields": [],
     "actions": [
       [
         "Criar quadro",
@@ -1402,7 +1434,11 @@ export const ENGINE_APPS: Record<string, EngineAppInfo> = {
       ],
       [
         "Criar item",
-        "Cria um item no quadro."
+        "Cria um item no quadro, com subitens se quiser."
+      ],
+      [
+        "Comentar no item",
+        "Publica uma atualização (comentário) num item do quadro."
       ]
     ],
     "triggers": [

@@ -298,7 +298,10 @@ function build(): Integration[] {
       uses: content?.uses?.length ? content.uses : CATEGORY_USES[c.category](c.name),
       officialUrl: c.docsUrl,
     }
-    const full: Integration = { ...item, faq: faqFor(item), related: [] }
+    // Perguntas de nicho do app (ex.: "O FreeScout tem OAuth?") entram depois das duas primeiras.
+    const base = faqFor(item)
+    const faq = [...base.slice(0, 2), ...(content?.faq ?? []), ...base.slice(2)]
+    const full: Integration = { ...item, faq, related: [] }
     bySlug.set(slug, full)
     list.push(full)
   }

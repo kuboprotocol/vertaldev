@@ -8,11 +8,13 @@ import {
   FLUXOS_ACTION_COST,
   FLUXOS_PENDING_TTL_MS,
   type FluxosAppDef,
+  isTokenMode,
   type FluxosEngine,
   makeEngine,
   META_APPS,
   parseFluxosOp,
   platformOAuthData,
+  tokenModeFields,
   userAuthFields,
   whatsappErrorHint,
   whatsappTest,
@@ -122,11 +124,20 @@ export async function handleFluxosApps(
 
   if (op.op === "start") {
     if (!def.supportsConnections) return json(400, { error: "no_connection_needed" });
-    const data: Record<string, string> = { ...(op.fields ?? {}), ...(platform ?? {}) };
+    // Avançado: token pessoal no lugar do login OAuth (não usa o cliente do Vertal).
+    const tokenMode = isTokenMode(def, op.fields);
+    const client = tokenMode ? null : platform;
+    const data: Record<string, string> = { ...(op.fields ?? {}), ...(client ?? {}) };
+    if (tokenMode) {
+      for (const f of def.authFields) if (f.oauthOnly) delete data[f.key];
+    } else {
+      // Sem token: campos do Avançado não seguem para o motor.
+      for (const f of def.authFields) if (f.advanced) delete data[f.key];
+    }
     if (!data.screenName) data.screenName = user.email ? `${def.name} · ${user.email}` : def.name;
     // Meta: a configuração de login é só a do app do Vertal.
     if (platform && META_APPS.has(op.app) && !platform.configId) delete data.configId;
-    const missing = userAuthFields(def, platform)
+    const missing = (tokenMode ? tokenModeFields(def) : userAuthFields(def, platform))
       .filter((f) => f.required && !data[f.key] && !(f.value !== undefined && f.value !== null && f.value !== ""))
       .map((f) => f.key);
     if (missing.length) return json(400, { error: "missing_fields", fields: missing });
@@ -154,7 +165,7 @@ export async function handleFluxosApps(
       return json(500, { error: "save_failed" });
     }
 
-    if (def.oauth) {
+    if (def.oauth && !tokenMode) {
       const r = await engine.call("POST", `/connections/${connId}/auth-url`);
       if (r.status !== 200 || typeof r.data?.url !== "string") {
         log(user, op.app, "start", false, "auth url failed");

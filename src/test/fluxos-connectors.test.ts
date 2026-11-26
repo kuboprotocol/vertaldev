@@ -65,14 +65,28 @@ describe('apps escondidos do catálogo', () => {
   })
   it('conectores sem uso para o público ou sem função real ficam fora (auditoria 26/11/2026)', async () => {
     const { fluxosConnectors, HIDDEN_FLUXOS_APPS } = await import('@/lib/fluxosConnectors')
-    for (const app of ['airbrake', 'flowers-software', 'freescout', 'placetel', 'virtualq', 'firefly-iii']) {
+    for (const app of ['flowers-software', 'placetel']) {
       expect(HIDDEN_FLUXOS_APPS.has(app), app).toBe(true)
       expect(getConnectorBySlug(`fluxos-${app}`), app).toBeUndefined()
       expect(fluxosConnectors.some(c => c.fluxosApp === app), app).toBe(false)
     }
-    // úteis continuam (chave/token ou app próprio)
-    for (const app of ['postgresql', 'telegram-bot', 'smtp', 'monday', 'zendesk', 'wordpress', 'linkedin']) {
+    // úteis continuam (chave/token ou app próprio); FreeScout, Firefly III, VirtualQ e Airbrake voltaram (26/11/2026)
+    for (const app of ['postgresql', 'telegram-bot', 'smtp', 'monday', 'zendesk', 'wordpress', 'linkedin', 'freescout', 'firefly-iii', 'virtualq', 'airbrake']) {
       expect(getConnectorBySlug(`fluxos-${app}`), app).toBeDefined()
+    }
+  })
+  it('FreeScout, Firefly III, VirtualQ e Airbrake de volta, com logo oficial PNG 128×128', async () => {
+    const { HIDDEN_FLUXOS_APPS } = await import('@/lib/fluxosConnectors')
+    const fs = await import('node:fs')
+    for (const [app, name] of [['freescout', 'FreeScout'], ['firefly-iii', 'Firefly III'], ['virtualq', 'VirtualQ'], ['airbrake', 'Airbrake']]) {
+      expect(HIDDEN_FLUXOS_APPS.has(app), app).toBe(false)
+      const c = getConnectorBySlug(`fluxos-${app}`)
+      expect(c?.name).toBe(name)
+      expect(c?.logoUrl).toBe(`/connectors/${app}.png`)
+      const png = fs.readFileSync(`public${c!.logoUrl}`)
+      expect(png.subarray(1, 4).toString()).toBe('PNG')
+      expect(png.readUInt32BE(16)).toBe(128)
+      expect(png.readUInt32BE(20)).toBe(128)
     }
   })
   it('lista do servidor igual à do catálogo', async () => {
