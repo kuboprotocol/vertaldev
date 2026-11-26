@@ -34,7 +34,7 @@ describe('Integrações: uma página pública por conector do catálogo', () => 
       const slug = c.slug === 'fluxos-instagram' ? 'instagram' : c.slug === 'fluxos-whatsapp' ? 'whatsapp' : integrationSlug(c)
       expect(slugs.has(slug), c.slug).toBe(true)
     }
-    expect(INTEGRATIONS.length).toBeGreaterThanOrEqual(100)
+    expect(INTEGRATIONS.length).toBeGreaterThanOrEqual(95)
   })
 
   it('apps escondidos e "em breve" nunca ganham página', () => {
@@ -58,7 +58,8 @@ describe('Integrações: uma página pública por conector do catálogo', () => 
 
   it('todo conector atual tem conteúdo próprio (e nenhum texto órfão)', () => {
     for (const i of INTEGRATIONS) expect(INTEGRATION_CONTENT[i.slug], i.slug).toBeDefined()
-    for (const key of Object.keys(INTEGRATION_CONTENT)) expect(findIntegration(key), key).toBeDefined()
+    // Texto de app escondido fica guardado (volta junto se o app voltar ao catálogo).
+    for (const key of Object.keys(INTEGRATION_CONTENT)) if (!HIDDEN_FLUXOS_APPS.has(key)) expect(findIntegration(key), key).toBeDefined()
   })
 
   it('título, descrição e H1 únicos e dentro dos limites; 3+ exemplos e FAQ', () => {

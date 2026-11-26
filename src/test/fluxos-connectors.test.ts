@@ -19,10 +19,22 @@ describe('catálogo unificado Vertal Dev ↔ Vertal Fluxos', () => {
     expect(notion?.status).toBe('available')
     for (const a of FLUXOS_NATIVE_APPS) expect(Object.keys(FLUXOS_SHARED_APPS)).not.toContain(a.app)
   })
-  it('Airbrake mostra o logo oficial no catálogo', () => {
-    const airbrake = getConnectorBySlug('fluxos-airbrake')
-    expect(airbrake?.name).toBe('Airbrake')
-    expect(airbrake?.logoUrl).toBe('/connectors/airbrake.png')
+  it('todo conector visível de marca tem logo próprio que existe em public/', async () => {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    // Sem marca: ficam com o ícone genérico (Vertal Fluxos/Agentes, RPC próprio, carteira, LLM próprio, SMTP).
+    const generic = new Set(['automatisch', 'huginn', 'custom-rpc', 'web-wallet', 'fluxos-self-hosted-llm', 'fluxos-smtp'])
+    const seen = new Map<string, string>()
+    for (const c of connectors) {
+      if (generic.has(c.slug)) continue
+      expect(c.logoUrl, c.slug).toBeTruthy()
+      expect(fs.existsSync(path.join(process.cwd(), 'public', c.logoUrl!)), `${c.slug} → ${c.logoUrl}`).toBe(true)
+      // Logo de uma marca não serve para outra (ex.: o mesmo quadrado da Microsoft em Outlook e Teams).
+      // Instagram e WhatsApp têm dois cartões (nativo e via Vertal Fluxos) com o mesmo app.
+      const owner = seen.get(c.logoUrl!)
+      if (owner) expect(c.name.split(' ')[0], `${c.slug} repete o logo de ${owner}`).toBe(owner.split(' ')[0])
+      else seen.set(c.logoUrl!, c.name)
+    }
   })
   it('Airtable mostra o logo oficial no catálogo', () => {
     const airtable = getConnectorBySlug('fluxos-airtable')
@@ -50,6 +62,26 @@ describe('apps escondidos do catálogo', () => {
     const { fluxosConnectors, HIDDEN_FLUXOS_APPS } = await import('@/lib/fluxosConnectors')
     expect(HIDDEN_FLUXOS_APPS.has('flickr')).toBe(true)
     expect(fluxosConnectors.some(c => c.slug === 'fluxos-flickr')).toBe(false)
+  })
+  it('conectores sem uso para o público ou sem função real ficam fora (auditoria 26/11/2026)', async () => {
+    const { fluxosConnectors, HIDDEN_FLUXOS_APPS } = await import('@/lib/fluxosConnectors')
+    for (const app of ['airbrake', 'flowers-software', 'freescout', 'placetel', 'virtualq', 'firefly-iii']) {
+      expect(HIDDEN_FLUXOS_APPS.has(app), app).toBe(true)
+      expect(getConnectorBySlug(`fluxos-${app}`), app).toBeUndefined()
+      expect(fluxosConnectors.some(c => c.fluxosApp === app), app).toBe(false)
+    }
+    // úteis continuam (chave/token ou app próprio)
+    for (const app of ['postgresql', 'telegram-bot', 'smtp', 'monday', 'zendesk', 'wordpress', 'linkedin']) {
+      expect(getConnectorBySlug(`fluxos-${app}`), app).toBeDefined()
+    }
+  })
+  it('lista do servidor igual à do catálogo', async () => {
+    const { HIDDEN_FLUXOS_APPS } = await import('@/lib/fluxosConnectors')
+    const fs = await import('node:fs')
+    const src = fs.readFileSync('supabase/functions/_shared/hiddenFluxosApps.ts', 'utf8')
+    const body = src.slice(src.indexOf('new Set(['), src.indexOf(']);'))
+    const server = new Set([...body.matchAll(/"([a-z0-9-]+)"/g)].map(m => m[1]))
+    expect([...server].sort()).toEqual([...HIDDEN_FLUXOS_APPS].sort())
   })
   it('Strava não aparece em /connectors', async () => {
     const { fluxosConnectors, HIDDEN_FLUXOS_APPS } = await import('@/lib/fluxosConnectors')

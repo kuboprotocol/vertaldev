@@ -13,6 +13,10 @@ import { BANNED_PUBLIC_TERMS, INTEGRATIONS } from '@/config/integrations'
 import { integrationSourceStrings } from '@/config/integrations/i18n'
 import { ALL_INTEGRATION_LOCALES, INTEGRATION_LOCALES } from '@/config/integrations/locales'
 import { crawlPriceFor } from '../../worker/payPerCrawl'
+import { HIDDEN_FLUXOS_APPS } from '@/lib/fluxosConnectors'
+
+/** Traduções de app escondido ficam guardadas (voltam junto se o app voltar ao catálogo). */
+const hiddenKey = (k: string) => HIDDEN_FLUXOS_APPS.has(k.match(/^[ec]\.([a-z0-9-]+)\./)?.[1] ?? '')
 
 const ORIGIN = 'https://vertal.dev'
 const pages = renderIntegrationI18nPages(ORIGIN)
@@ -56,6 +60,7 @@ describe('Integrações em 22 idiomas', () => {
     for (const l of INTEGRATION_LOCALES) {
       const dict = loadDict(l.code)
       for (const [k, v] of Object.entries(dict)) {
+        if (hiddenKey(k)) continue
         expect(k in source, `${l.code}: chave órfã ${k}`).toBe(true)
         expect(placeholders(v), `${l.code} ${k}`).toBe(placeholders(source[k]))
       }
@@ -75,6 +80,14 @@ describe('Integrações em 22 idiomas', () => {
     }
     const committed = JSON.parse(readFileSync('src/config/integrations/i18n/source.pt-BR.json', 'utf8'))
     expect(Object.keys(committed).length).toBeGreaterThan(1000)
+  })
+
+  it('app escondido do catálogo não tem página nem entra nos sitemaps', () => {
+    const maps = renderIntegrationSitemaps(ORIGIN, '2026-11-26')
+    for (const app of ['airbrake', 'placetel', 'virtualq', 'flowers-software', 'freescout', 'firefly-iii', 'strava', 'flickr']) {
+      for (const [file] of pages) expect(file.includes(`/${app}.html`), file).toBe(false)
+      for (const [name, xml] of maps) expect(xml.includes(`/${app}</loc>`), `${name}: ${app}`).toBe(false)
+    }
   })
 
   it('sitemap por idioma com alternates + índice de sitemaps + robots', () => {
