@@ -4,7 +4,14 @@ Pedido do Laércio (26/11/2026): transformar a caixinha "Emails" do painel num s
 e-mail que o cliente pode usar como e-mail profissional, ligado ao Vertal CRM grátis; e as contas Gmail e
 Outlook conectadas ganham subpáginas em Conectores e alimentam o CRM — só as contas que o cliente escolher.
 
-**Tudo desligado por padrão.** Aditivo: não muda o motor do Vibe Code, prompts, roteamento de modelos,
+**Status (26/11/2026, OK do Laércio — opção A):** ligado para TODOS os clientes em `@vertal.dev`. Catch-all de vertal.dev →
+Worker `vertaldev`; regras específicas (contato@, developers@ → Gmail do Laércio) continuam antes do catch-all. Antes o catch-all
+estava desligado (endereço desconhecido = recusado), então `MAILBOX_FALLBACK_FORWARD` fica vazio e o comportamento para
+endereços desconhecidos não muda. Envio pelo Resend grátis (100/dia no total): `dailySendCap` 20 por usuário e
+`globalDailySendCap` 90 somando todos; ao bater qualquer um a tela mostra "Limite diário atingido". O Vertal CRM continua só
+para a conta dele: para os outros, o interruptor "Alimentar o CRM" some e aparece um link para a lista de espera (/crm).
+
+Originalmente tudo desligado por padrão. Aditivo: não muda o motor do Vibe Code, prompts, roteamento de modelos,
 o conector Gmail/Outlook existente nem os clientes OAuth. Nenhum escopo novo, nenhum segredo novo,
 nenhuma edge function nova, nada pago.
 
@@ -45,10 +52,11 @@ nenhuma edge function nova, nada pago.
 ```json
 "VERTAL_MAILBOX": {
   "enabled": true,
-  "userIds": ["<id do Laércio>"],
+  "userIds": ["*"],
   "aliasDomains": ["vertal.dev"],
   "outboundDomains": ["vertal.dev"],
-  "dailySendCap": 50,
+  "dailySendCap": 20,
+  "globalDailySendCap": 90,
   "crmFeedDefault": true
 }
 ```

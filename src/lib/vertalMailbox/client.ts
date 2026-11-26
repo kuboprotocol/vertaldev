@@ -62,7 +62,7 @@ export interface MailAccounts {
 }
 export interface MailStatus {
   ok: true; enabled: true;
-  config: { aliasDomains: string[]; outboundDomains: string[]; dailySendCap: number; outbound: boolean };
+  config: { aliasDomains: string[]; outboundDomains: string[]; dailySendCap: number; globalDailySendCap?: number; outbound: boolean };
   addresses: MailAddress[]; accounts: MailAccounts; crmEnabled: boolean; unread: number;
 }
 

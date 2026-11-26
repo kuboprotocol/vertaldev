@@ -71,6 +71,23 @@ describe('Vertal Mail · handler', () => {
     expect((await handleMailbox({ op: 'send', addressId: A1, to: 'c@d.com', subject: 'x', text: 'y' }, deps)).body.error).toBe('daily_send_cap');
   });
 
+  it('respeita o limite diário global (todos os clientes somados) e a cota do provedor', async () => {
+    const other = 'cccccccc-2222-4333-8444-555555555555';
+    const { deps, sent } = setup({ cfg: { ...cfg, dailySendCap: 20, globalDailySendCap: 1 } }, {
+      mailbox_addresses: [{ id: A1, user_id: U, address: 'laercio@mail.vertal.dev', local_part: 'laercio', domain: 'mail.vertal.dev', active: true }],
+      mailbox_messages: [{ id: IN1, user_id: other, direction: 'out', folder: 'sent', status: 'sent', created_at: new Date().toISOString() }],
+    });
+    const r = await handleMailbox({ op: 'send', addressId: A1, to: 'c@d.com', subject: 's', text: 't' }, deps);
+    expect(r.status).toBe(429);
+    expect(r.body.error).toBe('global_daily_send_cap');
+    expect(sent.length).toBe(0);
+
+    const q = setup({ fetch: (async () => new Response(JSON.stringify({ name: 'daily_quota_exceeded', message: 'You have reached your daily email sending quota.' }), { status: 429 })) as typeof fetch }, {
+      mailbox_addresses: [{ id: A1, user_id: U, address: 'laercio@mail.vertal.dev', local_part: 'laercio', domain: 'mail.vertal.dev', active: true }],
+    });
+    expect((await handleMailbox({ op: 'send', addressId: A1, to: 'c@d.com', subject: 's', text: 't' }, q.deps)).body.error).toBe('global_daily_send_cap');
+  });
+
   it('não envia por domínio não verificado', async () => {
     const { deps } = setup({ cfg: { ...cfg, outboundDomains: [] } }, {
       mailbox_addresses: [{ id: A1, user_id: U, address: 'x@mail.vertal.dev', local_part: 'x', domain: 'mail.vertal.dev', active: true }],

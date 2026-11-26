@@ -10,6 +10,7 @@
 //     "aliasDomains": ["mail.vertal.dev"],         // domínios onde o cliente pode criar endereço (Email Routing ligado)
 //     "outboundDomains": ["mail.vertal.dev"],      // domínios verificados no provedor de envio já usado (Resend)
 //     "dailySendCap": 50,                          // envios por usuário por dia (padrão 50, máx. 500)
+//     "globalDailySendCap": 90,                    // envios de TODOS os usuários somados por dia (Resend grátis = 100/dia; padrão 90)
 //     "crmFeedDefault": true                       // endereço novo já alimenta o CRM (o usuário desliga)
 //   }
 // Um segredo avulso VERTAL_MAILBOX com o mesmo JSON vence (como nos outros módulos).
@@ -23,6 +24,8 @@ export interface MailboxConfig {
   aliasDomains: string[];
   outboundDomains: string[];
   dailySendCap: number;
+  /** Soma de envios de todos os usuários por dia (UTC). O Resend grátis permite 100/dia no total. */
+  globalDailySendCap: number;
   crmFeedDefault: boolean;
 }
 
@@ -63,6 +66,7 @@ export function mailboxConfig(env: MailEnv): MailboxConfig | null {
   const c = parseObj(env.VERTAL_MAILBOX) ?? parseObj(parseObj(env.VERTAL_GPU_CONFIG)?.VERTAL_MAILBOX);
   if (!c || !truthy(c.enabled)) return null;
   const cap = Math.floor(Number(c.dailySendCap));
+  const gcap = Math.floor(Number(c.globalDailySendCap));
   return {
     enabled: true,
     userIds: Array.isArray(c.userIds)
@@ -71,6 +75,7 @@ export function mailboxConfig(env: MailEnv): MailboxConfig | null {
     aliasDomains: domains(c.aliasDomains),
     outboundDomains: domains(c.outboundDomains),
     dailySendCap: Number.isFinite(cap) && cap > 0 ? Math.min(cap, 500) : 50,
+    globalDailySendCap: Number.isFinite(gcap) && gcap > 0 ? Math.min(gcap, 1_000_000) : 90,
     crmFeedDefault: c.crmFeedDefault === undefined ? true : truthy(c.crmFeedDefault),
   };
 }

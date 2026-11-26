@@ -162,17 +162,23 @@ export default function ConnectorMailAccountPage({ source }: { source: 'gmail' |
           <Badge variant="secondary">{source === 'gmail' ? 'Gmail' : 'Outlook'}</Badge>
           <span className="font-medium truncate">{label}</span>
           <div className="ml-auto flex items-center gap-3">
-            <label className="flex items-center gap-2 text-sm" title={ui.feedCrmHint}>
-              {ui.feedCrm}
-              <Switch checked={feedOn} disabled={!status.crmEnabled} onCheckedChange={(v) => void toggleFeed(v)} />
-            </label>
+            {status.crmEnabled && (
+              <label className="flex items-center gap-2 text-sm" title={ui.feedCrmHint}>
+                {ui.feedCrm}
+                <Switch checked={feedOn} onCheckedChange={(v) => void toggleFeed(v)} />
+              </label>
+            )}
             {status.crmEnabled && feedOn && (
               <Button size="sm" variant="outline" className="gap-2" disabled={syncing} onClick={() => void syncNow()}><Database className="h-4 w-4" />{ui.syncNow}</Button>
             )}
             <Button size="sm" className="gap-2" onClick={() => { setOpen(null); setCompose({ to: '', subject: '', body: '' }); }}><PenSquare className="h-4 w-4" />{ui.compose}</Button>
           </div>
         </div>
-        {!status.crmEnabled && <p className="max-w-7xl mx-auto px-4 pb-2 text-xs text-amber-500">{ui.crmOff}</p>}
+        {!status.crmEnabled && (
+          <p className="max-w-7xl mx-auto px-4 pb-2 text-xs">
+            <button type="button" className="text-primary underline-offset-2 hover:underline" onClick={() => navigate('/crm')}>{ui.crmWaitlist}</button>
+          </p>
+        )}
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6 grid gap-4 xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">

@@ -175,10 +175,12 @@ export default function MailboxPanel({ status, onReload, onShowLog }: { status: 
                 <div key={a.id} className="rounded-lg border border-border p-2 space-y-1">
                   <div className="font-medium break-all">{a.address}</div>
                   {!canSend(a.domain) && <div className="text-xs text-amber-500">{ui.outboundOff}</div>}
-                  <label className="flex items-center justify-between gap-2 text-xs" title={ui.feedCrmHint}>
-                    <span>{ui.feedCrm}</span>
-                    <Switch checked={a.crm_feed} disabled={!status.crmEnabled} onCheckedChange={(v) => void toggleAddressFeed(a.id, v)} />
-                  </label>
+                  {status.crmEnabled && (
+                    <label className="flex items-center justify-between gap-2 text-xs" title={ui.feedCrmHint}>
+                      <span>{ui.feedCrm}</span>
+                      <Switch checked={a.crm_feed} onCheckedChange={(v) => void toggleAddressFeed(a.id, v)} />
+                    </label>
+                  )}
                 </div>
               ))}
               {status.config.aliasDomains.length > 0 && activeAddresses.length < 5 && (
@@ -202,14 +204,18 @@ export default function MailboxPanel({ status, onReload, onShowLog }: { status: 
               <p className="text-xs text-muted-foreground">{ui.connectedHint}</p>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
-              {!status.crmEnabled && <p className="text-xs text-amber-500">{ui.crmOff}</p>}
+              {!status.crmEnabled && (
+                <button type="button" className="text-left text-xs text-primary underline-offset-2 hover:underline" onClick={() => navigate('/crm')}>{ui.crmWaitlist}</button>
+              )}
               {status.accounts.gmail.map((g) => (
                 <div key={g.id} className="rounded-lg border border-border p-2 space-y-1">
                   <div className="flex items-center gap-2"><Badge variant="secondary">Gmail</Badge><span className="break-all text-xs">{g.email}</span></div>
-                  <label className="flex items-center justify-between gap-2 text-xs" title={ui.feedCrmHint}>
-                    <span>{ui.feedCrm}</span>
-                    <Switch checked={g.crmFeed} disabled={!status.crmEnabled} onCheckedChange={(v) => void toggleFeed('gmail', g.id, v)} />
-                  </label>
+                  {status.crmEnabled && (
+                    <label className="flex items-center justify-between gap-2 text-xs" title={ui.feedCrmHint}>
+                      <span>{ui.feedCrm}</span>
+                      <Switch checked={g.crmFeed} onCheckedChange={(v) => void toggleFeed('gmail', g.id, v)} />
+                    </label>
+                  )}
                   {g.lastSyncedAt && <div className="text-[11px] text-muted-foreground">{ui.lastSync}: {fmtDate(g.lastSyncedAt)}</div>}
                   <Button size="sm" variant="ghost" className="w-full gap-2" onClick={() => navigate(mailAccountPath('gmail', g.id))}><ExternalLink className="h-3 w-3" />{ui.openInbox}</Button>
                 </div>
@@ -220,10 +226,12 @@ export default function MailboxPanel({ status, onReload, onShowLog }: { status: 
               {status.accounts.outlook.connected ? (
                 <div className="rounded-lg border border-border p-2 space-y-1">
                   <div className="flex items-center gap-2"><Badge variant="secondary">Outlook</Badge><span className="break-all text-xs">{status.accounts.outlook.label}</span></div>
-                  <label className="flex items-center justify-between gap-2 text-xs" title={ui.feedCrmHint}>
-                    <span>{ui.feedCrm}</span>
-                    <Switch checked={status.accounts.outlook.crmFeed} disabled={!status.crmEnabled} onCheckedChange={(v) => void toggleFeed('outlook', 'microsoft-outlook', v)} />
-                  </label>
+                  {status.crmEnabled && (
+                    <label className="flex items-center justify-between gap-2 text-xs" title={ui.feedCrmHint}>
+                      <span>{ui.feedCrm}</span>
+                      <Switch checked={status.accounts.outlook.crmFeed} onCheckedChange={(v) => void toggleFeed('outlook', 'microsoft-outlook', v)} />
+                    </label>
+                  )}
                   {status.accounts.outlook.lastSyncedAt && <div className="text-[11px] text-muted-foreground">{ui.lastSync}: {fmtDate(status.accounts.outlook.lastSyncedAt)}</div>}
                   <Button size="sm" variant="ghost" className="w-full gap-2" onClick={() => navigate(mailAccountPath('outlook'))}><ExternalLink className="h-3 w-3" />{ui.openInbox}</Button>
                 </div>

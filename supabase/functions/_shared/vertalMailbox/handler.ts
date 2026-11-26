@@ -107,6 +107,8 @@ async function sendViaResend(deps: MailboxDeps, payload: Record<string, unknown>
     signal: typeof AbortSignal.timeout === "function" ? AbortSignal.timeout(20_000) : undefined,
   });
   const j = await r.json().catch(() => ({}));
+  // Resend: 429 com "quota" = cota diária/mensal da conta (soma de todos os clientes); outro 429 = muitos pedidos por segundo.
+  if (r.status === 429) return { ok: false, error: /quota/i.test(`${j?.name ?? ""} ${j?.message ?? ""}`) ? "global_daily_send_cap" : "rate_limited" };
   if (!r.ok) return { ok: false, error: `provider_${r.status}:${String(j?.message ?? j?.name ?? "").slice(0, 160)}` };
   return { ok: true, id: typeof j?.id === "string" ? j.id : null };
 }
@@ -131,6 +133,10 @@ async function send(deps: MailboxDeps, body: Loose): Promise<Res> {
   const { count } = await deps.admin.from("mailbox_messages").select("id", { count: "exact", head: true })
     .eq("user_id", deps.userId).eq("direction", "out").gte("created_at", dayStart);
   if ((count ?? 0) >= deps.cfg.dailySendCap) return fail(429, "daily_send_cap", { cap: deps.cfg.dailySendCap });
+  // Limite diário global (todos os clientes somados): o plano grátis do provedor de envio tem cota total por dia.
+  const { count: total } = await deps.admin.from("mailbox_messages").select("id", { count: "exact", head: true })
+    .eq("direction", "out").in("status", ["queued", "sent"]).gte("created_at", dayStart);
+  if ((total ?? 0) >= deps.cfg.globalDailySendCap) return fail(429, "global_daily_send_cap");
 
   let inReplyTo: string | null = null;
   let references: string | null = null;
@@ -168,6 +174,7 @@ async function send(deps: MailboxDeps, body: Loose): Promise<Res> {
   await deps.admin.from("mailbox_messages").update(
     r.ok ? { status: "sent", provider_message_id: r.id, sent_at: new Date().toISOString() } : { status: "failed", error: r.error.slice(0, 300) },
   ).eq("id", saved.id);
+  if (!r.ok && (r.error === "global_daily_send_cap" || r.error === "rate_limited")) return fail(429, r.error, { id: saved.id });
   if (!r.ok) return fail(502, r.error.startsWith("outbound_") ? r.error : "send_failed", { id: saved.id });
   return ok({ id: saved.id });
 }
@@ -295,7 +302,7 @@ export async function handleMailbox(body: Loose, deps: MailboxDeps): Promise<Res
         .eq("user_id", deps.userId).eq("folder", "inbox").is("read_at", null);
       return ok({
         enabled: true,
-        config: { aliasDomains: deps.cfg.aliasDomains, outboundDomains: deps.cfg.outboundDomains, dailySendCap: deps.cfg.dailySendCap, outbound: !!deps.resendKey },
+        config: { aliasDomains: deps.cfg.aliasDomains, outboundDomains: deps.cfg.outboundDomains, dailySendCap: deps.cfg.dailySendCap, globalDailySendCap: deps.cfg.globalDailySendCap, outbound: !!deps.resendKey },
         addresses: addrs, accounts: await connectedAccounts(deps), crmEnabled: deps.crmEnabled, unread: unread ?? 0,
       });
     }
