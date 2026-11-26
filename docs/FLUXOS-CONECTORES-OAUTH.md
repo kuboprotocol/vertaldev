@@ -192,3 +192,25 @@ App da Meta **Vertal Dev**, App ID `1145586658064572` (modo Desenvolvimento), se
   conexão de usuário continua visível.
 - **Pendentes que ficam** (formulário de app próprio enquanto o cliente do Vertal não sai): LinkedIn, eBay (conta em
   análise), Amazon Ads (acesso à Ads API pedido), TikTok Ads, Kwai Ads, Discord, Reddit, HubSpot, Trello.
+
+## Meta: "Remover app" e "Exclusão de dados" (26/11/2026)
+Exigidos pela Meta para o app "Vertal Dev" (1145586658064572). Uma Edge Function só (`meta-data-deletion`,
+`verify_jwt = false`; limite de funções do plano), lógica em `_shared/metaDataDeletion.ts`. Sem segredo novo:
+a assinatura do `signed_request` (HMAC-SHA256) é conferida com `FLUXOS_OAUTH_META_SECRET`.
+
+| Campo no painel da Meta | URL |
+| --- | --- |
+| Login do Facebook → Configurações → **URL de retorno de chamada para cancelar autorização** (Deauthorize) | `https://sccizjlpwezsgaxkclot.supabase.co/functions/v1/meta-data-deletion/deauthorize` |
+| Configurações do app → Básico → **URL de solicitação de exclusão de dados** (Data deletion request) | `https://sccizjlpwezsgaxkclot.supabase.co/functions/v1/meta-data-deletion` |
+
+- O ID do usuário da Meta não fica no Supabase. O motor guarda `formattedData.userId` (`/me`) no login dos apps
+  `facebook`, `instagram`, `whatsapp`, `meta-ads`; a rota interna `POST /internal/vertal/connections/find`
+  (fork PR #16) devolve as conexões desse usuário. A função apaga cada uma no motor e a linha em
+  `fluxos_connections` (igual a "Desconectar") e grava um aviso em `connector_activity_logs`. Nada mais é tocado.
+- Cada pedido fica em `meta_data_requests` (só service role): tipo, código de confirmação, HMAC do ID da Meta,
+  status (`completed` ou `pending_review` quando o motor não respondeu), quantas conexões saíram.
+- Exclusão de dados responde `{url, confirmation_code}`; a página pública `https://vertal.dev/data-deletion?code=…`
+  (`DataDeletionPage`, pt-BR) consulta `GET …/meta-data-deletion?code=…`. Sem código, a página explica o que é
+  apagado e como pedir.
+- `pending_review`: rodar de novo a busca quando o motor voltar (ou apagar à mão) e atualizar o status.
+- Não cobre o canal do operador (`virtual-chat-instagram-webhook`, conta do próprio Vertal).

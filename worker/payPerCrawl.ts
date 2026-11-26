@@ -23,6 +23,7 @@ const RULES: PriceRule[] = [
   { match: prefix('/pricing'), priceUSD: 0 },
   { match: prefix('/privacy'), priceUSD: 0 },
   { match: prefix('/terms'), priceUSD: 0 },
+  { match: prefix('/data-deletion'), priceUSD: 0 },
   { match: prefix('/support'), priceUSD: 0 },
   { match: prefix('/download'), priceUSD: 0 },
   // Landing do Vertal Vibe Pay (todas as línguas): página de aquisição.

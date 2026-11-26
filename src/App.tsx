@@ -36,6 +36,7 @@ const CanvasPage = lazy(() => import("./pages/CanvasPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const TermsPage = lazy(() => import("./pages/TermsPage"));
 const PrivacyPage = lazy(() => import("./pages/PrivacyPage"));
+const DataDeletionPage = lazy(() => import("./pages/DataDeletionPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const PricingPage = lazy(() => import("./pages/PricingPage"));
 const AlternativesPage = lazy(() => import("./pages/AlternativesPage"));
@@ -235,6 +236,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/" element={<Index />} />
                 <Route path="/terms" element={<TermsPage />} />
                 <Route path="/privacy" element={<PrivacyPage />} />
+                <Route path="/data-deletion" element={<DataDeletionPage />} />
                 <Route path="/auth" element={<AuthPage />} />
                 <Route path="/pricing" element={<PricingPage />} />
                 <Route path="/ecossistema" element={<EcosystemPage />} />
