@@ -226,9 +226,10 @@ Config (arquivo `supabase/functions/_shared/vertalCodeAi/freeQuota.ts`):
 | `VERTAL_GPU_CONFIG` | `VERTAL_FREE_QUOTA_OLLAMA_MONTHLY_USD` | opcional: teto estimado do mês no Ollama Cloud (só pula se definido) |
 
 **Monitor de cota.** Cada chamada a Cerebras, Gemini, OpenRouter `:free` e Ollama Cloud é contada (pedidos e tokens do
-`usage`). Minuto: memória do isolate. Dia/mês e esperas: tabela **já existente** `rate_limit_counters` (sem migração),
-`bucket_key` `vcaq:<provedor>:<modelo>:d:<dia>:req|tok`, `…:m:<mês>:usd_micro` e `…:cool`, `user_id` zero, `window_start`
-= fim da janela (no futuro; a limpeza do `bump_rate_limit` não apaga). Cabeçalhos `x-ratelimit-*` (Cerebras) são lidos.
+`usage`). Minuto: memória do isolate. Dia/mês e esperas: tabela **já existente** `ai_gateway_cache` (sem migração),
+`key` `vcaq:<provedor>:<modelo>:d:<dia>:req|tok`, `…:m:<mês>:usd_micro` e `…:cool`, `content` = contagem,
+`task_kind` = `vca_quota`, `expires_at` = fim da janela. (A `rate_limit_counters` não serve: o gatilho de INSERT dela
+usa uma coluna `created_at` que não existe, então todo INSERT falha — também o `bump_rate_limit`; corrigir exige migração.) Cabeçalhos `x-ratelimit-*` (Cerebras) são lidos.
 O modelo é **pulado** quando chega a 90% de um limite, quando os cabeçalhos dizem que sobra ≤10%, ou depois de
 429/402/403-de-cota: espera até `retry-after`/`retryDelay`/reset dos cabeçalhos; cota **diária** do Gemini espera até a
 **meia-noite do Pacífico** (Cerebras: meia-noite UTC, ou o reset que o cabeçalho disser). A API do Ollama não expõe o uso
