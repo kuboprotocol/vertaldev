@@ -161,7 +161,7 @@ export default function ConnectorChannelPage({ channel }: { channel: ChannelId }
             app="instagram"
             name="Instagram"
             returnPath="/connectors/instagram"
-            intro="Use uma conta profissional do Instagram (Empresa ou Criador de conteúdo) vinculada a uma Página do Facebook. O login é feito na Meta e você escolhe quais Páginas e contas liberar. Depois, peça no Vertal Chat para publicar fotos e Reels, ver métricas ou ler e responder DMs (sempre com a sua confirmação)."
+            intro="Use uma conta profissional do Instagram (Empresa ou Criador de conteúdo). O login é feito na tela da Meta, com Instagram ou Facebook, e você escolhe quais contas liberar. Depois, peça no Vertal Chat para publicar fotos e Reels, ver métricas ou ler e responder DMs (sempre com a sua confirmação)."
           />
           <Button
             variant="ghost"
