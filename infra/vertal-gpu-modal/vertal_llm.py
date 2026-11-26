@@ -61,3 +61,23 @@ def serve():
         "--compilation-config", '{"cudagraph_capture_sizes": [1, 2, 4, 8]}',
     ]
     subprocess.Popen(cmd, env=env)
+
+    # Grava o cache do torch.compile no Volume assim que o servidor sobe: a próxima partida a frio
+    # pula a compilação (~45-60 s a menos).
+    def _persist_compile_cache():
+        import time
+        import urllib.request
+
+        for _ in range(600):
+            try:
+                if urllib.request.urlopen(f"http://127.0.0.1:{PORT}/health", timeout=2).status == 200:
+                    vllm_vol.commit()
+                    print("compile cache committed")
+                    return
+            except Exception:
+                pass
+            time.sleep(1)
+
+    import threading
+
+    threading.Thread(target=_persist_compile_cache, daemon=True).start()

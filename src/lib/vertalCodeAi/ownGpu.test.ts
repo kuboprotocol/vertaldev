@@ -124,7 +124,9 @@ describe('VERTAL Code AI · imagem e vídeo próprios (GPU)', () => {
     expect(ownVideoStatus({ status: 'failed' })).toBe('failed');
     expect(ownVideoStatus({ status: 'weird' })).toBe('pending');
     expect(ownVideoStatus(undefined)).toBe('pending');
-    expect(VCA_OWN_JOB_PREFIX).toBe('own:');
+    expect(VCA_OWN_JOB_PREFIX).toBe('vcaown_');
+    // o job assinado só aceita [A-Za-z0-9_-] (mesma regra do verifyJob da função)
+    expect(/^[A-Za-z0-9_-]+$/.test(`${VCA_OWN_JOB_PREFIX}fc-01M8AWMHNRABD9XV64N0R05AV3`)).toBe(true);
   });
 });
 
