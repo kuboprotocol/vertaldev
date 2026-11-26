@@ -134,8 +134,8 @@ primeiro para pedidos pequenos; depois vêm os grátis da opção, depois os pag
 | Vertal Livre (só grátis) | própria → gemma-4-31b:free → `vca-light-free` gemma-4-26b-a4b:free → nemotron-3-ultra:free → nemotron-3.5-super-vl:free → `vca-omni-free` nemotron-3-nano-omni:free → `vca-swift-free` nemotron-3.5-lightning:free → particle-1:free → (Gemini/Groq se houver chave) → reserva |
 | Vertal Turbo | própria → deepseek-chat direto → `vca-turbo-v4` deepseek-v4-flash ($0,09/$0,18) → deepseek-v4.1-flash → `vca-open` llama-4-maverick ($0,35/$1,00) → `vca-open-lite` llama-4-scout ($0,10/$0,30) → reserva |
 | Vertal Pro | própria → `vca-pro` kimi-k2.6 ($0,65/$3,41) → kimi-k2.7-code → deepseek-chat → deepseek-v4.1-flash → reserva |
-| Vertal Imagem | `vca-image` google/gemini-3.1-flash-lite-image (≈US$0,04/imagem) — ação `image` |
-| Vertal Vídeo | `vca-video` google/veo-3.1-lite 4 s 720p sem áudio (≈US$0,12) → `vca-video-alt` google/gemini-omni-1.2-flash 4 s 360p (≈US$0,09; instável em 24–25/11/2026) — ações `video`/`video_status`/`video_content` |
+| Vertal Imagem | `vca-image-own` própria em GPU (FLUX.1-schnell, se `VERTAL_OWN_IMAGE_URL`) → `vca-image` google/gemini-3.1-flash-lite-image (≈US$0,04/imagem) — ação `image` |
+| Vertal Vídeo | `vca-video-own` próprio em GPU (Wan2.1 T2V 1.3B, 4 s 480p, se `VERTAL_OWN_VIDEO_URL`) → `vca-video` google/veo-3.1-lite 4 s 720p sem áudio (≈US$0,12) → `vca-video-alt` google/gemini-omni-1.2-flash 4 s 360p (≈US$0,09; instável em 24–25/11/2026) — ações `video`/`video_status`/`video_content` |
 
 Preços em US$ por 1M tokens (entrada/saída), tabela do OpenRouter de 24/11/2026. Não existe Llama grátis no
 OpenRouter hoje, por isso Llama ficou no Turbo (pago). Cada modelo novo tem teto de saída por pedido
@@ -148,6 +148,27 @@ OpenRouter hoje, por isso Llama ficou no Turbo (pago). Cada modelo novo tem teto
 `OPENROUTER_API_KEY`, e continuam atrás da lista de liberação. O vídeo é assíncrono: `video` devolve um `job`
 assinado (HMAC com o usuário), `video_status` consulta e devolve o link assinado do provedor; quando não há link,
 `video_content` repassa os bytes.
+
+**GPU própria serverless (Modal, desde 26/11/2026)** — kit em `infra/vertal-gpu-modal/`, scale-to-zero (desliga
+após 120 s sem uso), no máximo 1 contêiner por endpoint, cada um protegido por Bearer próprio:
+
+- **LLM**: Qwen2.5-Coder-14B-Instruct-AWQ (Apache-2.0) no vLLM, GPU A10G, nome `vertal-coder-gpu`, contexto 16K.
+  Entra no **2º endpoint próprio** (`VERTAL_OLLAMA_URL_2` / `_TOKEN_2` / `_MODEL_2`, mais `_MAX_INPUT_TOKENS_2`,
+  `_FIRST_TOKEN_MS_2`, `_TOTAL_MS_2`, `_MAX_OUTPUT_TOKENS_2`, `_CONTEXT_2`). O roteador já fala OpenAI-compatível
+  (`/v1/chat/completions` com streaming), então não precisou de adaptador. Ordem: VM → GPU para pedidos pequenos;
+  acima de `VERTAL_OLLAMA_2_FIRST_ABOVE_TOKENS` (padrão 3 000) a GPU vem primeiro (a VM nem cabe). Medido em
+  26/11/2026: ~48 tok/s gerando (VM: ~18 tok/s com o 1.5B), 1º token 0,3 s quente / ~52 s a frio.
+- **Imagem**: FLUX.1-schnell (Apache-2.0; cópia sem bloqueio `unsloth/FLUX.1-schnell`), GPU L40S, 1024 px, 4 passos.
+  `VERTAL_OWN_IMAGE_URL` / `_TOKEN` (`_TIMEOUT_MS`, padrão 70 s; `_COST` US$/imagem, padrão 0,003). Só texto → imagem:
+  com imagem de referência vai direto para a de sempre. ~2,5 s quente, ~34 s a frio.
+- **Vídeo**: Wan2.1-T2V-1.3B (Apache-2.0), GPU L40S, 4 s 832×480 16 fps, H.264. `VERTAL_OWN_VIDEO_URL` / `_TOKEN`
+  (`_COST` US$/segundo, padrão 0,02). Assíncrono: o `job` assinado ganha o prefixo `own:`; `video_status` consulta o
+  endpoint próprio e `video_content` repassa o mp4. ~1 min 50 s gerando, ~2 min 40 s a frio.
+- Falhou (erro, tempo, contêiner frio demais)? A cadeia segue para os modelos de sempre. Tirar o segredo desliga.
+- O projeto Supabase está no limite de 100 segredos, então tudo isso vai num **único** segredo JSON,
+  `VERTAL_GPU_CONFIG` (`{"VERTAL_OLLAMA_URL_2":"…","VERTAL_OWN_IMAGE_URL":"…",…}`). Ele só aceita chaves
+  `VERTAL_OLLAMA_*_2`, `VERTAL_OLLAMA_2_FIRST_ABOVE_TOKENS` e `VERTAL_OWN_IMAGE_*`/`VERTAL_OWN_VIDEO_*`; um segredo avulso
+  com o mesmo nome vence. Nunca mexe em liga/desliga, lista de liberação ou chaves de provedores.
 
 **Provedor extra OpenAI-compatível** (opcional, por segredo): `VERTAL_EXTRA_PROVIDER_URL` (https, base `/v1`),
 `VERTAL_EXTRA_PROVIDER_KEY`, `VERTAL_EXTRA_PROVIDER_MODELS` (ids por vírgula), `VERTAL_EXTRA_PROVIDER_COST`
@@ -279,6 +300,9 @@ os erros ao loop; embeddings do repositório; botão "Publicar" usando o `deploy
   ferramentas abertas como o OpenCode (licença MIT, https://github.com/anomalyco/opencode); se partes dele forem
   usadas no futuro, o aviso MIT precisa ir junto (THIRD_PARTY_NOTICES.md).
 - Ollama (MIT) e Caddy (Apache-2.0) só são usados como imagens Docker no kit de deploy.
+- GPU própria (kit `infra/vertal-gpu-modal/`): vLLM (Apache-2.0), Diffusers (Apache-2.0); pesos Qwen2.5-Coder-14B-
+  Instruct-AWQ, FLUX.1-schnell e Wan2.1-T2V-1.3B, todos **Apache-2.0** (baixados do Hugging Face no deploy, não
+  versionados aqui).
 - Modelo padrão do servidor próprio: Qwen2.5-Coder-7B-Instruct, **Apache-2.0**. Alternativas leves: Qwen3-4B e
   Qwen2.5-Coder-1.5B (Apache-2.0). **Evitar Qwen2.5-Coder-3B** (licença Qwen Research, restringe uso comercial).
 - Nomes de provedores aparecem só nesta documentação e no código do servidor; a interface mostra apenas nomes Vertal.
