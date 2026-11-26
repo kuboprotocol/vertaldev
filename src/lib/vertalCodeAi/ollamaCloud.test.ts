@@ -136,7 +136,7 @@ describe('Vertal Decide · prazo da própria (Modal) 30 s, Jev inalterado', () =
     return { f, calls };
   };
 
-  it('padrão é 30 s', () => expect(OWN_DECIDE_TIMEOUT_MS).toBe(30_000));
+  it('padrão é 45 s', () => expect(OWN_DECIDE_TIMEOUT_MS).toBe(45_000));
 
   it('própria fria que responde em 25 s agora vale (antes caía no Jev aos 15 s)', async () => {
     vi.useFakeTimers();
@@ -148,11 +148,21 @@ describe('Vertal Decide · prazo da própria (Modal) 30 s, Jev inalterado', () =
     expect(calls).toEqual(['own']);
   });
 
-  it('própria acima de 30 s cai no Jev, que segue com 15 s', async () => {
+  it('própria fria que responde em 40 s agora vale (antes caía no Jev aos 30 s)', async () => {
     vi.useFakeTimers();
-    const { f, calls } = fakeFetch(60_000);
+    const { f, calls } = fakeFetch(40_000);
     const p = makeDecider({ fetch: f, env: { ...OWN, ...OR } })({ a: 1 }, Q);
-    await vi.advanceTimersByTimeAsync(29_000);
+    await vi.advanceTimersByTimeAsync(41_000);
+    const r = await p;
+    expect(r.source).toBe('own');
+    expect(calls).toEqual(['own']);
+  });
+
+  it('própria acima de 45 s cai no Jev, que segue com 15 s', async () => {
+    vi.useFakeTimers();
+    const { f, calls } = fakeFetch(90_000);
+    const p = makeDecider({ fetch: f, env: { ...OWN, ...OR } })({ a: 1 }, Q);
+    await vi.advanceTimersByTimeAsync(44_000);
     expect(calls).toEqual(['own']);
     await vi.advanceTimersByTimeAsync(1_500);
     expect(calls).toEqual(['own', 'jev']);

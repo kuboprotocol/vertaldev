@@ -199,8 +199,47 @@ opção Turbo. Fica fora da opção Livre (que também é a cadeia de coordenaç
 com imagem (sem visão). Aparece como `cost: "paid"` (gasta créditos do plano Ollama); a cobrança ao usuário segue
 desligada. Prazo por chamada: 120 s.
 
-**Vertal Decide da Equipe**: prazo da própria (Modal) 30 s (antes 15 s; o frio da L4 passava de 15 s e caía no Jev).
-Ajustável com `VERTAL_OWN_DECIDE_TIMEOUT_MS` (aceito no `VERTAL_GPU_CONFIG`). O prazo do Jev continua 15 s.
+**Vertal Decide da Equipe**: prazo da própria (Modal) **45 s** (15 s → 30 s → 45 s em 26/11/2026; o frio da L4 passava
+de 30 s e caía no Jev). Ajustável com `VERTAL_OWN_DECIDE_TIMEOUT_MS` (aceito no `VERTAL_GPU_CONFIG`; em produção = 45000).
+O prazo do Jev continua 15 s.
+
+### 5.1b Grátis extras depois do Ollama Cloud + monitor de cota (desde 26/11/2026)
+
+Ordem nas opções Auto, Code, Turbo e Pro: própria pequena (VM) → GPU (Modal) → Nuvem (Ollama Cloud) →
+**Vertal Livre · Veloz** (Cerebras, plano grátis) → **Vertal Livre · Leve+** (Gemini, plano grátis do AI Studio) →
+outros grátis (OpenRouter `:free`) → pagos só com `ALLOW_PAID`. A opção **Livre** (também cadeia de coordenação/Decide)
+não muda. NVIDIA (termos só de teste interno) e Groq (conta restrita) **não** são usados.
+
+Config (arquivo `supabase/functions/_shared/vertalCodeAi/freeQuota.ts`):
+
+| Onde | Chave | Padrão / uso |
+| --- | --- | --- |
+| segredo avulso | `VERTAL_CEREBRAS_KEY` | chave da Cerebras; sem ela o provedor fica fora |
+| segredo avulso | `VERTAL_GEMINI_KEY` | chave do AI Studio; sem ela o provedor fica fora (nome próprio para não ligar o `GEMINI_API_KEY` de outras funções) |
+| `VERTAL_GPU_CONFIG` | `VERTAL_FREE_CEREBRAS_MODELS` | `qwen-3.8-27b,gpt-oss-120b` (450 RPM e 1,08 B tokens/dia; 5 RPM) |
+| `VERTAL_GPU_CONFIG` | `VERTAL_FREE_GEMINI_MODELS` | `gemini-3.5-flash-lite` (15 RPM / 500 RPD) |
+| `VERTAL_GPU_CONFIG` | `VERTAL_FREE_CEREBRAS_CONTEXT` / `_GEMINI_CONTEXT` | 32 000 / 200 000 |
+| `VERTAL_GPU_CONFIG` | `VERTAL_FREE_TIER_ENABLED` | `false` tira os dois sem apagar nada |
+| `VERTAL_GPU_CONFIG` | `VERTAL_FREE_QUOTA_THRESHOLD` | 0.9 (pula ao chegar a 90%) |
+| `VERTAL_GPU_CONFIG` | `VERTAL_FREE_QUOTA_LIMITS` | JSON `{"gemini:*":{"rpd":500,"rpm":15}}` sobrepõe limites (`rpm`,`rpd`,`tpm`,`tpd`,`resetTz`) |
+| `VERTAL_GPU_CONFIG` | `VERTAL_FREE_QUOTA_OLLAMA_MONTHLY_USD` | opcional: teto estimado do mês no Ollama Cloud (só pula se definido) |
+
+**Monitor de cota.** Cada chamada a Cerebras, Gemini, OpenRouter `:free` e Ollama Cloud é contada (pedidos e tokens do
+`usage`). Minuto: memória do isolate. Dia/mês e esperas: tabela **já existente** `rate_limit_counters` (sem migração),
+`bucket_key` `vcaq:<provedor>:<modelo>:d:<dia>:req|tok`, `…:m:<mês>:usd_micro` e `…:cool`, `user_id` zero, `window_start`
+= fim da janela (no futuro; a limpeza do `bump_rate_limit` não apaga). Cabeçalhos `x-ratelimit-*` (Cerebras) são lidos.
+O modelo é **pulado** quando chega a 90% de um limite, quando os cabeçalhos dizem que sobra ≤10%, ou depois de
+429/402/403-de-cota: espera até `retry-after`/`retryDelay`/reset dos cabeçalhos; cota **diária** do Gemini espera até a
+**meia-noite do Pacífico** (Cerebras: meia-noite UTC, ou o reset que o cabeçalho disser). A API do Ollama não expõe o uso
+dos créditos: o monitor só soma o **nosso gasto estimado** do mês (preço de tabela).
+
+**Consulta (só admin, `is_admin`)**: `POST /functions/v1/vertal-code-ai` com JWT do usuário admin e
+`{"action":"free_quota"}` → `{at, threshold, providers:[{key, requestsToday, tokensToday, limits, pct, resetsAt,
+cooldownUntil, skipped, skipReason, estUsdThisMonth, providerHeaders…}], anySkipped, warnings, chainAuto}`.
+`{"action":"free_quota","op":"probe"}` lista os ids de modelo que cada chave enxerga (para conferir a config).
+Não-admin recebe 404. Teste de queda (só admin): `run` aceita `skipModels: ["ollama","ollama_cloud"]` (ids, provedores ou custos).
+
+**Plano grátis do Gemini:** o Google pode usar o conteúdo enviado para melhorar os produtos (o Laércio aceitou em 26/11/2026).
 
 Limites oficiais dos planos grátis (fontes abaixo, lidas em 24/11/2026):
 
@@ -211,8 +250,8 @@ Limites oficiais dos planos grátis (fontes abaixo, lidas em 24/11/2026):
   free tier. **No free tier o conteúdo pode ser usado para melhorar os produtos do Google** — não mande código de
   cliente sensível por essa rota. Fontes: https://ai.google.dev/gemini-api/docs/pricing e /rate-limits.
 - **Groq free**: `openai/gpt-oss-120b` 30/min, 1.000/dia, 8K tokens/min, 200K tokens/dia. Fonte: https://console.groq.com/docs/rate-limits.
-- **Cerebras**: **não tem plano grátis permanente** (só US$5 de teste por 30 dias, exige cartão). Ficou de fora.
-  Fonte: https://inference-docs.cerebras.ai/support/rate-limits.
+- **Cerebras**: em 24/11/2026 não havia plano grátis permanente; desde 26/11/2026 a conta do Laércio tem plano grátis
+  (ver 5.1b). Fonte: https://inference-docs.cerebras.ai/support/rate-limits.
 
 Um pedido do agente usa em média 2–5 chamadas (ler, editar, corrigir). Com 50/dia no OpenRouter dá ~10–25 pedidos;
 com 1.000/dia, ~200–500. **As cotas grátis são da conta da Vertal, divididas entre todos os usuários**: servem para o

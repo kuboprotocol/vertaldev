@@ -11,6 +11,7 @@
 //     próximos pedidos com o intervalo de espera.
 
 import { type ModelReply, parseVcaTurn } from "./core.ts";
+import type { QuotaEvent } from "./freeQuota.ts";
 import {
   estimateCostUsd,
   estimateTokens,
@@ -46,6 +47,14 @@ export interface ChainRunnerDeps {
   cooldown: Map<string, number>;
   log?: (msg: string) => void;
   warn?: (msg: string) => void;
+  /**
+   * Monitor de cota grátis (freeQuota.ts), opcional. skipReason ≠ null pula o modelo (perto do limite ou em
+   * espera depois de 429); record recebe o resultado de cada chamada. Sem ele, nada muda.
+   */
+  quota?: {
+    skipReason(m: VcaModel, inputTokens: number): string | null;
+    record(m: VcaModel, ev: QuotaEvent): void;
+  } | null;
 }
 
 /** Lê o streaming OpenAI-compatível; `onFirst` é chamado no 1º pedaço com texto. */
@@ -101,6 +110,11 @@ export async function runChain(
     if (left < 8_000) break;
     const budget = m.budget;
     let maxTokens = opts.maxTokens;
+    const quotaWhy = deps.quota?.skipReason(m, inputTokens) ?? null;
+    if (quotaWhy) {
+      failures.push(`${m.id}:skip(quota ${quotaWhy})`);
+      continue;
+    }
     if (budget) {
       // LLM própria: só pedidos que cabem, com tempo, e sem comer o tempo da reserva.
       if ((deps.cooldown.get(m.id) ?? 0) > Date.now()) {
@@ -148,6 +162,11 @@ export async function runChain(
       });
       if (!r.ok) {
         failures.push(`${m.id}:${r.status}`);
+        if (deps.quota) {
+          // Lê um pedaço do erro só para entender cota (diária/por minuto); nunca vai para o usuário.
+          const errorText = [429, 402, 403].includes(r.status) ? await r.text().then((t) => t.slice(0, 4_000)).catch(() => "") : "";
+          deps.quota.record(m, { status: r.status, headers: r.headers, errorText });
+        }
         await r.body?.cancel().catch(() => {});
         if (budget && !requestScoped(r.status)) deps.cooldown.set(m.id, Date.now() + SELF_HOSTED_COOLDOWN_MS);
         if (budget || shouldFallback(r.status)) continue;
@@ -179,6 +198,13 @@ export async function runChain(
       const costUsd = typeof u.cost === "number"
         ? u.cost
         : estimateCostUsd(m, u.prompt_tokens ?? inputTokens, u.completion_tokens ?? Math.ceil(content.length / 3.5));
+      deps.quota?.record(m, {
+        status: r.status,
+        headers: r.headers,
+        inputTokens: u.prompt_tokens ?? inputTokens,
+        outputTokens: u.completion_tokens ?? Math.ceil(content.length / 3.5),
+        costUsd,
+      });
       deps.log?.(
         `[vertal-code-ai] ok ${m.id} (${m.provider}/${m.model}) in=${inputTokens} tokens=${JSON.stringify(usage)} ` +
           `cost_usd=${costUsd.toFixed(6)} retail_credits=${retailCredits(costUsd)} (cobrança desligada)` +
