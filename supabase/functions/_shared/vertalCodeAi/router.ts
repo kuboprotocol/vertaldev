@@ -775,8 +775,11 @@ export function videoRequestBody(m: VcaMediaModel, prompt: string): Record<strin
 //   VERTAL_OWN_VIDEO_URL / _TOKEN   POST {url}/submit {prompt,seconds} → {id}; GET {url}/status?id=; GET {url}/result?id= (mp4)
 //   VERTAL_OWN_IMAGE_COST (US$ por imagem) e VERTAL_OWN_VIDEO_COST (US$ por segundo): só estimativa.
 
-/** Prefixo dos jobs de vídeo do endpoint próprio (o resto é o id do provedor de sempre). */
-export const VCA_OWN_JOB_PREFIX = "own:";
+/**
+ * Prefixo dos jobs de vídeo do endpoint próprio (o resto é o id do provedor de sempre).
+ * Só [A-Za-z0-9_-]: o job assinado (verifyJob) recusa qualquer outro caractere.
+ */
+export const VCA_OWN_JOB_PREFIX = "vcaown_";
 
 function ownMediaAt(env: VcaEnv, kind: "image" | "video"): VcaMediaModel | null {
   const pre = kind === "image" ? "VERTAL_OWN_IMAGE" : "VERTAL_OWN_VIDEO";

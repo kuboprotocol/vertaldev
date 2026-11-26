@@ -162,7 +162,7 @@ após 120 s sem uso), no máximo 1 contêiner por endpoint, cada um protegido po
   `VERTAL_OWN_IMAGE_URL` / `_TOKEN` (`_TIMEOUT_MS`, padrão 70 s; `_COST` US$/imagem, padrão 0,003). Só texto → imagem:
   com imagem de referência vai direto para a de sempre. ~2,5 s quente, ~34 s a frio.
 - **Vídeo**: Wan2.1-T2V-1.3B (Apache-2.0), GPU L40S, 4 s 832×480 16 fps, H.264. `VERTAL_OWN_VIDEO_URL` / `_TOKEN`
-  (`_COST` US$/segundo, padrão 0,02). Assíncrono: o `job` assinado ganha o prefixo `own:`; `video_status` consulta o
+  (`_COST` US$/segundo, padrão 0,02). Assíncrono: o `job` assinado ganha o prefixo `vcaown_`; `video_status` consulta o
   endpoint próprio e `video_content` repassa o mp4. ~1 min 50 s gerando, ~2 min 40 s a frio.
 - Falhou (erro, tempo, contêiner frio demais)? A cadeia segue para os modelos de sempre. Tirar o segredo desliga.
 - O projeto Supabase está no limite de 100 segredos, então tudo isso vai num **único** segredo JSON,
