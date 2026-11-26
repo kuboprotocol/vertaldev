@@ -87,10 +87,7 @@ create policy "mailbox_messages_own_select" on public.mailbox_messages for selec
 drop policy if exists "mail_crm_feeds_own_select" on public.mail_crm_feeds;
 create policy "mail_crm_feeds_own_select" on public.mail_crm_feeds for select to authenticated using (user_id = auth.uid());
 
--- Sem políticas de insert/update/delete para "authenticated": só o service role escreve.
-revoke insert, update, delete on public.mailbox_addresses from anon, authenticated;
-revoke insert, update, delete on public.mailbox_messages from anon, authenticated;
-revoke insert, update, delete on public.mail_crm_feeds from anon, authenticated;
-revoke all on public.mailbox_addresses from anon;
-revoke all on public.mailbox_messages from anon;
-revoke all on public.mail_crm_feeds from anon;
+-- Permissões explícitas: o dono só LÊ (RLS acima); só o service role (servidor) escreve.
+revoke all on table public.mailbox_addresses, public.mailbox_messages, public.mail_crm_feeds from anon, authenticated;
+grant select on table public.mailbox_addresses, public.mailbox_messages, public.mail_crm_feeds to authenticated;
+grant all on table public.mailbox_addresses, public.mailbox_messages, public.mail_crm_feeds to service_role;
