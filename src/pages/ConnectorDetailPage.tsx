@@ -1,3 +1,4 @@
+import { connectorSetupPath } from '@/lib/connectorSetupPath'
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -752,6 +753,9 @@ export default function ConnectorDetailPage() {
     }
     if (isGitHub) {
       github.connect()
+    } else if (connector.fluxosApp) {
+      // Apps do Vertal Fluxos conectam de verdade no painel de setup (login do provedor ou chave).
+      navigate(connectorSetupPath(connector))
     } else if (isStripe) {
       navigate('/connect')
     } else {
