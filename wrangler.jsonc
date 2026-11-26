@@ -40,7 +40,9 @@
       "!/manifest.webmanifest",
       "!/registerSW.js",
       "!/robots.txt",
-      "!/sitemap.xml"
+      "!/sitemap.xml",
+      "!/sitemap_index.xml",
+      "!/sitemap-*"
     ]
   },
   "vars": {

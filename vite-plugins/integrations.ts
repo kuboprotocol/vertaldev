@@ -21,6 +21,7 @@ import {
   integrationSeo,
   type Integration,
 } from "../src/config/integrations";
+import { integrationHreflang } from "./integrationsI18n";
 
 type ApplyHead = (html: string, page: RouteSeo, url: string, extraHead?: string) => string;
 
@@ -144,6 +145,7 @@ export function renderIntegrationPages(
   const website = { "@type": "WebSite", name: APP_NAME, url: `${origin}/` };
 
   const indexHead = [
+    integrationHreflang(origin),
     jsonLd(breadcrumb(origin, [home, hub])),
     jsonLd({
       "@context": "https://schema.org",
@@ -175,6 +177,7 @@ export function renderIntegrationPages(
     const seo = integrationSeo(i);
     const logo = i.logoUrl ? `${origin}${i.logoUrl}` : null;
     const head = [
+      integrationHreflang(origin, i.slug),
       jsonLd(breadcrumb(origin, [home, hub, [i.name, path]])),
       jsonLd({
         "@context": "https://schema.org",

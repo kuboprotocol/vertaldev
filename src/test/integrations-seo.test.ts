@@ -133,11 +133,11 @@ describe('Integrações: uma página pública por conector do catálogo', () => 
   })
 
   it('sitemap e robots incluem as integrações; prerender do build também', () => {
+    // As integrações ficam nos sitemaps por idioma (sitemap_index.xml), não no principal.
     const urls = sitemapUrls(ORIGIN)
-    expect(urls).toContain(`${ORIGIN}/integracoes`)
-    for (const i of INTEGRATIONS) expect(urls).toContain(`${ORIGIN}/integracoes/${i.slug}`)
+    expect(urls.some((u) => u.includes('/integracoes'))).toBe(false)
     expect(new Set(urls).size).toBe(urls.length)
-    expect(renderSitemap(ORIGIN, '2026-11-26')).toContain(`<loc>${ORIGIN}/integracoes/notion</loc><lastmod>2026-11-26</lastmod>`)
+    expect(renderSitemap(ORIGIN, '2026-11-26')).not.toContain('/integracoes/')
     expect(renderRobots(ORIGIN)).toContain('Allow: /integracoes')
     const all = prerenderPages(INDEX, ORIGIN)
     expect(all.get('integracoes/notion.html')).toContain('Integração Notion')

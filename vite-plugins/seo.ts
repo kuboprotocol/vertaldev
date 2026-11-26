@@ -41,7 +41,9 @@ import { VIBE_PAY, VIBE_PAY_COPY } from "../src/config/vibePay";
 import { isFreeCrmSeoEnabled } from "../src/config/freeCrm";
 import { freeCrmSitemapEntries, renderFreeCrmPages } from "./freeCrm";
 // Páginas de integração (/integracoes e /integracoes/<slug>), geradas do catálogo de conectores.
-import { integrationUrls, renderIntegrationPages } from "./integrations";
+import { renderIntegrationPages } from "./integrations";
+// Mesmas páginas em 21 idiomas + sitemaps por idioma (índice em /sitemap_index.xml).
+import { renderIntegrationI18nPages, renderIntegrationSitemaps, renderSitemapIndex } from "./integrationsI18n";
 
 /** Rotas públicas indexáveis (sem login). */
 const PUBLIC_ROUTES = [
@@ -63,7 +65,6 @@ export function sitemapUrls(origin: string = SITE_ORIGIN): string[] {
   ];
   return [
     ...paths.map((p) => `${origin}${p === "/" ? "/" : p}`),
-    ...integrationUrls(origin),
     ...vibePayUrls(origin),
     ...localizedUrls(origin),
   ];
@@ -133,7 +134,7 @@ ${body}
 export function renderRobots(origin: string = SITE_ORIGIN): string {
   // Allow explícito das landings do Vertal Vibe Pay (todas as línguas).
   // Allow explícito das páginas de integração (uma por conector).
-  return `User-agent: *\nAllow: /\nAllow: /vibe-pay\nAllow: /*/vibe-pay\nAllow: /integracoes\nAllow: /integracoes/\nDisallow: /admin/\n\nSitemap: ${origin}/sitemap.xml\n`;
+  return `User-agent: *\nAllow: /\nAllow: /vibe-pay\nAllow: /*/vibe-pay\nAllow: /integracoes\nAllow: /integracoes/\nDisallow: /admin/\n\nSitemap: ${origin}/sitemap.xml\nSitemap: ${origin}/sitemap_index.xml\n`;
 }
 
 const esc = (v: string) =>
@@ -294,6 +295,8 @@ export function seoPlugin(): Plugin {
       this.emitFile({ type: "asset", fileName: "sitemap.xml", source: renderSitemap() });
       this.emitFile({ type: "asset", fileName: "robots.txt", source: renderRobots() });
       this.emitFile({ type: "asset", fileName: "rss.xml", source: renderRss() });
+      this.emitFile({ type: "asset", fileName: "sitemap_index.xml", source: renderSitemapIndex() });
+      for (const [fileName, source] of renderIntegrationSitemaps()) this.emitFile({ type: "asset", fileName, source });
     },
     // Depois que o Vite gravou o index.html final (com os scripts com hash).
     writeBundle(options) {
@@ -309,6 +312,7 @@ export function seoPlugin(): Plugin {
         ...prerenderPages(indexHtml),
         ...renderLocalizedPages(),
         ...renderVibePayPages(),
+        ...renderIntegrationI18nPages(),
         ...(isFreeCrmSeoEnabled() ? renderFreeCrmPages() : []),
       ]);
       for (const [file, html] of pages) {

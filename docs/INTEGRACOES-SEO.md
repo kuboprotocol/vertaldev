@@ -44,3 +44,21 @@ tráfego orgânico de quem pesquisa "<App> integração", "<App> API automação
 kuboprotocol@gmail.com. O sitemap é `https://vertal.dev/sitemap.xml`
 (Search Console → Sitemaps → enviar). Bing/IndexNow recebem as URLs pelo workflow
 `indexnow.yml` depois do deploy.
+
+## Idiomas (22)
+pt-BR na raiz (`/integracoes/<slug>`, x-default) + 21 idiomas em `/<código>/<segmento>/<slug>`:
+zh-CN, es (`/es/integraciones`), en (`/en/integrations`), hi, bn, ru (`/ru/integratsii`), ja, pa,
+vi (`/vi/tich-hop`), tr (`/tr/entegrasyonlar`), mr, te, ko, fr, ta, ar, de (`/de/integrationen`),
+ur, jv (`/jv/integrasi`), it (`/it/integrazioni`), fa. Lista e segmentos:
+`src/config/integrations/locales.ts`.
+
+- Páginas traduzidas: estáticas e leves (sem React), `vite-plugins/integrationsI18n.ts`, com
+  `lang`, `dir="rtl"` para ar/ur/fa (CSS com propriedades lógicas), hreflang das 22 versões +
+  x-default em todas as páginas (inclusive as pt-BR) e JSON-LD no idioma.
+- Textos: `src/config/integrations/i18n/<código>.json` (chave → texto). Fonte pt-BR em
+  `i18n/source.pt-BR.json`. Chave sem tradução cai no inglês e depois no pt-BR, então
+  conector novo sai em todos os idiomas no próximo build. Para traduzir o que falta:
+  `TRANSLATE_API_URL=… TRANSLATE_API_KEY=… TRANSLATE_MODEL=… npx vite-node scripts/integrations-i18n.ts`
+  (`--check` mostra a cobertura). Revisões de falantes nativos entram direto nos JSON.
+- Sitemaps: `sitemap_index.xml` → `sitemap.xml` (páginas gerais) + `sitemap-integrations-<código>.xml`
+  (22, com `xhtml:link` hreflang). `robots.txt` aponta para os dois. IndexNow lê os por idioma.

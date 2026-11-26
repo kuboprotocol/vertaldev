@@ -29,6 +29,10 @@ export interface IntegrationStep {
   description: string
 }
 
+export type ConnectKind =
+  | 'override' | 'base-mcp' | 'base-oauth' | 'base-account' | 'base-whatsapp' | 'base-key'
+  | 'fluxos-oauth' | 'fluxos-own' | 'fluxos-key' | 'fluxos-nofields'
+
 export interface Integration {
   slug: string
   name: string
@@ -53,6 +57,14 @@ export interface Integration {
   actions: { name: string; description: string }[]
   triggers: { name: string; description: string }[]
   connectMode: 'oauth' | 'own-app' | 'key' | 'account'
+  /** Qual texto de conexão foi usado (as traduções montam o mesmo texto). */
+  connectKind: ConnectKind
+  /** Campos pedidos no formulário (rótulos pt-BR). */
+  fields: string[]
+  /** Card do catálogo é um app do Vertal Fluxos (`fluxos-*`). */
+  fluxosCard: boolean
+  /** App do motor de onde vêm ações e gatilhos. */
+  engineApp?: string
   connectSummary: string
   steps: IntegrationStep[]
   uses: string[]
@@ -161,26 +173,26 @@ function engineFor(c: ConnectorConfig): EngineAppInfo | undefined {
   return key ? ENGINE_APPS[key] : undefined
 }
 
-function connectInfo(c: ConnectorConfig, engine: EngineAppInfo | undefined): Pick<Integration, 'connectMode' | 'connectSummary' | 'steps'> {
+function connectInfo(c: ConnectorConfig, engine: EngineAppInfo | undefined): Pick<Integration, 'connectMode' | 'connectKind' | 'connectSummary' | 'steps'> {
   const n = c.name
   const isFluxosCard = c.slug.startsWith('fluxos-')
   if (!isFluxosCard) {
     const steps = STEP_OVERRIDES[integrationSlug(c)] ?? c.setupSteps.map((s) => ({ title: clean(s.title), description: clean(s.description) }))
     const override = CONNECT_SUMMARY_OVERRIDES[integrationSlug(c)]
-    if (override) return { connectMode: 'key', connectSummary: override, steps }
+    if (override) return { connectMode: 'key', connectKind: 'override', connectSummary: override, steps }
     if (c.mcpUrl || c.slug === 'vertal-app') {
-      return { connectMode: 'oauth', connectSummary: `A conexão usa OAuth: você entra com a sua conta do ${n} e autoriza, sem chave para copiar.`, steps }
+      return { connectMode: 'oauth', connectKind: 'base-mcp', connectSummary: `A conexão usa OAuth: você entra com a sua conta do ${n} e autoriza, sem chave para copiar.`, steps }
     }
     if (c.authType === 'oauth') {
-      return { connectMode: 'oauth', connectSummary: `Você entra com a sua conta do ${n} (login oficial, OAuth) e autoriza o acesso. Não há chave para copiar.`, steps }
+      return { connectMode: 'oauth', connectKind: 'base-oauth', connectSummary: `Você entra com a sua conta do ${n} (login oficial, OAuth) e autoriza o acesso. Não há chave para copiar.`, steps }
     }
     if (c.authType === 'manual' && c.slug.startsWith('vertal-')) {
-      return { connectMode: 'account', connectSummary: `Usa a sua própria conta do ${APP_NAME}: é só abrir, sem chave nem configuração.`, steps }
+      return { connectMode: 'account', connectKind: 'base-account', connectSummary: `Usa a sua própria conta do ${APP_NAME}: é só abrir, sem chave nem configuração.`, steps }
     }
     if (c.slug === 'whatsapp') {
-      return { connectMode: 'key', connectSummary: 'Você cola o token da WhatsApp Business Cloud API e o ID do número, testa a conexão e salva. O token fica cifrado no servidor.', steps }
+      return { connectMode: 'key', connectKind: 'base-whatsapp', connectSummary: 'Você cola o token da WhatsApp Business Cloud API e o ID do número, testa a conexão e salva. O token fica cifrado no servidor.', steps }
     }
-    return { connectMode: 'key', connectSummary: `Você cola a credencial do ${n} (chave ou token) no formulário. Ela fica cifrada no servidor e nunca volta para o navegador.`, steps }
+    return { connectMode: 'key', connectKind: 'base-key', connectSummary: `Você cola a credencial do ${n} (chave ou token) no formulário. Ela fica cifrada no servidor e nunca volta para o navegador.`, steps }
   }
   const open = { title: `Abra Conectores → ${n}`, description: `Crie a sua conta grátis no ${APP_NAME} e abra o cartão do ${n} em Conectores.` }
   const use = { title: 'Use pelo chat ou em fluxos', description: `Peça ao Vertal Chat, por exemplo, “use o ${n} para …”, ou monte um fluxo no Vertal Fluxos. Ações que mudam algo pedem a sua aprovação.` }
@@ -188,6 +200,7 @@ function connectInfo(c: ConnectorConfig, engine: EngineAppInfo | undefined): Pic
   if (engine?.auth === 'vertal-oauth') {
     return {
       connectMode: 'oauth',
+      connectKind: 'fluxos-oauth',
       connectSummary: `Botão “Entrar com ${n}”: você faz login no próprio ${n} e autoriza o ${APP_NAME}. Não há chave para copiar.`,
       steps: [open, { title: `Toque em “Entrar com ${n}”`, description: `Você vai para o login oficial do ${n}, escolhe a conta e autoriza. O acesso fica guardado cifrado no servidor e pode ser revogado quando quiser.` }, use],
     }
@@ -195,12 +208,14 @@ function connectInfo(c: ConnectorConfig, engine: EngineAppInfo | undefined): Pic
   if (engine?.auth === 'own-oauth') {
     return {
       connectMode: 'own-app',
+      connectKind: 'fluxos-own',
       connectSummary: `Você informa ${fields || 'os dados do seu app'} do ${n} e entra com a sua conta para autorizar (login OAuth com o seu próprio app).`,
       steps: [open, { title: 'Informe os dados do seu app', description: `Preencha ${fields || 'os dados pedidos'} (o endereço de retorno aparece na tela) e entre com a sua conta do ${n} para autorizar.` }, use],
     }
   }
   return {
     connectMode: 'key',
+    connectKind: fields ? 'fluxos-key' : 'fluxos-nofields',
     connectSummary: fields
       ? `Você informa ${fields} do ${n}. O ${APP_NAME} confere e guarda tudo cifrado no servidor.`
       : `Você informa o endereço que quer acompanhar; não há login nem chave.`,
@@ -277,6 +292,9 @@ function build(): Integration[] {
       actions: (engine?.actions ?? []).map(([name, description]) => ({ name, description })),
       triggers: (engine?.triggers ?? []).map(([name, description]) => ({ name, description })),
       ...connectInfo(c, engine),
+      fields: fluxosCard ? (engine?.fields ?? []) : [],
+      fluxosCard,
+      engineApp: c.fluxosApp ?? ENGINE_APP_FOR_NATIVE[c.slug],
       uses: content?.uses?.length ? content.uses : CATEGORY_USES[c.category](c.name),
       officialUrl: c.docsUrl,
     }
