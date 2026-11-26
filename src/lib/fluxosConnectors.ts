@@ -136,6 +136,7 @@ const FLUXOS_APP_LOGOS: Record<string, string> = {
   mailchimp: '/connectors/mailchimp.png',
   mailerlite: '/connectors/mailerlite.png',
   'meta-ads': '/connectors/meta-ads.png',
+  miro: '/connectors/miro.jpg',
   gitlab: '/connectors/gitlab.webp',
   gitea: '/connectors/gitea.png',
   ghost: '/connectors/ghost.png',
