@@ -205,3 +205,33 @@ describe('Vertal Prospector · categoria do ICP no servidor (reteste 26/11/2026)
     expect(r.body.icpArea).toBeTruthy();
   });
 });
+
+describe('Vertal Prospector · local escolhido pelo usuário vence a IA (26/11/2026)', () => {
+  const AI = JSON.stringify({ profile: { offer: 'apps com IA' }, icp: { summary: 's', osmTags: [{ key: 'office', value: 'it' }], area: 'Campinas, SP' } });
+
+  it('create_campaign: "São Paulo, SP; Campinas, SP" digitado pelo usuário substitui a região sugerida', async () => {
+    const { db, deps, callModel } = setup();
+    callModel.mockImplementation(async () => ({ content: AI }));
+    const r = await handleProspector({ op: 'create_campaign', companyName: 'Vertal Company', area: 'São Paulo, SP;Campinas, SP' }, deps);
+    expect(r.status).toBe(200);
+    const c = db.tables.prospector_campaigns.find((x) => x.company_name === 'Vertal Company' && x.id !== C) as { icp: { area: string } };
+    expect(c.icp.area).toBe('São Paulo, SP; Campinas, SP');
+  });
+
+  it('create_campaign sem local digitado: fica a sugestão da IA', async () => {
+    const { db, deps, callModel } = setup();
+    callModel.mockImplementation(async () => ({ content: AI }));
+    await handleProspector({ op: 'create_campaign', companyName: 'Outra Empresa' }, deps);
+    const c = db.tables.prospector_campaigns.find((x) => x.company_name === 'Outra Empresa') as { icp: { area: string } };
+    expect(c.icp.area).toBe('Campinas, SP');
+  });
+
+  it('update_icp: troca para São Paulo capital + Lisboa e continua confirmado', async () => {
+    const { db, deps } = setup();
+    const cur = db.tables.prospector_campaigns.find((x) => x.id === C) as { icp: Record<string, unknown> };
+    const r = await handleProspector({ op: 'update_icp', campaignId: C, icp: { ...cur.icp, area: 'São Paulo, SP; Lisboa, Portugal' }, confirm: true }, deps);
+    expect(r.status).toBe(200);
+    expect((r.body.campaign as { icp: { area: string }; status: string }).icp.area).toBe('São Paulo, SP; Lisboa, Portugal');
+    expect((r.body.campaign as { status: string }).status).toBe('icp_confirmed');
+  });
+});

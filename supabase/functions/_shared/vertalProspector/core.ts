@@ -167,7 +167,8 @@ export function parseIcp(v: unknown): Icp {
     summary: cleanStr(o.summary, 600),
     segments: cleanList(o.segments, 8, 80),
     osmTags: parseOsmTags(o.osmTags ?? o.osm_tags),
-    area: cleanStr(o.area, 120),
+    // Uma ou mais regiões ("São Paulo, SP; Campinas, SP"), em qualquer país.
+    area: joinAreas(parseAreas(cleanStr(o.area, 400))),
     companySize: cleanStr(o.companySize ?? o.company_size, 120),
     buyingSignals: cleanList(o.buyingSignals ?? o.buying_signals, 8, 140),
     exclusions: cleanList(o.exclusions, 8, 140),
@@ -297,6 +298,34 @@ export function keepIcpCategories(elements: unknown[], tags: OsmTag[]): unknown[
     const t = (e as { tags?: Record<string, string> })?.tags ?? {};
     return tags.some((tg) => t[tg.key] === tg.value);
   });
+}
+
+/**
+ * Regiões da busca, na ordem do usuário: "São Paulo, SP; Campinas, SP" → ["São Paulo, SP", "Campinas, SP"].
+ * Separadores: ";", "|", quebra de linha ou " + ". A vírgula fica dentro da região (cidade, UF/país). Até 5, sem repetir.
+ */
+export const MAX_AREAS = 5;
+export function parseAreas(area: string | null | undefined): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of String(area ?? "").split(/\s*(?:;|\||\n|\s\+\s)\s*/)) {
+    const a = raw.replace(/\s+/g, " ").replace(/^[\s,]+|[\s,]+$/g, "").slice(0, 120);
+    const k = normName(a);
+    if (!a || seen.has(k)) continue;
+    seen.add(k);
+    out.push(a);
+    if (out.length >= MAX_AREAS) break;
+  }
+  return out;
+}
+export const joinAreas = (areas: string[]): string => areas.join("; ");
+
+/** A região é no Brasil? (UF no fim, ou "Brasil/Brazil" escrito). Sem país escrito e sem UF: não dá para saber (null). */
+export function isBrazilArea(area: string): boolean | null {
+  const a = (area ?? "").trim();
+  if (/\b(brasil|brazil)\s*$/i.test(a)) return true;
+  if (parseArea(a)?.uf) return true;
+  return a.includes(",") ? false : null;
 }
 
 export interface LeadDraft {
