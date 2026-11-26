@@ -7,11 +7,14 @@ import {
   buildOverpassQuery,
   buildOverpassQueryByName,
   isProspectCommand,
+  joinAreas,
   keepIcpCategories,
+  isBrazilArea,
   keepInsideMunicipality,
   overpassAreaId,
   parseAreaGeometry,
   parseArea,
+  parseAreas,
   parseIcp,
   parseProspectCommand,
   PROSPECTOR_NAME,
@@ -19,7 +22,7 @@ import {
   type OsmTag,
 } from '../../../supabase/functions/_shared/vertalProspector/core';
 
-export { isProspectCommand, parseProspectCommand, PROSPECTOR_NAME };
+export { isProspectCommand, joinAreas, parseAreas, parseProspectCommand, PROSPECTOR_NAME };
 
 export const VERTAL_PROSPECTOR_ROUTE = '/vertal-code-ai/prospector';
 
@@ -357,6 +360,8 @@ export interface MapPlace {
   name: string;
   /** Contorno do município (GeoJSON). Com ele, empresas das cidades vizinhas que caem no retângulo saem da lista. */
   geometry?: AreaGeometry | null;
+  /** Tipo do lugar (municipality, city, state, country…). Estado/país não filtram pelo nome da cidade. */
+  kind?: string | null;
 }
 
 const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -365,7 +370,8 @@ const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').t
 async function geocodeNominatim(area: string, fetchImpl: typeof fetch, ms: number, signal?: AbortSignal): Promise<MapPlace | null> {
   const r = await fetchJsonWithTimeout(
     fetchImpl,
-    `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=br&accept-language=pt-BR&polygon_geojson=1&polygon_threshold=0.001&q=${encodeURIComponent(area)}`,
+    // Brasil só quando a região é do Brasil (UF ou "Brasil" escrito, ou só o nome); "Lisboa, Portugal" busca no mundo.
+    `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5${isBrazilArea(area) === false ? '' : '&countrycodes=br'}&accept-language=pt-BR&polygon_geojson=1&polygon_threshold=0.001&q=${encodeURIComponent(area)}`,
     { method: 'GET' },
     ms,
     signal,
@@ -384,6 +390,7 @@ async function geocodeNominatim(area: string, fetchImpl: typeof fetch, ms: numbe
     bbox: bb.length === 4 && bb.every(Number.isFinite) ? [bb[0], bb[2], bb[1], bb[3]] : null,
     name: String(p.display_name ?? area),
     geometry: parseAreaGeometry(p.geojson),
+    kind: p.addresstype ?? null,
   };
 }
 
@@ -392,7 +399,9 @@ async function geocodeNominatim(area: string, fetchImpl: typeof fetch, ms: numbe
  * Devolve o retângulo do município ("regiao-limitrofe"). Não usa o mapa: funciona mesmo com o Nominatim recusando.
  */
 async function geocodeIbge(area: string, fetchImpl: typeof fetch, ms: number, signal?: AbortSignal): Promise<MapPlace | null> {
-  const parsed = parseArea(area);
+  // Malha do IBGE só vale para o Brasil ("Toledo, Espanha" não pode virar Toledo, PR).
+  if (isBrazilArea(area) === false) return null;
+  const parsed = parseArea(area.replace(/,?\s*(brasil|brazil)\s*$/i, ''));
   if (!parsed) return null;
   const started = Date.now();
   const listUrl = parsed.uf
@@ -427,6 +436,7 @@ async function geocodeIbge(area: string, fetchImpl: typeof fetch, ms: number, si
     bbox: [Math.min(...lats), Math.min(...lons), Math.max(...lats), Math.max(...lons)],
     name: `${hit.nome}${parsed.uf ? `, ${parsed.uf}` : ''}`,
     geometry,
+    kind: 'municipality',
   };
 }
 
@@ -492,29 +502,74 @@ export async function searchCompaniesInBrowser(
   icpRaw: unknown,
   fetchImpl: typeof fetch = fetch,
   opts: { totalMs?: number; attemptMs?: number; endpoints?: string[]; hedgeMs?: number; geocoderMs?: number } = {},
-): Promise<{ elements: unknown[]; via: string }> {
+): Promise<{ elements: unknown[]; via: string; areas: AreaSearchResult[] }> {
   const icp = parseIcp(icpRaw);
   if (!icp.osmTags.length || !icp.area) throw new ProspectorError('icp_incomplete');
+  const areas = parseAreas(icp.area);
   const totalMs = opts.totalMs ?? MAP_TOTAL_TIMEOUT_MS;
   const deadline = Date.now() + totalMs;
-  const run = (q: string) => runMapQueryInBrowser(q, fetchImpl, { endpoints: opts.endpoints, attemptMs: opts.attemptMs, hedgeMs: opts.hedgeMs, deadline });
-  const parsed = parseArea(icp.area);
-  const place = await geocodeAreaInBrowser(icp.area, fetchImpl, Math.min(opts.geocoderMs ?? GEOCODER_TIMEOUT_MS, Math.max(1, totalMs / 3)));
-  if (!place && !parsed) throw new ProspectorError('area_not_found', { finding: `Não achei a região "${icp.area}" no mapa. Use "Cidade, UF" (ex.: "Campinas, SP").` });
-  // Só o município do ICP e só as categorias do ICP (o retângulo pega cidades vizinhas; nada de outra categoria).
-  // Consulta por área oficial já é exata: lá só o contorno (se houver) e a categoria filtram (distritos ficam).
+  // Cada região escolhida pelo usuário (qualquer cidade, estado ou país) é buscada em paralelo, no mesmo prazo total.
+  const results = await Promise.all(areas.map((area) =>
+    searchOneArea(icp.osmTags, area, fetchImpl, { ...opts, totalMs, deadline })
+      .then((r): AreaSearchResult & { elements: unknown[] } => ({ area, count: r.elements.length, via: r.via, elements: r.elements }))
+      .catch((e): AreaSearchResult & { elements: unknown[] } => ({ area, count: 0, error: e instanceof ProspectorError ? e.code : 'map_timeout', finding: e instanceof ProspectorError ? (e.detail.finding as string | undefined) : undefined, elements: [] })),
+  ));
+  const ok = results.filter((r) => !r.error);
+  if (!ok.length) {
+    const first = results[0];
+    throw new ProspectorError(first?.error ?? 'map_timeout', first?.finding ? { finding: first.finding, areas: results.map(({ elements: _e, ...r }) => r) } : {});
+  }
+  // Junta sem repetir o mesmo ponto do mapa (regiões que se sobrepõem, ex.: estado + capital).
+  const seen = new Set<string>();
+  const elements: unknown[] = [];
+  for (const r of ok) {
+    for (const e of r.elements) {
+      const x = e as { type?: string; id?: number };
+      const k = x?.type && x?.id ? `${x.type}/${x.id}` : JSON.stringify(e);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      elements.push(e);
+    }
+  }
+  return {
+    elements: elements.slice(0, 400),
+    via: ok.length === 1 ? ok[0].via! : ok.map((r) => r.via).join(' + '),
+    areas: results.map(({ elements: _e, ...r }) => r),
+  };
+}
+
+export interface AreaSearchResult { area: string; count: number; via?: string; error?: string; finding?: string }
+
+const CITY_LIKE = new Set(['municipality', 'city', 'town', 'village', 'hamlet', 'city_district', 'suburb', 'borough', 'district']);
+
+/** Uma região: lugar → retângulo (leve) → área oficial → (Brasil) município pelo nome. Filtra lugar e categoria. */
+async function searchOneArea(
+  tags: OsmTag[],
+  area: string,
+  fetchImpl: typeof fetch,
+  opts: { totalMs: number; deadline: number; attemptMs?: number; endpoints?: string[]; hedgeMs?: number; geocoderMs?: number },
+): Promise<{ elements: unknown[]; via: string }> {
+  const run = (q: string) => runMapQueryInBrowser(q, fetchImpl, { endpoints: opts.endpoints, attemptMs: opts.attemptMs, hedgeMs: opts.hedgeMs, deadline: opts.deadline });
+  const br = isBrazilArea(area);
+  const parsed = br === false ? null : parseArea(area);
+  const place = await geocodeAreaInBrowser(area, fetchImpl, Math.min(opts.geocoderMs ?? GEOCODER_TIMEOUT_MS, Math.max(1, opts.totalMs / 3)));
+  if (!place && !parsed) throw new ProspectorError('area_not_found', { finding: `Não achei a região "${area}" no mapa. Use "Cidade, UF" ou "Cidade, País" (ex.: "São Paulo, SP" ou "Lisboa, Portugal").` });
+  // Só o lugar escolhido e só as categorias do ICP (o retângulo pega vizinhos; nada de outra categoria).
+  // Contorno decide quando existe; sem contorno, o nome da cidade só filtra quando o lugar é uma cidade
+  // (estado/país não). Consulta por área oficial já é exata.
+  const cityName = place && place.kind && !CITY_LIKE.has(place.kind) ? null : parsed?.city ?? (place ? area.split(',')[0].trim() : null);
   const clean = (els: unknown[], exactArea = false) =>
-    keepIcpCategories(keepInsideMunicipality(els, { city: exactArea ? null : parsed?.city ?? null, geometry: place?.geometry ?? null }), icp.osmTags);
+    keepIcpCategories(keepInsideMunicipality(els, { city: exactArea ? null : cityName, geometry: place?.geometry ?? null }), tags);
   if (place?.bbox) {
-    const els = await run(buildOverpassQueryByBbox(icp.osmTags, place.bbox, 200));
+    const els = await run(buildOverpassQueryByBbox(tags, place.bbox, 200));
     if (els) return { elements: clean(els), via: 'região do município' };
   }
   if (place?.areaId) {
-    const els = await run(buildOverpassQuery(icp.osmTags, place.areaId, 200));
+    const els = await run(buildOverpassQuery(tags, place.areaId, 200));
     if (els) return { elements: clean(els, true), via: 'área do município' };
   }
   if (!place && parsed) {
-    const els = await run(buildOverpassQueryByName(icp.osmTags, parsed.city, parsed.uf, 200));
+    const els = await run(buildOverpassQueryByName(tags, parsed.city, parsed.uf, 200));
     if (els) return { elements: clean(els, true), via: 'nome do município' };
   }
   throw new ProspectorError('map_timeout');

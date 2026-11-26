@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import {
-  callProspector, campaignOptionLabel, downloadCsv, prospectorErrorText, PROSPECTOR_NAME, readProspectorHandoff, searchCompaniesInBrowser, useVertalProspectorAccess, withDeadline,
+  callProspector, campaignOptionLabel, downloadCsv, joinAreas, parseAreas, prospectorErrorText, PROSPECTOR_NAME, readProspectorHandoff, searchCompaniesInBrowser, useVertalProspectorAccess, withDeadline,
 } from '@/lib/vertalProspector/client';
 import {
   EMAIL_STATUS_LABEL, leadsToCsv, textProblems, type CsvLead, type EmailStatus, type Icp,
@@ -83,6 +83,47 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+/** Onde buscar: um ou mais locais (cidade, estado ou país), fácil de trocar antes de buscar. */
+function AreasEditor({ areas, categories, disabled, onSave }: { areas: string[]; categories: string[]; disabled: boolean; onSave: (areas: string[]) => void }) {
+  const [list, setList] = useState(areas);
+  const [input, setInput] = useState('');
+  const changed = joinAreas(list) !== joinAreas(areas);
+  const add = () => {
+    const more = parseAreas(input);
+    if (!more.length) return;
+    setList((cur) => parseAreas(joinAreas([...cur, ...more])));
+    setInput('');
+  };
+  return (
+    <div className="space-y-1.5 rounded-md border border-border/50 p-2" data-testid="prospector-search-scope">
+      <p className="text-xs text-muted-foreground">
+        Onde buscar{categories.length ? <> · <span className="text-foreground/80">{categories.join(', ')}</span></> : null}
+      </p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {list.map((a) => (
+          <span key={a} className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs">
+            {a}
+            <button type="button" aria-label={`Remover ${a}`} disabled={disabled || list.length < 2} onClick={() => setList(list.filter((x) => x !== a))} className="text-muted-foreground hover:text-foreground disabled:opacity-40">×</button>
+          </span>
+        ))}
+        <Input
+          aria-label="Adicionar local"
+          value={input}
+          placeholder="Ex.: São Paulo, SP · Lisboa, Portugal"
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+          className="h-7 w-56 text-xs"
+          disabled={disabled}
+        />
+        <Button size="sm" variant="outline" className="h-7 text-xs" disabled={disabled || !input.trim()} onClick={add}>Adicionar</Button>
+        {changed && (
+          <Button size="sm" className="h-7 text-xs" disabled={disabled || !list.length} onClick={() => onSave(list)}>Salvar locais</Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function VertalProspectorScreen() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -98,7 +139,7 @@ export function VertalProspectorScreen() {
   const [cap, setCap] = useState({ cap: 20, sentToday: 0 });
   const [accounts, setAccounts] = useState<Array<{ id: string; email: string }>>([]);
   const [accountId, setAccountId] = useState('');
-  const [form, setForm] = useState({ companyName: handoff.companyName, cnpj: handoff.cnpj, website: handoff.website });
+  const [form, setForm] = useState({ companyName: handoff.companyName, cnpj: handoff.cnpj, website: handoff.website, area: '' });
   const [icpDraft, setIcpDraft] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [edits, setEdits] = useState<Record<string, { subject: string; body: string }>>({});
@@ -151,7 +192,7 @@ export function VertalProspectorScreen() {
     if (!r) return;
     setCampaign(r.campaign);
     // Etapa "1. Empresa" mostra os dados salvos da campanha (antes aparecia vazia ao reabrir).
-    setForm({ companyName: r.campaign.company_name ?? '', cnpj: r.campaign.cnpj ?? '', website: r.campaign.website ?? '' });
+    setForm({ companyName: r.campaign.company_name ?? '', cnpj: r.campaign.cnpj ?? '', website: r.campaign.website ?? '', area: '' });
     setLeads(r.leads);
     setMessages(r.messages);
     setCap({ cap: r.cap, sentToday: r.sentToday });
@@ -212,6 +253,21 @@ export function VertalProspectorScreen() {
     }
   };
 
+  /** Locais da busca escolhidos pelo usuário (vencem o que a IA sugeriu). Mantém o ICP confirmado. */
+  const saveAreas = async (areas: string[]) => {
+    if (!campaign || !areas.length) return;
+    const r = await run('Salvando locais', () =>
+      callProspector<{ campaign: Campaign }>('update_icp', {
+        campaignId: campaign.id, icp: { ...campaign.icp, area: joinAreas(areas) }, confirm: campaign.status === 'icp_confirmed',
+      }),
+    );
+    if (!r) return;
+    setCampaign(r.campaign);
+    setIcpDraft(icpToDraft(r.campaign.icp));
+    setCampaigns((cs) => cs.map((c) => (c.id === r.campaign.id ? { ...c, area: r.campaign.icp?.area ?? null } : c)));
+    toast.success('Locais da busca salvos.');
+  };
+
   const findLeads = async () => {
     if (!campaign) return;
     const r = await run('Buscando empresas no mapa aberto', async () => {
@@ -221,9 +277,13 @@ export function VertalProspectorScreen() {
       setSearchError(null);
       try {
         return await withDeadline((async () => {
-          const { elements, via } = await searchCompaniesInBrowser(campaign.icp);
+          const { elements, via, areas } = await searchCompaniesInBrowser(campaign.icp);
           const res = await callProspector<{ added: number; found: number; findings: string[] }>('find_leads', { campaignId: campaign.id, limit, elements }, { timeoutMs: 30_000 });
-          return { ...res, via };
+          // Por região: quantas o mapa trouxe e quais falharam (as outras seguem valendo).
+          const perArea = areas.length > 1 || areas.some((a) => a.error)
+            ? areas.map((a) => (a.error ? `${a.area}: ${a.finding ?? 'o mapa não respondeu agora.'}` : `${a.area}: ${a.count} no mapa.`))
+            : [];
+          return { ...res, findings: [...perArea, ...(res.findings ?? [])], via };
         })(), 90_000);
       } catch (e) {
         // Erro fica escrito na tela (o aviso flutuante some em segundos).
@@ -418,6 +478,9 @@ export function VertalProspectorScreen() {
             <Field label="Site (opcional)">
               <Input value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} inputMode="url" placeholder="suaempresa.com.br" />
             </Field>
+            <Field label="Onde buscar clientes (opcional — cidade, estado ou país; várias separadas por ;)">
+              <Input value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} placeholder="São Paulo, SP; Campinas, SP" />
+            </Field>
             <Button className="w-full" disabled={!!busy || !form.companyName.trim()} onClick={createCampaign}>
               <Search className="mr-2 h-4 w-4" /> Analisar empresa
             </Button>
@@ -436,7 +499,7 @@ export function VertalProspectorScreen() {
             <Field label="Quem compra e por quê"><Textarea rows={3} value={icpDraft.summary ?? ''} onChange={(e) => setIcpDraft({ ...icpDraft, summary: e.target.value })} /></Field>
             <Field label="Segmentos"><Input value={icpDraft.segments ?? ''} onChange={(e) => setIcpDraft({ ...icpDraft, segments: e.target.value })} /></Field>
             <Field label="Categorias do mapa"><Input value={icpDraft.osmTags ?? ''} onChange={(e) => setIcpDraft({ ...icpDraft, osmTags: e.target.value })} /></Field>
-            <Field label="Região (cidade, UF)"><Input value={icpDraft.area ?? ''} onChange={(e) => setIcpDraft({ ...icpDraft, area: e.target.value })} /></Field>
+            <Field label="Onde buscar (cidade, estado ou país — várias separadas por ;)"><Input value={icpDraft.area ?? ''} placeholder="São Paulo, SP; Campinas, SP" onChange={(e) => setIcpDraft({ ...icpDraft, area: e.target.value })} /></Field>
             <Field label="Porte"><Input value={icpDraft.companySize ?? ''} onChange={(e) => setIcpDraft({ ...icpDraft, companySize: e.target.value })} /></Field>
             <Field label="Sinais de compra"><Textarea rows={2} value={icpDraft.buyingSignals ?? ''} onChange={(e) => setIcpDraft({ ...icpDraft, buyingSignals: e.target.value })} /></Field>
             <Field label="Quem NÃO é cliente"><Input value={icpDraft.exclusions ?? ''} onChange={(e) => setIcpDraft({ ...icpDraft, exclusions: e.target.value })} /></Field>
@@ -470,12 +533,13 @@ export function VertalProspectorScreen() {
               </Button>
             </div>
             {campaign.status !== 'icp_confirmed' && <p className="text-xs text-amber-300">Confirme o ICP para buscar empresas.</p>}
-            {campaign.icp?.area && (
-              <p className="text-xs text-muted-foreground" data-testid="prospector-search-scope">
-                Busca em <span className="font-medium text-foreground">{campaign.icp.area}</span>
-                {campaign.icp.osmTags?.length ? <> · {campaign.icp.osmTags.map((t) => `${t.key}=${t.value}`).join(', ')}</> : null}
-              </p>
-            )}
+            <AreasEditor
+              key={`${campaign.id}:${campaign.icp?.area ?? ''}`}
+              areas={parseAreas(campaign.icp?.area ?? '')}
+              categories={(campaign.icp?.osmTags ?? []).map((t) => `${t.key}=${t.value}`)}
+              disabled={!!busy}
+              onSave={saveAreas}
+            />
             {searchError && !busy && <p role="alert" className="text-sm text-destructive">{searchError}</p>}
             {leads.length === 0 && !busy && <p className="text-sm text-muted-foreground">Nenhuma empresa ainda.</p>}
             <ul className="space-y-2">
