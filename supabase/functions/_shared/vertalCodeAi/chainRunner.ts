@@ -120,7 +120,7 @@ export async function runChain(
     }
     const timeout = budget
       ? Math.min(budget.totalMs, left - FALLBACK_RESERVE_MS)
-      : Math.min(left - 3_000, m.provider === "ollama" ? 240_000 : 90_000);
+      : Math.min(left - 3_000, m.provider === "ollama" ? 240_000 : m.provider === "ollama_cloud" ? 120_000 : 90_000);
     const key = (e[m.keyEnv] ?? "").trim();
     const abort = new AbortController();
     const totalTimer = setTimeout(() => abort.abort(new DOMException("timeout", "TimeoutError")), timeout);
