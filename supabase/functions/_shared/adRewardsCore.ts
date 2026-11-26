@@ -8,6 +8,11 @@
 // Tudo é decidido no servidor. O saldo pendente é a soma das linhas de
 // `ad_rewards` dos tipos abaixo: cliques somam, retiradas entram negativas.
 // Sem imports: o mesmo arquivo roda no Deno (função `shortlinks`) e no vitest.
+//
+// Checklist diário (2026-11-26): cliques feitos depois de `gating.startMs` só entram no saldo
+// retirável se o dia do clique (America/Sao_Paulo) fechou o checklist (vídeo + 5 músicas + TERRA).
+// Cliques de hoje ainda abertos ficam em `pending_today`; de dias passados que não fecharam, em
+// `expired` (as linhas continuam em ad_rewards). Sem `gating`, a regra antiga vale para tudo.
 
 export const AD_REWARD_PER_CLICK = 0.002;
 export const AD_CLICK_COOLDOWN_MS = 60 * 60 * 1000;
@@ -26,6 +31,25 @@ export interface AdRewardRow {
   created_at: string;
 }
 
+/** Regra do checklist diário para os cliques TERRA ADS. */
+export interface AdGating {
+  /** Cliques antes deste instante seguem a regra antiga (sempre liberados). */
+  startMs: number;
+  /** Dias (YYYY-MM-DD, São Paulo) em que o usuário completou o checklist. */
+  completedDays: string[];
+}
+
+const SP_DAY = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Sao_Paulo",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+/** Dia civil em America/Sao_Paulo (YYYY-MM-DD). */
+export function saoPauloDay(ms: number): string {
+  return SP_DAY.format(new Date(ms));
+}
+
 export interface AdRewardStatus {
   reward_per_click: number;
   min_withdraw: number;
@@ -39,19 +63,39 @@ export interface AdRewardStatus {
   /** Créditos inteiros que saem numa retirada agora (0 se abaixo do mínimo). */
   withdrawable: number;
   can_withdraw: boolean;
+  /** Cliques de hoje (São Paulo). */
+  clicks_today: number;
+  /** Créditos de cliques de hoje esperando o checklist do dia fechar. */
+  pending_today: number;
+  /** Créditos de cliques de dias passados em que o checklist não fechou. */
+  expired: number;
 }
 
-export function summarizeAdRewards(rows: AdRewardRow[], nowMs: number): AdRewardStatus {
+export function summarizeAdRewards(rows: AdRewardRow[], nowMs: number, gating?: AdGating | null): AdRewardStatus {
   let pendingUnits = 0;
+  let pendingTodayUnits = 0;
+  let expiredUnits = 0;
   let clicks = 0;
+  let clicksToday = 0;
   let withdrawals = 0;
   let lastClickMs: number | null = null;
+  const today = saoPauloDay(nowMs);
+  const completed = new Set(gating?.completedDays ?? []);
 
   for (const row of rows) {
     if (row.ad_type === AD_TYPE_CLICK) {
       clicks += 1;
-      pendingUnits += toUnits(row.reward_credits);
       const at = Date.parse(row.created_at);
+      const day = Number.isFinite(at) ? saoPauloDay(at) : null;
+      if (day === today) clicksToday += 1;
+      const units = toUnits(row.reward_credits);
+      if (!gating || !Number.isFinite(at) || at < gating.startMs || (day !== null && completed.has(day))) {
+        pendingUnits += units;
+      } else if (day === today) {
+        pendingTodayUnits += units;
+      } else {
+        expiredUnits += units;
+      }
       if (Number.isFinite(at) && (lastClickMs === null || at > lastClickMs)) lastClickMs = at;
     } else if (row.ad_type === AD_TYPE_WITHDRAWAL) {
       withdrawals += 1;
@@ -77,6 +121,9 @@ export function summarizeAdRewards(rows: AdRewardRow[], nowMs: number): AdReward
     can_click: canClick,
     withdrawable,
     can_withdraw: withdrawable > 0,
+    clicks_today: clicksToday,
+    pending_today: fromUnits(pendingTodayUnits),
+    expired: fromUnits(expiredUnits),
   };
 }
 
@@ -97,6 +144,10 @@ export interface AdRewardStore {
   deleteRow(id: string): Promise<void>;
   /** Soma créditos inteiros ao saldo do usuário; repetir a mesma chave não soma de novo. */
   topup(userId: string, amount: number, idempotencyKey: string): Promise<void>;
+  /** Regra do checklist diário (opcional; sem ela vale a regra antiga). */
+  gating?(userId: string): Promise<AdGating | null>;
+  /** Depois de um clique aceito: fecha o checklist do dia se tudo estiver feito e devolve o estado. */
+  afterClick?(userId: string): Promise<Record<string, unknown> | null>;
 }
 
 export type AdRewardAction = "ad-status" | "ad-click" | "ad-withdraw";
@@ -114,7 +165,9 @@ export async function handleAdReward(
   store: AdRewardStore,
   nowMs: number = Date.now(),
 ): Promise<AdRewardResult> {
-  const before = summarizeAdRewards(await store.listRows(userId), nowMs);
+  const gating = store.gating ? await store.gating(userId) : null;
+  const summarize = async () => summarizeAdRewards(await store.listRows(userId), nowMs, gating);
+  const before = await summarize();
 
   if (action === "ad-status") return { status: 200, body: { ...before } };
 
@@ -130,9 +183,23 @@ export async function handleAdReward(
       reward_credits: AD_REWARD_PER_CLICK,
       ad_type: AD_TYPE_CLICK,
     });
-    const after = summarizeAdRewards(await store.listRows(userId), nowMs);
-    if (inserted === "conflict") return { status: 429, body: { error: "cooldown", ...after } };
-    return { status: 200, body: { success: true, credits_earned: AD_REWARD_PER_CLICK, ...after } };
+    if (inserted === "conflict") {
+      return { status: 429, body: { error: "cooldown", ...(await summarize()) } };
+    }
+    let checklist: Record<string, unknown> | null = null;
+    if (store.afterClick) {
+      try {
+        checklist = await store.afterClick(userId);
+      } catch {
+        checklist = null; // o clique já foi registrado; o checklist é recalculado no próximo status
+      }
+    }
+    // Se o checklist fechou agora, o dia de hoje passa a contar como liberado.
+    const completedNow = checklist && (checklist as { completed?: boolean }).completed === true;
+    const gatingAfter =
+      gating && completedNow ? { ...gating, completedDays: [...gating.completedDays, saoPauloDay(nowMs)] } : gating;
+    const after = summarizeAdRewards(await store.listRows(userId), nowMs, gatingAfter);
+    return { status: 200, body: { success: true, credits_earned: AD_REWARD_PER_CLICK, checklist, ...after } };
   }
 
   // ad-withdraw
@@ -149,7 +216,7 @@ export async function handleAdReward(
     ad_type: AD_TYPE_WITHDRAWAL,
   });
   if (inserted === "conflict") {
-    const now = summarizeAdRewards(await store.listRows(userId), nowMs);
+    const now = await summarize();
     return { status: 409, body: { error: "already_processing", ...now } };
   }
   try {
@@ -159,6 +226,6 @@ export async function handleAdReward(
     await store.deleteRow(id);
     throw err;
   }
-  const after = summarizeAdRewards(await store.listRows(userId), nowMs);
+  const after = await summarize();
   return { status: 200, body: { success: true, credits_withdrawn: amount, ...after } };
 }

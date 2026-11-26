@@ -179,3 +179,54 @@ describe('deterministicUuid', () => {
     expect(a).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
   })
 })
+
+describe('checklist diário (gating dos cliques TERRA ADS)', () => {
+  // 26/11/2026 15:00 em São Paulo (UTC-3)
+  const T = Date.parse('2026-11-26T18:00:00Z')
+  const START = Date.parse('2026-11-26T17:00:00Z')
+  const row = (iso: string): AdRewardRow => ({ ad_type: AD_TYPE_CLICK, reward_credits: 0.002, created_at: iso })
+
+  it('cliques antes do início da regra continuam liberados', () => {
+    const s = summarizeAdRewards([row('2026-11-25T12:00:00Z')], T, { startMs: START, completedDays: [] })
+    expect(s.pending).toBe(0.002)
+    expect(s.pending_today).toBe(0)
+    expect(s.expired).toBe(0)
+  })
+
+  it('clique de hoje fica pendente até o checklist fechar', () => {
+    const rows = [row('2026-11-26T17:30:00Z')]
+    const open = summarizeAdRewards(rows, T, { startMs: START, completedDays: [] })
+    expect(open.pending).toBe(0)
+    expect(open.pending_today).toBe(0.002)
+    expect(open.clicks_today).toBe(1)
+    const done = summarizeAdRewards(rows, T, { startMs: START, completedDays: ['2026-11-26'] })
+    expect(done.pending).toBe(0.002)
+    expect(done.pending_today).toBe(0)
+  })
+
+  it('clique de dia passado sem checklist expira', () => {
+    const next = Date.parse('2026-11-27T15:00:00Z')
+    const s = summarizeAdRewards([row('2026-11-26T17:30:00Z')], next, { startMs: START, completedDays: [] })
+    expect(s.pending).toBe(0)
+    expect(s.expired).toBe(0.002)
+  })
+
+  it('o dia é o de São Paulo (23:30 BRT ainda é o mesmo dia)', () => {
+    const s = summarizeAdRewards([row('2026-11-27T02:30:00Z')], Date.parse('2026-11-27T02:45:00Z'), {
+      startMs: START,
+      completedDays: ['2026-11-26'],
+    })
+    expect(s.pending).toBe(0.002)
+  })
+
+  it('ad-click devolve o checklist e libera o clique quando o dia fecha', async () => {
+    const { store } = memoryStore()
+    store.gating = async () => ({ startMs: NOW - 1000, completedDays: [] })
+    store.afterClick = async () => ({ completed: true })
+    const res = await handleAdReward('ad-click', USER, store, NOW)
+    expect(res.status).toBe(200)
+    expect(res.body.checklist).toEqual({ completed: true })
+    expect(res.body.pending).toBe(0.002)
+    expect(res.body.pending_today).toBe(0)
+  })
+})
