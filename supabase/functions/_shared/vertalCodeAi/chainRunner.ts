@@ -185,7 +185,14 @@ export async function runChain(
           (failures.length ? ` after=${failures.join(",")}` : ""),
       );
       const info = publicModelInfo(m);
-      return { content, label: info.label, cost: info.cost, fellBack: failures.some((f) => !f.includes(":skip(")) };
+      return {
+        content,
+        label: info.label,
+        cost: info.cost,
+        fellBack: failures.some((f) => !f.includes(":skip(")),
+        // Uso desta chamada (só para a Data Library, desligada por padrão; não muda roteamento nem cobrança).
+        usage: { inputTokens: u.prompt_tokens ?? inputTokens, outputTokens: u.completion_tokens ?? Math.ceil(content.length / 3.5), costUsd },
+      };
     } catch (err) {
       failures.push(`${m.id}:${err instanceof Error ? err.name : "err"}`);
       if (budget) deps.cooldown.set(m.id, Date.now() + SELF_HOSTED_COOLDOWN_MS);
