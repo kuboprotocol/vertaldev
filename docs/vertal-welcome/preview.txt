@@ -1,0 +1,27 @@
+Subject: Welcome to Vertal Dev, Ana
+Preheader: Everything you need to build, launch and grow is already in your account.
+
+Hi Ana,
+
+Welcome to Vertal Dev. We're really glad you're here.
+
+Your account comes with a full set of tools to build, launch and run your projects, and most of them cost nothing. Here's what's waiting for you:
+
+• Free CRM: keep your contacts, companies and deals in one place, with no monthly fee. It's opening soon, and you can join the waitlist today. (https://vertal.dev/crm)
+• Deploy and rendering: put your projects online in a few clicks and watch them come to life as you build.
+• Vertal App: take a project from your repository to a live app, with AI that detects your stack and build, plus live status and logs. (https://vertal.app)
+• Vertal Run: safe, isolated sandboxes where your AI agents run Python, JavaScript and Bash code. (https://vertalrun.com)
+• Vertal Vibe Pay: a digital account to get paid in multiple currencies, with Pix, cards and payment links. It's opening soon. (https://vertal.dev/en/vibe-pay)
+• Premium Design, CAD and Office tools: free whenever you use them manually. (https://vertal.dev/creative)
+
+You only pay for Vertal AI, and only for what you use, with credits you control.
+
+The best way to get started is our documentation. Spend a few minutes there and you'll find guides, examples and shortcuts that make everything easier.
+
+Explore the docs: https://vertal.dev/docs
+
+If you have a question or an idea, just reply to this email. We'd love to hear from you.
+
+Welcome aboard,
+Laércio Borges
+Founder, Vertal
