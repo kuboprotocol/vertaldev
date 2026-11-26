@@ -84,6 +84,17 @@ import { autoImport as vertalCrmAutoImport, handleCrm, hashApiKey as hashVertalC
 import { verifyFluxosKey as verifyVertalCrmFluxosKey } from "../_shared/fluxosBroker.ts";
 import { makeEngine as makeVertalCrmEngine } from "../_shared/fluxosApps.ts";
 import { vertalPersonaEnabled } from "../_shared/vertalPersona.ts";
+// VERTAL Code AI → Vertal Data Library (Vertaldephin): desligado por padrão (config VERTAL_DATA_LIBRARY); só com consentimento gravado.
+import {
+  dataLibraryConfig as vcaDataLibraryConfig,
+  decideConsent as vcaDlDecideConsent,
+  parseCookieClaim as vcaDlCookieClaim,
+  rewardsConsentFromRows as vcaDlRewardsConsent,
+  trackMedia as vcaDlTrackMedia,
+  type VcaConsentDecision,
+  VcaDataLibrarySender,
+  VcaRunTracker,
+} from "../_shared/vertalCodeAi/dataLibrary.ts";
 
 // Cliente do Supabase e módulo TypeScript sem tipos gerados (mesmo padrão do vibe-code-agent).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -171,6 +182,32 @@ function callChain(
     log: (m) => console.log(m),
     warn: (m) => console.warn(m),
   });
+}
+
+// ── VERTAL Code AI → Data Library (Vertaldephin). Sem config = null = nada muda (nem consulta ao banco). ──
+let vcaDlSender: { sig: string; sender: VcaDataLibrarySender } | null = null;
+const vcaDlDefer = (p: Promise<unknown>) => (globalThis as Loose).EdgeRuntime?.waitUntil?.(p);
+function vcaDataLibrary(admin: Loose, userId: string, body: Record<string, Loose>): { sender: VcaDataLibrarySender; consent: Promise<VcaConsentDecision> } | null {
+  try {
+    const cfg = vcaDataLibraryConfig(Deno.env.toObject());
+    if (!cfg) return null;
+    const sig = `${cfg.endpoint}|${cfg.key}|${cfg.policy}`;
+    if (vcaDlSender?.sig !== sig) vcaDlSender = { sig, sender: new VcaDataLibrarySender(cfg, { fetch, warn: (m) => console.warn(m) }) };
+    const cookie = vcaDlCookieClaim(body.dataConsent);
+    // Consulta em paralelo (o pedido não espera): aceite do Vertal Node no painel de recompensas (vertal_nodes.opted_in).
+    const consent = (async () => {
+      if (!cfg.sources.includes("rewards_panel")) return vcaDlDecideConsent(cfg, "none", cookie);
+      const { data, error } = await admin.from("vertal_nodes").select("opted_in").eq("user_id", userId);
+      return vcaDlDecideConsent(cfg, error ? "none" : vcaDlRewardsConsent(data), cookie);
+    })().catch(() => vcaDlDecideConsent(cfg, "none", cookie));
+    return { sender: vcaDlSender.sender, consent };
+  } catch {
+    return null;
+  }
+}
+function vcaDlMedia(admin: Loose, userId: string, body: Record<string, Loose>, m: Parameters<typeof vcaDlTrackMedia>[1]): void {
+  const dl = vcaDataLibrary(admin, userId, body);
+  if (dl) vcaDlTrackMedia({ ...dl, userId, runId: crypto.randomUUID(), defer: vcaDlDefer }, m);
 }
 
 async function sha256(s: string): Promise<string> {
@@ -716,6 +753,7 @@ Deno.serve(async (req) => {
             }
             const usd = mediaCostUsd(m);
             console.log(`[vertal-code-ai] image ok ${m.id} (${m.model}) ms=${Date.now() - t0} est_usd=${usd.toFixed(6)}`);
+            vcaDlMedia(admin, userId, body, { mediaType: "image", ok: true, latencyMs: Date.now() - imgStart, cost: "self_hosted", label: m.label, fellBack: fails.some((f) => !f.includes(":skip(")), costUsd: usd, referenceImages: refs.length, outputs: 1, videoSeconds: null });
             return json(200, {
               images: [img],
               text: "",
@@ -748,6 +786,7 @@ Deno.serve(async (req) => {
           }
           const usd = typeof d?.usage?.cost === "number" ? d.usage.cost : mediaCostUsd(m);
           console.log(`[vertal-code-ai] image ok ${m.id} (${m.model}) ms=${Date.now() - t0} cost_usd=${usd.toFixed(6)}`);
+          vcaDlMedia(admin, userId, body, { mediaType: "image", ok: true, latencyMs: Date.now() - imgStart, cost: "paid", label: m.label, fellBack: fails.some((f) => !f.includes(":skip(")), costUsd: usd, referenceImages: refs.length, outputs: Math.min(2, out.images.length), videoSeconds: null });
           return json(200, {
             images: out.images.slice(0, 2),
             text: out.text.slice(0, 2_000),
@@ -759,12 +798,14 @@ Deno.serve(async (req) => {
         }
       }
       console.warn(`[vertal-code-ai] image failed: ${fails.join(",")}`);
+      vcaDlMedia(admin, userId, body, { mediaType: "image", ok: false, latencyMs: Date.now() - imgStart, cost: null, label: null, fellBack: fails.length > 1, costUsd: 0, referenceImages: refs.length, outputs: 0, videoSeconds: null });
       return json(502, { error: "vca_media_failed" });
     }
 
     if (action === "video") {
       if (!mprompt) return json(400, { error: "empty_prompt" });
       const fails: string[] = [];
+      const vidStart = Date.now(); // VERTAL Code AI · Data Library (latência até o envio do trabalho)
       for (const m of videoModels(e)) {
         if (m.provider === "own") {
           try {
@@ -786,6 +827,7 @@ Deno.serve(async (req) => {
             }
             const usd = mediaCostUsd(m);
             console.log(`[vertal-code-ai] video submitted ${m.id} (${m.model}) est_usd=${usd.toFixed(4)}`);
+            vcaDlMedia(admin, userId, body, { mediaType: "video", ok: true, latencyMs: Date.now() - vidStart, cost: "self_hosted", label: m.label, fellBack: fails.length > 0, costUsd: usd, referenceImages: 0, outputs: 1, videoSeconds: m.seconds ?? null });
             return json(202, {
               job: await signJob(userId, `${VCA_OWN_JOB_PREFIX}${d.id}`),
               status: "pending",
@@ -816,6 +858,7 @@ Deno.serve(async (req) => {
           }
           const usd = mediaCostUsd(m);
           console.log(`[vertal-code-ai] video submitted ${m.id} (${m.model}) est_usd=${usd.toFixed(4)}`);
+          vcaDlMedia(admin, userId, body, { mediaType: "video", ok: true, latencyMs: Date.now() - vidStart, cost: "paid", label: m.label, fellBack: fails.length > 0, costUsd: usd, referenceImages: 0, outputs: 1, videoSeconds: m.seconds ?? null });
           return json(202, {
             job: await signJob(userId, d.id),
             status: d.status ?? "pending",
@@ -827,6 +870,7 @@ Deno.serve(async (req) => {
         }
       }
       console.warn(`[vertal-code-ai] video failed: ${fails.join(",")}`);
+      vcaDlMedia(admin, userId, body, { mediaType: "video", ok: false, latencyMs: Date.now() - vidStart, cost: null, label: null, fellBack: fails.length > 1, costUsd: 0, referenceImages: 0, outputs: 0, videoSeconds: null });
       return json(502, { error: "vca_media_failed" });
     }
 
@@ -938,6 +982,16 @@ Deno.serve(async (req) => {
   const chain = option === "auto" && !modelId ? buildChain(env(), chainOpts) : buildOptionChain(env(), { ...chainOpts, option, modelId });
   if (!chain.length) return json(503, { error: "no_model_configured" });
 
+  // VERTAL Code AI → Data Library: null sem config (padrão). Consentimento consultado em paralelo; o pedido não espera.
+  const vcaDl = vcaDataLibrary(admin, userId, body);
+  const vcaDlRun = vcaDl
+    ? new VcaRunTracker(
+      { mode, option, effort, modelPinned: !!modelId, prompt, images: images.length, attachments: attachments.length, historyTurns: history.length, surface: origin },
+      { ...vcaDl, userId, runId: crypto.randomUUID(), defer: vcaDlDefer },
+    )
+    : null;
+  vcaDlRun?.started();
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
@@ -964,7 +1018,7 @@ Deno.serve(async (req) => {
             persona: vertalPersonaEnabled(Deno.env.get("VERTAL_PERSONA_ENABLED")),
           },
           {
-            callModel: (messages, o) => callChain(chain, messages, { ...o, effort, deadline }),
+            callModel: (messages, o) => callChain(chain, messages, { ...o, effort, deadline }).then((r) => (vcaDlRun?.modelCall(r), r)),
             listPaths: async () => [...(await getFiles()).keys()],
             readFile: async (p) => (await getFiles()).get(p),
             indexSource: async () => [...(await getFiles())].filter(([, c]) => c.length < 60_000).map(([path, content]) => ({ path, content })),
@@ -972,6 +1026,7 @@ Deno.serve(async (req) => {
             emit: send,
           },
         );
+        vcaDlRun?.finished({ ok: true, filesChanged: result.changes.length, verified: result.verified, codeExcerpt: result.changes.find((c) => c.after)?.after ?? null });
         // Hash do "antes" de cada arquivo: o apply recusa se o arquivo mudou no meio do caminho.
         send({
           kind: "base_hashes",
@@ -986,6 +1041,7 @@ Deno.serve(async (req) => {
             : "Não consegui concluir o pedido.",
         });
         console.error("[vertal-code-ai] run failed:", msg);
+        vcaDlRun?.finished({ ok: false, errorCode: msg === "vca_all_models_failed" ? "all_models_failed" : "internal" });
       } finally {
         try {
           controller.close();

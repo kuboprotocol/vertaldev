@@ -455,3 +455,6 @@ Tela: botão de olho no cabeçalho do `/vertal-code-ai` abre o painel "Visão ·
 Ver `work/vmllm/NOTES.md` (fora do repo) para os números da rodada de testes; resumo no PR.
 Preço de varejo (só proposta; cobrança desligada): créditos = (custo real + US$0,05) × 1,5 ÷ US$0,03.
 
+## Data Library (Vertaldephin)
+
+O uso do VERTAL Code AI pode ser enviado ao livro "Vertal Code AI" do Knowledge Book: desligado por padrão, só com consentimento já gravado (painel de recompensas / banner de cookies), uso anonimizado. Ver [VERTAL-CODE-AI-DATA-LIBRARY.md](VERTAL-CODE-AI-DATA-LIBRARY.md).

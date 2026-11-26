@@ -208,6 +208,10 @@ describe('VERTAL Code AI · executor da cadeia com a GPU própria', () => {
     expect(ff.calls.map((c) => new URL(c.url).host)).toEqual([GPU_HOST]);
     expect(ff.calls[0].body.max_tokens).toBe(4_096);
     expect(ff.calls[0].body.model).toBe('vertal-coder-gpu');
+    // Data Library: a resposta também traz o uso da chamada (tokens/custo), sem mudar o roteamento.
+    expect(r.usage?.inputTokens).toBeGreaterThan(3_000);
+    expect(r.usage?.outputTokens).toBeGreaterThan(0);
+    expect(r.usage?.costUsd).toBe(0);
   });
 
   it('pedido pequeno: a VM responde primeiro (GPU nem é chamada)', async () => {
