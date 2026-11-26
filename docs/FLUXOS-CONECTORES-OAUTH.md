@@ -152,3 +152,23 @@ App da Meta **Vertal Dev**, App ID `1145586658064572` (modo Desenvolvimento), se
   última mensagem do contato). Buscas: contas, mídias, métricas, conversas de DM, mensagens de uma conversa.
 - Para DMs, a conta do Instagram precisa de "Permitir acesso às mensagens" (Configurações → Privacidade → Mensagens →
   Ferramentas conectadas) ligado.
+
+## Auditoria de OAuth e novos clientes (26/11/2026)
+- **Limite de 100 segredos** nas Edge Functions do projeto Supabase. Por isso os **IDs públicos** dos clientes
+  OAuth (não são secretos) ficam no código: `PUBLIC_OAUTH_CLIENT_IDS` em `_shared/fluxosApps.ts` (GOOGLE,
+  MICROSOFT, META, SALESFORCE, DISQUS, GITLAB). O segredo `FLUXOS_OAUTH_<GRUPO>_ID`, se existir, vale mais;
+  o `_SECRET` continua obrigatório nos segredos. Para um cliente novo: ID no código + só o `_SECRET` no Supabase.
+- **Salesforce**: External Client App "Vertal Dev" (org de desenvolvedor Agentforce), retorno
+  `https://vertal.dev/fluxos/oauth/salesforce`, escopos `api`, `refresh_token offline_access`, `id profile email`.
+  External Client Apps exigem **PKCE** → motor (fork PR #13) manda `code_challenge` S256 e `code_verifier`.
+- **Disqus**: app 8213420 "Vertal Dev", retorno `https://vertal.dev/fluxos/oauth/disqus`, acesso "Read, Write, Manage Forums".
+- **GitLab**: app OAuth "Vertal Dev" no gitlab.com (escopos `api`, `read_user`), retorno
+  `https://vertal.dev/fluxos/oauth/gitlab`. Com o cliente do Vertal a instância é sempre `https://gitlab.com`.
+- **YouTube**: mesmo cliente Google ("Vertal Fluxos"); YouTube Data API v3 ativada, retorno
+  `https://vertal.dev/fluxos/oauth/youtube` e escopos do YouTube em Acesso a dados (sensíveis → só testadores
+  enquanto o app estiver em Teste).
+- Flickr escondido do catálogo (`HIDDEN_FLUXOS_APPS` em `src/lib/fluxosConnectors.ts`); o app continua no motor.
+- Bloqueados: Strava (API só para assinantes pagos), Flickr (chave de API só no Flickr Pro), Reddit ("Max clients
+  have been reached" — novos clientes da Data API dependem de aprovação do Reddit), HubSpot (apps OAuth só pela
+  HubSpot CLI, `hs project create/upload`), Discord (login do portal pede confirmação por e-mail), eBay (conta
+  de desenvolvedor em análise), Trello (login Atlassian).

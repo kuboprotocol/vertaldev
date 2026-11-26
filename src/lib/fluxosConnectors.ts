@@ -146,7 +146,13 @@ const FLUXOS_APP_LOGOS: Record<string, string> = {
   appwrite: '/connectors/appwrite.png',
 }
 
-export const fluxosConnectors: ConnectorConfig[] = FLUXOS_NATIVE_APPS.map(a => ({
+/**
+ * Apps fora do catálogo de /connectors (o motor e os dados continuam). Flickr: a chave de API só sai
+ * para assinantes do Flickr Pro (pago), então o Vertal não tem cliente OAuth (decisão do Laércio, 26/11/2026).
+ */
+export const HIDDEN_FLUXOS_APPS = new Set(['flickr'])
+
+export const fluxosConnectors: ConnectorConfig[] = FLUXOS_NATIVE_APPS.filter(a => !HIDDEN_FLUXOS_APPS.has(a.app)).map(a => ({
   name: a.name,
   slug: `fluxos-${a.app}`,
   icon: Workflow,
