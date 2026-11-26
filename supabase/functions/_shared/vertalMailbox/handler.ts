@@ -103,7 +103,8 @@ async function sendViaResend(deps: MailboxDeps, payload: Record<string, unknown>
     method: "POST",
     headers: { Authorization: `Bearer ${deps.resendKey}`, "Content-Type": "application/json" },
     body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(20_000),
+    // (jsdom dos testes não tem AbortSignal.timeout; Deno e o Worker têm)
+    signal: typeof AbortSignal.timeout === "function" ? AbortSignal.timeout(20_000) : undefined,
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) return { ok: false, error: `provider_${r.status}:${String(j?.message ?? j?.name ?? "").slice(0, 160)}` };
