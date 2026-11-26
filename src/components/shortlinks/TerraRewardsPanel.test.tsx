@@ -13,7 +13,7 @@ vi.mock('@/lib/terraAds', () => ({
 }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), info: vi.fn(), error: vi.fn() } }))
 
-import TerraRewardsPanel from './TerraRewardsPanel'
+import TerraRewardsPanel, { TERRA_FILL_TIMEOUT_SECONDS } from './TerraRewardsPanel'
 
 const base = {
   reward_per_click: 0.002,
@@ -103,5 +103,82 @@ describe('TerraRewardsPanel', () => {
 
     expect(await screen.findByText(/Não foi possível carregar/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Tentar de novo' })).toBeInTheDocument()
+  })
+
+  it('anúncio recusado (erro no script): mostra a alternativa do vídeo extra e registra no servidor', async () => {
+    const onUnavailable = vi.fn()
+    const checklist = { terra_done: false, terra_unavailable: true, completed: false }
+    invoke.mockImplementation((name: string) =>
+      Promise.resolve(
+        name.startsWith('daily-rewards')
+          ? { data: { ok: true, first_report_today: true, checklist }, error: null }
+          : { data: base, error: null },
+      ),
+    )
+    const { container } = render(<TerraRewardsPanel onUnavailable={onUnavailable} />)
+
+    const script = await waitFor(() => {
+      const found = container.querySelector('script[src="https://ads.example.test/invoke.js"]')
+      expect(found).not.toBeNull()
+      return found as HTMLScriptElement
+    })
+    script.dispatchEvent(new Event('error'))
+
+    expect(await screen.findByTestId('terra-unavailable')).toHaveTextContent(
+      'Anúncio TERRA indisponível — assista mais 1 vídeo para completar',
+    )
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith(
+        'daily-rewards?action=terra-unavailable',
+        expect.objectContaining({ body: expect.objectContaining({ reason: 'script_error' }) }),
+      ),
+    )
+    await waitFor(() => expect(onUnavailable).toHaveBeenCalledWith(checklist))
+    expect(screen.queryByRole('button', { name: 'Assista ao anúncio para receber' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tentar carregar o anúncio de novo' })).toBeInTheDocument()
+  })
+
+  it(`sem anúncio em ${TERRA_FILL_TIMEOUT_SECONDS} s: trata como indisponível (no fill)`, async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      invoke.mockImplementation((name: string) =>
+        Promise.resolve(
+          name.startsWith('daily-rewards')
+            ? { data: { ok: true, first_report_today: true }, error: null }
+            : { data: base, error: null },
+        ),
+      )
+      render(<TerraRewardsPanel />)
+      await screen.findByTestId('terra-watch-ad')
+      expect(screen.queryByTestId('terra-unavailable')).not.toBeInTheDocument()
+
+      await vi.advanceTimersByTimeAsync(TERRA_FILL_TIMEOUT_SECONDS * 1000 + 100)
+
+      expect(await screen.findByTestId('terra-unavailable')).toBeInTheDocument()
+      expect(invoke).toHaveBeenCalledWith(
+        'daily-rewards?action=terra-unavailable',
+        expect.objectContaining({ body: expect.objectContaining({ reason: 'no_fill_timeout' }) }),
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('anúncio preenchido a tempo não dispara a alternativa', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      invoke.mockResolvedValue({ data: base, error: null })
+      const { container } = render(<TerraRewardsPanel />)
+      await screen.findByTestId('terra-watch-ad')
+      const slot = container.querySelector('#container-test') as HTMLElement
+      slot.appendChild(document.createElement('div'))
+
+      await vi.advanceTimersByTimeAsync(TERRA_FILL_TIMEOUT_SECONDS * 1000 + 100)
+
+      expect(screen.queryByTestId('terra-unavailable')).not.toBeInTheDocument()
+      expect(invoke).not.toHaveBeenCalledWith('daily-rewards?action=terra-unavailable', expect.anything())
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

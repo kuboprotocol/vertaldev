@@ -46,6 +46,12 @@ export interface DailyChecklist {
   tracks: ChecklistTrack[];
   terra_done: boolean;
   terra_today: number;
+  /** O anúncio TERRA não carregou hoje (registrado no servidor): o passo fecha com 1 vídeo extra. */
+  terra_unavailable?: boolean;
+  /** Como o passo TERRA fechou: clique no anúncio ou vídeo extra (anúncio indisponível). */
+  terra_done_via?: "terra_click" | "terra_unavailable" | null;
+  /** Vídeos premiados no dia que fecham o passo TERRA quando ele está indisponível (padrão 2). */
+  terra_fallback_videos_required?: number;
   completed: boolean;
   completed_at: string | null;
   pending_credits: number;
@@ -86,10 +92,29 @@ async function callDailyRewards<T>(action: string, body: Record<string, unknown>
   return data as T;
 }
 
+/** Mensagem mostrada quando o anúncio TERRA ADS não carrega. */
+export const TERRA_UNAVAILABLE_MESSAGE = "Anúncio TERRA indisponível — assista mais 1 vídeo para completar";
+
+export type TerraUnavailableReason = "script_error" | "no_fill_timeout" | "panel_error";
+
+export interface TerraUnavailableResult {
+  ok: boolean;
+  error?: string;
+  first_report_today?: boolean;
+  checklist?: DailyChecklist;
+}
+
 export const fetchDailyChecklist = () => callDailyRewards<DailyChecklist>("status");
 export const startMusicSession = (trackId: string) =>
   callDailyRewards<MusicStartResult>("music-start", { track_id: trackId });
 export const reportMusicProgress = (nonce: string, listenedSeconds: number) =>
   callDailyRewards<MusicReportResult>("music-report", { nonce, listened_seconds: listenedSeconds });
+
+/** Avisa o servidor que o anúncio TERRA não carregou hoje (idempotente: 1 registro por dia). */
+export const reportTerraUnavailable = (reason: TerraUnavailableReason, waitedSeconds?: number) =>
+  callDailyRewards<TerraUnavailableResult>("terra-unavailable", {
+    reason,
+    ...(waitedSeconds === undefined ? {} : { waited_seconds: waitedSeconds }),
+  });
 
 export { ListeningMeter, type PlaybackState } from "@/lib/listeningMeter";

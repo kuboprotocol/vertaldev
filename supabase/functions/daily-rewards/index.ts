@@ -11,6 +11,10 @@
 //   music-report  -> { nonce, listened_seconds } tempo de reprodução real acumulado nessa sessão.
 //                    O servidor aceita no máximo o tempo de relógio desde o music-start (+2 s) e a
 //                    duração da faixa; repetir o mesmo valor não soma de novo.
+//   terra-unavailable -> { reason: script_error|no_fill_timeout|panel_error, waited_seconds? } o anúncio
+//                    TERRA ADS não carregou no navegador. Registra 1 linha por usuário por dia
+//                    (public.terra_unavailable_reports, idempotente) e, a partir daí, o passo TERRA do
+//                    checklist fecha com 1 vídeo premiado extra no dia (2 vídeos no total). Não dá crédito.
 //
 // Env (opcionais): KUBO_MUSIC_MIN_SECONDS (30) segundos por faixa para contar;
 // KUBO_MUSIC_CREDITS (1) crédito pendente ao completar as 5 faixas no dia;
@@ -34,6 +38,8 @@ const MUSIC_ERRORS: Record<string, number> = {
 };
 
 const TRACK_ID = /^[A-Za-z0-9]{22}$/;
+
+const TERRA_UNAVAILABLE_REASONS = new Set(["script_error", "no_fill_timeout", "panel_error"]);
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: rewardsCors });
@@ -94,6 +100,29 @@ Deno.serve(async (req) => {
       const result = data as { ok: boolean; error?: string };
       if (!result.ok) return json(result, MUSIC_ERRORS[result.error ?? ""] ?? 400);
       return json({ ...result, music_min_seconds: threshold });
+    }
+
+    if (action === "terra-unavailable") {
+      const reason = String(body.reason ?? "");
+      if (!TERRA_UNAVAILABLE_REASONS.has(reason)) return json({ ok: false, error: "invalid_reason" }, 400);
+      const waited = Number(body.waited_seconds);
+      const details: Record<string, unknown> = {
+        user_agent: (req.headers.get("user-agent") ?? "").slice(0, 200),
+      };
+      if (Number.isFinite(waited) && waited >= 0 && waited <= 3600) details.waited_seconds = Math.round(waited);
+      const { data, error } = await admin.rpc("report_terra_unavailable", {
+        _user_id: userId,
+        _reason: reason,
+        _details: details,
+        _tz: REWARDS_TZ,
+      });
+      if (error) throw error;
+      const result = data as { ok: boolean; error?: string; checklist?: Record<string, unknown> };
+      if (!result.ok) return json(result, 400);
+      return json({
+        ...result,
+        checklist: result.checklist ? { ...result.checklist, music_min_seconds: threshold } : undefined,
+      });
     }
 
     return json({ error: "unknown_action" }, 400);

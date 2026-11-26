@@ -92,6 +92,12 @@ export default function RewardsPage() {
     refreshChecklist()
   }, [loadData, refreshChecklist])
 
+  // TERRA ADS não carregou: o servidor registrou e devolveu o checklist (passo TERRA via vídeo extra).
+  const onTerraUnavailable = useCallback(
+    (next: DailyChecklist | undefined) => (next ? applyChecklist(next) : refreshChecklist()),
+    [applyChecklist, refreshChecklist],
+  )
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -196,7 +202,11 @@ export default function RewardsPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.25 }}
           >
-            <TerraRewardsPanel onWithdrawn={loadData} onActivity={refreshChecklist} />
+            <TerraRewardsPanel
+              onWithdrawn={loadData}
+              onActivity={refreshChecklist}
+              onUnavailable={onTerraUnavailable}
+            />
           </motion.div>
 
           {/* Bônus opcional: Vertal Node (app desktop/Android), fora do checklist */}

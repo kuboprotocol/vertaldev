@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Coins, Loader2, Timer } from "lucide-react";
+import { AlertTriangle, Coins, Loader2, Timer } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,9 +16,18 @@ import {
   TERRA_ADS_NATIVE_BANNER_SRC,
 } from "@/lib/terraAds";
 import { AdFrameSquare } from "@/components/creative/AdBanner";
+import {
+  reportTerraUnavailable,
+  TERRA_UNAVAILABLE_MESSAGE,
+  type DailyChecklist,
+  type TerraUnavailableReason,
+} from "@/lib/dailyRewards";
 
 /** Segundos que o anúncio precisa ficar visível na tela antes de liberar o crédito. */
 export const WATCH_SECONDS = 10;
+
+/** Sem anúncio preenchido nesse tempo, o TERRA ADS é tratado como indisponível (fallback do checklist). */
+export const TERRA_FILL_TIMEOUT_SECONDS = 15;
 
 /** Resposta da função `shortlinks` (ações ad-status, ad-click e ad-withdraw). */
 interface AdRewardStatus {
@@ -74,27 +83,55 @@ async function callAdReward(
  * assiste, e se quiser clicar ele leva ao anunciante na mesma aba do link do anúncio.
  * Conta o tempo só enquanto o anúncio está preenchido, visível na tela e a aba em primeiro plano.
  */
-function WatchableAd({ onReady }: { onReady: (ready: boolean) => void }) {
+function WatchableAd({
+  onReady,
+  onUnavailable,
+}: {
+  onReady: (ready: boolean) => void;
+  /** O script do anúncio falhou (ex.: 403 da rede) ou não houve anúncio em TERRA_FILL_TIMEOUT_SECONDS. */
+  onUnavailable: (reason: TerraUnavailableReason, waitedSeconds: number) => void;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [filled, setFilled] = useState(false);
   const [watched, setWatched] = useState(0);
+  const onUnavailableRef = useRef(onUnavailable);
+  onUnavailableRef.current = onUnavailable;
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
+    const startedAt = Date.now();
+    let hasFilled = false;
+    let gaveUp = false;
+    const giveUp = (reason: TerraUnavailableReason) => {
+      if (hasFilled || gaveUp) return;
+      gaveUp = true;
+      onUnavailableRef.current(reason, Math.round((Date.now() - startedAt) / 1000));
+    };
+
     const script = document.createElement("script");
     script.async = true;
     script.dataset.cfasync = "false";
     script.src = TERRA_ADS_NATIVE_BANNER_SRC;
+    // A rede de anúncios pode recusar o script (403 para IP de proxy/datacenter ou domínio não aprovado).
+    script.onerror = () => giveUp("script_error");
     container.appendChild(script);
 
     const checkFilled = () => {
       const hasAd = Array.from(container.children).some(
         (el) => el.tagName !== "SCRIPT",
       );
-      if (hasAd) setFilled(true);
+      if (hasAd && !gaveUp) {
+        hasFilled = true;
+        setFilled(true);
+      }
     };
+    // Sem preenchimento (no fill) no prazo: libera o fallback do checklist em vez de ficar carregando.
+    const fillTimeout = setTimeout(
+      () => giveUp("no_fill_timeout"),
+      TERRA_FILL_TIMEOUT_SECONDS * 1000,
+    );
     const fillObserver = new MutationObserver(checkFilled);
     fillObserver.observe(container, { childList: true, subtree: true });
 
@@ -124,6 +161,8 @@ function WatchableAd({ onReady }: { onReady: (ready: boolean) => void }) {
 
     return () => {
       clearInterval(timer);
+      clearTimeout(fillTimeout);
+      script.onerror = null;
       fillObserver.disconnect();
       io?.disconnect();
       script.remove();
@@ -164,16 +203,59 @@ function WatchableAd({ onReady }: { onReady: (ready: boolean) => void }) {
 export default function TerraRewardsPanel({
   onWithdrawn,
   onActivity,
+  onUnavailable,
 }: {
   onWithdrawn?: () => void;
   /** Chamado depois de um anúncio aceito (atualiza o checklist do dia). */
   onActivity?: () => void;
+  /** Checklist devolvido pelo servidor depois de registrar que o anúncio TERRA está indisponível hoje. */
+  onUnavailable?: (checklist: DailyChecklist | undefined) => void;
 }) {
   const [status, setStatus] = useState<AdRewardStatus | null>(null);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState<"click" | "withdraw" | null>(null);
   const [adReady, setAdReady] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [unavailable, setUnavailable] = useState(false);
+  const [adAttempt, setAdAttempt] = useState(0);
+  const reportedRef = useRef(false);
+  const onUnavailableRef = useRef(onUnavailable);
+  onUnavailableRef.current = onUnavailable;
+
+  // Anúncio TERRA não carregou: registra no servidor (1x por carregamento da página; o servidor
+  // guarda 1 linha por dia) e mostra a alternativa do vídeo extra.
+  const handleUnavailable = useCallback(
+    async (reason: TerraUnavailableReason, waitedSeconds?: number) => {
+      setUnavailable(true);
+      setAdReady(false);
+      if (reportedRef.current) return;
+      reportedRef.current = true;
+      try {
+        const res = await reportTerraUnavailable(reason, waitedSeconds);
+        if (res?.ok) onUnavailableRef.current?.(res.checklist);
+      } catch {
+        reportedRef.current = false;
+      }
+    },
+    [],
+  );
+
+  const unavailableNotice = (
+    <div
+      className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-foreground"
+      data-testid="terra-unavailable"
+      role="status"
+    >
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+      <div className="space-y-1">
+        <p className="font-medium">{TERRA_UNAVAILABLE_MESSAGE}</p>
+        <p className="text-xs text-muted-foreground">
+          O anúncio não carregou agora. Para não travar suas recompensas, hoje 1 vídeo premiado
+          a mais no painel de vídeo completa este passo do checklist.
+        </p>
+      </div>
+    </div>
+  );
 
   const refresh = useCallback(async () => {
     try {
@@ -181,8 +263,10 @@ export default function TerraRewardsPanel({
       setFailed(false);
     } catch {
       setFailed(true);
+      // Sem o painel TERRA não há como ver o anúncio: libera a alternativa do vídeo extra.
+      handleUnavailable("panel_error");
     }
-  }, []);
+  }, [handleUnavailable]);
 
   useEffect(() => {
     refresh();
@@ -246,13 +330,16 @@ export default function TerraRewardsPanel({
   if (failed && !status) {
     return (
       <Card className="glass glass-border">
-        <CardContent className="flex items-center justify-between gap-4 py-6">
-          <p className="text-sm text-muted-foreground">
-            Não foi possível carregar as recompensas por anúncio.
-          </p>
-          <Button variant="outline" size="sm" onClick={refresh}>
-            Tentar de novo
-          </Button>
+        <CardContent className="space-y-4 py-6">
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-sm text-muted-foreground">
+              Não foi possível carregar as recompensas por anúncio.
+            </p>
+            <Button variant="outline" size="sm" onClick={refresh}>
+              Tentar de novo
+            </Button>
+          </div>
+          {unavailable && unavailableNotice}
         </CardContent>
       </Card>
     );
@@ -312,9 +399,27 @@ export default function TerraRewardsPanel({
             )}
           </div>
 
-          {status.can_click ? (
+          {status.can_click && unavailable ? (
             <>
-              <WatchableAd onReady={setAdReady} />
+              {unavailableNotice}
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setUnavailable(false);
+                  setAdAttempt((n) => n + 1);
+                }}
+              >
+                Tentar carregar o anúncio de novo
+              </Button>
+            </>
+          ) : status.can_click ? (
+            <>
+              <WatchableAd
+                key={adAttempt}
+                onReady={setAdReady}
+                onUnavailable={handleUnavailable}
+              />
               <Button
                 className="w-full"
                 onClick={handleReceive}
