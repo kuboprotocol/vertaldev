@@ -480,6 +480,7 @@ const baseConnectors: ConnectorConfig[] = [
     name: 'MongoDB',
     slug: 'mongodb',
     icon: Leaf,
+    logoUrl: '/connectors/mongodb.png',
     color: '#13AA52',
     authType: 'api_key',
     category: 'infrastructure',
