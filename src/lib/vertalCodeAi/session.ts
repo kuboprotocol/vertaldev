@@ -1,5 +1,6 @@
 // VERTAL Code AI · estado da conversa na tela (puro, testável). Guardado só no aparelho (localStorage).
 import type { VcaStreamEvent, VcaUiEffort, VcaUiMode } from './client';
+import { reduceTeamEvent, type TeamState } from './team';
 
 export const EFFORT_LABEL: Record<VcaUiEffort, string> = {
   auto: 'Auto',
@@ -48,6 +49,8 @@ export type ChatItem =
       prompt?: string;
       /** Resultado de imagem/vídeo (opções Vertal Imagem / Vertal Vídeo). */
       media?: { kind: 'image' | 'video'; urls: string[] };
+      /** Progresso da Equipe Vertal (só em pedidos da Equipe). */
+      team?: TeamState;
     };
 
 type AgentItem = Extract<ChatItem, { type: 'agent' }>;
@@ -56,7 +59,10 @@ const s = (v: unknown) => (typeof v === 'string' ? v : '');
 const n = (v: unknown) => (typeof v === 'number' ? v : 0);
 
 /** Aplica um evento do servidor ao balão do agente. */
+const TEAM_KINDS = new Set(['core', 'role', 'decision', 'memory', 'budget', 'package']);
+
 export function reduceEvent(item: AgentItem, e: VcaStreamEvent): AgentItem {
+  if (TEAM_KINDS.has(e.kind)) return { ...item, team: reduceTeamEvent(item.team, e) };
   switch (e.kind) {
     case 'status':
       return { ...item, steps: [...item.steps, { text: s(e.title) }] };

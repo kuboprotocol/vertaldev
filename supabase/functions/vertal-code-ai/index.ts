@@ -55,6 +55,21 @@ import { type ModelReply, runVertalCodeAi, type VcaEvent, type VcaPlan } from ".
 import { runChain } from "../_shared/vertalCodeAi/chainRunner.ts";
 import { sensesConfig } from "../_shared/vertalCodeAi/senses.ts";
 import { handleNovela, handleSenses, type SensesHandlerDeps } from "../_shared/vertalCodeAi/sensesHandler.ts";
+// Equipe Vertal (3 núcleos + 5 papéis), memória expansiva e Vertal Decide — aditivo, desligado por padrão:
+// VERTAL_CODE_AI_TEAM_ENABLED + VERTAL_CODE_AI_TEAM_USER_IDS (lista própria; vazia = ninguém).
+import {
+  expandTeamEnv,
+  isVcaTeamEnabled,
+  isVcaTeamMemoryEnabled,
+  isVcaTeamSandboxEnabled,
+  runVertalTeam,
+  teamBudgetFromEnv,
+  VcaBudgetGuard,
+} from "../_shared/vertalCodeAi/team.ts";
+import { deleteMemories, listMemories, type MemoryStoreDeps, rememberRun, retrieveMemories } from "../_shared/vertalCodeAi/memory.ts";
+import { analyzeWithDecide, type DecisionQuestions, makeDecider } from "../_shared/vertalCodeAi/decide.ts";
+import { runSandboxTest } from "../_shared/vertalCodeAi/sandbox.ts";
+import { repairAgentJson } from "../_shared/chatOrchestrator.ts";
 // Vertal Prospector (aditivo, desligado por padrão: VERTAL_PROSPECTOR_ENABLED + VERTAL_PROSPECTOR_USER_IDS).
 import { isProspectorEnabled } from "../_shared/vertalProspector/core.ts";
 import { handleProspector } from "../_shared/vertalProspector/handler.ts";
@@ -103,6 +118,20 @@ async function liveFreeIds(): Promise<string[] | null> {
   } catch {
     return null;
   }
+}
+
+// Equipe Vertal: config própria (também aceita as chaves VERTAL_CODE_AI_TEAM_* / VERTAL_DECIDE_* dentro de VERTAL_GPU_CONFIG).
+const teamEnv = () => expandTeamEnv(env());
+
+/** Embedding local do Edge Runtime (gte-small, 384 dimensões, sem custo). Sem ele, a memória busca por palavras. */
+let gteSession: Loose = null;
+async function embedText(text: string): Promise<number[] | null> {
+  if (/^(0|false|off|no)$/i.test(Deno.env.get("VERTAL_CODE_AI_TEAM_EMBEDDINGS") ?? "")) return null;
+  const S = (globalThis as Loose).Supabase;
+  if (!S?.ai?.Session || !text.trim()) return null;
+  gteSession ??= new S.ai.Session("gte-small");
+  const out = await gteSession.run(text, { mean_pool: true, normalize: true });
+  return Array.from(out as ArrayLike<number>);
 }
 
 /** Checagem de sintaxe real com o compilador TypeScript (carregado só quando preciso). */
@@ -407,6 +436,30 @@ Deno.serve(async (req) => {
     return json(200, { models: chain.map(publicModelInfo), paidEnabled: chain.some((m) => m.cost === "paid"), options, mediaEnabled });
   }
 
+  // ─── Equipe Vertal: status e memória (só para quem está na lista da Equipe; os demais, 404) ───
+  const teamActions = ["team_status", "team_run", "memory_list", "memory_delete", "decide", "decide_analyze"];
+  if (teamActions.includes(action) && !isVcaTeamEnabled(teamEnv(), userId)) return json(404, { error: "vertal_code_ai_team_disabled" });
+  const memDeps = (): MemoryStoreDeps => ({
+    admin,
+    userClient,
+    userId,
+    projectId,
+    embed: embedText,
+    warn: (m) => console.warn(m),
+  });
+  if (action === "team_status") {
+    const te = teamEnv();
+    return json(200, { team: true, memory: isVcaTeamMemoryEnabled(te), sandbox: isVcaTeamSandboxEnabled(te), decide: true });
+  }
+  if (action === "memory_list") {
+    if (!isVcaTeamMemoryEnabled(teamEnv())) return json(200, { available: false, items: [] });
+    return json(200, await listMemories(memDeps(), { allProjects: body.allProjects === true }));
+  }
+  if (action === "memory_delete") {
+    if (!isVcaTeamMemoryEnabled(teamEnv())) return json(200, { available: false, deleted: 0 });
+    return json(200, await deleteMemories(memDeps(), { ids: body.ids, clear: body.clear === true, clearAll: body.clearAll === true }));
+  }
+
   // Limite por usuário (balde próprio; não divide cota com o Vibe Code).
   try {
     const { data: rl } = await admin.rpc("bump_rate_limit", { _bucket: "vertal_code_ai", _user: userId, _window_seconds: 60 });
@@ -425,6 +478,155 @@ Deno.serve(async (req) => {
     for (const r of (data ?? []) as Array<{ path: string; content: string }>) if (!out.has(r.path)) out.set(r.path, r.content ?? "");
     return out;
   };
+
+  // Cadeia barata/própria (coordenação e Vertal Decide): própria → grátis → reserva; nunca paga.
+  const coordinatorChain = async (promptTokens: number) =>
+    buildOptionChain(env(), { option: "livre", effort: "low", promptTokens, liveFreeIds: await liveFreeIds() });
+
+  if (action === "decide" || action === "decide_analyze") {
+    const coord = await coordinatorChain(1_000);
+    const deadline = Date.now() + 60_000;
+    const callLlm = coord.length ? (m: VcaChatMessage[], o: { json: boolean; maxTokens: number }) => callChain(coord, m, { ...o, effort: "low", deadline }) : undefined;
+    const decide = makeDecider({ fetch: (u, i) => fetch(u, i), env: teamEnv(), callLlm, log: (m) => console.log(m) });
+    if (action === "decide") {
+      const state = body.state && typeof body.state === "object" && !Array.isArray(body.state) ? body.state : null;
+      const questions = body.questions && typeof body.questions === "object" ? (body.questions as DecisionQuestions) : null;
+      if (!state || !questions || JSON.stringify(state).length > 120_000) return json(400, { error: "invalid_decision_request" });
+      const r = await decide(state, questions);
+      return json(200, { ...r, source: r.source === "none" ? "none" : "vertal_decide", engine: r.source });
+    }
+    if (!body.dossier) return json(400, { error: "invalid_decision_request" });
+    const r = await analyzeWithDecide(
+      { dossier: body.dossier, question: typeof body.question === "string" ? body.question.slice(0, 500) : undefined, causes: Array.isArray(body.causes) ? body.causes : undefined },
+      {
+        decide,
+        proposeCauses: callLlm
+          ? async (dossier, question) => {
+            const reply = await callLlm([
+              { role: "system", content: 'Você é analista de negócios. Liste de 3 a 5 causas candidatas, curtas e distintas, para o problema do dossiê. Responda só JSON: {"causes":["..."]}. Português do Brasil.' },
+              { role: "user", content: `${question ? `Pergunta: ${question}\n\n` : ""}Dossiê:\n${dossier}` },
+            ], { json: true, maxTokens: 400 });
+            const fixed = repairAgentJson(reply.content);
+            const list = fixed && Array.isArray(fixed.value.causes) ? fixed.value.causes : [];
+            return list.filter((c: unknown): c is string => typeof c === "string").map((c: string) => c.slice(0, 200));
+          }
+          : undefined,
+      },
+    );
+    return json(200, { ...r, source: r.source === "none" ? "none" : "vertal_decide", engine: r.source });
+  }
+
+  if (action === "team_run") {
+    const te = teamEnv();
+    const mode: VcaMode = body.mode === "plan" ? "plan" : "build";
+    const effort: VcaEffort = EFFORTS.includes(body.effort) ? body.effort : "auto";
+    const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+    if (!prompt) return json(400, { error: "empty_prompt" });
+    const images: string[] = (Array.isArray(body.images) ? body.images : [])
+      .filter((u: unknown): u is string => typeof u === "string" && (/^data:image\/(png|jpe?g|webp|gif);base64,/.test(u) || /^https:\/\//.test(u)) && u.length < 6_000_000)
+      .slice(0, 4);
+    const attachments = (Array.isArray(body.attachments) ? body.attachments : [])
+      .filter((a: Loose) => a && typeof a.path === "string" && typeof a.content === "string")
+      .slice(0, 10)
+      .map((a: Loose) => ({ path: a.path.slice(0, 300), content: a.content.slice(0, 200_000) }));
+    const history = (Array.isArray(body.history) ? body.history : [])
+      .filter((h: Loose) => h && (h.role === "user" || h.role === "assistant") && typeof h.content === "string")
+      .slice(-8);
+    const option = parseVcaOption(body.option);
+    if (option === "imagem" || option === "video") return json(400, { error: "use_media_action" });
+    const modelId = typeof body.modelId === "string" ? body.modelId.slice(0, 64) : null;
+    const deadlineMs = Number(Deno.env.get("VERTAL_CODE_AI_DEADLINE_MS")) || 140_000;
+    const deadline = Date.now() + deadlineMs;
+    const chainOpts = { effort, needsVision: images.length > 0, promptTokens: Math.ceil(prompt.length / 3.5), liveFreeIds: await liveFreeIds() };
+    // Engenheiros: a cadeia de sempre da opção escolhida (própria primeiro, grátis, pago só com ALLOW_PAID).
+    const engineerChain = option === "auto" && !modelId ? buildChain(env(), chainOpts) : buildOptionChain(env(), { ...chainOpts, option, modelId });
+    if (!engineerChain.length) return json(503, { error: "no_model_configured" });
+    const coordChain = await coordinatorChain(chainOpts.promptTokens);
+    const coord = coordChain.length ? coordChain : engineerChain;
+    const runId = crypto.randomUUID();
+    const memoryOn = isVcaTeamMemoryEnabled(te);
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const send = (e: unknown) => {
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(e)}\n\n`));
+          } catch {
+            /* cliente fechou */
+          }
+        };
+        send({ kind: "status", title: mode === "plan" ? "Equipe Vertal planejando" : "Equipe Vertal construindo", origin, team: true });
+        try {
+          let files: Map<string, string> | null = null;
+          const getFiles = async () => (files ??= await latestFiles());
+          const callCoordinator = (m: VcaChatMessage[], o: { json: boolean; maxTokens: number }) => callChain(coord, m, { ...o, effort: "low", deadline });
+          const result = await runVertalTeam(
+            {
+              mode,
+              effort,
+              prompt,
+              history,
+              images,
+              attachments,
+              plan: body.plan && typeof body.plan === "object" ? (body.plan as VcaPlan) : null,
+              persona: vertalPersonaEnabled(Deno.env.get("VERTAL_PERSONA_ENABLED")),
+              runId,
+              maxEngineers: Number(te.VERTAL_CODE_AI_TEAM_MAX_ENGINEERS) || 3,
+              maxReviewRounds: te.VERTAL_CODE_AI_TEAM_REVIEW_ROUNDS !== undefined ? Number(te.VERTAL_CODE_AI_TEAM_REVIEW_ROUNDS) : 1,
+            },
+            {
+              callCoordinator,
+              callEngineer: (m, o) => callChain(engineerChain, m, { ...o, effort, deadline }),
+              listPaths: async () => [...(await getFiles()).keys()],
+              readFile: async (p) => (await getFiles()).get(p),
+              indexSource: async () => [...(await getFiles())].filter(([, c]) => c.length < 60_000).map(([path, content]) => ({ path, content })),
+              checkSyntax,
+              sandboxTest: isVcaTeamSandboxEnabled(te)
+                ? async (changes) => {
+                  const orch = await import("../_shared/orchestrator.ts");
+                  if (orch.orchestratorDriver() !== "e2b") return { ran: false, ok: false, issues: [] };
+                  return runSandboxTest(changes, {
+                    provision: (sid, t) => orch.provisionContainer(sid, "vertal-code-ai", userId, t),
+                    exec: (ref, cmd, ms) => orch.execInContainer(ref, cmd, "vertal_code_ai_check", ms),
+                    destroy: (ref) => orch.destroyContainer(ref),
+                  }, { runId, timeoutMs: Number(te.VERTAL_CODE_AI_TEAM_E2B_TIMEOUT_MS) || 45_000 });
+                }
+                : undefined,
+              memory: memoryOn
+                ? {
+                  retrieve: (q) => retrieveMemories(memDeps(), q),
+                  remember: (drafts, summary) => rememberRun(memDeps(), drafts, summary, { runId }),
+                }
+                : undefined,
+              decide: makeDecider({ fetch: (u, i) => fetch(u, i), env: te, callLlm: callCoordinator, log: (m) => console.log(m) }),
+              emit: send,
+              budget: new VcaBudgetGuard(teamBudgetFromEnv(te, Math.max(20_000, deadline - Date.now() - 2_000))),
+            },
+          );
+          send({
+            kind: "base_hashes",
+            hashes: Object.fromEntries(await Promise.all(result.changes.map(async (c) => [c.path, await sha256(c.before)]))),
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          send({
+            kind: "error",
+            message: msg === "vca_all_models_failed"
+              ? "Todos os modelos estão ocupados ou sem cota agora. Tente em alguns minutos."
+              : "A Equipe Vertal não conseguiu concluir o pedido.",
+          });
+          console.error("[vertal-code-ai] team_run failed:", msg);
+        } finally {
+          try {
+            controller.close();
+          } catch {
+            /* já fechado */
+          }
+        }
+      },
+    });
+    return new Response(stream, { headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });
+  }
 
   if (action === "apply") {
     const changes = Array.isArray(body.changes) ? body.changes.slice(0, 40) : [];

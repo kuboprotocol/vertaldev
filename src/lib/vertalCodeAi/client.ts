@@ -97,6 +97,8 @@ export interface RunRequest {
   plan?: unknown;
   projectId?: string | null;
   origin?: 'vertal_code_ai' | 'vertal_chat' | 'vibe_code';
+  /** "team_run" = Equipe Vertal (só para quem o servidor liberou). Padrão: "run". */
+  action?: 'run' | 'team_run';
 }
 
 export async function streamRun(
@@ -110,7 +112,7 @@ export async function streamRun(
     method: 'POST',
     signal,
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'run', ...req, projectId: req.projectId ?? undefined }),
+    body: JSON.stringify({ ...req, action: req.action ?? 'run', projectId: req.projectId ?? undefined }),
   });
   if (!r.ok || !r.body) {
     let err = `http_${r.status}`;
@@ -155,6 +157,7 @@ export const ERROR_TEXT: Record<string, string> = {
   vertal_code_ai_media_disabled: 'Imagem e vídeo ainda não foram liberados na sua conta.',
   vca_media_failed: 'Não consegui gerar agora. Tente de novo em alguns minutos.',
   job_not_found: 'Esse vídeo não foi encontrado.',
+  vertal_code_ai_team_disabled: 'A Equipe Vertal ainda não foi liberada na sua conta.',
 };
 
 export function errorText(code: string): string {

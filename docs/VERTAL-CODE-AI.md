@@ -205,6 +205,77 @@ Um pedido do agente usa em média 2–5 chamadas (ler, editar, corrigir). Com 50
 com 1.000/dia, ~200–500. **As cotas grátis são da conta da Vertal, divididas entre todos os usuários**: servem para o
 Laércio e beta testers, não para um produto aberto ao público (ver decisões).
 
+## 5.2 Equipe Vertal, memória expansiva e Vertal Decide (desde 26/11/2026 · desligado por padrão)
+
+Modo novo, **ao lado** do `run` de sempre (ação `team_run`; o `run` não mudou). Só aparece para quem está na lista
+**própria** da Equipe e já é liberado pelo VERTAL Code AI (a regra de liberação geral não foi tocada).
+
+| Segredo | Padrão | Para quê |
+|---|---|---|
+| `VERTAL_CODE_AI_TEAM_ENABLED` | desligado | Liga a Equipe |
+| `VERTAL_CODE_AI_TEAM_USER_IDS` | vazio = **ninguém** | Quem pode usar (ids separados por vírgula) |
+| `VERTAL_CODE_AI_TEAM_MAX_CALLS` / `_MAX_TOKENS` / `_MAX_MS` / `_MAX_DECISIONS` | 16 / 200 000 / prazo do pedido / 8 | Orçamento por execução |
+| `VERTAL_CODE_AI_TEAM_MAX_ENGINEERS` / `_REVIEW_ROUNDS` | 3 / 1 | Engenheiros em paralelo / rodadas "reprovado → corrige" |
+| `VERTAL_CODE_AI_TEAM_MEMORY` | ligada (precisa da migração) | `false` desliga a memória |
+| `VERTAL_CODE_AI_TEAM_EMBEDDINGS` | ligado | `false` = memória só por palavras |
+| `VERTAL_CODE_AI_TEAM_E2B` (+ `E2B_API_KEY`) / `_E2B_TIMEOUT_MS` | desligado / 45 000 | Revisor testa no sandbox |
+| `VERTAL_DECIDE_URL` / `_TOKEN` / `_MODEL` | — | Modelo de decisão próprio (GPU) |
+| `VERTAL_DECIDE_JEV_MODEL` / `VERTAL_DECIDE_JEV` | `typesafe/jev-1.14` / ligado | Decisões via OpenRouter (só com `VERTAL_CODE_AI_ALLOW_PAID`) |
+| `VERTAL_DECIDE_HIGH` / `_MEDIUM` | 0,80 / 0,55 | Limites de confiança |
+
+O projeto está no limite de 100 segredos: todas as chaves `VERTAL_CODE_AI_TEAM_*` e `VERTAL_DECIDE_*` também podem ir
+**dentro do `VERTAL_GPU_CONFIG`** (o JSON que já existe). Segredo avulso vence. Nenhuma outra chave é aceita ali.
+
+**3 núcleos, 5 papéis** (`_shared/vertalCodeAi/team.ts`, lógica pura testada no Vitest):
+
+- **Pensa** — *Gerente* (entende, define escopo, divide em tarefas com arquivos; cadeia barata/própria) e *Encarregado*
+  (determinístico, sem chamada: junta tarefas que dividem arquivo, dá a cada Engenheiro arquivos **exclusivos**).
+- **Constrói** — *Engenheiros* em paralelo (até 3), cada um com o loop de sempre (ler → editar → verificar → auto-corrigir)
+  na cadeia **forte** da opção escolhida (própria primeiro → grátis → pago só com `ALLOW_PAID`). Edição em arquivo de
+  outro Engenheiro é descartada.
+- **Entrega** — *Revisor/QA* (verificação automática do conjunto: sintaxe, imports entre arquivos, segredos; teste no
+  sandbox se ligado; revisão do diff; reprova e devolve ao Engenheiro **dono** do arquivo) e *Entregador* (pacote final
+  com os diffs no mesmo formato do Aplicar de sempre, resumo para o dev e o que vale lembrar).
+- Coordenação (Gerente, Revisor, Entregador, Vertal Decide por LLM) usa a cadeia "Vertal Livre" com esforço rápido:
+  própria → grátis → reserva grátis, **nunca paga**.
+- **Orçamento** por execução: chamadas, tokens (estimados) e tempo; cada papel deixa reserva de tempo para quem vem
+  depois. Estourou: entrega o que tiver, marcado como **não verificado**.
+- "Verificado" = todas as tarefas saíram, orçamento não estourou, verificação automática limpa, sandbox ok (se rodou) e
+  Revisor não reprovou.
+
+**Vertal Decide** (`_shared/vertalCodeAi/decide.ts`): camada de decisão rápida e tipada para bifurcações simples, no
+lugar de uma chamada de LLM inteira. Perguntas `noul` (sim/não), `choice` e `score`, cada uma com probabilidade.
+Interface única `decide(state, questions)`; provedores: **própria** (`VERTAL_DECIDE_URL`, contrato = corpo e resposta da
+Decisions API: `POST {model?, state, questions}` → `{answers}`) → **OpenRouter Decisions API** (`/api/alpha/decisions`,
+chave `OPENROUTER_API_KEY` que já existe; cobrado por token de entrada, por isso só com `ALLOW_PAID`) → **LLM barata** com
+JSON (confiança limitada abaixo de "alta") → nenhum (padrão seguro). Regra: **alta age, média sobe para modelo maior,
+baixa pergunta ao usuário** (as perguntas aparecem no pacote final).
+
+| Papel | Decisão | Alta | Média / baixa |
+|---|---|---|---|
+| Gerente | tamanho (score) | trivial → pula a chamada do Gerente (1 tarefa) | chama o Gerente |
+| Gerente | modelo dos Engenheiros (choice) | "padrão" → Engenheiros na cadeia barata | cadeia forte |
+| Gerente | precisa de sandbox? (noul) | "não" → pula o sandbox | roda se ligado |
+| Gerente | revisão humana? (noul) | "sim" → pacote marcado | baixa → pergunta |
+| Revisor | passa? (noul) | "sim" → aprova sem LLM | revisão por LLM; baixa → aviso ao dev |
+| Entregador | pronto para entregar? (noul) | segue a decisão, mas **nunca "pronto" com problema pendente** | média: pronto só se verificado e aprovado; baixa → pergunta |
+
+Ferramenta **Vertal Decide** para análise de dados: ação `decide` (`{state, questions}` livres) e `decide_analyze`
+(`{dossier, question?, causes?}` → causa principal + probabilidades + risco baixo/médio/alto/crítico + confiança + nível;
+sem causas, a LLM barata propõe 3–5 antes). Respostas mostram só "vertal_decide" (o motor fica em `engine`).
+
+**Memória expansiva** (`_shared/vertalCodeAi/memory.ts` + migração `20261126120000_vertal_code_ai_memory.sql`,
+**não aplicada em produção**): tabela `vertal_code_ai_memories` (escopo `user` ou `project`; cofre pessoal =
+`project_id` nulo), tipos decisão / preferência / fato do código / execução / resumo do projeto / nota, embedding
+`vector(384)` (gte-small do próprio Edge Runtime, sem custo) com índice HNSW, função `match_vertal_code_ai_memories`
+(só service role) e FTS em português. RLS: o dono só **lê e apaga**; grava só a edge function, que barra segredos.
+Busca = cosseno + palavras + importância + recência; sem a função SQL, ordena as últimas 300 linhas no código.
+**Sem a tabela, nada quebra**: a memória desliga por 10 min no isolate e o pedido segue. Ações `memory_list` /
+`memory_delete` (`ids`, `clear` do projeto, `clearAll`); tela "Memória" (ícone de cérebro) para ver e apagar.
+
+Tela: botão **Equipe** ao lado do seletor de modelo (só com `team_status` liberado), progresso por núcleo (Pensa /
+Constrói / Entrega) e por papel, decisões rápidas, memória usada/guardada, orçamento e o pacote final.
+
 ## 6. Servidor próprio (Ollama na nuvem, opcional)
 
 Kit em `infra/vertal-ollama/`: Docker Compose com Ollama (sem porta pública) + Caddy com HTTPS automático e **token
