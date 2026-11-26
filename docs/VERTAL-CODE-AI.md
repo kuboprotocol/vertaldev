@@ -165,9 +165,23 @@ após 120 s sem uso), no máximo 1 contêiner por endpoint, cada um protegido po
   (`_COST` US$/segundo, padrão 0,02). Assíncrono: o `job` assinado ganha o prefixo `vcaown_`; `video_status` consulta o
   endpoint próprio e `video_content` repassa o mp4. ~1 min 50 s gerando, ~2 min 40 s a frio.
 - Falhou (erro, tempo, contêiner frio demais)? A cadeia segue para os modelos de sempre. Tirar o segredo desliga.
+- **Pedido grande → GPU primeiro em todas as opções de texto** (Auto, Code, Livre, Turbo, Pro; decisão do Laércio em
+  26/11/2026). "Grande" = acima do limite de entrada da VM (`VERTAL_OLLAMA_MAX_INPUT_TOKENS`, 3 000; ou
+  `VERTAL_OLLAMA_2_FIRST_ABOVE_TOKENS`, se definido). Pequeno: VM → GPU → cadeia da opção. A decisão final é por chamada,
+  com o pedido real (sistema + mapa do projeto + arquivos): se passar do limite da VM, ela é pulada sem chamada. Na
+  "Vertal Livre" a GPU conta como própria (crédito Modal), então entra; pagos continuam fora. `modelId` continua vencendo.
+- **Frio**: o prazo do 1º token da GPU (`_FIRST_TOKEN_MS_2`, 60 s) conta desde o ENVIO (`firstTokenFromStart`, padrão
+  ligado só no 2º endpoint; `VERTAL_OLLAMA_FIRST_TOKEN_FROM_START_2=false` volta ao antigo). Antes contava só depois dos
+  cabeçalhos, e um contêiner subindo a frio podia segurar o pedido até o prazo total (90 s). A VM segue como antes.
+- **Contexto**: a saída pedida à própria é limitada a `contexto − entrada × 1,35 − 256` (`selfHostedOutputTokens`;
+  a estimativa de 3,5 caracteres/token erra para baixo em código: medido com o tokenizer do Qwen2.5-Coder, TS/JSON/CSS
+  ≈ 1,3× a estimativa, português ≈ 1,0–1,1×). Sem espaço para ≥ 1 024 tokens de resposta, a GPU é pulada sem chamada.
+  400/413/422 da própria (erro do pedido) não deixa a GPU de castigo para os próximos pedidos; 5xx/tempo deixa 60 s.
+- Executor da cadeia em `_shared/vertalCodeAi/chainRunner.ts` (testado com fetch e relógio falsos em
+  `src/lib/vertalCodeAi/gpuRouting.test.ts`).
 - O projeto Supabase está no limite de 100 segredos, então tudo isso vai num **único** segredo JSON,
   `VERTAL_GPU_CONFIG` (`{"VERTAL_OLLAMA_URL_2":"…","VERTAL_OWN_IMAGE_URL":"…",…}`). Ele só aceita chaves
-  `VERTAL_OLLAMA_*_2`, `VERTAL_OLLAMA_2_FIRST_ABOVE_TOKENS` e `VERTAL_OWN_IMAGE_*`/`VERTAL_OWN_VIDEO_*`; um segredo avulso
+  `VERTAL_OLLAMA_*_2` (inclui `VERTAL_OLLAMA_FIRST_TOKEN_FROM_START_2`), `VERTAL_OLLAMA_2_FIRST_ABOVE_TOKENS` e `VERTAL_OWN_IMAGE_*`/`VERTAL_OWN_VIDEO_*`; um segredo avulso
   com o mesmo nome vence. Nunca mexe em liga/desliga, lista de liberação ou chaves de provedores.
 
 **Provedor extra OpenAI-compatível** (opcional, por segredo): `VERTAL_EXTRA_PROVIDER_URL` (https, base `/v1`),
