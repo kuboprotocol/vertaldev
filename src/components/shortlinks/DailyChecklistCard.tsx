@@ -1,11 +1,14 @@
-import { CheckCircle2, Circle, Gift, Info } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, Gift, Info } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { DAILY_CHECKLIST_NOTICE, type DailyChecklist } from "@/lib/dailyRewards";
+import { DAILY_CHECKLIST_NOTICE, TERRA_UNAVAILABLE_MESSAGE, type DailyChecklist } from "@/lib/dailyRewards";
 
 /** Checklist do dia no topo de /recompensas: aviso, as 3 atividades obrigatórias e os créditos. */
 export default function DailyChecklistCard({ checklist }: { checklist: DailyChecklist | null }) {
   const total = checklist?.music_tracks_total ?? 5;
+  // TERRA indisponível hoje: o passo fecha com vídeos extras (padrão 2 vídeos no dia).
+  const terraFallback = Boolean(checklist?.terra_unavailable) && !(checklist?.terra_today);
+  const fallbackVideos = checklist?.terra_fallback_videos_required ?? 2;
   const items = [
     {
       key: "video",
@@ -21,8 +24,12 @@ export default function DailyChecklistCard({ checklist }: { checklist: DailyChec
     },
     {
       key: "terra",
-      label: "Veja o anúncio TERRA ADS",
-      detail: checklist ? `${checklist.terra_today} hoje` : "",
+      label: terraFallback ? "Anúncio TERRA indisponível: assista 1 vídeo a mais" : "Veja o anúncio TERRA ADS",
+      detail: !checklist
+        ? ""
+        : terraFallback
+          ? `${Math.min(checklist.videos_today, fallbackVideos)}/${fallbackVideos} vídeos`
+          : `${checklist.terra_today} hoje`,
       done: checklist?.terra_done ?? false,
     },
   ];
@@ -50,6 +57,16 @@ export default function DailyChecklistCard({ checklist }: { checklist: DailyChec
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
           <p>{DAILY_CHECKLIST_NOTICE}</p>
         </div>
+
+        {terraFallback && !checklist?.terra_done && (
+          <div
+            className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-foreground"
+            data-testid="daily-checklist-terra-fallback"
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+            <p>{TERRA_UNAVAILABLE_MESSAGE}.</p>
+          </div>
+        )}
 
         <Progress value={(doneCount / 3) * 100} className="h-2" />
 
