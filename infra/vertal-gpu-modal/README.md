@@ -10,6 +10,7 @@ Três apps independentes, **scale-to-zero** (o contêiner desliga 120 s depois d
 | `vertal-video` | Wan2.1-T2V-1.3B-Diffusers (Apache-2.0), 4 s, 832×480, 16 fps, H.264 | L40S | `https://<workspace>--vertal-video-web.us-east.modal.run` (`/submit`, `/status?id=`, `/result?id=`) |
 | `vertal-decide` (Vertal Decide) | Intern-Decision-4B (Apache-2.0; base Qwen3.5-4B, texto + imagens), formato `/v1/systemone` (noul/choice/score com probabilidades calibradas) | L4 (alternativa A10G) | `https://<workspace>--vertal-decide-decide-web.us-east.modal.run` (`/v1/systemone`, `/v1/systemone/video`, `/health`) |
 | `vertal-omni` (Vertal Visão / Ouvir) | Qwen2.5-Omni-7B (Apache-2.0) no vLLM 0.11 (só o "thinker": foto, vídeo curto e áudio → texto), nome `vertal-omni` | L40S | `https://<workspace>--vertal-omni-serve.us-east.modal.run/v1/chat/completions` (OpenAI-compatível) |
+| `vertal-music` (Vertal Music AI, painel Música) | ACE-Step v1.5 XL Turbo (MIT, uso comercial; formato Diffusers), música com vocal ou instrumental, MP3 48 kHz | L4 → A10G → L40S (o que tiver livre) | `https://<workspace>--vertal-music-web.us-east.modal.run` (`/submit`, `/status?id=`, `/result?id=`), segredo Modal `vertal-music-auth` (`VERTAL_MUSIC_TOKEN`) |
 | `vertal-novela` (Vertal Novela) | Orquestra LLM própria + FLUX + (opcional) Wan + voz Kokoro-82M (Apache-2.0, pt-BR) + ffmpeg; sem GPU própria | CPU | `https://<workspace>--vertal-novela-web.us-east.modal.run` (`/submit`, `/status?id=`, `/result?id=`, `/tts`) |
 
 Os 3 apps novos usam o segredo Modal `vertal-media-auth` (`VERTAL_DECIDE_TOKEN`, `VERTAL_OMNI_TOKEN`,
@@ -55,3 +56,11 @@ Tirar o segredo desliga a opção; a cadeia volta a ser exatamente a de antes.
 
 A10G ≈ US$1,10/h, L40S ≈ US$1,95/h. Cada acordada paga também os 120 s ociosos antes de desligar.
 Medido em 26/11/2026: LLM ~48 tok/s; imagem ~2,5 s quente; vídeo ~1 min 50 s por clipe de 4 s.
+
+## Vertal Music AI (painel Música do Vertal Dev)
+
+`modal run vertal_music.py::download && modal deploy vertal_music.py` (segredo `vertal-music-auth`).
+A edge function `creative-music` lê `VERTAL_OWN_MUSIC_URL` / `VERTAL_OWN_MUSIC_TOKEN` do cofre de segredos da conta dona
+(`VERTAL_FREE_KEYS_OWNER`) — ou de segredos avulsos, que vencem. Medido em 26/11/2026: ~7 s para carregar a frio
+(pesos no Volume), ~2 s para gerar 45 s de música. Com `SUNOAPI_KEY` (mesmo provedor da MusKAI) o painel usa o
+sunoapi.org primeiro e este app vira reserva. Detalhes: `docs/VERTAL-MUSIC.md`.

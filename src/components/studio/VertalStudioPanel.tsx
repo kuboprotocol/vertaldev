@@ -424,7 +424,7 @@ function MusicTab() {
         if (ready.length > 0) {
           setItems(ready);
           setFeedback({ kind: 'ok', text: 'Música pronta.' });
-        } else if (res.status && /FAILED|ERROR/.test(res.status)) {
+        } else if (res.status && /fail|error/i.test(res.status)) {
           setFeedback({ kind: 'error', text: `A geração falhou (${res.status}).` });
           setJob(null);
         }
