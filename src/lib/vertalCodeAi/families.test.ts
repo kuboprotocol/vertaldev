@@ -131,10 +131,12 @@ describe('VERTAL Code AI · opções Vertal (famílias de modelos)', () => {
 });
 
 describe('VERTAL Code AI · preço de varejo (cobrança desligada)', () => {
-  it('fórmula (custo + US$0,05) × 1,5 ÷ US$0,03', () => {
-    expect(retailCredits(0)).toBe(2.5);
-    expect(retailCredits(0.01)).toBe(3);
-    expect(retailCredits(-1)).toBe(2.5);
+  it('cobrança v2: custo × 1,69 ÷ US$0,03, com piso de custo (nunca zero)', () => {
+    // código: piso US$0,002 × 1,69 = US$0,00338 → 0,11 crédito
+    expect(retailCredits(0)).toBe(0.11);
+    expect(retailCredits(0.01)).toBe(0.56);
+    expect(retailCredits(-1)).toBe(0.11);
+    expect(retailCredits(0.02, 'image')).toBe(1.13);
   });
   it('estimativa por tokens: grátis = 0, pago pela tabela', () => {
     const agile = VCA_FAMILY_CATALOG.find((m) => m.id === 'vca-code-agile')!;

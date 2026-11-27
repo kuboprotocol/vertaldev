@@ -112,6 +112,10 @@ import {
   VcaDataLibrarySender,
   VcaRunTracker,
 } from "../_shared/vertalCodeAi/dataLibrary.ts";
+import { type CostClass, inAppChargeKey, inAppCredits, loadPricing, worstClass } from "../_shared/vertalCodeAi/pricing.ts";
+// Cobrança v2 (custo real × markup, grátis, aviso de crédito baixo, extrato) — tudo desligado por padrão.
+import { billingFlags, billingV2For, expandBillingEnv, loadBilling, wholesaleBalanceGate } from "../_shared/vertalCodeAi/billing.ts";
+import { type BillingRuntime, chargeUsage, listNotices, markNoticeRead, usageStatement } from "../_shared/vertalCodeAi/billingRuntime.ts";
 
 // Cliente do Supabase e módulo TypeScript sem tipos gerados (mesmo padrão do vibe-code-agent).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -461,6 +465,34 @@ async function handleVertalCrmRequest(req: Request): Promise<Response> {
   }
 }
 
+/**
+ * Estimativa de mídia (sempre) + cobrança v2 quando ligada (VERTAL_CODE_AI_CHARGE_ENABLED + v2).
+ * Imagem cobra no sucesso; vídeo cobra quando o job conclui (idempotente pelo job).
+ */
+async function mediaEstimate(admin: Loose, userId: string, kind: "image" | "video", usd: number, requestKey: string, extra: Record<string, unknown> = {}) {
+  const base = { usd: Math.round(usd * 1e6) / 1e6, credits: retailCredits(usd, kind), charged: false, ...extra };
+  const rt = billingFlags(expandBillingEnv(env())).retailCharge ? vcaBillingRuntime(admin, userId) : null;
+  if (!rt) return base;
+  const r = await chargeUsage(rt, { userId, channel: "retail", kind, costUsd: usd, requestKey: `vcai-${kind}-${userId}-${requestKey}`.slice(0, 200) });
+  return { ...base, credits: r.credits, charged: r.status === "charged" || r.status === "accrued", free: r.status === "free" || undefined };
+}
+
+/** Cobrança v2 para esta conta, ou null (interruptor desligado / conta fora da lista). */
+function vcaBillingRuntime(admin: Loose, userId: string): BillingRuntime | null {
+  const benv = expandBillingEnv(env());
+  const flags = billingFlags(benv);
+  if (!billingV2For(flags, userId)) return null;
+  const fluxosUrl = Deno.env.get("FLUXOS_INTERNAL_URL");
+  const fluxosKey = Deno.env.get("FLUXOS_INTERNAL_KEY");
+  return {
+    admin,
+    cfg: loadBilling(benv.VERTAL_BILLING_CONFIG).config,
+    flags,
+    engine: fluxosUrl && fluxosKey ? makeVertalCrmEngine(fluxosUrl, fluxosKey) : null,
+    env: (k) => benv[k],
+  };
+}
+
 Deno.serve(async (req) => {
   // Vertal CRM: rota própria (?app=crm), com as próprias flags; com VERTAL_CRM_ENABLED desligado responde 404.
   if (new URL(req.url).searchParams.get("app") === "crm") return handleVertalCrmRequest(req);
@@ -492,6 +524,14 @@ Deno.serve(async (req) => {
   }
   const action = body.action ?? "run";
   if (action === "status") return json(200, { enabled: true, allowed: true });
+
+  // Extrato e avisos da cobrança v2 (só do próprio usuário). Desligado: 404 igual ao resto.
+  if (action === "usage_statement" || action === "billing_notices" || action === "billing_notice_read") {
+    if (!billingV2For(billingFlags(expandBillingEnv(env())), userId)) return json(404, { error: "billing_v2_disabled" });
+    if (action === "usage_statement") return json(200, await usageStatement(admin, userId, Number(body.days) || 30));
+    if (action === "billing_notices") return json(200, { notices: await listNotices(admin, userId) });
+    return json(200, { ok: await markNoticeRead(admin, userId, body.id) });
+  }
 
   // Vertal Prospector: desligado (404) se o interruptor/lista não liberar este usuário. Não muda nada do resto.
   if (action === "prospector") {
@@ -914,7 +954,7 @@ Deno.serve(async (req) => {
               images: [img],
               text: "",
               model: { id: m.id, label: m.label, cost: "self_hosted" },
-              estimate: { usd: Math.round(usd * 1e6) / 1e6, credits: retailCredits(usd), charged: false },
+              estimate: await mediaEstimate(admin, userId, "image", usd, (typeof body.requestId === "string" && /^[\w-]{8,64}$/.test(body.requestId) ? body.requestId : crypto.randomUUID())),
             });
           } catch (err) {
             fails.push(`${m.id}:${err instanceof Error ? err.name : "err"}`);
@@ -947,7 +987,7 @@ Deno.serve(async (req) => {
             images: out.images.slice(0, 2),
             text: out.text.slice(0, 2_000),
             model: { id: m.id, label: m.label, cost: "paid" },
-            estimate: { usd: Math.round(usd * 1e6) / 1e6, credits: retailCredits(usd), charged: false },
+            estimate: await mediaEstimate(admin, userId, "image", usd, (typeof body.requestId === "string" && /^[\w-]{8,64}$/.test(body.requestId) ? body.requestId : crypto.randomUUID())),
           });
         } catch (err) {
           fails.push(`${m.id}:${err instanceof Error ? err.name : "err"}`);
@@ -988,7 +1028,7 @@ Deno.serve(async (req) => {
               job: await signJob(userId, `${VCA_OWN_JOB_PREFIX}${d.id}`),
               status: "pending",
               model: { id: m.id, label: m.label, cost: "self_hosted" },
-              estimate: { usd: Math.round(usd * 1e6) / 1e6, credits: retailCredits(usd), charged: false, seconds: m.seconds },
+              estimate: { usd: Math.round(usd * 1e6) / 1e6, credits: retailCredits(usd, "video"), charged: false, seconds: m.seconds },
             });
           } catch (err) {
             fails.push(`${m.id}:${err instanceof Error ? err.name : "err"}`);
@@ -1019,7 +1059,7 @@ Deno.serve(async (req) => {
             job: await signJob(userId, d.id),
             status: d.status ?? "pending",
             model: { id: m.id, label: m.label, cost: "paid" },
-            estimate: { usd: Math.round(usd * 1e6) / 1e6, credits: retailCredits(usd), charged: false, seconds: m.seconds },
+            estimate: { usd: Math.round(usd * 1e6) / 1e6, credits: retailCredits(usd, "video"), charged: false, seconds: m.seconds },
           });
         } catch (err) {
           fails.push(`${m.id}:${err instanceof Error ? err.name : "err"}`);
@@ -1045,8 +1085,10 @@ Deno.serve(async (req) => {
           return json(502, { error: "vca_media_failed", status: r.status });
         }
         const status = ownVideoStatus(await r.json());
+        const ownEstimate = status === "completed" ? await mediaEstimate(admin, userId, "video", mediaCostUsd(own), jobId) : undefined;
         return json(200, {
           status,
+          estimate: ownEstimate,
           url: null,
           needsProxy: status === "completed",
           error: status === "failed" || status === "expired" ? "vca_media_failed" : undefined,
@@ -1075,7 +1117,7 @@ Deno.serve(async (req) => {
         url: status === "completed" ? signed : null,
         needsProxy: status === "completed" && !signed,
         error: ["failed", "cancelled", "expired"].includes(status) ? "vca_media_failed" : undefined,
-        estimate: usd !== null ? { usd, credits: retailCredits(usd), charged: false } : undefined,
+        estimate: usd !== null ? (status === "completed" ? await mediaEstimate(admin, userId, "video", usd, jobId) : { usd, credits: retailCredits(usd, "video"), charged: false }) : undefined,
       });
     }
     // video_content: repassa os bytes (o link sem assinatura exige a nossa chave).
@@ -1156,6 +1198,33 @@ Deno.serve(async (req) => {
     )
     : null;
   vcaDlRun?.started();
+  // Varejo em créditos (desligado por padrão: VERTAL_CODE_AI_CHARGE_ENABLED=true). Preço da tabela
+  // (VERTAL_CODE_AI_PRICING); checa o saldo para o pior caso da cadeia ANTES e cobra uma vez DEPOIS,
+  // pelo modelo mais caro que respondeu, com idempotência por pedido.
+  // Interruptores lidos também de dentro do VERTAL_GPU_CONFIG (sem segredo novo); seguem desligados.
+  const benv = expandBillingEnv(env());
+  const chargeOn = billingFlags(benv).retailCharge;
+  const pricing = loadPricing(benv.VERTAL_CODE_AI_PRICING).pricing;
+  // Cobrança v2: NOSSO custo real × markup (código 1,69), com piso; débito fracionário com "carry".
+  const billingRt = vcaBillingRuntime(admin, userId);
+  const priceAction = mode === "plan" ? "plan" : "build";
+  const requestId = typeof body.requestId === "string" && /^[\w-]{8,64}$/.test(body.requestId) ? body.requestId : crypto.randomUUID();
+  if (chargeOn && billingRt) {
+    // v2: saldo zerado pausa a IA até a recarga (mesma regra do aviso de crédito baixo).
+    const { data: sub } = await admin.from("subscriptions").select("edits_limit, edits_used").eq("user_id", userId).eq("is_active", true).maybeSingle();
+    const balance = sub ? (sub.edits_limit ?? 0) - (sub.edits_used ?? 0) : 0;
+    const gate = wholesaleBalanceGate(balance);
+    if (gate.ok === false) return json(402, { error: "credits_exhausted", balance });
+  } else if (chargeOn) {
+    const worst = inAppCredits(pricing, priceAction, worstClass(chain.map((m) => m.cost)));
+    if (worst > 0) {
+      const { data: sub } = await admin.from("subscriptions").select("edits_limit, edits_used").eq("user_id", userId).eq("is_active", true).maybeSingle();
+      const balance = sub ? (sub.edits_limit ?? 0) - (sub.edits_used ?? 0) : 0;
+      if (balance < worst) return json(402, { error: "insufficient_credits", needed: worst, balance });
+    }
+  }
+  const usedCosts: CostClass[] = [];
+  let usedUsd = 0;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -1185,7 +1254,13 @@ Deno.serve(async (req) => {
             persona: vertalPersonaEnabled(Deno.env.get("VERTAL_PERSONA_ENABLED")),
           },
           {
-            callModel: (messages, o) => callChain(chain, messages, { ...o, effort, deadline }).then((r) => (vcaDlRun?.modelCall(r), r)),
+            callModel: async (messages, o) => {
+              const reply = await callChain(chain, messages, { ...o, effort, deadline });
+              vcaDlRun?.modelCall(reply);
+              usedCosts.push(reply.cost as CostClass);
+              usedUsd += Number(reply.usage?.costUsd ?? 0) || 0;
+              return reply;
+            },
             listPaths: async () => [...(await getFiles()).keys()],
             readFile: async (p) => (await getFiles()).get(p),
             indexSource: async () => [...(await getFiles())].filter(([, c]) => c.length < 60_000).map(([path, content]) => ({ path, content })),
@@ -1194,6 +1269,30 @@ Deno.serve(async (req) => {
           },
         );
         vcaDlRun?.finished({ ok: true, filesChanged: result.changes.length, verified: result.verified, codeExcerpt: result.changes.find((c) => c.after)?.after ?? null });
+        if (chargeOn && billingRt && usedCosts.length) {
+          const r = await chargeUsage(billingRt, {
+            userId,
+            channel: "retail",
+            kind: "code",
+            costUsd: usedUsd,
+            requestKey: inAppChargeKey(userId, mode, requestId),
+            meta: { mode, origin, request_id: requestId },
+          });
+          send({ kind: "charge", status: r.status === "charged" || r.status === "accrued" || r.status === "free" ? "ok" : "failed", credits: r.credits, billing: "v2" });
+        } else if (chargeOn && usedCosts.length) {
+          const credits = inAppCredits(pricing, priceAction, worstClass(usedCosts));
+          if (credits > 0) {
+            const { error: chErr } = await admin.rpc("execute_atomic_credit_deduction", {
+              _user_id: userId,
+              _amount: credits,
+              _reason: `vertal_code_ai:${mode}`,
+              _category: "vertal_code_ai",
+              _metadata: { mode, origin, cost_class: worstClass(usedCosts), request_id: requestId },
+              _idempotency_key: inAppChargeKey(userId, mode, requestId),
+            });
+            send(chErr ? { kind: "charge", status: "failed", credits } : { kind: "charge", status: "ok", credits });
+          }
+        }
         // Hash do "antes" de cada arquivo: o apply recusa se o arquivo mudou no meio do caminho.
         send({
           kind: "base_hashes",

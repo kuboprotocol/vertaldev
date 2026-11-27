@@ -31,6 +31,9 @@ project_id = "sccizjlpwezsgaxkclot"
     verify_jwt = false
   [functions.mcp]
     verify_jwt = false
+  # VERTAL AI API: autentica a chave vtl_ai_ (ou o JWT em /keys) dentro da função.
+  [functions.vertal-ai-api]
+    verify_jwt = false
   [functions.rls-test-create-user]
     verify_jwt = false
   [functions.runtime-error-beacon]

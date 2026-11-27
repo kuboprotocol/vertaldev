@@ -3,7 +3,7 @@
 // conversas, fila de correções). Só aparece com VITE_VERTAL_CODE_AI=true.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Brain, Check, Eye, FileCode2, Hammer, ImagePlus, ListChecks, Loader2, Paperclip, Send, Sparkles, Square, Trash2, Users, X } from 'lucide-react';
+import { ArrowLeft, Brain, Check, Eye, FileCode2, Hammer, ImagePlus, KeyRound, ListChecks, Loader2, Paperclip, Send, ShieldCheck, Sparkles, Square, Trash2, Users, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { VertalCodeAiGate } from '@/components/vertal-code-ai/VertalCodeAiGate';
 import { VertalProspectorEntryButton } from '@/components/vertal-prospector/VertalProspectorEntryButton';
@@ -41,6 +41,10 @@ import {
   historyForModel,
   EFFORT_LABEL,
 } from '@/lib/vertalCodeAi/session';
+import { opsApi } from '@/lib/vertalCodeAi/platformApi';
+import { VertalCodeAiKeysDialog } from '@/components/vertal-code-ai/VertalCodeAiKeysDialog';
+import { VertalCreditNoticeBanner } from '@/components/vertal-code-ai/VertalCreditNoticeBanner';
+import { VertalCodeAiOpsPanel } from '@/components/vertal-code-ai/VertalCodeAiOpsPanel';
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const MAX_TEXT_BYTES = 200 * 1024;
@@ -198,6 +202,17 @@ function VertalCodeAIScreen() {
     },
     [running, images],
   );
+  // Plataforma: chaves da API VERTAL (todo usuário) e modo Operação (só o operador; o servidor decide).
+  const [keysOpen, setKeysOpen] = useState(false);
+  const [operator, setOperator] = useState(false);
+  const [opsView, setOpsView] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void opsApi.isOperator().then((ok) => alive && setOperator(ok));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const run = useCallback(
     async (prompt: string, runMode: VcaUiMode, plan?: PlanData) => {
@@ -341,12 +356,27 @@ function VertalCodeAIScreen() {
             <Brain className="h-4 w-4" />
           </button>
         )}
+        {operator && (
+          <button type="button" aria-label="Modo Operação" aria-pressed={opsView} onClick={() => setOpsView((v) => !v)} className={cn('rounded-lg p-2 hover:bg-secondary', opsView ? 'text-primary' : 'text-muted-foreground')}>
+            <ShieldCheck className="h-4 w-4" />
+          </button>
+        )}
+        <button type="button" aria-label="Chaves da API" onClick={() => setKeysOpen(true)} className="rounded-lg p-2 text-muted-foreground hover:bg-secondary">
+          <KeyRound className="h-4 w-4" />
+        </button>
         {items.length > 0 && (
           <button type="button" aria-label="Clear conversation" onClick={() => setItems([])} className="rounded-lg p-2 text-muted-foreground hover:bg-secondary">
             <Trash2 className="h-4 w-4" />
           </button>
         )}
       </header>
+      <VertalCodeAiKeysDialog open={keysOpen} onOpenChange={setKeysOpen} />
+      <VertalCreditNoticeBanner />
+      {opsView && operator && (
+        <div className="max-h-[60dvh] shrink-0 overflow-y-auto border-b border-border/50 px-3 py-3">
+          <VertalCodeAiOpsPanel />
+        </div>
+      )}
 
       <main className="flex-1 space-y-3 overflow-y-auto px-3 py-4">
         {items.length === 0 && (

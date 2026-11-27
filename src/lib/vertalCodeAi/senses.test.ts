@@ -270,9 +270,9 @@ describe('Vertal Novela · pedido e preço', () => {
     expect(novelaPublicStatus({ status: 'weird' }).status).toBe('unknown');
   });
 
-  it('preço de varejo: (custo + US$0,05) × 1,5 ÷ US$0,03', () => {
-    expect(retailCredits(0.03)).toBe(4);
-    expect(retailCredits(0)).toBe(2.5);
+  it('preço de varejo v2: custo × 1,69 ÷ US$0,03 (piso quando o custo é ~0)', () => {
+    expect(retailCredits(0.03)).toBe(1.69);
+    expect(retailCredits(0)).toBe(0.11);
   });
 
   it('custo ativo de GPU por segundo', () => {

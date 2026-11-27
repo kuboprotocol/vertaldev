@@ -187,6 +187,7 @@ export const ERROR_TEXT: Record<string, string> = {
   vca_media_failed: 'Não consegui gerar agora. Tente de novo em alguns minutos.',
   job_not_found: 'Esse vídeo não foi encontrado.',
   vertal_code_ai_team_disabled: 'A Equipe Vertal ainda não foi liberada na sua conta.',
+  insufficient_credits: 'Créditos insuficientes para este pedido.',
 };
 
 export function errorText(code: string): string {
