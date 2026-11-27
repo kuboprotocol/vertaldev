@@ -20,6 +20,7 @@ import {
   priceEthPerToken, SEPOLIA_DEX, SEPOLIA_TOKENS, SELECTORS, targetPrice, type TokenInfo, toUnits, type TradeIntent, triggerMet,
 } from "./trade.ts";
 import { WEB3_TEMPLATE_FILES, WEB3_TEMPLATE_ID } from "./web3Template.ts";
+import { isWalletFluxosEnabled } from "./fluxos.ts";
 
 export const WALLET_TABLE = "vertal_wallet_connections";
 
@@ -103,6 +104,7 @@ export async function handleWallet(body: Record<string, unknown>, deps: WalletDe
     return ok({
       enabled: true,
       trader: isTraderEnabled(env, userId),
+      fluxos: isWalletFluxosEnabled(env, userId), // app só-leitura no Vertal Fluxos (VERTAL_METAMASK_FLUXOS_ENABLED)
       mainnetTrade: false, // esta versão nunca monta ordem na mainnet
       mainnetFlag: isMainnetTradeAllowed(env),
       walletConnectProjectId: walletConnectProjectId(env),

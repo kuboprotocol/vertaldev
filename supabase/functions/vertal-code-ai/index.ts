@@ -86,6 +86,7 @@ import { repairAgentJson } from "../_shared/chatOrchestrator.ts";
 import { expandWalletEnv, isWeb3HintEnabled } from "../_shared/vertalWallet/core.ts";
 import { handleWallet } from "../_shared/vertalWallet/handler.ts";
 import { withWeb3Hint } from "../_shared/vertalWallet/web3Template.ts";
+import { handleWalletFluxos } from "../_shared/vertalWallet/fluxos.ts";
 import { recoverPersonalSign, supabaseWalletStore } from "../_shared/vertalWallet/deno.ts";
 // Vertal Prospector (aditivo, desligado por padrão: VERTAL_PROSPECTOR_ENABLED + VERTAL_PROSPECTOR_USER_IDS).
 import { isProspectorEnabled } from "../_shared/vertalProspector/core.ts";
@@ -465,6 +466,30 @@ async function handleVertalCrmRequest(req: Request): Promise<Response> {
   }
 }
 
+// Vertal · conector MetaMask → Vertal Fluxos (?app=wallet): SÓ LEITURA, só com a chave vfk1 do próprio usuário.
+// 404 se VERTAL_METAMASK_ENABLED / VERTAL_METAMASK_USER_IDS / VERTAL_METAMASK_FLUXOS_ENABLED não liberarem. Nada assina nem envia.
+async function handleVertalWalletFluxosRequest(req: Request): Promise<Response> {
+  if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
+  const fluxosKey = req.headers.get("x-vertal-fluxos-key");
+  if (!fluxosKey) return json(401, { error: "missing_fluxos_key" });
+  const userId = await verifyVertalCrmFluxosKey(fluxosKey, Deno.env.get("FLUXOS_BROKER_SECRET"));
+  if (!userId) return json(401, { error: "invalid_fluxos_key" });
+  let body: Record<string, Loose>;
+  try {
+    body = await req.json();
+  } catch {
+    return json(400, { error: "invalid_json_body" });
+  }
+  try {
+    const admin: Loose = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+    const r = await handleWalletFluxos(body ?? {}, { env: expandWalletEnv(env()), userId, store: supabaseWalletStore(admin), fetch });
+    return json(r.status, r.body);
+  } catch (e) {
+    console.error("[vertal-wallet-fluxos] falhou:", e instanceof Error ? e.message : e);
+    return json(500, { error: "wallet_failed" });
+  }
+}
+
 /**
  * Estimativa de mídia (sempre) + cobrança v2 quando ligada (VERTAL_CODE_AI_CHARGE_ENABLED + v2).
  * Imagem cobra no sucesso; vídeo cobra quando o job conclui (idempotente pelo job).
@@ -496,6 +521,8 @@ function vcaBillingRuntime(admin: Loose, userId: string): BillingRuntime | null 
 Deno.serve(async (req) => {
   // Vertal CRM: rota própria (?app=crm), com as próprias flags; com VERTAL_CRM_ENABLED desligado responde 404.
   if (new URL(req.url).searchParams.get("app") === "crm") return handleVertalCrmRequest(req);
+  // MetaMask → Vertal Fluxos (só leitura, chave vfk1); desligado = 404.
+  if (new URL(req.url).searchParams.get("app") === "wallet") return handleVertalWalletFluxosRequest(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
   if (!isVcaEnabled(env())) return json(404, { error: "vertal_code_ai_disabled" });

@@ -61,6 +61,7 @@ Lista das **transações recentes** só com `VERTAL_METAMASK_ETHERSCAN_KEY` na c
 | `VERTAL_METAMASK_WALLETCONNECT_PROJECT_ID` | ausente | Mostra a opção WalletConnect (id público do WalletConnect Cloud / Reown) |
 | `VERTAL_METAMASK_ETHERSCAN_KEY` | ausente | Lista de transações recentes |
 | `VERTAL_METAMASK_RPC_11155111` / `_RPC_1` | publicnode | RPC próprio (https) |
+| `VERTAL_METAMASK_FLUXOS_ENABLED` | off | Rota só-leitura `?app=wallet` para o app MetaMask do Vertal Fluxos (abaixo) |
 | `VERTAL_METAMASK_DOMAINS` | vertal.dev, www.vertal.dev, kubovibe.dev, www.kubovibe.dev, localhost:8080, localhost:5173 | Domínios aceitos na mensagem SIWE |
 
 Exemplo (acrescentar ao JSON atual, sem tirar nada):
@@ -98,10 +99,38 @@ Nesta versão o Trader é ferramenta de interface **sem custódia**, **só testn
 permissões delegadas), o Vertal pode passar a ser enquadrado como prestador de serviços de ativos virtuais. Também não é recomendação de
 investimento (avisos de suitability/CVM também ficam para a revisão).
 
-## Fluxos (Vertal Fluxos)
-Próximo passo, não feito aqui: o motor do Vertal Fluxos fica no fork `kuboprotocol/automatisch` (outro repositório). O caminho limpo é um app
-`vertal-wallet` no fork com **gatilho** "saldo mudou / nova transação" (polling na `wallet/read`) e **ação** "ler saldo/rede", autenticando
-com a chave do broker do Fluxos como o Vertal CRM faz (`x-vertal-fluxos-key`). Nenhuma ação que assine ou envie transação deve entrar nos Fluxos.
+## Fluxos (Vertal Fluxos) — app "MetaMask (Vertal Wallet)", SÓ LEITURA (pedido de 27/11/2026)
+Draft em dois repositórios, **tudo desligado por padrão**:
+- **Fork `kuboprotocol/automatisch`** — app `metamask` ("MetaMask (Vertal Wallet)") em `packages/backend/src/apps/metamask/` (README próprio).
+  Gatilhos (consulta a cada 15 min): **Nova transação recebida** e **Saldo mudou** (ETH ou um token ERC-20). Ações: **Consultar saldo** e
+  **Listar transações recentes**. Rede: Sepolia (padrão) ou Ethereum mainnet (só leitura). Só carteiras que o usuário conectou aqui podem ser lidas.
+- **Este repositório** — rota `POST vertal-code-ai?app=wallet` (mesma função, sem função nova), autenticada **só** com a chave vfk1 do próprio
+  usuário (`x-vertal-fluxos-key`, o mesmo caminho do Vertal CRM `?app=crm`). Lógica em `supabase/functions/_shared/vertalWallet/fluxos.ts`:
+  - `{op:"addresses"}` → `{ok, wallets:[{address, chainId, connectedAt}], setupUrl}` (só o que já está na `vertal_wallet_connections`).
+  - `{op:"txlist", chainId, tokenAddress?, startBlock?, limit≤50}` → com `VERTAL_METAMASK_ETHERSCAN_KEY` no `VERTAL_GPU_CONFIG`, Etherscan API v2
+    (`txlist`/`tokentx`) **do endereço conectado** (o endereço do pedido é ignorado); sem a chave, `{ok, available:false}` e o Fluxos usa o RPC. A chave nunca sai do servidor.
+  - Qualquer outro op (assinar, enviar, trade…) → `invalid_op`. Pedido com cara de chave privada/frase-semente → `secret_material_refused`.
+  - Liberado só com `VERTAL_METAMASK_ENABLED` + usuário em `VERTAL_METAMASK_USER_IDS` + **`VERTAL_METAMASK_FLUXOS_ENABLED`** (nova chave, padrão off).
+    Quem não está liberado recebe 404 `vertal_metamask_fluxos_disabled`. (Como a rota do CRM, esta **não** passa pela lista do VERTAL Code AI.)
+  - `wallet/status` passa a devolver `fluxos: true|false`; a página `/connectors/metamask/setup` mostra uma linha (pt-BR/en/es) dizendo que a
+    carteira também está no Vertal Fluxos quando `fluxos` é true.
+
+Leitura de transações no Fluxos, nesta ordem: Etherscan com chave no Railway (`VERTAL_METAMASK_ETHERSCAN_KEY`) → Etherscan pela chave do
+`VERTAL_GPU_CONFIG` (op `txlist`) → RPC público (logs `Transfer` para ERC-20; para ETH, compara saldo/nonce e só então lê os blocos, em lotes;
+janela de `VERTAL_METAMASK_SCAN_BLOCKS`=120 blocos, 2 confirmações, 5 chamadas/s por RPC, novas tentativas em 429 com `Retry-After`).
+Limite conhecido: transferências internas de ETH (feitas por contrato) não aparecem.
+
+Variáveis do Fluxos (Railway, serviços **main e worker**), todas ausentes por padrão: `VERTAL_METAMASK_FLUXOS_ENABLED` (liga o app),
+`VERTAL_METAMASK_RPC_11155111` / `VERTAL_METAMASK_RPC_1`, `VERTAL_METAMASK_ETHERSCAN_KEY`, `VERTAL_METAMASK_SCAN_BLOCKS`,
+`VERTAL_METAMASK_CONFIRMATIONS`, `VERTAL_METAMASK_RPC_RPS`, `VERTAL_METAMASK_FLUXOS_LANG` (pt/en/es), `VERTAL_WALLET_URL`. Usa a
+`VERTAL_BROKER_ANON_KEY` que já existe. Nenhum segredo novo no Supabase.
+
+Conexão no Fluxos: "Adicionar conexão" no app MetaMask com a mesma `VERTAL_FLUXOS_KEY` do app "Vertal". Sem carteira conectada aqui, a conexão
+falha com o link para `/connectors/metamask/setup`. O catálogo do Vertal Dev (`src/lib/fluxosConnectors.ts`) **não** foi mexido: o app só aparece
+no editor de fluxos do motor.
+
+Para ligar (decisões do Laércio): merge dos dois PRs; no `VERTAL_GPU_CONFIG` acrescentar `"VERTAL_METAMASK_FLUXOS_ENABLED": "true"`;
+no Railway (automatisch main + worker) `VERTAL_METAMASK_FLUXOS_ENABLED=true`; opcional: chave do Etherscan e RPC próprio.
 
 ## Arquivos
 - Novos: `supabase/functions/_shared/vertalWallet/{core,trade,handler,web3Template,deno}.ts`, `src/lib/vertalWallet/{config,client,eip6963,i18n}.ts`,

@@ -16,6 +16,8 @@ export interface WalletStatus {
   chains: Array<{ chainId: number; name: string; explorer: string }>
   connection: WalletConnection | null
   migrationPending: boolean
+  /** App só-leitura no Vertal Fluxos liberado (VERTAL_METAMASK_FLUXOS_ENABLED). Ausente em servidores antigos. */
+  fluxos?: boolean
 }
 
 export interface WalletRead {
