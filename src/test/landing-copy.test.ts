@@ -75,7 +75,7 @@ describe('landing copy', () => {
   it('index.html marks the home page as English', () => {
     const html = readFileSync(join(ROOT, '..', 'index.html'), 'utf8')
     expect(html).toContain('<html lang="en">')
-    expect(html).toContain('if (en.indexOf(p) < 0) document.documentElement.lang = "pt-BR"')
+    expect(html).toContain('if (!isEn) document.documentElement.lang = "pt-BR"')
   })
 
   it('pre-rendered pages report their own language', () => {
