@@ -32,6 +32,8 @@ export const ENGLISH_ROUTES: readonly string[] = [
   '/connect',
   // Agents
   '/vibe-agents',
+  // Vertal Vibe Pay app
+  '/pay',
 ]
 
 /**

@@ -11,7 +11,7 @@
  * Only copy changes here. Slugs, routes, auth type, Fluxos app keys and every
  * other field the code uses are taken from the original config unchanged.
  *
- * Vertal Vibe Pay is left as it is (owner decision pending on Vibe Pay copy).
+ * Vertal Vibe Pay copy follows the compliance rule: never call it a bank.
  */
 import type { ConnectorConfig, ConnectorSetupStep } from './connectorsConfig'
 
@@ -28,6 +28,19 @@ export interface ConnectorCopy {
 }
 
 const COPY: Record<string, ConnectorCopy> = {
+  'vertal-vibe-pay': {
+    description: 'Your digital account in Vertal Dev: Pix, boleto, cards, payment links and a global account in more than one currency.',
+    longDescription:
+      'Vertal Vibe Pay brings together the Brazil account (ASAAS: Pix, boleto, cards, payment links and outgoing Pix) and the global account (Stripe Connect: receive in 16 currencies and pay out in your country), with one balance, one statement and saved cards. Accounts and payments are provided by Stripe and ASAAS. Vertal is not a financial institution.',
+    features: ['Pix (QR code and copy and paste) and boleto', 'Cards and payment links', 'Global account in more than one currency (Stripe)', 'One balance and one statement'],
+    apiKeyLabel: 'Vertal Vibe Pay account',
+    apiKeyHelp: 'No key needed: you open the account inside Vertal Dev, at /pay.',
+    setupSteps: [
+      { title: 'Open Vertal Vibe Pay', description: 'Select the card to go to /pay. You are already signed in.' },
+      { title: 'Open your accounts', description: 'In the Accounts tab, open the Brazil account (Pix and boleto) and the global account (choose your country).' },
+      { title: 'Start receiving', description: 'In the Receive tab, create a Pix, a boleto, a card payment request or a payment link.' },
+    ],
+  },
   'vertal-app': {
     description: 'Deploy your apps from a repository with AI help. Open it here or connect it with MCP.',
     longDescription:
@@ -414,7 +427,7 @@ function fluxosCopy(app: string, original: string): ConnectorCopy {
   }
 }
 
-/** English copy for a connector, or undefined when there is none (Vertal Vibe Pay). */
+/** English copy for a connector, or undefined when there is none. */
 export function connectorCopyEn(c: Pick<ConnectorConfig, 'slug' | 'name' | 'fluxosApp'>): ConnectorCopy | undefined {
   if (COPY[c.slug]) return COPY[c.slug]
   if (c.slug.startsWith('fluxos-') && c.fluxosApp) return fluxosCopy(c.fluxosApp, c.name)

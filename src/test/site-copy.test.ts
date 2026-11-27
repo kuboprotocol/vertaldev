@@ -70,6 +70,16 @@ const FILES = [
   'pages/VibeAgentsPage.tsx',
   'components/huginn/HuginnAgentsCard.tsx',
   'components/huginn/FluxosAgentBuilder.tsx',
+  // Vertal Vibe Pay (batch 5)
+  'pages/VertalBankPage.tsx',
+  'components/bank/BankStatement.tsx',
+  'components/bank/BankSend.tsx',
+  'components/bank/BankReceive.tsx',
+  'components/bank/BankAccounts.tsx',
+  'components/bank/PayOnboarding.tsx',
+  'components/profile/WalletSection.tsx',
+  'components/vibepay/VibePayPromo.tsx',
+  'components/vibepay/VibePayDevGate.tsx',
 ]
 
 function visibleText(file: string): string {
