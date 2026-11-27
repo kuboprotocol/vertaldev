@@ -6,6 +6,7 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { VibePayPromo } from '@/components/vibepay/VibePayPromo'
 import { connectors, getConnectorBySlug } from '@/lib/connectorsConfig'
 import { CONNECTOR_CATALOG, detectRequirements } from '@/config/connectorCatalog'
+import { localizeConnector } from '@/lib/connectorsCopyEn'
 
 const BANK_WORD = /\b(banco|bank)\b/i
 
@@ -24,8 +25,8 @@ function renderAt(node: React.ReactNode) {
 describe('Vertal Vibe Pay: divulgação', () => {
   it('banner grande abre /pay no app', () => {
     renderAt(<VibePayPromo />)
-    const banner = screen.getByRole('link', { name: 'Abrir o Vertal Vibe Pay' })
-    expect(banner.textContent).toContain('VERTAL VIBE PAY')
+    const banner = screen.getByRole('link', { name: 'Open Vertal Vibe Pay' })
+    expect(banner.textContent).toContain('Vertal Vibe Pay')
     expect(banner.querySelector('img')?.getAttribute('src')).toBe('/vibe-pay/logo.webp')
     fireEvent.click(banner)
     expect(screen.getByText('pay aberto')).toBeTruthy()
@@ -33,13 +34,13 @@ describe('Vertal Vibe Pay: divulgação', () => {
 
   it('na home pública leva à landing /vibe-pay', () => {
     renderAt(<VibePayPromo to="/vibe-pay" />)
-    fireEvent.click(screen.getByRole('link', { name: 'Abrir o Vertal Vibe Pay' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Open Vertal Vibe Pay' }))
     expect(screen.getByText('landing aberta')).toBeTruthy()
   })
 
   it('cartão compacto abre /pay com Enter', () => {
     renderAt(<VibePayPromo variant="compact" />)
-    fireEvent.keyDown(screen.getByRole('link', { name: 'Abrir o Vertal Vibe Pay' }), { key: 'Enter' })
+    fireEvent.keyDown(screen.getByRole('link', { name: 'Open Vertal Vibe Pay' }), { key: 'Enter' })
     expect(screen.getByText('pay aberto')).toBeTruthy()
   })
 
@@ -59,6 +60,14 @@ describe('Vertal Vibe Pay: conectores', () => {
     expect(c?.internalRoute).toBe('/pay')
     expect(BANK_WORD.test(`${c?.name} ${c?.description} ${c?.longDescription}`)).toBe(false)
     expect(connectors.filter((x) => x.slug === 'vertal-vibe-pay')).toHaveLength(1)
+  })
+
+  it('English copy keeps the route and never calls the product a bank', () => {
+    const en = localizeConnector(getConnectorBySlug('vertal-vibe-pay'))
+    expect(en?.internalRoute).toBe('/pay')
+    expect(en?.description).toMatch(/digital account/)
+    expect(en?.longDescription).toMatch(/not a financial institution/)
+    expect(BANK_WORD.test(`${en?.name} ${en?.description} ${en?.longDescription} ${en?.features.join(' ')}`)).toBe(false)
   })
 
   it('está no catálogo de requisitos com connectPath /pay', () => {

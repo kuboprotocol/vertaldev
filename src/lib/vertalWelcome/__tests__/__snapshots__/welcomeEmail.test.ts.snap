@@ -1,0 +1,87 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`welcome v2 · conteúdo > HTML: logo com alt "Vertal", botão para a documentação, sem nomes de fornecedor 1`] = `
+"<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>Welcome to Vertal Dev, Ana</title>
+<style>
+@media (max-width:620px){.v-container{width:100%!important}.v-pad{padding-left:20px!important;padding-right:20px!important}}
+@media (prefers-color-scheme:dark){.v-body{background:#0b0b12!important}.v-card{background:#14141f!important}.v-card td,.v-card p{color:#e8e8f0!important}.v-muted{color:#a1a1b5!important}}
+</style>
+</head>
+<body class="v-body" style="margin:0;padding:0;background:#f3f2f8;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">Everything you need to build, launch and grow is already in your account.&#8203;&#160;&#8203;&#160;&#8203;&#160;&#8203;&#160;</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="v-body" style="background:#f3f2f8;">
+<tr><td align="center" style="padding:24px 12px;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" class="v-container" style="width:600px;max-width:600px;">
+<tr><td align="center" style="background:#0b0b12;border-radius:16px 16px 0 0;padding:28px 24px;">
+<a href="https://vertal.dev" style="text-decoration:none;"><img src="https://vertal.dev/pwa-512x512.png" width="88" height="88" alt="Vertal" style="display:block;width:88px;height:88px;border:0;outline:none;text-decoration:none;color:#ffffff;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:20px;font-weight:700;"></a>
+</td></tr>
+<tr><td class="v-card v-pad" style="background:#ffffff;border-radius:0 0 16px 16px;padding:32px 40px 36px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+<tr><td>
+<p style="margin:0 0 16px;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#1f2330;">Hi Ana,</p>
+<p style="margin:0 0 16px;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#1f2330;">Welcome to Vertal Dev. We&#39;re so glad you&#39;re here!</p>
+<p style="margin:0 0 10px;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#1f2330;">Here&#39;s what&#39;s already in your account:</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 10px;">
+<tr><td valign="top" style="padding:0 10px 6px 0;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#7c3aed;">&#8226;</td><td valign="top" style="padding:0 0 6px;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#1f2330;"><a href="https://vertal.dev/crm" style="color:#6d28d9;text-decoration:underline;font-weight:600;">Free CRM</a>: opening soon</td></tr>
+<tr><td valign="top" style="padding:0 10px 6px 0;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#7c3aed;">&#8226;</td><td valign="top" style="padding:0 0 6px;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#1f2330;"><strong style="font-weight:600;color:#1f2330;">Deploy and rendering</strong>: go live fast</td></tr>
+<tr><td valign="top" style="padding:0 10px 6px 0;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#7c3aed;">&#8226;</td><td valign="top" style="padding:0 0 6px;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#1f2330;"><a href="https://vertal.app" style="color:#6d28d9;text-decoration:underline;font-weight:600;">Vertal App</a>: repo to live app</td></tr>
+<tr><td valign="top" style="padding:0 10px 6px 0;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#7c3aed;">&#8226;</td><td valign="top" style="padding:0 0 6px;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#1f2330;"><a href="https://vertalrun.com" style="color:#6d28d9;text-decoration:underline;font-weight:600;">Vertal Run</a>: safe code sandboxes</td></tr>
+<tr><td valign="top" style="padding:0 10px 6px 0;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#7c3aed;">&#8226;</td><td valign="top" style="padding:0 0 6px;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#1f2330;"><a href="https://vertal.dev/en/vibe-pay" style="color:#6d28d9;text-decoration:underline;font-weight:600;">Vertal Vibe Pay</a>: opening soon</td></tr>
+<tr><td valign="top" style="padding:0 10px 6px 0;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#7c3aed;">&#8226;</td><td valign="top" style="padding:0 0 6px;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#1f2330;"><a href="https://vertal.dev/creative" style="color:#6d28d9;text-decoration:underline;font-weight:600;">Design, CAD, Office</a>: free manually</td></tr>
+</table>
+<p style="margin:0 0 16px;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#1f2330;">You only pay for Vertal AI, by the credit.</p>
+<p style="margin:0 0 12px;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#1f2330;">Our docs are the quickest way to get started.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
+<tr><td align="center" bgcolor="#7c3aed" style="border-radius:12px;background:#7c3aed;">
+<a href="https://vertal.dev/docs" style="display:inline-block;padding:14px 28px;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:12px;">Explore the docs</a>
+</td></tr>
+</table>
+<p style="margin:0 0 16px;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#1f2330;">Questions or ideas? Just reply, we&#39;d love to hear from you.</p>
+<p style="margin:0;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#1f2330;">Welcome aboard,<br>Laércio Borges<br><span class="v-muted" style="color:#5b5f6e;">Founder, Vertal</span></p>
+</td></tr>
+</table>
+</td></tr>
+<tr><td align="center" class="v-muted" style="padding:20px 12px 0;font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#7a7d8c;">
+You're receiving this because you created a Vertal Dev account.<br><a href="https://vertal.dev" style="color:#7a7d8c;text-decoration:underline;">vertal.dev</a>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>
+"
+`;
+
+exports[`welcome v2 · conteúdo > assunto, pré-cabeçalho e versão texto exatamente como aprovados 1`] = `
+"Hi Ana,
+
+Welcome to Vertal Dev. We're so glad you're here!
+
+Here's what's already in your account:
+• Free CRM: opening soon
+• Deploy and rendering: go live fast
+• Vertal App: repo to live app
+• Vertal Run: safe code sandboxes
+• Vertal Vibe Pay: opening soon
+• Design, CAD, Office: free manually
+
+You only pay for Vertal AI, by the credit.
+
+Our docs are the quickest way to get started.
+Explore the docs: https://vertal.dev/docs
+
+Questions or ideas? Just reply, we'd love to hear from you.
+
+Welcome aboard,
+Laércio Borges
+Founder, Vertal
+"
+`;

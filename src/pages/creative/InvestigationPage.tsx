@@ -8,13 +8,14 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, RotateCw, Ban, FileDown, Search, ExternalLink, AlertTriangle, ArrowUpDown, Loader2, X, Info, Package, RefreshCw } from "lucide-react";
+import { RotateCw, Ban, FileDown, Search, ExternalLink, AlertTriangle, ArrowUpDown, Loader2, X, Info, Package, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "@/hooks/use-debounce";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RetryIndicator } from "@/components/creative/RetryIndicator";
+import { AppTopBar, SITE_FONT, siteRoot } from "@/components/site";
 
 const isUUID = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 
@@ -90,7 +91,7 @@ export default function InvestigationPage() {
   const { data: assetsData, isLoading: loading, error: queryError, refetch: fetchAssets, failureCount } = useQuery({
     queryKey: ["creative-assets", user?.id, debouncedStatus, debouncedTool, debouncedSearch, debouncedStartDate, debouncedEndDate, sortField, sortDir, page],
     queryFn: async ({ signal }) => {
-      if (!user) throw new Error("Não autenticado");
+      if (!user) throw new Error("Not signed in");
       
       let q = supabase
         .from("creative_assets")
@@ -156,7 +157,7 @@ export default function InvestigationPage() {
       
       const { data: a, error: aErr } = await supabase.from("creative_assets").select("*").eq("id", investigateId).maybeSingle();
       if (aErr) throw aErr;
-      if (!a) throw new Error("Execução não encontrada");
+      if (!a) throw new Error("Run not found");
 
       const { data: logs, error: lErr } = await supabase
         .from("creative_audit_logs")
@@ -192,14 +193,14 @@ export default function InvestigationPage() {
   }
 
   async function cancelAsset(a: Asset) {
-    if (!confirm(`Cancelar execução ${a.id.slice(0, 8)}?`)) return;
+    if (!confirm(`Cancel run ${a.id.slice(0, 8)}?`)) return;
     const { error } = await supabase
       .from("creative_assets")
       .update({ status: "cancelled", metadata: { ...(a.metadata || {}), cancelled_at: new Date().toISOString() } })
       .eq("id", a.id);
     if (error) return toast.error(error.message);
     await recordAudit(a.id, "cancel", { reason: "user_request" });
-    toast.success("Execução cancelada");
+    toast.success("Run canceled");
     if (selected?.id === a.id) queryClient.invalidateQueries({ queryKey: ["asset-detail", a.id] });
   }
 
@@ -210,7 +211,7 @@ export default function InvestigationPage() {
       .eq("id", a.id);
     if (error) return toast.error(error.message);
     await recordAudit(a.id, "retry", { previous_status: a.status });
-    toast.success("Reenfileirado para nova tentativa");
+    toast.success("Queued again for another try");
     if (selected?.id === a.id) queryClient.invalidateQueries({ queryKey: ["asset-detail", a.id] });
   }
 
@@ -240,7 +241,7 @@ export default function InvestigationPage() {
     const a = document.createElement("a");
     a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url);
-    toast.success(`Trilha exportada (${filtered.length} itens)`);
+    toast.success(`Audit trail exported (${filtered.length} items)`);
   }
 
   const distinctTools = useMemo(() => Array.from(new Set(assets.map((a) => a.tool))), [assets]);
@@ -251,28 +252,28 @@ export default function InvestigationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-border p-4 flex flex-wrap items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/creative")}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-amber-500" /> Investigação de Falhas
+    <div className={`min-h-screen ${siteRoot}`} style={SITE_FONT}>
+      <AppTopBar
+        back={{ to: "/creative", label: "Creative" }}
+        actions={
+          <>
+            <Button variant="ghost" size="sm" className="rounded-full" onClick={() => navigate("/creative/notifications")}>
+              Email preferences
+            </Button>
+            <Button variant="ghost" size="sm" className="rounded-full" onClick={() => navigate("/creative/presets")}>
+              Presets
+            </Button>
+          </>
+        }
+      />
+      <header className="mx-auto max-w-7xl px-4 pt-8 sm:px-6">
+        <h1 className="flex items-center gap-2 text-3xl font-semibold tracking-[-0.02em]">
+            <AlertTriangle className="h-5 w-5 text-amber-500" aria-hidden /> Failure investigation
           </h1>
-          <p className="text-xs text-muted-foreground">Atualização em tempo real • {count} resultados</p>
-        </div>
-        <div className="nav-carousel max-md:basis-full">
-          <Button variant="outline" size="sm" onClick={() => navigate("/creative/notifications")}>
-            Preferências de e-mail
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => navigate("/creative/presets")}>
-            Presets
-          </Button>
-        </div>
+        <p className="mt-1 text-[15px] text-muted-foreground">Updates live · {count} results</p>
       </header>
 
-      <div className="px-4 pt-4">
+      <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6">
         <RetryIndicator 
           failureCount={failureCount} 
           error={queryError as Error} 
@@ -281,16 +282,16 @@ export default function InvestigationPage() {
         />
       </div>
 
-      <div className="p-4 grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-4">
+      <main id="main" className="mx-auto grid max-w-7xl grid-cols-1 gap-4 px-4 py-4 sm:px-6 lg:grid-cols-[1fr_400px]">
         <div className="space-y-3">
-          <Card className="p-3">
+          <Card className="rounded-2xl border-white/[0.06] bg-card/50 p-3">
             <div className="grid md:grid-cols-5 gap-2">
               <div className="relative md:col-span-2">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   data-testid="filter-search"
                   className="pl-8"
-                  placeholder="Buscar por prompt, ID..."
+                  placeholder="Search by prompt or ID"
                   value={search}
                   onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 />
@@ -298,12 +299,12 @@ export default function InvestigationPage() {
               <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
                 <SelectTrigger data-testid="filter-status"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos os status</SelectItem>
-                  <SelectItem value="failed">Falha</SelectItem>
-                  <SelectItem value="error">Erro</SelectItem>
-                  <SelectItem value="cancelled">Cancelado</SelectItem>
-                  <SelectItem value="processing">Processando</SelectItem>
-                  <SelectItem value="completed">Concluído</SelectItem>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="failed">Failed</SelectItem>
+                  <SelectItem value="error">Error</SelectItem>
+                  <SelectItem value="cancelled">Canceled</SelectItem>
+                  <SelectItem value="processing">Processing</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
                 </SelectContent>
               </Select>
               <Input
@@ -319,9 +320,9 @@ export default function InvestigationPage() {
             </div>
             <div className="mt-2 flex gap-2 flex-wrap items-center">
               <Select value={tool} onValueChange={(v) => { setTool(v); setPage(1); }}>
-                <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="Ferramenta" /></SelectTrigger>
+                <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="Tool" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todas as ferramentas</SelectItem>
+                  <SelectItem value="all">All tools</SelectItem>
                   {["chat","nano_banana","downloader","clips","avatar","shorts","music","ebook","emo", ...distinctTools]
                     .filter((v, i, a) => a.indexOf(v) === i)
                     .map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
@@ -333,24 +334,24 @@ export default function InvestigationPage() {
                 data-testid="btn-clear-filters"
                 onClick={() => {
                   setSearch(""); setStatus("all"); setTool("all"); setStartDate(""); setEndDate(""); setPage(1);
-                  toast.info("Filtros limpos");
+                  toast.info("Filters cleared");
                 }}
               >
-                <X className="h-4 w-4 mr-1" /> Limpar filtros
+                <X className="h-4 w-4 mr-1" /> Clear filters
               </Button>
             </div>
           </Card>
 
-          <Card>
+          <Card className="overflow-hidden rounded-2xl border-white/[0.06] bg-card/50">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead><button onClick={() => toggleSort("tool")} className="flex items-center gap-1">Ferramenta <ArrowUpDown className="h-3 w-3"/></button></TableHead>
-                  <TableHead>Execução</TableHead>
+                  <TableHead><button onClick={() => toggleSort("tool")} className="flex items-center gap-1">Tool <ArrowUpDown className="h-3 w-3"/></button></TableHead>
+                  <TableHead>Run</TableHead>
                   <TableHead><button onClick={() => toggleSort("status")} className="flex items-center gap-1">Status <ArrowUpDown className="h-3 w-3"/></button></TableHead>
-                  <TableHead>Motivo</TableHead>
-                  <TableHead><button onClick={() => toggleSort("created_at")} className="flex items-center gap-1">Quando <ArrowUpDown className="h-3 w-3"/></button></TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+                  <TableHead>Reason</TableHead>
+                  <TableHead><button onClick={() => toggleSort("created_at")} className="flex items-center gap-1">When <ArrowUpDown className="h-3 w-3"/></button></TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -372,13 +373,13 @@ export default function InvestigationPage() {
                       <div className="flex flex-col items-center gap-2 text-destructive">
                         <AlertTriangle className="h-8 w-8" />
                         <p>{error}</p>
-                        <Button variant="outline" size="sm" onClick={() => fetchAssets()}>Tentar novamente</Button>
+                        <Button variant="outline" size="sm" onClick={() => fetchAssets()}>Try again</Button>
                       </div>
                     </TableCell>
                   </TableRow>
                 )}
                 {!loading && !error && assets.length === 0 && (
-                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhuma execução com os filtros atuais</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No runs match these filters</TableCell></TableRow>
                 )}
                 {!loading && !error && assets.map((a) => (
                   <TableRow key={a.id} data-testid="investigation-row" className={`cursor-pointer transition-colors ${selected?.id === a.id ? 'bg-muted/50' : 'hover:bg-muted/30'}`} onClick={() => loadDetail(a.id)}>
@@ -386,13 +387,13 @@ export default function InvestigationPage() {
                     <TableCell className="font-mono text-xs">{a.id.slice(0, 8)}</TableCell>
                     <TableCell><StatusBadge status={a.status} /></TableCell>
                     <TableCell className="max-w-xs truncate text-xs">{a.metadata?.error ?? a.metadata?.reason ?? "—"}</TableCell>
-                    <TableCell className="text-xs">{new Date(a.created_at).toLocaleString()}</TableCell>
+                    <TableCell className="text-xs">{new Date(a.created_at).toLocaleString('en-US')}</TableCell>
                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       {(a.status === "processing" || a.status === "queued") && (
-                        <Button data-testid="btn-cancel" variant="ghost" size="sm" onClick={() => cancelAsset(a)} title="Cancelar"><Ban className="h-4 w-4" /></Button>
+                        <Button data-testid="btn-cancel" variant="ghost" size="sm" onClick={() => cancelAsset(a)} title="Cancel" aria-label="Cancel"><Ban className="h-4 w-4" /></Button>
                       )}
                       {(a.status === "failed" || a.status === "error" || a.status === "cancelled") && (
-                        <Button data-testid="btn-requeue" variant="ghost" size="sm" onClick={() => requeueAsset(a)} title="Reenfileirar"><RotateCw className="h-4 w-4" /></Button>
+                        <Button data-testid="btn-requeue" variant="ghost" size="sm" onClick={() => requeueAsset(a)} title="Queue again" aria-label="Queue again"><RotateCw className="h-4 w-4" /></Button>
                       )}
                     </TableCell>
                   </TableRow>
@@ -400,16 +401,16 @@ export default function InvestigationPage() {
               </TableBody>
             </Table>
             <div className="flex items-center justify-between p-3 border-t border-border">
-              <div className="text-xs text-muted-foreground">Página {page} de {totalPages}</div>
+              <div className="text-xs text-muted-foreground">Page {page} of {totalPages}</div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Anterior</Button>
-                <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Próxima</Button>
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+                <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
               </div>
             </div>
           </Card>
         </div>
 
-        <Card className="p-4 h-fit sticky top-4">
+        <Card className="sticky top-20 h-fit rounded-2xl border-white/[0.06] bg-card/50 p-4">
           {detailLoading ? (
             <div className="space-y-4">
               <div className="flex justify-between">
@@ -433,8 +434,8 @@ export default function InvestigationPage() {
                 <Search className="h-6 w-6" />
               </div>
               <div>
-                <p className="font-semibold text-foreground">Nenhuma execução selecionada</p>
-                <p className="text-sm">Selecione uma linha na tabela para ver os detalhes completos e trilha de auditoria.</p>
+                <p className="font-semibold text-foreground">No run selected</p>
+                <p className="text-sm">Select a row in the table to see its details and audit trail.</p>
               </div>
             </div>
           ) : (
@@ -442,44 +443,44 @@ export default function InvestigationPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <h2 className="text-lg font-bold flex items-center gap-2">
-                    Detalhes: {selected.id.slice(0, 8)}
+                    Details: {selected.id.slice(0, 8)}
                     <Badge variant="secondary" className="font-mono text-[10px]">{selected.tool}</Badge>
                   </h2>
-                  <p className="text-xs text-muted-foreground">{new Date(selected.created_at).toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">{new Date(selected.created_at).toLocaleString('en-US')}</p>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => { setParams((p) => { p.delete("investigate"); return p; }); }}>
+                <Button variant="ghost" size="icon" aria-label="Close details" onClick={() => { setParams((p) => { p.delete("investigate"); return p; }); }}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
 
               <div className="space-y-2">
-                <Label className="text-xs uppercase text-muted-foreground">Prompt / Entrada</Label>
+                <Label className="text-xs text-muted-foreground">Prompt or input</Label>
                 <p className="text-sm bg-muted/30 p-2 rounded border border-border/50 max-h-32 overflow-y-auto whitespace-pre-wrap">
-                  {selected.prompt || "Nenhum prompt disponível"}
+                  {selected.prompt || "No prompt available"}
                 </p>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div className="p-2 rounded border border-border bg-muted/10">
-                  <Label className="text-[10px] uppercase text-muted-foreground block">Créditos</Label>
+                  <Label className="text-[11px] text-muted-foreground block">Credits</Label>
                   <span className="text-sm font-semibold">{selected.credits_spent}</span>
                 </div>
                 <div className="p-2 rounded border border-border bg-muted/10">
-                  <Label className="text-[10px] uppercase text-muted-foreground block">Status</Label>
+                  <Label className="text-[11px] text-muted-foreground block">Status</Label>
                   <StatusBadge status={selected.status} />
                 </div>
               </div>
 
               <div className="flex gap-2">
                 {(selected.status === "failed" || selected.status === "error" || selected.status === "cancelled") && (
-                  <Button data-testid="detail-requeue" size="sm" className="flex-1" onClick={() => requeueAsset(selected)}><RotateCw className="h-3 w-3 mr-1" /> Reenfileirar</Button>
+                  <Button data-testid="detail-requeue" size="sm" className="flex-1" onClick={() => requeueAsset(selected)}><RotateCw className="h-3 w-3 mr-1" /> Queue again</Button>
                 )}
                 {(selected.status === "processing" || selected.status === "queued") && (
-                  <Button data-testid="detail-cancel" size="sm" variant="destructive" className="flex-1" onClick={() => cancelAsset(selected)}><Ban className="h-3 w-3 mr-1" /> Cancelar</Button>
+                  <Button data-testid="detail-cancel" size="sm" variant="destructive" className="flex-1" onClick={() => cancelAsset(selected)}><Ban className="h-3 w-3 mr-1" /> Cancel</Button>
                 )}
                 {selected.output_url && (
                   <Button size="sm" variant="outline" className="flex-1" asChild>
-                    <a href={selected.output_url} target="_blank" rel="noreferrer"><ExternalLink className="h-3 w-3 mr-1" /> Ver Output</a>
+                    <a href={selected.output_url} target="_blank" rel="noreferrer"><ExternalLink className="h-3 w-3 mr-1" /> View output</a>
                   </Button>
                 )}
               </div>
@@ -487,32 +488,32 @@ export default function InvestigationPage() {
               <div className="pt-4 border-t border-border">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-bold flex items-center gap-1">
-                    Trilha de Auditoria
+                    Audit trail
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
-                        <TooltipContent>Histórico completo de eventos e ações para esta execução.</TooltipContent>
+                        <TooltipContent>Every event and action for this run.</TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
                   </h3>
                   <div className="flex gap-1">
-                    <Button data-testid="export-audit-json" variant="ghost" size="icon" className="h-7 w-7" onClick={() => exportAudit("json")} title="Exportar JSON"><FileDown className="h-3.5 w-3.5" /></Button>
-                    <Button data-testid="export-audit-csv" variant="ghost" size="icon" className="h-7 w-7" onClick={() => exportAudit("csv")} title="Exportar CSV"><Package className="h-3.5 w-3.5" /></Button>
+                    <Button data-testid="export-audit-json" variant="ghost" size="icon" className="h-7 w-7" onClick={() => exportAudit("json")} title="Export JSON" aria-label="Export JSON"><FileDown className="h-3.5 w-3.5" /></Button>
+                    <Button data-testid="export-audit-csv" variant="ghost" size="icon" className="h-7 w-7" onClick={() => exportAudit("csv")} title="Export CSV" aria-label="Export CSV"><Package className="h-3.5 w-3.5" /></Button>
                   </div>
                 </div>
                 
                 <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                   {audit.length === 0 ? (
-                    <p className="text-xs text-center py-4 text-muted-foreground italic">Nenhum log registrado</p>
+                    <p className="text-xs text-center py-4 text-muted-foreground italic">No logs yet</p>
                   ) : (
                     audit.map((e) => (
                       <div key={e.id} className="text-xs border-l-2 border-primary/30 pl-3 py-1 hover:border-primary transition-colors">
                         <div className="flex justify-between font-medium">
-                          <span className="capitalize">{e.event_type?.replace(/_/g, " ") || "Evento"}</span>
-                          <span className="text-[10px] text-muted-foreground">{new Date(e.created_at).toLocaleTimeString()}</span>
+                          <span className="capitalize">{e.event_type?.replace(/_/g, " ") || "Event"}</span>
+                          <span className="text-[10px] text-muted-foreground">{new Date(e.created_at).toLocaleTimeString('en-US')}</span>
                         </div>
                         {e.metadata?.error && <p className="text-destructive font-mono mt-1 break-all">{e.metadata.error}</p>}
-                        {e.metadata?.actor_email && <p className="text-[10px] text-muted-foreground mt-1">Por: {e.metadata.actor_email}</p>}
+                        {e.metadata?.actor_email && <p className="text-[10px] text-muted-foreground mt-1">By: {e.metadata.actor_email}</p>}
                       </div>
                     ))
                   )}
@@ -521,7 +522,7 @@ export default function InvestigationPage() {
             </div>
           )}
         </Card>
-      </div>
+      </main>
     </div>
   );
 }

@@ -1,82 +1,37 @@
 'use client'
-import { useState, useEffect, Suspense, lazy, Component, ReactNode } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Button } from '@/components/ui/button'
-import { ArrowRight, Zap, Loader2, Globe, Palette } from 'lucide-react'
+import { ArrowUp, Loader2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
-import PromptAttachMenu from '@/components/landing/PromptAttachMenu'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
+import { cn } from '@/lib/utils'
+import { Brand, MoreLink, focusRing } from './landingUi'
 
-const AnimatedLogo = lazy(() => import('@/components/branding/AnimatedLogo'))
-
-class LogoBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { hasError: boolean }> {
-  state = { hasError: false }
-  static getDerivedStateFromError() { return { hasError: true } }
-  componentDidCatch(e: Error) { console.error('AnimatedLogo failed:', e) }
-  render() { return this.state.hasError ? this.props.fallback : this.props.children }
-}
-
-const LogoTextFallback = () => (
-  <span className="font-display font-bold tracking-[0.18em] text-foreground" style={{ fontSize: 'min(48px, calc((100vw - 48px) / 13))' }}>
-    VERTAL&nbsp;VIBE
-  </span>
-)
-
-
-// Sugestões em linguagem natural — sem jargão técnico (Web2 ou Web3).
-// O orquestrador detecta a stack por trás. O usuário só descreve a ideia.
+// Example ideas in plain language, with no technical terms (Web2 or Web3).
+// The orchestrator picks the stack. The visitor only describes the idea.
 const suggestions = [
-  'A Nubank-style app with login and digital wallet',
-  'NFT marketplace with crypto payment',
-  'Online store with token loyalty rewards',
-  'SaaS dashboard with real-time analytics',
-  'Social network with creator rewards',
+  'A banking app with login and a digital wallet',
+  'An NFT marketplace that accepts crypto payments',
+  'An online store with a points program',
+  'A dashboard that shows sales in real time',
 ]
+
+const fadeUp = (delay: number) => ({
+  initial: { opacity: 0, y: 16 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.7, ease: [0.25, 0.1, 0.25, 1] as const, delay },
+})
 
 export default function HeroSection() {
   const [prompt, setPrompt] = useState('')
-  const [attachedFile, setAttachedFile] = useState<File | null>(null)
-  const [references, setReferences] = useState<string[]>([])
   const [generating, setGenerating] = useState(false)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const navigate = useNavigate()
   const { user } = useAuth()
 
-  const handleAttachFile = (file: File) => {
-    setAttachedFile(file)
-    toast.success(`File attached: ${file.name}`)
-  }
-
-  const handleScreenshot = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true })
-      const video = document.createElement('video')
-      video.srcObject = stream
-      await video.play()
-      const canvas = document.createElement('canvas')
-      canvas.width = video.videoWidth
-      canvas.height = video.videoHeight
-      canvas.getContext('2d')?.drawImage(video, 0, 0)
-      stream.getTracks().forEach(track => track.stop())
-      canvas.toBlob((blob) => {
-        if (blob) {
-          const file = new File([blob], `screenshot-${Date.now()}.png`, { type: 'image/png' })
-          setAttachedFile(file)
-          toast.success('Screenshot captured!')
-        }
-      }, 'image/png')
-    } catch (err) {
-      toast.error('Could not capture the screen')
-    }
-  }
-
-  const handleAddReference = (url: string) => {
-    setReferences(prev => [...prev, url])
-    toast.success('Reference added!')
-  }
-
-  // Restaura prompt pendente após login (vindo do /auth).
+  // Restore a pending prompt after sign-in (coming back from /auth).
   useEffect(() => {
     const saved = sessionStorage.getItem('kubo:pending_prompt')
     if (saved) {
@@ -89,8 +44,8 @@ export default function HeroSection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
 
-  // Conecta o botão Gerar ao orquestrador (Camada 2). Sem login: persiste o
-  // prompt em sessionStorage e manda para /auth; ao voltar, retoma sozinho.
+  // Sends the idea to the orchestrator (layer 2). Signed out: keep the prompt in
+  // sessionStorage and go to /auth; on return it resumes by itself.
   const handleGenerate = async (override?: string) => {
     const text = (typeof override === 'string' ? override : prompt).trim()
     if (!text) return
@@ -105,12 +60,12 @@ export default function HeroSection() {
         body: { prompt: text },
       })
       if (error) throw error
-      if (!data?.plan_id) throw new Error('Plan has no ID')
-      toast.success('Plan generated!')
+      if (!data?.plan_id) throw new Error('The plan has no ID.')
+      toast.success('Your plan is ready.')
       navigate(`/plan/${data.plan_id}`)
     } catch (e) {
       console.error(e)
-      const msg = e instanceof Error ? e.message : 'Failed to generate plan'
+      const msg = e instanceof Error ? e.message : 'We could not create the plan. Please try again.'
       toast.error(msg)
     } finally {
       setGenerating(false)
@@ -118,72 +73,60 @@ export default function HeroSection() {
   }
 
   return (
-    <section className="relative py-28 md:py-40 px-6 overflow-hidden">
-      {/* Background effects */}
-      <div className="absolute inset-0 gradient-mesh pointer-events-none" />
-      <div className="absolute inset-0 dot-pattern opacity-40 pointer-events-none" />
-      {/* Subtle gold radial */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-primary/[0.03] blur-3xl pointer-events-none" />
+    <section aria-labelledby="hero-title" className="relative overflow-hidden px-6 pb-24 pt-20 md:pb-32 md:pt-32">
+      {/* One soft light behind the headline. No patterns, no glow on text. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-0 h-[520px] w-[900px] max-w-full -translate-x-1/2 rounded-full bg-primary/[0.06] blur-3xl"
+      />
 
-      <div className="max-w-3xl mx-auto text-center relative z-10">
-        {/* Badge */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-accent glass-border text-accent-foreground text-xs font-medium mb-8"
-        >
-          <Zap className="h-3 w-3" />
-          AI Builder — Web2 and Web3 made simple
-        </motion.div>
-
-        {/* Logo */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.6, delay: 0.05 }}
-          className="flex justify-center mb-8"
-        >
-          <LogoBoundary fallback={<LogoTextFallback />}>
-            <Suspense fallback={<LogoTextFallback />}>
-              <AnimatedLogo size={48} fit variant="stacked" className="drop-shadow-2xl" />
-            </Suspense>
-          </LogoBoundary>
-        </motion.div>
+      <div className="relative mx-auto max-w-3xl text-center">
+        <motion.p {...fadeUp(0)} className="text-[17px] font-medium text-primary md:text-xl">
+          <Brand>Vertal Dev</Brand>
+        </motion.p>
 
         <motion.h1
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          className="text-4xl md:text-6xl font-display font-bold text-foreground leading-[1.1] tracking-tight"
+          id="hero-title"
+          {...fadeUp(0.05)}
+          className="mt-3 text-[34px] font-semibold leading-[1.08] tracking-[-0.03em] text-foreground sm:text-6xl sm:leading-[1.05] md:text-7xl"
         >
-          Transform ideas into
-          <br />
-          <span className="hero-highlight">real products</span>
+          <span className="block">Describe your app.</span>
+          <span className="block">We build it with AI.</span>
         </motion.h1>
 
         <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="mt-6 text-lg text-muted-foreground max-w-lg mx-auto leading-relaxed"
+          {...fadeUp(0.12)}
+          className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground md:text-[21px] md:leading-[1.45]"
         >
-          Describe your idea in plain language. We handle the rest — Web2, Web3, wallets, contracts. You don't need to know any of that.
+          Write your idea in plain words. Vertal Dev creates the app, including the backend, and helps you
+          publish it. You do not need to know how to code.
         </motion.p>
 
-        {/* Prompt input */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.35 }}
-          className="mt-10 max-w-2xl mx-auto"
+        {/* Prompt: the primary action of the page */}
+        <motion.form
+          {...fadeUp(0.2)}
+          className="mx-auto mt-12 max-w-2xl text-left"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (!prompt.trim()) {
+              inputRef.current?.focus()
+              return
+            }
+            handleGenerate()
+          }}
         >
-          <div className="relative glass glass-border rounded-2xl shadow-gold overflow-hidden">
+          <label htmlFor="hero-prompt" className="sr-only">
+            Describe the app you want to build
+          </label>
+          <div className="relative rounded-[28px] border border-white/10 bg-card/80 shadow-[0_20px_60px_-30px_rgba(0,0,0,0.8)] transition-colors focus-within:border-primary/60">
             <textarea
+              id="hero-prompt"
+              ref={inputRef}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Describe the app you want. Example: 'I want a Nubank-style app with login and wallet'"
-              className="w-full resize-none bg-transparent px-5 pt-5 pb-16 text-foreground placeholder:text-muted-foreground focus:outline-none text-base min-h-[130px] font-sans"
+              placeholder="For example: a booking app for a hair salon, with online payment"
+              rows={3}
+              className="block min-h-[120px] w-full resize-none rounded-[28px] bg-transparent px-6 pb-16 pt-5 text-[17px] leading-relaxed text-foreground placeholder:text-muted-foreground/80 focus:outline-none"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault()
@@ -191,69 +134,46 @@ export default function HeroSection() {
                 }
               }}
             />
-            <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <PromptAttachMenu 
-                  onAttachFile={handleAttachFile}
-                  onScreenshot={handleScreenshot}
-                  onAddReference={handleAddReference}
-                />
-                {attachedFile && (
-                  <span className="text-xs text-primary bg-primary/10 px-2 py-1 rounded-lg">
-                    📎 {attachedFile.name}
-                  </span>
-                )}
-                {references.length > 0 && (
-                  <span className="text-xs text-primary bg-primary/10 px-2 py-1 rounded-lg">
-                    🔗 {references.length} ref{references.length > 1 ? 's' : ''}
-                  </span>
-                )}
-              </div>
-              <Button
-                variant="hero"
-                size="sm"
-                onClick={() => handleGenerate()}
-                disabled={generating}
-                className="rounded-xl px-6 gap-2"
-              >
-                {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {generating ? 'Generating...' : 'Generate'}
-                {!generating && <ArrowRight className="h-4 w-4" />}
-              </Button>
-            </div>
-          </div>
-
-          {/* Suggestion chips */}
-          <div className="flex flex-wrap justify-center gap-2 mt-4">
-            {suggestions.map((s) => (
+            <div className="absolute bottom-3 right-3">
               <button
-                key={s}
-                onClick={() => setPrompt(s)}
-                className="text-xs px-3 py-1.5 rounded-full bg-secondary text-secondary-foreground hover:bg-accent hover:text-accent-foreground transition-colors border border-border/50"
+                type="submit"
+                disabled={generating}
+                className={cn(
+                  'inline-flex h-11 items-center gap-2 rounded-full bg-primary px-5 text-[15px] font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50',
+                  focusRing,
+                )}
               >
-                {s}
+                {generating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                ) : (
+                  <ArrowUp className="h-4 w-4" aria-hidden />
+                )}
+                {generating ? 'Creating…' : 'Start building'}
               </button>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* Stats */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.5 }}
-          className="mt-16 flex items-center justify-center gap-8 md:gap-12"
-        >
-          {[
-            { icon: Globe, label: '10K+ apps built' },
-            { icon: Palette, label: '500+ templates' },
-            { icon: Zap, label: '< 30s to generate' },
-          ].map(({ icon: Icon, label }) => (
-            <div key={label} className="flex items-center gap-2 text-muted-foreground">
-              <Icon className="h-4 w-4 text-primary/70" />
-              <span className="text-xs font-medium">{label}</span>
             </div>
-          ))}
+          </div>
+
+          <p className="mt-6 text-center text-sm text-muted-foreground">Or start with an example:</p>
+          <ul className="mt-3 flex flex-wrap justify-center gap-2">
+            {suggestions.map((s) => (
+              <li key={s}>
+                <button
+                  type="button"
+                  onClick={() => setPrompt(s)}
+                  className={cn(
+                    'rounded-full border border-white/10 px-4 py-2 text-[13px] text-foreground/80 transition-colors hover:border-white/25 hover:text-foreground',
+                    focusRing,
+                  )}
+                >
+                  {s}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </motion.form>
+
+        <motion.div {...fadeUp(0.3)} className="mt-10">
+          <MoreLink to="/pricing">See plans and pricing</MoreLink>
         </motion.div>
       </div>
     </section>

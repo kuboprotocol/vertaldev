@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, Plus, Store, ShoppingCart, CheckCircle, AlertCircle, Loader2, ExternalLink } from "lucide-react";
+import { SITE_FONT, siteRoot } from '@/components/site/siteUi'
 
 // ============================================================
 // ConnectPage: Full Stripe Connect dashboard
@@ -255,7 +256,7 @@ export default function ConnectPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className={`min-h-screen ${siteRoot}`} style={SITE_FONT}>
       {/* Header */}
       <div className="border-b border-border bg-card">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center gap-4">

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
+import { remainingCredits } from '@/lib/creditBalance'
 
 
 
@@ -37,7 +38,10 @@ export function useSubscription() {
 
   // UI hint only; actual entitlement is enforced server-side by RLS/RPC.
   const canEdit = isAdmin || (subscription?.is_active && (subscription.edits_used < subscription.edits_limit))
-  const editsRemaining = isAdmin ? 9999 : (subscription ? subscription.edits_limit - subscription.edits_used : 0)
+  // Saldo real (o mesmo que o servidor deixa gastar e que o extrato mostra).
+  // Antes admins viam um 9999 fixo, mas execute_atomic_credit_deduction cobra
+  // admins igual a qualquer usuário — o número fixo não era o saldo de verdade.
+  const editsRemaining = remainingCredits(subscription)
 
   const incrementEdit = useCallback(async () => {
     // Server-side enforcement: the subscriptions UPDATE is RLS-scoped to the owner,

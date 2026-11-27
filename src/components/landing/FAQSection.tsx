@@ -1,92 +1,93 @@
-import { APP_NAME } from '@/config/brand'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown } from 'lucide-react'
+import { Plus } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { Section, SectionHeading, focusRing } from './landingUi'
 
 const faqs = [
   {
-    q: `What is ${APP_NAME}?`,
-    a: `${APP_NAME} is a platform that lets you create professional apps, websites, e-commerce stores, and tools using AI — no coding required.`,
+    q: 'What is Vertal Dev?',
+    a: 'Vertal Dev is a platform where you create apps, websites, online stores, and tools with AI. You describe what you want, and the AI writes the code. You do not need to know how to code.',
   },
   {
-    q: 'Does it work for any type of business?',
-    a: `Yes! Whether you run a restaurant, consulting firm, e-commerce store, or anything else, ${APP_NAME} adapts to your needs.`,
+    q: 'Does it work for my type of business?',
+    a: 'Yes. It works for restaurants, consulting firms, online stores, and many other types of business. You describe your business, and the app follows your needs.',
   },
   {
-    q: "What if I don't know exactly what I want?",
-    a: 'No problem! Just describe your idea in a few words and our AI will suggest designs, layouts, and features to get you started.',
+    q: 'What if I do not know exactly what I want?',
+    a: 'Describe your idea in a few words. The AI suggests designs, pages, and features to help you start.',
   },
   {
-    q: 'Do I need technical knowledge?',
-    a: `Not at all. ${APP_NAME} is designed to be used by anyone. Just describe what you want in plain language.`,
+    q: 'Can I change what the AI creates?',
+    a: 'Yes. You can change the text, images, colors, layout, and pages. Ask for each change in the chat.',
   },
   {
-    q: 'Can I edit what is created?',
-    a: 'Absolutely! You can edit everything — text, images, colors, layout, pages — just by talking naturally to the AI.',
+    q: 'How much does it cost?',
+    a: 'You can start for free. You get 5 free credits when you create an account. Paid plans start at US$4.99 per month. See the pricing page for all plans.',
   },
   {
     q: 'What does the free plan include?',
-    a: 'The free plan includes credits to generate and iterate on your projects, access to templates, and community sharing.',
+    a: 'The free plan includes credits to create and change your projects, and access to templates.',
   },
 ]
 
 export default function FAQSection() {
   const [open, setOpen] = useState<number | null>(null)
+  const baseId = useId()
 
   return (
-    <section className="py-24 px-6">
-      <div className="max-w-2xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center mb-14"
-        >
-          <span className="text-xs font-medium text-primary uppercase tracking-widest mb-3 block">FAQ</span>
-          <h2 className="text-3xl md:text-4xl font-display font-bold text-foreground">
-            Questions & answers
-          </h2>
-        </motion.div>
+    <Section labelledBy="faq-title" className="border-t border-white/[0.06]">
+      <SectionHeading id="faq-title" title="Questions and answers" />
 
-        <div className="space-y-2">
-          {faqs.map((faq, index) => (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0, y: 10 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: index * 0.05 }}
-              className="border border-border rounded-xl overflow-hidden bg-card"
-            >
-              <button
-                onClick={() => setOpen(open === index ? null : index)}
-                className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-muted/50 transition-colors"
-              >
-                <span className="font-medium text-foreground text-sm">{faq.q}</span>
-                <ChevronDown
-                  className={`h-4 w-4 text-muted-foreground flex-shrink-0 transition-transform duration-200 ${
-                    open === index ? 'rotate-180' : ''
-                  }`}
-                />
-              </button>
-              <AnimatePresence>
-                {open === index && (
+      <ul className="mx-auto mt-14 max-w-2xl divide-y divide-white/[0.08] border-y border-white/[0.08]">
+        {faqs.map((faq, index) => {
+          const isOpen = open === index
+          const panelId = `${baseId}-panel-${index}`
+          const buttonId = `${baseId}-button-${index}`
+          return (
+            <li key={faq.q}>
+              <h3>
+                <button
+                  id={buttonId}
+                  type="button"
+                  aria-expanded={isOpen}
+                  aria-controls={panelId}
+                  onClick={() => setOpen(isOpen ? null : index)}
+                  className={cn(
+                    'flex w-full items-center justify-between gap-6 rounded-sm py-5 text-left text-[17px] font-medium text-foreground',
+                    focusRing,
+                  )}
+                >
+                  {faq.q}
+                  <Plus
+                    aria-hidden
+                    className={cn(
+                      'h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200',
+                      isOpen && 'rotate-45',
+                    )}
+                  />
+                </button>
+              </h3>
+              <AnimatePresence initial={false}>
+                {isOpen && (
                   <motion.div
+                    id={panelId}
+                    role="region"
+                    aria-labelledby={buttonId}
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
                     transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
                   >
-                    <p className="px-5 pb-4 text-sm text-muted-foreground leading-relaxed">
-                      {faq.a}
-                    </p>
+                    <p className="pb-6 pr-10 text-[17px] leading-relaxed text-muted-foreground">{faq.a}</p>
                   </motion.div>
                 )}
               </AnimatePresence>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </section>
+            </li>
+          )
+        })}
+      </ul>
+    </Section>
   )
 }

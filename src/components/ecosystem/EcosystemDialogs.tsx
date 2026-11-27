@@ -20,7 +20,7 @@ export function ecosystemLink(product: EcosystemProduct, medium: 'link' | 'embed
   return url.toString()
 }
 
-function CopyButton({ value, label = 'Copiar' }: { value: string; label?: string }) {
+function CopyButton({ value, label = 'Copy' }: { value: string; label?: string }) {
   const [copied, setCopied] = useState(false)
   const copy = async () => {
     try {
@@ -34,7 +34,7 @@ function CopyButton({ value, label = 'Copiar' }: { value: string; label?: string
   return (
     <Button type="button" size="sm" variant="secondary" onClick={copy} className="gap-1.5 shrink-0">
       {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-      {copied ? 'Copiado' : label}
+      {copied ? 'Copied' : label}
     </Button>
   )
 }
@@ -78,19 +78,19 @@ export function EcosystemEmbedDialog({
           <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: product.color }} />
           <div className="min-w-0 flex-1">
             <DialogTitle className="text-sm font-semibold truncate">{product.name}</DialogTitle>
-            <DialogDescription className="text-xs truncate">{product.domain} · integrado ao Vertal Dev</DialogDescription>
+            <DialogDescription className="text-xs truncate">{product.domain} · works with Vertal Dev</DialogDescription>
           </div>
-          <Button size="icon" variant="ghost" onClick={() => onOpenChange(false)} aria-label="Fechar">
+          <Button size="icon" variant="ghost" onClick={() => onOpenChange(false)} aria-label="Close">
             <X className="h-4 w-4" />
           </Button>
         </div>
         <div className="flex flex-col items-center gap-4 px-6 py-8 text-center">
           <p className="text-sm text-muted-foreground">
-            O login de {product.name} precisa acontecer no próprio site. Dentro desta janela, o navegador bloqueia o cookie de sessão e o login não termina.
+            You need to log in to {product.name} on its own site. Browsers block the login cookie inside this window, so the login would not finish.
           </p>
           <Button asChild variant="hero" className="gap-1.5 rounded-xl">
             <a href={ecosystemLink(product)} target="_blank" rel="noopener noreferrer" onClick={() => onOpenChange(false)}>
-              Abrir {product.name} em nova aba
+              Open {product.name} in a new tab
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
           </Button>
@@ -124,16 +124,16 @@ export function EcosystemMcpDialog({
             <Plug className="h-5 w-5" style={{ color: product.color }} />
           </div>
           <div className="min-w-0">
-            <DialogTitle className="text-lg">Conectar {product.name} via MCP</DialogTitle>
+            <DialogTitle className="text-lg">Connect {product.name} with MCP</DialogTitle>
             <DialogDescription className="text-sm">
-              Dê ao seu agente (Claude, ChatGPT, Cursor ou KUBO IA) as ferramentas do {product.name}.
+              Give your agent (Claude, ChatGPT, Cursor or KUBO AI) the tools of {product.name}.
             </DialogDescription>
           </div>
         </div>
 
         {mcp.url && (
           <div className="space-y-1.5">
-            <p className="text-xs font-medium text-muted-foreground">URL do servidor MCP</p>
+            <p className="text-xs font-medium text-muted-foreground">MCP server URL</p>
             <div className="flex items-stretch gap-2">
               <code className="flex-1 overflow-x-auto rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs font-mono">
                 {mcp.url}
@@ -145,7 +145,7 @@ export function EcosystemMcpDialog({
 
         <Tabs defaultValue="config" className="space-y-3">
           <TabsList>
-            <TabsTrigger value="config">Configuração JSON</TabsTrigger>
+            <TabsTrigger value="config">JSON config</TabsTrigger>
             {mcp.cli && <TabsTrigger value="cli">Claude Code</TabsTrigger>}
           </TabsList>
           <TabsContent value="config">
@@ -160,7 +160,7 @@ export function EcosystemMcpDialog({
 
         <div className="space-y-2 text-sm">
           <p>
-            <span className="font-medium">Autenticação:</span>{' '}
+            <span className="font-medium">Sign-in:</span>{' '}
             <span className="text-muted-foreground">{mcp.auth}</span>
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -175,11 +175,11 @@ export function EcosystemMcpDialog({
         <div className="flex flex-wrap justify-end gap-2">
           <Button asChild variant="ghost" size="sm" className="gap-1.5">
             <a href={mcp.docsUrl} target="_blank" rel="noopener noreferrer">
-              Documentação <ExternalLink className="h-3.5 w-3.5" />
+              Documentation <ExternalLink className="h-3.5 w-3.5" />
             </a>
           </Button>
           <Button size="sm" onClick={() => onOpenChange(false)}>
-            Pronto
+            Done
           </Button>
         </div>
       </DialogContent>

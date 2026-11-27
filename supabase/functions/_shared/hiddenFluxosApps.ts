@@ -2,9 +2,16 @@
 // src/lib/fluxosConnectors.ts). O motor e os fluxos continuam; nada é apagado.
 // - Vertal Chat: não lista esses apps nem abre conexão nova com eles.
 // - Quem já tem conexão (fluxos_connections) continua usando normalmente.
-// OpenAI/OpenRouter/Azure OpenAI: o Vertal vende a própria IA white-label (26/11/2026). Isto NÃO afeta o
+// OpenAI/OpenRouter/Azure OpenAI/Anthropic/Mistral AI/Together AI/Perplexity/Helix: o Vertal vende a própria IA white-label (26/11/2026). Isto NÃO afeta o
 // uso interno desses provedores pelo backend de IA do Vertal.
-export const HIDDEN_FLUXOS_APPS: ReadonlySet<string> = new Set(["flickr", "strava", "openai", "openrouter", "azure-openai"]);
+export const HIDDEN_FLUXOS_APPS: ReadonlySet<string> = new Set([
+  "flickr", "strava",
+  // Sem uso para o público do Vertal Dev ou sem função real (auditoria de conectores sem OAuth, 26/11/2026).
+  // FreeScout, Firefly III, VirtualQ e Airbrake voltaram (Laércio, 26/11/2026: páginas de nicho para SEO).
+  "flowers-software", "placetel",
+  // Fornecedores de modelos de IA (white-label):
+  "openai", "openrouter", "azure-openai", "anthropic", "mistral-ai", "together-ai", "perplexity", "helix",
+]);
 
 export function isHiddenFluxosApp(app: unknown): boolean {
   return typeof app === "string" && HIDDEN_FLUXOS_APPS.has(app.trim().toLowerCase());

@@ -1,6 +1,6 @@
-// Vertal Vibe Pay: cadastro único. Um formulário abre a conta Brasil (ASAAS)
-// e a conta global (Stripe) de uma vez; o Stripe só abre o próprio link se
-// ainda faltar algo lá (aceite dos termos, conta bancária, verificação).
+// Vertal Vibe Pay: single sign-up. One form opens the Brazil account (ASAAS)
+// and the global account (Stripe) at once; Stripe opens its own link only if
+// something is still missing there (terms, bank account, verification).
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, ArrowUpRight, Building2, CheckCircle2, Globe2, Loader2, RefreshCw, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
@@ -16,6 +16,7 @@ import {
   type PayField, type PayOpenInput, type PayOpenResult, type PayStatus,
 } from '@/lib/bank/payOnboarding'
 import { GlobalAccountCard } from './BankAccounts'
+import { COMPANY_TYPE_LABEL_EN, PAY_FIELD_MESSAGES_EN, payStatusTextEn } from './payCopyEn'
 
 const EMPTY: PayOpenInput = {
   name: '', cpfCnpj: '', birthDate: '', email: '', mobilePhone: '', postalCode: '', address: '', addressNumber: '',
@@ -42,12 +43,12 @@ export function PayOnboarding({ overview, onChange }: { overview: BankOverview |
     try {
       const s = await bankApi.payStatus()
       setStatus(s.status)
-    } catch { /* o resumo do /pay continua valendo */ }
+    } catch { /* the /pay summary still applies */ }
   }, [])
 
   useEffect(() => { refreshStatus() }, [refreshStatus, overview])
 
-  // E-mail da conta Vertal como sugestão.
+  // Suggest the Vertal account email.
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       const email = data.user?.email
@@ -68,7 +69,7 @@ export function PayOnboarding({ overview, onChange }: { overview: BankOverview |
     const addr = await lookupCep(masked)
     setCepBusy(false)
     if (!addr) {
-      setErrors((e) => ({ ...e, postalCode: 'CEP não encontrado: preencha o endereço à mão' }))
+      setErrors((e) => ({ ...e, postalCode: 'CEP not found. Please enter the address by hand' }))
       return
     }
     setForm((f) => ({
@@ -83,8 +84,8 @@ export function PayOnboarding({ overview, onChange }: { overview: BankOverview |
   const submit = async () => {
     const v = validatePayOpen(form)
     if (!v.ok) {
-      setErrors(Object.fromEntries(v.errors.map((e) => [e.field, PAY_FIELD_MESSAGES[e.code] ?? e.code])))
-      toast.error('Confira os campos destacados')
+      setErrors(Object.fromEntries(v.errors.map((e) => [e.field, PAY_FIELD_MESSAGES_EN[e.code] ?? PAY_FIELD_MESSAGES[e.code] ?? e.code])))
+      toast.error('Check the highlighted fields')
       return
     }
     setBusy(true)
@@ -94,10 +95,10 @@ export function PayOnboarding({ overview, onChange }: { overview: BankOverview |
       setStatus(r.status)
       setEditing(false)
       const okAll = r.asaas.ok && r.stripe.ok
-      if (okAll && r.nextUrl) toast.success('Contas abertas. Falta só confirmar seus dados no Stripe.')
-      else if (okAll) toast.success('Contas abertas.')
-      else if (r.asaas.ok || r.stripe.ok) toast.warning('Uma das contas abriu; a outra precisa de atenção.')
-      else toast.error('Não conseguimos abrir as contas. Veja os detalhes abaixo.')
+      if (okAll && r.nextUrl) toast.success('Accounts opened. Now confirm your details on Stripe.')
+      else if (okAll) toast.success('Accounts opened.')
+      else if (r.asaas.ok || r.stripe.ok) toast.warning('One account opened. The other one needs your attention.')
+      else toast.error('We could not open the accounts. See the details below.')
       onChange()
     } catch (e) {
       if (e instanceof WalletError && e.code === 'invalid_fields' && Array.isArray(e.details?.fields)) {
@@ -129,7 +130,7 @@ export function PayOnboarding({ overview, onChange }: { overview: BankOverview |
   }, [editing, result, status])
 
   if (status && status.overall === 'not_started' && status.nextStep === 'wait') {
-    return <Shell><p className="text-sm text-muted-foreground">{status.message}</p></Shell>
+    return <Shell><p className="text-sm text-muted-foreground">{payStatusTextEn(status)}</p></Shell>
   }
 
   return (
@@ -142,33 +143,33 @@ export function PayOnboarding({ overview, onChange }: { overview: BankOverview |
         <div className="space-y-2" data-testid="pay-open-result">
           <ProviderLine
             icon={<Building2 className="h-4 w-4" />}
-            title="Conta Brasil · ASAAS"
+            title="Brazil account · ASAAS"
             ok={result.asaas.ok}
             text={result.asaas.ok
-              ? (result.asaas.created || ('recovered' in result.asaas && result.asaas.recovered) ? 'Aberta. O ASAAS enviou um e-mail para criar a senha e enviar documentos.' : 'Já estava aberta.')
+              ? (result.asaas.created || ('recovered' in result.asaas && result.asaas.recovered) ? 'Open. ASAAS sent you an email to create a password and send your documents.' : 'Already open.')
               : result.asaas.message}
           />
           <ProviderLine
             icon={<Globe2 className="h-4 w-4" />}
-            title="Conta global · Stripe"
+            title="Global account · Stripe"
             ok={result.stripe.ok}
             text={result.stripe.ok
-              ? (result.stripe.onboardingUrl ? 'Aberta e pré-preenchida. Falta aceitar os termos e confirmar os dados no Stripe.' : 'Aberta.')
+              ? (result.stripe.onboardingUrl ? 'Open and pre-filled. Accept the terms and confirm your details on Stripe.' : 'Open.')
               : result.stripe.message}
           />
           <div className="flex flex-wrap gap-2 pt-1">
             {result.nextUrl && (
               <Button className="gap-1.5 bg-[#635bff] text-white hover:bg-[#5249e0]" onClick={continueStripe}>
-                <ArrowUpRight className="h-4 w-4" />Continuar no Stripe
+                <ArrowUpRight className="h-4 w-4" />Continue on Stripe
               </Button>
             )}
             {(!result.asaas.ok || !result.stripe.ok) && (
               <Button variant="outline" className="gap-1.5" disabled={busy} onClick={submit}>
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}Tentar de novo
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}Try again
               </Button>
             )}
             {(!result.asaas.ok || !result.stripe.ok) && (
-              <Button variant="ghost" onClick={() => setEditing(true)}>Corrigir dados</Button>
+              <Button variant="ghost" onClick={() => setEditing(true)}>Edit details</Button>
             )}
           </div>
         </div>
@@ -176,7 +177,7 @@ export function PayOnboarding({ overview, onChange }: { overview: BankOverview |
 
       {!result && !showForm && status?.nextStep === 'stripe_onboarding' && (
         <Button className="gap-1.5 bg-[#635bff] text-white hover:bg-[#5249e0]" disabled={linkBusy} onClick={continueStripe}>
-          {linkBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}Continuar no Stripe
+          {linkBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}Continue on Stripe
         </Button>
       )}
 
@@ -188,60 +189,60 @@ export function PayOnboarding({ overview, onChange }: { overview: BankOverview |
           data-testid="pay-open-form"
         >
           <div className="grid gap-2 sm:grid-cols-2">
-            <Field id="pay-doc" label="CPF ou CNPJ" error={errors.cpfCnpj}>
+            <Field id="pay-doc" label="CPF or CNPJ" error={errors.cpfCnpj}>
               <Input id="pay-doc" inputMode="numeric" autoComplete="off" value={form.cpfCnpj} onChange={(e) => set('cpfCnpj', maskCpfCnpj(e.target.value))} />
             </Field>
-            <Field id="pay-name" label={isPj ? 'Razão social' : 'Nome completo'} error={errors.name}>
+            <Field id="pay-name" label={isPj ? 'Company name' : 'Full name'} error={errors.name}>
               <Input id="pay-name" autoComplete="name" value={form.name} onChange={(e) => set('name', e.target.value)} />
             </Field>
             {isPj ? (
-              <Field id="pay-company" label="Tipo de empresa" error={errors.companyType}>
+              <Field id="pay-company" label="Company type" error={errors.companyType}>
                 <Select value={form.companyType || ''} onValueChange={(v) => set('companyType', v)}>
-                  <SelectTrigger id="pay-company"><SelectValue placeholder="Escolha" /></SelectTrigger>
+                  <SelectTrigger id="pay-company"><SelectValue placeholder="Choose" /></SelectTrigger>
                   <SelectContent>
-                    {COMPANY_TYPES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                    {COMPANY_TYPES.map((c) => <SelectItem key={c.value} value={c.value}>{COMPANY_TYPE_LABEL_EN[c.value] ?? c.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </Field>
             ) : (
-              <Field id="pay-birth" label="Data de nascimento" error={errors.birthDate}>
+              <Field id="pay-birth" label="Date of birth" error={errors.birthDate}>
                 <Input id="pay-birth" type="date" value={form.birthDate} onChange={(e) => set('birthDate', e.target.value)} />
               </Field>
             )}
-            <Field id="pay-income" label={isPj ? 'Faturamento mensal (R$)' : 'Renda mensal (R$)'} error={errors.incomeValue}>
+            <Field id="pay-income" label={isPj ? 'Monthly revenue (R$)' : 'Monthly income (R$)'} error={errors.incomeValue}>
               <Input id="pay-income" inputMode="decimal" placeholder="5.000,00" value={String(form.incomeValue)} onChange={(e) => set('incomeValue', e.target.value)} />
             </Field>
-            <Field id="pay-email" label="E-mail" error={errors.email}>
+            <Field id="pay-email" label="Email" error={errors.email}>
               <Input id="pay-email" type="email" autoComplete="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
             </Field>
-            <Field id="pay-phone" label="Celular" error={errors.mobilePhone}>
+            <Field id="pay-phone" label="Mobile number" error={errors.mobilePhone}>
               <Input id="pay-phone" inputMode="tel" autoComplete="tel-national" placeholder="(11) 99999-9999" value={form.mobilePhone} onChange={(e) => set('mobilePhone', maskPhone(e.target.value))} />
             </Field>
-            <Field id="pay-cep" label="CEP" error={errors.postalCode}>
+            <Field id="pay-cep" label="CEP (postal code)" error={errors.postalCode}>
               <div className="relative">
                 <Input id="pay-cep" inputMode="numeric" autoComplete="postal-code" value={form.postalCode} onChange={(e) => onCep(e.target.value)} />
                 {cepBusy && <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />}
               </div>
             </Field>
-            <Field id="pay-address" label="Endereço" error={errors.address}>
+            <Field id="pay-address" label="Street address" error={errors.address}>
               <Input id="pay-address" autoComplete="address-line1" value={form.address} onChange={(e) => set('address', e.target.value)} />
             </Field>
-            <Field id="pay-number" label="Número" error={errors.addressNumber}>
+            <Field id="pay-number" label="Number" error={errors.addressNumber}>
               <Input id="pay-number" value={form.addressNumber} onChange={(e) => set('addressNumber', e.target.value)} />
             </Field>
-            <Field id="pay-complement" label="Complemento (opcional)">
+            <Field id="pay-complement" label="Address line 2 (optional)">
               <Input id="pay-complement" autoComplete="address-line2" value={form.complement} onChange={(e) => set('complement', e.target.value)} />
             </Field>
-            <Field id="pay-province" label="Bairro" error={errors.province}>
+            <Field id="pay-province" label="Neighborhood" error={errors.province}>
               <Input id="pay-province" value={form.province} onChange={(e) => set('province', e.target.value)} />
             </Field>
             <div className="grid grid-cols-[1fr_88px] gap-2">
-              <Field id="pay-city" label="Cidade" error={errors.city}>
+              <Field id="pay-city" label="City" error={errors.city}>
                 <Input id="pay-city" autoComplete="address-level2" value={form.city} onChange={(e) => set('city', e.target.value)} />
               </Field>
-              <Field id="pay-state" label="UF" error={errors.state}>
+              <Field id="pay-state" label="State" error={errors.state}>
                 <Select value={form.state} onValueChange={(v) => set('state', v)}>
-                  <SelectTrigger id="pay-state"><SelectValue placeholder="UF" /></SelectTrigger>
+                  <SelectTrigger id="pay-state"><SelectValue placeholder="State" /></SelectTrigger>
                   <SelectContent className="max-h-72">
                     {BR_UFS.map((uf) => <SelectItem key={uf} value={uf}>{uf}</SelectItem>)}
                   </SelectContent>
@@ -250,16 +251,16 @@ export function PayOnboarding({ overview, onChange }: { overview: BankOverview |
             </div>
           </div>
           <p className="text-[11px] leading-relaxed text-muted-foreground">
-            Com estes dados abrimos sua conta Brasil no ASAAS (instituição de pagamento autorizada pelo Banco Central) e sua conta global no Stripe, em seu nome. O ASAAS envia um e-mail para criar a senha e enviar documentos; o Stripe pede o aceite dos termos e confirma o que faltar.
+            With these details we open your Brazil account at ASAAS (a payment institution authorized by the Central Bank of Brazil) and your global account at Stripe, in your name. ASAAS sends you an email to create a password and send your documents. Stripe asks you to accept its terms and confirms anything that is missing.
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            {editing && <Button type="button" variant="ghost" onClick={() => setEditing(false)} disabled={busy}>Voltar</Button>}
-            <Button type="submit" className="flex-1 gap-1.5 gradient-primary text-primary-foreground shadow-glow" disabled={busy}>
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}Abrir minha conta
+            {editing && <Button type="button" variant="ghost" onClick={() => setEditing(false)} disabled={busy}>Back</Button>}
+            <Button type="submit" className="flex-1 gap-1.5 rounded-full" disabled={busy}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}Open my account
             </Button>
           </div>
           <button type="button" className="text-xs text-muted-foreground underline-offset-2 hover:underline" onClick={() => setAbroad((x) => !x)}>
-            Não tem CPF/CNPJ ou mora fora do Brasil? Abra só a conta global
+            No CPF or CNPJ, or you live outside Brazil? Open only the global account
           </button>
           {abroad && <GlobalAccountCard overview={overview} onChange={onChange} />}
         </form>
@@ -270,11 +271,11 @@ export function PayOnboarding({ overview, onChange }: { overview: BankOverview |
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <section className="glass glass-border relative overflow-hidden rounded-2xl p-5 sm:p-6" aria-labelledby="pay-open-title" data-testid="pay-onboarding">
+    <section className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-card/50 p-5 sm:p-6" aria-labelledby="pay-open-title" data-testid="pay-onboarding">
       <div className="relative space-y-4">
         <div>
-          <h3 id="pay-open-title" className="font-display font-semibold text-foreground">Abra sua conta Vertal Vibe Pay</h3>
-          <p className="text-sm text-muted-foreground">Um cadastro só: conta Brasil (Pix, boleto, reais) e conta global (dólar, euro e +14 moedas).</p>
+          <h3 id="pay-open-title" className="font-semibold text-foreground">Open your Vertal Vibe Pay account</h3>
+          <p className="text-sm text-muted-foreground">One sign-up for both: a Brazil account (Pix, boleto, BRL) and a global account (US dollars, euros and 14 more currencies).</p>
         </div>
         {children}
       </div>
@@ -287,7 +288,7 @@ function StatusLine({ status }: { status: PayStatus }) {
   return (
     <p className={`flex items-start gap-2 rounded-xl p-3 text-sm ${ok ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-400/10 text-amber-200'}`} data-testid="pay-status">
       {ok ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
-      {status.message}
+      {payStatusTextEn(status)}
     </p>
   )
 }

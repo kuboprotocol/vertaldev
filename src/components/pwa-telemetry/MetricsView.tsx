@@ -52,15 +52,15 @@ export const MetricsView = ({ metrics }: MetricsViewProps) => {
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card className="rounded-xl border-white/[0.06] bg-card/50">
         <CardContent className="pt-6">
           <div className="flex flex-col md:flex-row gap-4 items-end">
             <div className="space-y-2 flex-1">
-              <Label htmlFor="metric-start" className="flex items-center gap-2"><Calendar className="w-3 h-3" /> Início</Label>
+              <Label htmlFor="metric-start" className="flex items-center gap-2"><Calendar className="w-3 h-3" /> Start</Label>
               <Input id="metric-start" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
             </div>
             <div className="space-y-2 flex-1">
-              <Label htmlFor="metric-end" className="flex items-center gap-2"><Calendar className="w-3 h-3" /> Fim</Label>
+              <Label htmlFor="metric-end" className="flex items-center gap-2"><Calendar className="w-3 h-3" /> End</Label>
               <Input id="metric-end" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
             </div>
           </div>
@@ -73,8 +73,8 @@ export const MetricsView = ({ metrics }: MetricsViewProps) => {
             <div className="flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-blue-500" />
               <div>
-                <CardTitle>Performance de Exportação</CardTitle>
-                <CardDescription>Tempo de processamento (ms) e volume de dados exportados.</CardDescription>
+                <CardTitle>Export performance</CardTitle>
+                <CardDescription>Processing time (ms) and number of rows exported.</CardDescription>
               </div>
             </div>
           </CardHeader>
@@ -90,20 +90,20 @@ export const MetricsView = ({ metrics }: MetricsViewProps) => {
                   labelStyle={{ fontWeight: 'bold', marginBottom: '4px' }}
                 />
                 <Legend verticalAlign="top" height={36}/>
-                <Line yAxisId="left" type="monotone" dataKey="duration" stroke="#3b82f6" name="Duração (ms)" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                <Line yAxisId="right" type="monotone" dataKey="rows" stroke="#10b981" name="Linhas" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                <Line yAxisId="left" type="monotone" dataKey="duration" stroke="#3b82f6" name="Duration (ms)" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                <Line yAxisId="right" type="monotone" dataKey="rows" stroke="#10b981" name="Rows" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="rounded-xl border-white/[0.06] bg-card/50">
           <CardHeader>
             <div className="flex items-center gap-2">
               <AlertCircle className="w-5 h-5 text-destructive" />
               <div>
-                <CardTitle>Falhas por Tipo de Filtro</CardTitle>
-                <CardDescription>Distribuição de erros nas consultas.</CardDescription>
+                <CardTitle>Failures by filter type</CardTitle>
+                <CardDescription>How query errors are spread.</CardDescription>
               </div>
             </div>
           </CardHeader>
@@ -130,13 +130,13 @@ export const MetricsView = ({ metrics }: MetricsViewProps) => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="rounded-xl border-white/[0.06] bg-card/50">
           <CardHeader>
             <div className="flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-purple-500" />
               <div>
-                <CardTitle>Top Falhas Recentes</CardTitle>
-                <CardDescription>Resumo dos últimos erros detectados.</CardDescription>
+                <CardTitle>Recent failures</CardTitle>
+                <CardDescription>The latest errors.</CardDescription>
               </div>
             </div>
           </CardHeader>
@@ -154,7 +154,7 @@ export const MetricsView = ({ metrics }: MetricsViewProps) => {
               {filteredMetrics.filter(m => m.error_message).length === 0 && (
                 <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
                   <TrendingUp className="w-8 h-8 opacity-20 mb-2" />
-                  <p className="text-sm italic">Nenhum erro no período.</p>
+                  <p className="text-sm italic">No errors in this period.</p>
                 </div>
               )}
             </div>

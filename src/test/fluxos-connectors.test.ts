@@ -19,20 +19,32 @@ describe('catálogo unificado Vertal Dev ↔ Vertal Fluxos', () => {
     expect(notion?.status).toBe('available')
     for (const a of FLUXOS_NATIVE_APPS) expect(Object.keys(FLUXOS_SHARED_APPS)).not.toContain(a.app)
   })
-  it('Airbrake mostra o logo oficial no catálogo', () => {
-    const airbrake = getConnectorBySlug('fluxos-airbrake')
-    expect(airbrake?.name).toBe('Airbrake')
-    expect(airbrake?.logoUrl).toBe('/connectors/airbrake.png')
+  it('todo conector visível de marca tem logo próprio que existe em public/', async () => {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    // Sem marca: ficam com o ícone genérico (Vertal Fluxos/Agentes, RPC próprio, carteira, LLM próprio, SMTP).
+    const generic = new Set(['automatisch', 'huginn', 'custom-rpc', 'web-wallet', 'fluxos-self-hosted-llm', 'fluxos-smtp'])
+    const seen = new Map<string, string>()
+    for (const c of connectors) {
+      if (generic.has(c.slug)) continue
+      expect(c.logoUrl, c.slug).toBeTruthy()
+      expect(fs.existsSync(path.join(process.cwd(), 'public', c.logoUrl!)), `${c.slug} → ${c.logoUrl}`).toBe(true)
+      // Logo de uma marca não serve para outra (ex.: o mesmo quadrado da Microsoft em Outlook e Teams).
+      // Instagram e WhatsApp têm dois cartões (nativo e via Vertal Fluxos) com o mesmo app.
+      const owner = seen.get(c.logoUrl!)
+      if (owner) expect(c.name.split(' ')[0], `${c.slug} repete o logo de ${owner}`).toBe(owner.split(' ')[0])
+      else seen.set(c.logoUrl!, c.name)
+    }
   })
   it('Airtable mostra o logo oficial no catálogo', () => {
     const airtable = getConnectorBySlug('fluxos-airtable')
     expect(airtable?.name).toBe('Airtable')
     expect(airtable?.logoUrl).toBe('/connectors/airtable.png')
   })
-  it('Anthropic mostra o logo oficial no catálogo', () => {
-    const anthropic = getConnectorBySlug('fluxos-anthropic')
-    expect(anthropic?.name).toBe('Anthropic')
-    expect(anthropic?.logoUrl).toBe('/connectors/anthropic.png')
+  it('DeepL mostra o logo oficial no catálogo', () => {
+    const deepl = getConnectorBySlug('fluxos-deepl')
+    expect(deepl?.name).toBe('DeepL')
+    expect(deepl?.logoUrl).toBe('/connectors/deepl.png')
   })
   it('Appwrite mostra o logo oficial no catálogo', () => {
     const appwrite = getConnectorBySlug('fluxos-appwrite')
@@ -51,6 +63,40 @@ describe('apps escondidos do catálogo', () => {
     expect(HIDDEN_FLUXOS_APPS.has('flickr')).toBe(true)
     expect(fluxosConnectors.some(c => c.slug === 'fluxos-flickr')).toBe(false)
   })
+  it('conectores sem uso para o público ou sem função real ficam fora (auditoria 26/11/2026)', async () => {
+    const { fluxosConnectors, HIDDEN_FLUXOS_APPS } = await import('@/lib/fluxosConnectors')
+    for (const app of ['flowers-software', 'placetel']) {
+      expect(HIDDEN_FLUXOS_APPS.has(app), app).toBe(true)
+      expect(getConnectorBySlug(`fluxos-${app}`), app).toBeUndefined()
+      expect(fluxosConnectors.some(c => c.fluxosApp === app), app).toBe(false)
+    }
+    // úteis continuam (chave/token ou app próprio); FreeScout, Firefly III, VirtualQ e Airbrake voltaram (26/11/2026)
+    for (const app of ['postgresql', 'telegram-bot', 'smtp', 'monday', 'zendesk', 'wordpress', 'linkedin', 'freescout', 'firefly-iii', 'virtualq', 'airbrake']) {
+      expect(getConnectorBySlug(`fluxos-${app}`), app).toBeDefined()
+    }
+  })
+  it('FreeScout, Firefly III, VirtualQ e Airbrake de volta, com logo oficial PNG 128×128', async () => {
+    const { HIDDEN_FLUXOS_APPS } = await import('@/lib/fluxosConnectors')
+    const fs = await import('node:fs')
+    for (const [app, name] of [['freescout', 'FreeScout'], ['firefly-iii', 'Firefly III'], ['virtualq', 'VirtualQ'], ['airbrake', 'Airbrake']]) {
+      expect(HIDDEN_FLUXOS_APPS.has(app), app).toBe(false)
+      const c = getConnectorBySlug(`fluxos-${app}`)
+      expect(c?.name).toBe(name)
+      expect(c?.logoUrl).toBe(`/connectors/${app}.png`)
+      const png = fs.readFileSync(`public${c!.logoUrl}`)
+      expect(png.subarray(1, 4).toString()).toBe('PNG')
+      expect(png.readUInt32BE(16)).toBe(128)
+      expect(png.readUInt32BE(20)).toBe(128)
+    }
+  })
+  it('lista do servidor igual à do catálogo', async () => {
+    const { HIDDEN_FLUXOS_APPS } = await import('@/lib/fluxosConnectors')
+    const fs = await import('node:fs')
+    const src = fs.readFileSync('supabase/functions/_shared/hiddenFluxosApps.ts', 'utf8')
+    const body = src.slice(src.indexOf('new Set(['), src.indexOf(']);'))
+    const server = new Set([...body.matchAll(/"([a-z0-9-]+)"/g)].map(m => m[1]))
+    expect([...server].sort()).toEqual([...HIDDEN_FLUXOS_APPS].sort())
+  })
   it('Strava não aparece em /connectors', async () => {
     const { fluxosConnectors, HIDDEN_FLUXOS_APPS } = await import('@/lib/fluxosConnectors')
     expect(HIDDEN_FLUXOS_APPS.has('strava')).toBe(true)
@@ -65,6 +111,18 @@ describe('apps escondidos do catálogo', () => {
     const text = JSON.stringify(connectors.map(c => [c.slug, c.name, c.description, c.longDescription, c.logoUrl, c.fluxosApp]))
     expect(text).not.toMatch(/openai|openrouter|open router/i)
     expect(fluxosConnectors.some(c => /openai|openrouter/i.test(c.slug))).toBe(false)
+  })
+  it('Anthropic, Mistral AI, Together AI, Perplexity e Helix fora do catálogo e da busca', async () => {
+    const { fluxosConnectors, HIDDEN_FLUXOS_APPS } = await import('@/lib/fluxosConnectors')
+    for (const app of ['anthropic', 'mistral-ai', 'together-ai', 'perplexity', 'helix']) {
+      expect(HIDDEN_FLUXOS_APPS.has(app)).toBe(true)
+      expect(getConnectorBySlug(`fluxos-${app}`)).toBeUndefined()
+    }
+    const text = JSON.stringify(connectors.map(c => [c.slug, c.name, c.description, c.longDescription, c.logoUrl, c.fluxosApp, c.setupSteps]))
+    expect(text).not.toMatch(/anthropic|claude|chatgpt|mistral|together ai|together-ai|perplexity|tryhelix|gemini|deepseek|groq|cohere|hugging ?face|replicate|stability ai/i)
+    expect(fluxosConnectors.some(c => c.slug === 'fluxos-helix')).toBe(false)
+    // genéricos/não-fornecedores de IA continuam
+    for (const app of ['self-hosted-llm', 'deepl', 'notion']) expect(getConnectorBySlug(`fluxos-${app}`)).toBeDefined()
   })
   it('card do Slack não cita o gateway de terceiros', () => {
     const slack = getConnectorBySlug('slack')

@@ -1,22 +1,20 @@
 import { APP_NAME } from '@/config/brand'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { Check, Loader2, Sparkles, Crown, Zap, ArrowRight } from 'lucide-react'
+import { Check, Loader2, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useSubscription } from '@/hooks/useSubscription'
 import { getPlanConfig, PLAN_CONFIG } from '@/lib/planConfig'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion'
-import Navbar from '@/components/landing/Navbar'
+import SitePage from '@/components/site/SitePage'
+import { PageHeader, Reveal, SectionHeading, focusRing, surface } from '@/components/site/siteUi'
 import { ContactDialog } from '@/components/pricing/ContactDialog'
 import { cn } from '@/lib/utils'
 
@@ -27,8 +25,8 @@ type Period = 'monthly' | 'annual' | 'lifetime'
 const ESSENTIALS = ['free', 'starter', 'pro', 'premium_1']
 
 const BADGES: Record<string, { label: string; tone: 'popular' | 'value' }> = {
-  pro: { label: '⭐ Mais Popular', tone: 'popular' },
-  premium_1: { label: '🔥 Melhor Custo-Benefício', tone: 'value' },
+  pro: { label: 'Most chosen', tone: 'popular' },
+  premium_1: { label: 'Best value', tone: 'value' },
 }
 
 // Monthly credits per plan (hardcoded as per user requirements)
@@ -40,13 +38,13 @@ const MONTHLY_CREDITS: Record<string, number> = {
 }
 
 function priceFor(monthly: number, period: Period): { display: string; suffix: string } {
-  if (monthly === 0) return { display: '$0', suffix: '/ para sempre' }
-  if (period === 'monthly') return { display: `$${monthly.toFixed(2)}`, suffix: '/ mês' }
+  if (monthly === 0) return { display: '$0', suffix: 'forever' }
+  if (period === 'monthly') return { display: `$${monthly.toFixed(2)}`, suffix: 'per month' }
   if (period === 'annual') {
     const yearly = monthly * 12 * 0.8
-    return { display: `$${yearly.toFixed(2)}`, suffix: '/ ano' }
+    return { display: `$${yearly.toFixed(2)}`, suffix: 'per year' }
   }
-  return { display: `$${(monthly * 6).toFixed(2)}`, suffix: 'pagamento único' }
+  return { display: `$${(monthly * 6).toFixed(2)}`, suffix: 'one payment' }
 }
 
 function featuresFor(plan: string): string[] {
@@ -55,41 +53,28 @@ function featuresFor(plan: string): string[] {
   const feats: string[] = []
 
   if (plan === 'free') {
-    feats.push(`✓ ${cfg.signupCredits} créditos no cadastro (1x)`)
-    feats.push(`✓ Até 5 créditos/mês via shortlinks`)
+    feats.push(`✓ ${cfg.signupCredits} credits when you sign up (one time)`)
+    feats.push(`✓ Extra credits in Rewards`)
   } else {
-    feats.push(`✓ ${monthlyCredits} créditos por mês`)
-    feats.push(`✓ Inclui 5 créditos/dia + bônus shortlinks`)
+    feats.push(`✓ ${monthlyCredits} credits per month`)
+    feats.push(`✓ Includes 5 credits per day`)
   }
 
-  feats.push('✓ 10 shortlinks/dia (+9.5 créditos)')
-  if (cfg.adFrequencyHours === null) {
-    feats.push('✓ Sem anúncios interruptivos')
-  } else {
-    feats.push(`✓ Anúncios a cada ${cfg.adFrequencyHours}h`)
-  }
-  feats.push('✓ TERRA ADS Smartlink incluso')
+  feats.push('✓ Optional rewards (reward videos, Kubo music, Vertal Node)')
+  // Nenhum plano tem anúncio interruptivo: o anúncio que abria em aba nova (TERRA ADS) foi removido.
+  feats.push('✓ No pop-up ads')
   if (['pro', 'premium_1', 'premium_2'].includes(plan) || plan.startsWith('business') || plan === 'enterprise') {
-    feats.push('✓ Suporte por email')
+    feats.push('✓ Email support')
   }
   if (plan.startsWith('business') || plan === 'enterprise') {
-    feats.push('✓ Suporte prioritário')
-    feats.push('✓ Acordo de parceria Vertal')
+    feats.push('✓ Priority support')
+    feats.push('✓ Vertal partner agreement')
   }
   const tierNum = Number(plan.replace('business_', '')) || 0
   if (tierNum >= 3 || plan === 'enterprise') feats.push('✓ API Access')
-  if (tierNum >= 5 || plan === 'enterprise') feats.push('✓ SLA garantido')
-  if (tierNum >= 7 || plan === 'enterprise') feats.push('✓ Manager dedicado')
+  if (tierNum >= 5 || plan === 'enterprise') feats.push('✓ Service level agreement (SLA)')
+  if (tierNum >= 7 || plan === 'enterprise') feats.push('✓ Dedicated account manager')
   return feats
-}
-
-const containerAnim = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.06 } },
-}
-const itemAnim = {
-  hidden: { opacity: 0, y: 16 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } },
 }
 
 interface PlanCardProps {
@@ -102,6 +87,15 @@ interface PlanCardProps {
   variant?: 'default' | 'gold'
 }
 
+const pillPrimary = cn(
+  'inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-[15px] font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60',
+  focusRing,
+)
+const pillSecondary = cn(
+  'inline-flex w-full items-center justify-center gap-2 rounded-full border border-white/[0.12] bg-white/[0.04] px-5 py-2.5 text-[15px] font-medium text-foreground transition-colors hover:bg-white/[0.08] disabled:opacity-60',
+  focusRing,
+)
+
 function PlanCard({ plan, period, currentPlan, loadingPlan, onCheckout, onFree, variant = 'default' }: PlanCardProps) {
   const cfg = getPlanConfig(plan)
   const badge = BADGES[plan]
@@ -113,79 +107,68 @@ function PlanCard({ plan, period, currentPlan, loadingPlan, onCheckout, onFree, 
   const isPopular = badge?.tone === 'popular'
 
   return (
-    <motion.div
-      variants={itemAnim}
+    <Reveal
       className={cn(
-        'relative flex h-full flex-col rounded-2xl border p-6 backdrop-blur-xl transition-all',
-        'bg-card/40 border-border/60 hover:border-primary/40 hover:-translate-y-1',
-        isGold && 'bg-gradient-to-b from-primary/10 to-card/40 border-primary/30',
-        isPopular && 'ring-2 ring-primary shadow-[0_0_40px_-10px_hsl(var(--primary)/0.5)]',
+        surface.card,
+        'relative flex h-full flex-col p-6',
+        isPopular && 'border-primary/50 ring-1 ring-primary/40',
       )}
     >
-      {badge && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <Badge
+      <div className="mb-5 flex items-start justify-between gap-2">
+        <div>
+          <h3 className="text-xl font-semibold tracking-[-0.01em]">{cfg.displayName}</h3>
+          <p className="mt-1 text-[13px] text-muted-foreground">
+            {isFree ? 'Start for free' : isGold ? 'Business plan' : 'Standard plan'}
+          </p>
+        </div>
+        {badge && (
+          <span
             className={cn(
-              'px-3 py-1 text-xs font-semibold whitespace-nowrap',
-              badge.tone === 'popular' && 'bg-primary text-primary-foreground',
-              badge.tone === 'value' && 'bg-emerald-500 text-white',
+              'shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium',
+              badge.tone === 'popular' ? 'bg-primary/15 text-primary' : 'bg-emerald-500/15 text-emerald-400',
             )}
           >
             {badge.label}
-          </Badge>
-        </div>
-      )}
-      {isGold && (
-        <Crown className="absolute top-4 right-4 h-4 w-4 text-primary/60" aria-hidden />
-      )}
-
-      <div className="mb-4">
-        <h3 className="font-display text-xl font-bold tracking-tight">{cfg.displayName}</h3>
-        <p className="mt-1 text-xs text-muted-foreground uppercase tracking-wider">
-          {isFree ? 'Comece grátis' : isGold ? 'Business Tier' : 'Plano essencial'}
-        </p>
+          </span>
+        )}
       </div>
 
-      <div className="mb-5">
-        <div className="flex items-baseline gap-1.5">
-          <span className="font-display text-4xl font-bold">{price.display}</span>
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">{price.suffix}</p>
+      <div className="mb-6">
+        <span className="text-4xl font-semibold tracking-[-0.02em]">{price.display}</span>
+        <p className="mt-1 text-[13px] text-muted-foreground">{price.suffix}</p>
       </div>
 
-      <ul className="mb-6 flex-1 space-y-2.5 text-sm">
+      <ul className="mb-8 flex-1 space-y-2.5 text-[15px]">
         {featuresFor(plan).map((f, i) => (
           <li key={i} className="flex items-start gap-2 text-foreground/85">
-            <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+            <Check className="mt-1 h-4 w-4 shrink-0 text-primary" aria-hidden />
             <span>{f.replace(/^✓\s*/, '')}</span>
           </li>
         ))}
       </ul>
 
       {isCurrent ? (
-        <Button disabled variant="secondary" className="w-full">
-          Plano atual
-        </Button>
+        <button type="button" disabled className={pillSecondary}>
+          Current plan
+        </button>
       ) : isFree ? (
-        <Button onClick={onFree} variant="outline" className="w-full">
-          Começar Grátis
-        </Button>
+        <button type="button" onClick={onFree} className={pillSecondary}>
+          Start for free
+        </button>
       ) : (
-        <Button
-          onClick={() => onCheckout(plan)}
-          disabled={loading}
-          className={cn('w-full', isGold && 'bg-primary text-primary-foreground hover:bg-primary/90')}
-        >
+        <button type="button" onClick={() => onCheckout(plan)} disabled={loading} className={pillPrimary}>
           {loading ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Redirecionando…
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Opening checkout…
             </>
           ) : (
-            <>Assinar com Stripe <ArrowRight className="ml-2 h-4 w-4" /></>
+            <>
+              Subscribe with Stripe <ArrowRight className="h-4 w-4" aria-hidden />
+            </>
           )}
-        </Button>
+        </button>
       )}
-    </motion.div>
+    </Reveal>
   )
 }
 
@@ -214,82 +197,62 @@ export default function PricingPage() {
       if (error) throw error
       if (data?.url) window.open(data.url, '_blank')
     } catch {
-      toast.error('Erro ao iniciar checkout. Tente novamente.')
+      toast.error('We could not open checkout. Please try again.')
     } finally {
       setLoadingPlan(null)
     }
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <Navbar />
-
-      <main className="mx-auto max-w-7xl px-4 pt-28 pb-24 sm:px-6 lg:px-8">
-        {/* Hero */}
-        <motion.section
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mx-auto max-w-3xl text-center"
-        >
-          <Badge variant="outline" className="mb-5 border-primary/30 bg-primary/5 text-primary uppercase tracking-widest">
-            <Sparkles className="mr-1.5 h-3 w-3" /> Vertal Vibe Dev · Planos e Preços
-          </Badge>
-          <h1 className="font-display text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
-            Escolha o plano ideal
-            <span className="block bg-gradient-to-r from-primary via-primary to-primary/70 bg-clip-text text-transparent">
-              para o seu crescimento
-            </span>
-          </h1>
-          <p className="mx-auto mt-5 max-w-xl text-base text-muted-foreground sm:text-lg">
-            Desde criadores individuais até grandes empresas — temos o plano certo para você escalar com IA.
-          </p>
-
-          {/* Toggle */}
-          <div className="mt-9 inline-flex items-center gap-1 rounded-full border border-border/60 bg-card/40 p-1 backdrop-blur-xl">
+    <SitePage>
+      <PageHeader
+        eyebrow="Pricing"
+        title="Simple plans, paid in credits."
+        actions={
+          <div
+            role="group"
+            aria-label="Billing period"
+            className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-card/50 p-1"
+          >
             {(['monthly', 'annual', 'lifetime'] as Period[]).map((p) => {
               const active = period === p
-              const label = p === 'monthly' ? 'Mensal' : p === 'annual' ? 'Anual' : 'Lifetime'
+              const label = p === 'monthly' ? 'Monthly' : p === 'annual' ? 'Yearly' : 'Lifetime'
               return (
                 <button
                   key={p}
+                  type="button"
+                  aria-pressed={active}
                   onClick={() => setPeriod(p)}
                   className={cn(
-                    'relative rounded-full px-5 py-2 text-sm font-medium transition-all',
-                    active ? 'bg-primary text-primary-foreground shadow-lg' : 'text-muted-foreground hover:text-foreground',
+                    'rounded-full px-5 py-2 text-[13px] font-medium transition-colors',
+                    focusRing,
+                    active ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
                   {label}
-                  {p === 'annual' && (
-                    <span className="ml-2 rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">
-                      -20%
-                    </span>
-                  )}
+                  {p === 'annual' && <span className={cn('ml-1.5', active ? 'text-background/70' : 'text-emerald-400')}>-20%</span>}
                 </button>
               )
             })}
           </div>
-          {period === 'annual' && (
-            <p className="mt-3 text-xs text-emerald-400">Economize 20% pagando anualmente</p>
-          )}
-          {period === 'lifetime' && (
-            <p className="mt-3 text-xs text-primary">Pagamento único · sem recorrência</p>
-          )}
-        </motion.section>
+        }
+      >
+        Start for free. Upgrade when you need more credits. Every plan can be canceled at any time.
+      </PageHeader>
+      {period === 'annual' && (
+        <p className="-mt-6 mb-6 text-center text-[13px] text-emerald-400">Pay once a year and save 20%.</p>
+      )}
+      {period === 'lifetime' && (
+        <p className="-mt-6 mb-6 text-center text-[13px] text-primary">One payment. No renewals.</p>
+      )}
 
-        {/* Grupo 1 — Essenciais */}
-        <motion.section
-          variants={containerAnim}
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, margin: '-80px' }}
-          className="mt-16"
-        >
-          <div className="mb-8 flex items-center gap-3">
-            <Zap className="h-5 w-5 text-primary" />
-            <h2 className="font-display text-2xl font-bold">Planos Essenciais</h2>
-          </div>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Plans for sale */}
+      <section aria-labelledby="plans-title" className="px-6 pb-20">
+        <div className="mx-auto max-w-6xl">
+          <h2 id="plans-title" className="sr-only">
+            Plans
+          </h2>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {ESSENTIALS.map((plan) => (
               <PlanCard
                 key={plan}
@@ -302,173 +265,146 @@ export default function PricingPage() {
               />
             ))}
           </div>
-        </motion.section>
+        </div>
+      </section>
 
-        {/* Recarga de Créditos */}
-        <motion.section
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="mt-24"
-        >
-          <div className="mb-8 flex items-center gap-3">
-            <Zap className="h-5 w-5 text-primary" />
-            <h2 className="font-display text-2xl font-bold">Recarga de Créditos</h2>
-          </div>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 max-w-4xl">
+      {/* Credit top-ups */}
+      <section aria-labelledby="topup-title" className="border-t border-white/[0.06] px-6 py-20 md:py-28">
+        <div className="mx-auto max-w-5xl">
+          <SectionHeading id="topup-title" title="Need more credits?">
+            Buy a top-up at any time. Credits are used for AI generations, publishing and premium actions.
+          </SectionHeading>
+          <div className="mx-auto mt-12 grid max-w-4xl grid-cols-1 gap-5 sm:grid-cols-3">
             {[
-              { credits: 50, price: 4.99, label: 'Pequena' },
-              { credits: 150, price: 12.99, label: 'Média' },
-              { credits: 350, price: 24.99, label: 'Grande' },
+              { credits: 50, price: 4.99, label: 'Small' },
+              { credits: 150, price: 12.99, label: 'Medium' },
+              { credits: 350, price: 24.99, label: 'Large' },
             ].map((recharge) => (
-              <motion.div
-                key={recharge.credits}
-                variants={itemAnim}
-                className="rounded-xl border border-border/60 bg-card/40 p-6 backdrop-blur-xl hover:border-primary/40 transition-all"
-              >
-                <div className="mb-4">
-                  <p className="text-sm text-muted-foreground uppercase tracking-wider">Recarga {recharge.label}</p>
-                  <p className="text-3xl font-bold mt-2">{recharge.credits}</p>
-                  <p className="text-xs text-muted-foreground">créditos</p>
-                </div>
-                <div className="mb-6">
-                  <p className="text-2xl font-bold">${recharge.price.toFixed(2)}</p>
-                </div>
-                <Button
+              <Reveal key={recharge.credits} className={cn(surface.card, 'flex flex-col p-6')}>
+                <p className="text-[13px] text-muted-foreground">{recharge.label} top-up</p>
+                <p className="mt-2 text-3xl font-semibold tracking-[-0.02em]">{recharge.credits} credits</p>
+                <p className="mt-1 text-xl text-foreground/85">${recharge.price.toFixed(2)}</p>
+                <button
+                  type="button"
                   onClick={() => handleStripeCheckout(`recharge_${recharge.credits}`)}
                   disabled={!user || loadingPlan === `recharge_${recharge.credits}`}
-                  className="w-full"
+                  className={cn(pillPrimary, 'mt-6')}
                 >
                   {loadingPlan === `recharge_${recharge.credits}` ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando…
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Processing…
                     </>
                   ) : (
-                    <>Comprar com Stripe <ArrowRight className="ml-2 h-4 w-4" /></>
+                    <>
+                      Buy with Stripe <ArrowRight className="h-4 w-4" aria-hidden />
+                    </>
                   )}
-                </Button>
-              </motion.div>
+                </button>
+              </Reveal>
             ))}
           </div>
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            Créditos adicionais podem ser usados a qualquer momento em gerações de IA, deploys e ações premium.
-          </p>
-        </motion.section>
+          {!user && (
+            <p className="mt-6 text-center text-[13px] text-muted-foreground">Log in to buy a top-up.</p>
+          )}
+        </div>
+      </section>
 
-        {/* Comparação */}
-        <motion.section
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="mt-24"
-        >
-          <div className="mb-6 text-center">
-            <h2 className="font-display text-3xl font-bold">Compare os principais recursos</h2>
-            <p className="mt-2 text-muted-foreground">Visão rápida do que muda entre os tiers</p>
-          </div>
-          <div className="overflow-x-auto rounded-2xl border border-border/60 bg-card/40 backdrop-blur-xl">
-            <table className="w-full text-sm">
-              <thead className="border-b border-border/60 bg-background/30">
+      {/* Comparison */}
+      <section aria-labelledby="compare-title" className="border-t border-white/[0.06] px-6 py-20 md:py-28">
+        <div className="mx-auto max-w-5xl">
+          <SectionHeading id="compare-title" title="Compare plans" />
+          <Reveal className={cn(surface.card, 'mt-12 overflow-x-auto p-0')}>
+            <table className="w-full text-[15px]">
+              <thead className="border-b border-white/[0.06]">
                 <tr>
-                  <th className="p-4 text-left font-semibold">Feature</th>
-                  <th className="p-4 text-center font-semibold">Free</th>
-                  <th className="p-4 text-center font-semibold">Starter</th>
-                  <th className="p-4 text-center font-semibold text-primary">Pro</th>
-                  <th className="p-4 text-center font-semibold text-primary">Premium 1</th>
+                  <th scope="col" className="p-4 text-left font-medium text-muted-foreground">
+                    Feature
+                  </th>
+                  <th scope="col" className="p-4 text-center font-semibold">Free</th>
+                  <th scope="col" className="p-4 text-center font-semibold">Starter</th>
+                  <th scope="col" className="p-4 text-center font-semibold">Pro</th>
+                  <th scope="col" className="p-4 text-center font-semibold">Premium 1</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border/40">
+              <tbody className="divide-y divide-white/[0.06]">
                 {[
-                  ['Preço/mês', '$0', '$4.99', '$19.99', '$49.99'],
-                  ['Créditos/mês', '5', '50', '200', '650'],
-                  ['Shortlinks/dia (opcional)', '10', '10', '10', '10'],
-                  ['Bonus shortlinks/dia', 'até +9.5', 'até +9.5', 'até +9.5', 'até +9.5'],
-                  ['Anúncios', 'A cada 6h', 'A cada 12h', 'Sem anúncios', 'Sem anúncios'],
-                  ['Suporte', '—', '—', 'Email', 'Email'],
+                  ['Price per month', '$0', '$4.99', '$19.99', '$49.99'],
+                  ['Credits per month', '5', '50', '200', '650'],
+                  ['Rewards (optional)', 'Yes', 'Yes', 'Yes', 'Yes'],
+                  ['Pop-up ads', 'None', 'None', 'None', 'None'],
+                  ['Email support', 'No', 'No', 'Yes', 'Yes'],
                 ].map((row) => (
                   <tr key={row[0]}>
-                    {row.map((cell, i) => (
-                      <td key={i} className={cn('p-4', i === 0 ? 'text-left font-medium' : 'text-center text-muted-foreground')}>
-                        {cell}
-                      </td>
-                    ))}
+                    {row.map((cell, i) =>
+                      i === 0 ? (
+                        <th key={i} scope="row" className="p-4 text-left font-medium">
+                          {cell}
+                        </th>
+                      ) : (
+                        <td key={i} className="p-4 text-center text-muted-foreground">
+                          {cell}
+                        </td>
+                      ),
+                    )}
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        </motion.section>
+          </Reveal>
+        </div>
+      </section>
 
-        {/* FAQ */}
-        <motion.section
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="mt-24"
-        >
-          <div className="mb-6 text-center">
-            <h2 className="font-display text-3xl font-bold">Perguntas frequentes</h2>
-          </div>
-          <div className="mx-auto max-w-3xl rounded-2xl border border-border/60 bg-card/40 p-2 backdrop-blur-xl">
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="q1">
-                <AccordionTrigger className="px-4 text-left">O que são créditos na {APP_NAME}?</AccordionTrigger>
-                <AccordionContent className="px-4 text-muted-foreground">
-                  Créditos são a moeda interna que alimenta gerações de IA, deploys e ações premium. Cada plano oferece um volume diário, e você pode acumular créditos extras completando shortlinks e convidando amigos.
-                </AccordionContent>
+      {/* FAQ */}
+      <section aria-labelledby="pricing-faq-title" className="border-t border-white/[0.06] px-6 py-20 md:py-28">
+        <div className="mx-auto max-w-3xl">
+          <SectionHeading id="pricing-faq-title" title="Questions about pricing" />
+          <Accordion type="single" collapsible className="mt-10 w-full">
+            {[
+              {
+                q: `What are credits in ${APP_NAME}?`,
+                a: 'Credits pay for AI generations, publishing and premium actions. Each plan gives you credits every day. You can earn extra credits in Rewards and by inviting friends.',
+              },
+              {
+                q: 'Can I cancel at any time?',
+                a: 'Yes. You can cancel any subscription in the Stripe customer portal. You keep access until the end of the period you already paid for.',
+              },
+              {
+                q: 'How do I earn extra credits?',
+                a: 'Open Rewards (/recompensas). You can watch reward videos, listen to Kubo music and turn on Vertal Node. All of it is optional, and the credits go to your balance.',
+              },
+              {
+                q: 'Do any plans show ads?',
+                a: 'No plan shows pop-up ads. The only ads are the optional reward videos in Rewards, and you see them only if you choose to earn extra credits.',
+              },
+              {
+                q: 'How does the Lifetime plan work?',
+                a: 'Lifetime is one payment equal to 6 months of the plan you choose. You keep the credits and features of that plan with no renewals.',
+              },
+            ].map((item, i) => (
+              <AccordionItem key={item.q} value={`q${i + 1}`} className="border-white/[0.06]">
+                <AccordionTrigger className="text-left text-[17px] font-medium hover:no-underline">{item.q}</AccordionTrigger>
+                <AccordionContent className="text-[15px] leading-relaxed text-muted-foreground">{item.a}</AccordionContent>
               </AccordionItem>
-              <AccordionItem value="q2">
-                <AccordionTrigger className="px-4 text-left">Posso cancelar a qualquer momento?</AccordionTrigger>
-                <AccordionContent className="px-4 text-muted-foreground">
-                  Sim. Todos os planos recorrentes podem ser cancelados a qualquer momento diretamente no portal do Stripe. Você continua com acesso até o fim do ciclo já pago.
-                </AccordionContent>
-              </AccordionItem>
-              <AccordionItem value="q3">
-                <AccordionTrigger className="px-4 text-left">O que são os shortlinks e como ganho créditos?</AccordionTrigger>
-                <AccordionContent className="px-4 text-muted-foreground">
-                  Todo dia você pode completar até 10 shortlinks TERRA ADS na página /shortlinks. Cada um libera +0,5 crédito e o 10º libera +5 bônus, totalizando +9,5 créditos por dia.
-                </AccordionContent>
-              </AccordionItem>
-              <AccordionItem value="q4">
-                <AccordionTrigger className="px-4 text-left">Quais planos têm anúncios?</AccordionTrigger>
-                <AccordionContent className="px-4 text-muted-foreground">
-                  Só o Free (a cada 6h) e o Starter de $4.99 (a cada 12h). Pro e Premium 1 não exibem anúncios. Os shortlinks são opcionais em todos os planos: você só vê o anúncio deles se decidir ganhar créditos extras.
-                </AccordionContent>
-              </AccordionItem>
-              <AccordionItem value="q5">
-                <AccordionTrigger className="px-4 text-left">Como funciona o plano Lifetime?</AccordionTrigger>
-                <AccordionContent className="px-4 text-muted-foreground">
-                  O Lifetime é um pagamento único equivalente a 6 meses do plano escolhido, garantindo acesso vitalício aos créditos e recursos daquele tier sem cobranças recorrentes.
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          </div>
-        </motion.section>
+            ))}
+          </Accordion>
 
-        {/* CTA final */}
-        <motion.section
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          className="mt-20 text-center"
-        >
-          <p className="text-sm text-muted-foreground">
-            Tem dúvidas?{' '}
+          <p className="mt-12 text-center text-[15px] text-muted-foreground">
+            Still have a question?{' '}
             <button
               type="button"
               onClick={() => setContactOpen(true)}
-              className="text-primary hover:underline"
+              className={cn('rounded-sm text-primary hover:underline underline-offset-4', focusRing)}
             >
-              Fale com a gente
-            </button>{' '}
-            — respondemos em até 24h.
+              Contact us
+            </button>
+            .
           </p>
           {/* Sanity check: ensure PLAN_CONFIG keys used above still exist */}
           <span className="sr-only">{Object.keys(PLAN_CONFIG).join(',')}</span>
-        </motion.section>
-      </main>
+        </div>
+      </section>
 
       <ContactDialog open={contactOpen} onOpenChange={setContactOpen} defaultReason="support" />
-    </div>
+    </SitePage>
   )
 }

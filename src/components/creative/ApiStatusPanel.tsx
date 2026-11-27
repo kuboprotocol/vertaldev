@@ -18,8 +18,8 @@ type Health = {
 };
 
 const PROVIDERS: { key: keyof Omit<Health, "checked_at">; label: string; purpose: string }[] = [
-  { key: "openrouter", label: "OpenRouter", purpose: "Claude, Llama, chat, slides, código" },
-  { key: "deepseek", label: "DeepSeek", purpose: "Geração de SaaS e apps" },
+  { key: "openrouter", label: "OpenRouter", purpose: "Claude, Llama, chat, slides, code" },
+  { key: "deepseek", label: "DeepSeek", purpose: "SaaS and app generation" },
 ];
 
 export function ApiStatusPanel() {
@@ -45,22 +45,22 @@ export function ApiStatusPanel() {
   useEffect(() => { check(); }, [check]);
 
   return (
-    <Card className="p-4 border-border/40 bg-gradient-to-br from-background/80 to-muted/20">
+    <Card className="rounded-2xl border-white/[0.06] bg-card/50 p-4">
       <div className="flex items-center justify-between mb-3">
         <div>
           <h3 className="text-sm font-semibold flex items-center gap-2">
-            Status das APIs
+            API status
             {loading && <Loader2 className="h-3 w-3 animate-spin" />}
           </h3>
           {health?.checked_at && (
             <p className="text-[10px] text-muted-foreground">
-              Verificado em {new Date(health.checked_at).toLocaleTimeString()}
+              Checked at {new Date(health.checked_at).toLocaleTimeString('en-US')}
             </p>
           )}
         </div>
-        <Button size="sm" variant="outline" onClick={check} disabled={loading} className="h-8 text-xs">
+        <Button size="sm" variant="outline" onClick={check} disabled={loading} className="h-8 rounded-full text-xs">
           <RefreshCw className={cn("h-3 w-3 mr-1.5", loading && "animate-spin")} />
-          Verificar APIs
+          Check APIs
         </Button>
       </div>
 
@@ -77,7 +77,7 @@ export function ApiStatusPanel() {
               ? "text-red-500"
               : "text-muted-foreground";
           return (
-            <div key={key} className="flex items-start gap-2 p-2.5 rounded-md border border-border/30 bg-background/40">
+            <div key={key} className="flex items-start gap-2 p-2.5 rounded-xl border border-white/[0.06]">
               <Icon className={cn("h-4 w-4 mt-0.5 shrink-0", color)} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">

@@ -1,75 +1,44 @@
-import { motion } from 'framer-motion'
-import { Sparkles, MessageSquare, Rocket } from 'lucide-react'
+import { Reveal, Section, SectionHeading } from './landingUi'
 
 const steps = [
   {
-    number: '01',
-    icon: Sparkles,
+    number: '1',
     title: 'Describe your idea',
-    description: 'Write a natural description of the app you want. Add colors, features, or upload references.',
-    accent: 'from-primary/20 to-accent',
+    description: 'Write what the app should do. You can add colors, pages, or a screenshot as a reference.',
   },
   {
-    number: '02',
-    icon: MessageSquare,
-    title: 'Iterate with AI',
-    description: 'Chat with the AI to refine layouts, add pages, change styles — just like talking to a designer.',
-    accent: 'from-blue-900/30 to-indigo-900/20',
+    number: '2',
+    title: 'Make changes in a chat',
+    description: 'Ask for changes in plain words. For example: add a page, change a color, or move a button.',
   },
   {
-    number: '03',
-    icon: Rocket,
-    title: 'Ship it',
-    description: 'One click to publish. Get a shareable link, custom domain, or export the code.',
-    accent: 'from-violet-900/30 to-purple-900/20',
+    number: '3',
+    title: 'Publish',
+    description: 'Publish with one click. You get a link to share. You can also use your own domain or export the code.',
   },
 ]
 
 export default function HowItWorksSection() {
   return (
-    <section className="py-24 px-6 relative">
-      <div className="absolute inset-0 dot-pattern opacity-30 pointer-events-none" />
-      <div className="max-w-5xl mx-auto relative z-10">
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center mb-16"
-        >
-          <span className="text-xs font-medium text-primary uppercase tracking-widest mb-3 block">How it works</span>
-          <h2 className="text-3xl md:text-4xl font-display font-bold text-foreground">
-            From idea to app in minutes
-          </h2>
-          <p className="text-muted-foreground mt-3 max-w-md mx-auto">
-            Three simple steps to go from concept to a fully working application.
-          </p>
-        </motion.div>
+    <Section labelledBy="how-title" className="border-t border-white/[0.06]">
+      <SectionHeading id="how-title" eyebrow="How it works" title="From idea to app in three steps.">
+        You talk to the AI the way you would talk to a developer.
+      </SectionHeading>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          {steps.map((step, index) => {
-            const Icon = step.icon
-            return (
-              <motion.div
-                key={step.number}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.12 }}
-                className="group relative"
+      <ol className="mt-16 grid gap-12 md:mt-20 md:grid-cols-3 md:gap-10">
+        {steps.map((step, i) => (
+          <Reveal as="li" key={step.number} delay={i * 0.08} className="text-center md:text-left">
+              <span
+                aria-hidden
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-sm font-medium text-foreground/80"
               >
-                <div className="p-6 rounded-2xl border border-border bg-card hover:shadow-gold transition-all duration-300 h-full hover:border-primary/30">
-                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${step.accent} flex items-center justify-center mb-5`}>
-                    <Icon className="h-5 w-5 text-foreground" />
-                  </div>
-                  <span className="text-xs font-mono text-primary/60">{step.number}</span>
-                  <h3 className="text-lg font-display font-semibold text-foreground mt-1 mb-2">{step.title}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{step.description}</p>
-                </div>
-              </motion.div>
-            )
-          })}
-        </div>
-      </div>
-    </section>
+                {step.number}
+              </span>
+              <h3 className="mt-5 text-xl font-semibold tracking-[-0.01em] text-foreground">{step.title}</h3>
+              <p className="mt-2 text-[17px] leading-relaxed text-muted-foreground">{step.description}</p>
+          </Reveal>
+        ))}
+      </ol>
+    </Section>
   )
 }

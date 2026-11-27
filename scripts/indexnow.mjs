@@ -5,7 +5,8 @@
 // local) ou, sem ele, o publicado em SITE_ORIGIN.
 // Antes de enviar, confere que https://<site>/<chave>.txt já devolve a chave:
 // sem isso o IndexNow recusa (403) e o deploy ainda não chegou.
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 const ORIGIN = process.env.SITE_ORIGIN || 'https://vertal.dev';
 const ENDPOINT = process.env.INDEXNOW_ENDPOINT || 'https://api.indexnow.org/indexnow';
@@ -77,13 +78,18 @@ async function main() {
   let xml;
   if (process.env.SITEMAP_FILE) {
     xml = readFileSync(process.env.SITEMAP_FILE, 'utf8');
+    // Páginas de integração: um sitemap por idioma (sitemap-integrations-<código>.xml) ao lado.
+    const dir = dirname(process.env.SITEMAP_FILE);
+    for (const f of readdirSync(dir).filter((n) => /^sitemap-integrations-[\w-]+\.xml$/.test(n))) {
+      xml += readFileSync(join(dir, f), 'utf8');
+    }
   } else {
     const sitemap = await fetch(`${ORIGIN}/sitemap.xml`);
     if (!sitemap.ok) throw new Error(`sitemap.xml respondeu HTTP ${sitemap.status}`);
     xml = await sitemap.text();
   }
   const host = new URL(ORIGIN).host;
-  const urls = parseSitemap(xml).filter((u) => new URL(u).host === host);
+  const urls = [...new Set(parseSitemap(xml).filter((u) => new URL(u).host === host))];
   console.log(`${urls.length} URLs no sitemap`);
   if (DRY_RUN) return;
 

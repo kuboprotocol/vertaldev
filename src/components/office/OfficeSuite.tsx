@@ -67,6 +67,7 @@ import { AppFrame } from './AppFrame';
 import { RibbonButton, RibbonGroup, RibbonSelect, RibbonTab } from './Ribbon';
 import { docToDocx } from '@/lib/office/officeFiles';
 import { OFFICE_KEYS, importFile } from '@/lib/office/importers';
+import { takePendingOfficeFile } from '@/lib/office/pendingFile';
 import { SlidesTab } from './SlidesTab';
 import { MiniWindow } from './MiniWindow';
 import { OfficeGalleryPanel } from './OfficeGalleryPanel';
@@ -1042,6 +1043,17 @@ export function OfficeSuite({
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    await openFile(file);
+  };
+
+  // Abre o arquivo escolhido no botão "Arquivo" do painel criativo, se houver.
+  useEffect(() => {
+    const pendingFile = takePendingOfficeFile();
+    if (pendingFile) void openFile(pendingFile);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function openFile(file: File) {
     setImporting(true);
     setImportNote(null);
     try {
@@ -1072,7 +1084,7 @@ export function OfficeSuite({
     } finally {
       setImporting(false);
     }
-  };
+  }
 
   return (
     <div className="mx-auto w-full max-w-7xl px-2 py-4 sm:px-4 sm:py-6">

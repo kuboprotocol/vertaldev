@@ -1,6 +1,10 @@
 import { Github, CreditCard, Globe, Figma, Server, Smartphone, Cloud, Database, Mail, MessageSquare, Shield, Container, Wallet, Zap, Leaf, Rocket, Terminal, TrendingUp, Instagram, MessageCircle, Music, Workflow, Radar } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { fluxosConnectors, FLUXOS_SHARED_APPS } from './fluxosConnectors'
+// Android Studio, iOS / Xcode e Google Play Console (flag VITE_VERTAL_MOBILE_STUDIO, padrão desligado).
+import { mobileStudioCatalog } from './mobileStudio/connectors'
+// MetaMask (Sign-In with Ethereum; flag VITE_VERTAL_METAMASK, padrão desligado).
+import { metamaskCatalog } from './vertalWallet/config'
 
 export interface ConnectorSetupStep {
   title: string
@@ -60,7 +64,7 @@ const baseConnectors: ConnectorConfig[] = [
     apiKeyHelp: 'A conexão MCP usa OAuth: o cliente abre o login do Vertal.app sozinho.',
     setupSteps: [
       { title: 'Abra o Vertal.app', description: 'Use o botão “Abrir aqui” para acessar o painel sem sair do Vertal Dev.' },
-      { title: 'Conecte via MCP', description: 'Copie a URL https://vertal.app/mcp no seu cliente MCP (Claude, ChatGPT, Cursor).' },
+      { title: 'Conecte via MCP', description: 'Copie a URL https://vertal.app/mcp no seu cliente MCP (o Vertal Chat ou qualquer cliente compatível).' },
       { title: 'Faça login', description: 'Autorize o acesso com a sua conta Vertal.app.' },
     ],
   },
@@ -277,6 +281,7 @@ const baseConnectors: ConnectorConfig[] = [
     name: 'Resend',
     slug: 'resend',
     icon: Mail,
+    logoUrl: '/connectors/resend.png',
     color: '#000000',
     authType: 'api_key',
     category: 'communication',
@@ -322,6 +327,7 @@ const baseConnectors: ConnectorConfig[] = [
     name: 'Spotify',
     slug: 'spotify',
     icon: Music,
+    logoUrl: '/connectors/spotify.png',
     color: '#1DB954',
     authType: 'oauth',
     category: 'communication',
@@ -367,6 +373,7 @@ const baseConnectors: ConnectorConfig[] = [
     name: 'Instagram',
     slug: 'instagram',
     icon: Instagram,
+    logoUrl: '/connectors/instagram.png',
     color: '#E4405F',
     authType: 'oauth',
     category: 'communication',
@@ -389,6 +396,7 @@ const baseConnectors: ConnectorConfig[] = [
     name: 'WhatsApp',
     slug: 'whatsapp',
     icon: MessageCircle,
+    logoUrl: '/connectors/whatsapp.png',
     color: '#25D366',
     authType: 'webhook',
     category: 'communication',
@@ -550,6 +558,7 @@ const baseConnectors: ConnectorConfig[] = [
     name: 'Infura',
     slug: 'infura',
     icon: Zap,
+    logoUrl: '/connectors/infura.png',
     color: '#FF6B4A',
     authType: 'api_key',
     category: 'infrastructure',
@@ -619,6 +628,8 @@ export const connectors: ConnectorConfig[] = [
     return app ? { ...c, fluxosApp: app, features: [...c.features, 'Também no Vertal Fluxos'] } : c
   }),
   ...fluxosConnectors,
+  ...mobileStudioCatalog(),
+  ...metamaskCatalog(),
 ]
 
 export function getConnectorBySlug(slug: string): ConnectorConfig | undefined {

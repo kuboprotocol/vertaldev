@@ -5,7 +5,9 @@
 // modelo de dados (contatos/empresas/negócios/notas/tarefas/etiquetas), status de contato, tipos de tarefa,
 // agrupamento do Kanban por etapa (getDealsByStage), reordenação ao arrastar e o formato CSV de importação/exportação.
 // Mudanças: multi-tenant por workspace, vários funis com etapas personalizadas (aberta/ganha/perdida + probabilidade),
-// textos pt-BR/en/es, previsão ponderada e taxa de ganho, IA cobrada por crédito.
+// textos em 21 idiomas, previsão ponderada e taxa de ganho, IA cobrada por crédito.
+
+import { resolveUiLang, UI_LANG_AI_NAME, type UiLang } from "../vertalUiLang.ts";
 
 export const CRM_NAME = "Vertal CRM";
 export const CRM_ROUTE = "/crm";
@@ -62,31 +64,90 @@ export function isPaidCrmPlan(sub: { plan?: string | null; is_active?: boolean |
 }
 
 // ─── Idioma ──────────────────────────────────────────────────────────────
-export type CrmLang = "pt" | "en" | "es";
+// Os 21 idiomas da interface (os mesmos das páginas de SEO do CRM grátis). "pt" = português do Brasil.
+export type CrmLang = UiLang;
 export function crmLang(...hints: Array<string | null | undefined>): CrmLang {
-  for (const h of hints) {
-    const s = (h ?? "").toLowerCase().trim();
-    if (!s) continue;
-    if (s.startsWith("pt")) return "pt";
-    if (s.startsWith("es")) return "es";
-    if (s.startsWith("en")) return "en";
-  }
-  return "pt";
+  return resolveUiLang(...hints);
 }
+/** Nome inicial de um workspace novo. */
+export const CRM_DEFAULT_WS_NAME: Record<CrmLang, string> = {
+  pt: "Meu CRM", "pt-PT": "O meu CRM", en: "My CRM", es: "Mi CRM", fr: "Mon CRM", de: "Mein CRM", it: "Il mio CRM", nl: "Mijn CRM",
+  pl: "Mój CRM", tr: "CRM'im", ru: "Мой CRM", uk: "Мій CRM", ar: "نظام CRM الخاص بي", hi: "मेरा CRM", id: "CRM Saya", vi: "CRM của tôi",
+  th: "CRM ของฉัน", ja: "マイCRM", ko: "내 CRM", "zh-CN": "我的 CRM", "zh-TW": "我的 CRM",
+};
+/** Moeda inicial de um workspace novo pelo idioma (o usuário muda nas Configurações). */
+export const CRM_DEFAULT_CURRENCY: Record<CrmLang, string> = {
+  pt: "BRL", "pt-PT": "EUR", en: "USD", es: "USD", fr: "EUR", de: "EUR", it: "EUR", nl: "EUR", pl: "PLN", tr: "TRY",
+  ru: "RUB", uk: "UAH", ar: "USD", hi: "INR", id: "IDR", vi: "VND", th: "THB", ja: "JPY", ko: "KRW", "zh-CN": "CNY", "zh-TW": "TWD",
+};
 
 // ─── Funis e etapas ─────────────────────────────────────────────────────
 export type StageKind = "open" | "won" | "lost";
 export interface CrmStage { id: string; label: string; probability: number; kind: StageKind }
 export interface CrmPipeline { id: string; name: string; stages: CrmStage[]; is_default?: boolean; position?: number }
 
-const DEFAULT_STAGES: Record<CrmLang, Array<[string, string, number, StageKind]>> = {
-  pt: [["lead", "Lead", 10, "open"], ["qualificado", "Qualificado", 25, "open"], ["proposta", "Proposta enviada", 50, "open"], ["negociacao", "Em negociação", 75, "open"], ["ganho", "Ganho", 100, "won"], ["perdido", "Perdido", 0, "lost"]],
-  en: [["lead", "Lead", 10, "open"], ["qualified", "Qualified", 25, "open"], ["proposal", "Proposal sent", 50, "open"], ["negotiation", "In negotiation", 75, "open"], ["won", "Won", 100, "won"], ["lost", "Lost", 0, "lost"]],
-  es: [["lead", "Lead", 10, "open"], ["calificado", "Calificado", 25, "open"], ["propuesta", "Propuesta enviada", 50, "open"], ["negociacion", "En negociación", 75, "open"], ["ganado", "Ganado", 100, "won"], ["perdido", "Perdido", 0, "lost"]],
+// Etapas padrão de um funil novo: [id, rótulo, probabilidade, tipo]. Os ids ficam estáveis por idioma.
+const STAGE_IDS = { pt: ["lead", "qualificado", "proposta", "negociacao", "ganho", "perdido"], en: ["lead", "qualified", "proposal", "negotiation", "won", "lost"], es: ["lead", "calificado", "propuesta", "negociacion", "ganado", "perdido"] } as const;
+const STAGE_LABELS: Record<CrmLang, [string, string, string, string, string, string]> = {
+  pt: ["Lead", "Qualificado", "Proposta enviada", "Em negociação", "Ganho", "Perdido"],
+  "pt-PT": ["Lead", "Qualificado", "Proposta enviada", "Em negociação", "Ganho", "Perdido"],
+  en: ["Lead", "Qualified", "Proposal sent", "In negotiation", "Won", "Lost"],
+  es: ["Lead", "Calificado", "Propuesta enviada", "En negociación", "Ganado", "Perdido"],
+  fr: ["Prospect", "Qualifié", "Proposition envoyée", "En négociation", "Gagné", "Perdu"],
+  de: ["Lead", "Qualifiziert", "Angebot gesendet", "In Verhandlung", "Gewonnen", "Verloren"],
+  it: ["Lead", "Qualificato", "Proposta inviata", "In trattativa", "Vinto", "Perso"],
+  nl: ["Lead", "Gekwalificeerd", "Offerte verstuurd", "In onderhandeling", "Gewonnen", "Verloren"],
+  pl: ["Lead", "Zakwalifikowany", "Oferta wysłana", "W negocjacjach", "Wygrany", "Przegrany"],
+  tr: ["Potansiyel müşteri", "Nitelikli", "Teklif gönderildi", "Pazarlıkta", "Kazanıldı", "Kaybedildi"],
+  ru: ["Лид", "Квалифицирован", "Предложение отправлено", "Переговоры", "Выиграна", "Проиграна"],
+  uk: ["Лід", "Кваліфікований", "Пропозицію надіслано", "Переговори", "Виграно", "Програно"],
+  ar: ["عميل محتمل", "مؤهَّل", "تم إرسال العرض", "قيد التفاوض", "مكسوبة", "خاسرة"],
+  hi: ["लीड", "योग्य", "प्रस्ताव भेजा गया", "बातचीत जारी", "जीता", "हारा"],
+  id: ["Prospek", "Terkualifikasi", "Penawaran terkirim", "Dalam negosiasi", "Menang", "Kalah"],
+  vi: ["Khách tiềm năng", "Đủ điều kiện", "Đã gửi báo giá", "Đang đàm phán", "Thành công", "Thất bại"],
+  th: ["ลีด", "ผ่านการคัดกรอง", "ส่งใบเสนอราคาแล้ว", "กำลังเจรจา", "ปิดการขายได้", "ไม่สำเร็จ"],
+  ja: ["リード", "見込みあり", "提案送付済み", "交渉中", "受注", "失注"],
+  ko: ["리드", "검증됨", "제안서 발송", "협상 중", "수주", "실패"],
+  "zh-CN": ["潜在客户", "已确认", "已发送报价", "谈判中", "赢单", "输单"],
+  "zh-TW": ["潛在客戶", "已確認", "已寄出報價", "洽談中", "成交", "未成交"],
 };
-export const defaultStages = (lang: CrmLang = "pt"): CrmStage[] =>
-  DEFAULT_STAGES[lang].map(([id, label, probability, kind]) => ({ id, label, probability, kind }));
-export const defaultPipelineName = (lang: CrmLang = "pt") => (lang === "en" ? "Sales" : lang === "es" ? "Ventas" : "Vendas");
+const STAGE_PROB: Array<[number, StageKind]> = [[10, "open"], [25, "open"], [50, "open"], [75, "open"], [100, "won"], [0, "lost"]];
+export const defaultStages = (lang: CrmLang = "pt"): CrmStage[] => {
+  const ids = lang === "pt" || lang === "pt-PT" ? STAGE_IDS.pt : lang === "es" ? STAGE_IDS.es : STAGE_IDS.en;
+  const labels = STAGE_LABELS[lang] ?? STAGE_LABELS.pt;
+  return STAGE_PROB.map(([probability, kind], i) => ({ id: ids[i], label: labels[i], probability, kind }));
+};
+const PIPELINE_NAME: Record<CrmLang, string> = {
+  pt: "Vendas", "pt-PT": "Vendas", en: "Sales", es: "Ventas", fr: "Ventes", de: "Vertrieb", it: "Vendite", nl: "Verkoop", pl: "Sprzedaż",
+  tr: "Satış", ru: "Продажи", uk: "Продажі", ar: "المبيعات", hi: "बिक्री", id: "Penjualan", vi: "Bán hàng", th: "การขาย", ja: "営業",
+  ko: "영업", "zh-CN": "销售", "zh-TW": "銷售",
+};
+export const defaultPipelineName = (lang: CrmLang = "pt") => PIPELINE_NAME[lang] ?? PIPELINE_NAME.pt;
+
+/**
+ * Rótulos padrão no idioma da tela: um funil criado em pt mostra "Qualifiziert" para quem abre em alemão.
+ * Só troca o que ainda é o texto padrão (em qualquer um dos 21 idiomas); nome que o usuário escreveu fica como está.
+ */
+const STAGE_POS: Record<string, number> = Object.fromEntries(
+  (Object.values(STAGE_IDS) as ReadonlyArray<readonly string[]>).flatMap((ids) => ids.map((id, i) => [id, i] as [string, number])),
+);
+const norm = (s: string) => String(s ?? "").trim().toLowerCase();
+export function localizedStageLabel(stage: { id: string; label: string }, lang: CrmLang): string {
+  const i = STAGE_POS[stage.id];
+  if (i === undefined) return stage.label;
+  const isDefault = Object.values(STAGE_LABELS).some((labels) => norm(labels[i]) === norm(stage.label));
+  return isDefault ? (STAGE_LABELS[lang] ?? STAGE_LABELS.pt)[i] : stage.label;
+}
+export function localizedPipelineName(name: string, lang: CrmLang): string {
+  return Object.values(PIPELINE_NAME).some((n) => norm(n) === norm(name)) ? (PIPELINE_NAME[lang] ?? name) : name;
+}
+export function localizedWorkspaceName(name: string, lang: CrmLang): string {
+  return Object.values(CRM_DEFAULT_WS_NAME).some((n) => norm(n) === norm(name)) ? (CRM_DEFAULT_WS_NAME[lang] ?? name) : name;
+}
+/** Funil com nome e etapas padrão no idioma da tela (ids, probabilidades e etapas personalizadas intactos). */
+export function localizePipeline<P extends { name: string; stages: Array<{ id: string; label: string }> }>(p: P, lang: CrmLang): P {
+  return { ...p, name: localizedPipelineName(p.name, lang), stages: p.stages.map((st) => ({ ...st, label: localizedStageLabel(st, lang) })) };
+}
 
 export const slugify = (s: string) =>
   (s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
@@ -355,7 +416,7 @@ export const AI_KINDS = ["summary", "email", "score", "next_action", "search"] a
 export type CrmAiKind = (typeof AI_KINDS)[number];
 export const isAiKind = (v: unknown): v is CrmAiKind => typeof v === "string" && (AI_KINDS as readonly string[]).includes(v);
 
-const LANG_NAME: Record<CrmLang, string> = { pt: "português do Brasil", en: "English", es: "español" };
+const LANG_NAME: Record<CrmLang, string> = UI_LANG_AI_NAME;
 
 /** Contexto enxuto (sem segredos) que vai para o modelo. */
 export function compactContext(ctx: unknown, max = 6000): string {
@@ -379,6 +440,96 @@ export const AI_VALUE_LABELS: Record<CrmLang, { status: Record<string, string>; 
     status: { cold: "cold", warm: "warm", hot: "hot", "in-contract": "customer (in contract)" },
     dealStatus: { open: "open", won: "won", lost: "lost" },
     taskType: {},
+  },
+  "pt-PT": {
+    status: { cold: "frio", warm: "morno", hot: "quente", "in-contract": "cliente (com contrato)" },
+    dealStatus: { open: "aberto", won: "ganho", lost: "perdido" },
+    taskType: { none: "tarefa", email: "e-mail", demo: "demonstração", lunch: "almoço", meeting: "reunião", "follow-up": "seguimento", "thank-you": "agradecimento", ship: "entrega", call: "chamada" },
+  },
+  fr: {
+    status: { cold: "froid", warm: "tiède", hot: "chaud", "in-contract": "client (sous contrat)" },
+    dealStatus: { open: "ouverte", won: "gagnée", lost: "perdue" },
+    taskType: { none: "tâche", email: "e-mail", demo: "démo", lunch: "déjeuner", meeting: "réunion", "follow-up": "relance", "thank-you": "remerciement", ship: "livraison", call: "appel" },
+  },
+  de: {
+    status: { cold: "kalt", warm: "warm", hot: "heiß", "in-contract": "Kunde (unter Vertrag)" },
+    dealStatus: { open: "offen", won: "gewonnen", lost: "verloren" },
+    taskType: { none: "Aufgabe", email: "E-Mail", demo: "Demo", lunch: "Mittagessen", meeting: "Meeting", "follow-up": "Nachfassen", "thank-you": "Dankeschön", ship: "Lieferung", call: "Anruf" },
+  },
+  it: {
+    status: { cold: "freddo", warm: "tiepido", hot: "caldo", "in-contract": "cliente (con contratto)" },
+    dealStatus: { open: "aperta", won: "vinta", lost: "persa" },
+    taskType: { none: "attività", email: "e-mail", demo: "demo", lunch: "pranzo", meeting: "riunione", "follow-up": "follow-up", "thank-you": "ringraziamento", ship: "consegna", call: "chiamata" },
+  },
+  nl: {
+    status: { cold: "koud", warm: "lauw", hot: "warm", "in-contract": "klant (met contract)" },
+    dealStatus: { open: "open", won: "gewonnen", lost: "verloren" },
+    taskType: { none: "taak", email: "e-mail", demo: "demo", lunch: "lunch", meeting: "afspraak", "follow-up": "opvolging", "thank-you": "bedankje", ship: "levering", call: "telefoontje" },
+  },
+  pl: {
+    status: { cold: "zimny", warm: "letni", hot: "gorący", "in-contract": "klient (z umową)" },
+    dealStatus: { open: "otwarta", won: "wygrana", lost: "przegrana" },
+    taskType: { none: "zadanie", email: "e-mail", demo: "demo", lunch: "lunch", meeting: "spotkanie", "follow-up": "follow-up", "thank-you": "podziękowanie", ship: "wysyłka", call: "telefon" },
+  },
+  tr: {
+    status: { cold: "soğuk", warm: "ılık", hot: "sıcak", "in-contract": "müşteri (sözleşmeli)" },
+    dealStatus: { open: "açık", won: "kazanıldı", lost: "kaybedildi" },
+    taskType: { none: "görev", email: "e-posta", demo: "demo", lunch: "öğle yemeği", meeting: "toplantı", "follow-up": "takip", "thank-you": "teşekkür", ship: "teslimat", call: "arama" },
+  },
+  ru: {
+    status: { cold: "холодный", warm: "тёплый", hot: "горячий", "in-contract": "клиент (по договору)" },
+    dealStatus: { open: "открыта", won: "выиграна", lost: "проиграна" },
+    taskType: { none: "задача", email: "письмо", demo: "демо", lunch: "обед", meeting: "встреча", "follow-up": "повторный контакт", "thank-you": "благодарность", ship: "доставка", call: "звонок" },
+  },
+  uk: {
+    status: { cold: "холодний", warm: "теплий", hot: "гарячий", "in-contract": "клієнт (за договором)" },
+    dealStatus: { open: "відкрита", won: "виграна", lost: "програна" },
+    taskType: { none: "завдання", email: "лист", demo: "демо", lunch: "обід", meeting: "зустріч", "follow-up": "повторний контакт", "thank-you": "подяка", ship: "доставка", call: "дзвінок" },
+  },
+  ar: {
+    status: { cold: "بارد", warm: "فاتر", hot: "ساخن", "in-contract": "عميل (بعقد)" },
+    dealStatus: { open: "مفتوحة", won: "مكسوبة", lost: "خاسرة" },
+    taskType: { none: "مهمة", email: "بريد إلكتروني", demo: "عرض توضيحي", lunch: "غداء", meeting: "اجتماع", "follow-up": "متابعة", "thank-you": "شكر", ship: "شحن", call: "مكالمة" },
+  },
+  hi: {
+    status: { cold: "ठंडा", warm: "गुनगुना", hot: "गर्म", "in-contract": "ग्राहक (अनुबंध में)" },
+    dealStatus: { open: "खुला", won: "जीता", lost: "हारा" },
+    taskType: { none: "कार्य", email: "ईमेल", demo: "डेमो", lunch: "लंच", meeting: "मीटिंग", "follow-up": "फ़ॉलो-अप", "thank-you": "धन्यवाद", ship: "डिलीवरी", call: "कॉल" },
+  },
+  id: {
+    status: { cold: "dingin", warm: "hangat", hot: "panas", "in-contract": "pelanggan (terikat kontrak)" },
+    dealStatus: { open: "terbuka", won: "menang", lost: "kalah" },
+    taskType: { none: "tugas", email: "email", demo: "demo", lunch: "makan siang", meeting: "rapat", "follow-up": "tindak lanjut", "thank-you": "ucapan terima kasih", ship: "pengiriman", call: "telepon" },
+  },
+  vi: {
+    status: { cold: "lạnh", warm: "ấm", hot: "nóng", "in-contract": "khách hàng (có hợp đồng)" },
+    dealStatus: { open: "đang mở", won: "thành công", lost: "thất bại" },
+    taskType: { none: "công việc", email: "email", demo: "demo", lunch: "ăn trưa", meeting: "cuộc họp", "follow-up": "theo dõi", "thank-you": "cảm ơn", ship: "giao hàng", call: "cuộc gọi" },
+  },
+  th: {
+    status: { cold: "เย็น", warm: "อุ่น", hot: "ร้อน", "in-contract": "ลูกค้า (มีสัญญา)" },
+    dealStatus: { open: "เปิดอยู่", won: "ปิดได้", lost: "ไม่สำเร็จ" },
+    taskType: { none: "งาน", email: "อีเมล", demo: "สาธิต", lunch: "มื้อกลางวัน", meeting: "ประชุม", "follow-up": "ติดตามผล", "thank-you": "ขอบคุณ", ship: "จัดส่ง", call: "โทร" },
+  },
+  ja: {
+    status: { cold: "コールド", warm: "ウォーム", hot: "ホット", "in-contract": "顧客（契約中）" },
+    dealStatus: { open: "進行中", won: "受注", lost: "失注" },
+    taskType: { none: "タスク", email: "メール", demo: "デモ", lunch: "ランチ", meeting: "ミーティング", "follow-up": "フォローアップ", "thank-you": "お礼", ship: "発送", call: "電話" },
+  },
+  ko: {
+    status: { cold: "콜드", warm: "웜", hot: "핫", "in-contract": "고객(계약 중)" },
+    dealStatus: { open: "진행 중", won: "수주", lost: "실패" },
+    taskType: { none: "할 일", email: "이메일", demo: "데모", lunch: "점심", meeting: "미팅", "follow-up": "후속 연락", "thank-you": "감사 인사", ship: "배송", call: "전화" },
+  },
+  "zh-CN": {
+    status: { cold: "冷", warm: "温", hot: "热", "in-contract": "客户（已签约）" },
+    dealStatus: { open: "进行中", won: "赢单", lost: "输单" },
+    taskType: { none: "任务", email: "邮件", demo: "演示", lunch: "午餐", meeting: "会议", "follow-up": "跟进", "thank-you": "致谢", ship: "发货", call: "电话" },
+  },
+  "zh-TW": {
+    status: { cold: "冷", warm: "溫", hot: "熱", "in-contract": "客戶（已簽約）" },
+    dealStatus: { open: "進行中", won: "成交", lost: "未成交" },
+    taskType: { none: "任務", email: "郵件", demo: "展示", lunch: "午餐", meeting: "會議", "follow-up": "跟進", "thank-you": "致謝", ship: "出貨", call: "電話" },
   },
 };
 

@@ -4,8 +4,10 @@ name: 🚀 Deploy Supabase Edge Functions
 #   - Railway (vertal.dev / kubovibe.dev): builds every push to main with Railpack + Caddy
 #     (service build command: npm install --legacy-peer-deps && npm run build:deploy).
 #   - Cloudflare Workers Builds ("vertaldev" worker).
-# Database migrations are not pushed automatically: production's migration history has drifted from
-# supabase/migrations, so `supabase db push` would try to re-run old migrations. Apply them deliberately.
+# Database migrations: supabase/migrations now mirrors production's migration history exactly
+# (see supabase/migrations_archive/README.md). The Supabase GitHub integration ("Supabase Preview"
+# check on main) applies any migration in supabase/migrations that production has not recorded yet,
+# so a new migration file merged to main WILL run on production.
 
 on:
   push:

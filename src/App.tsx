@@ -9,6 +9,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { lazy, Suspense, forwardRef } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ClockRinger } from "@/components/clock/ClockRinger";
+import { WelcomeEmailTrigger } from "@/components/vertal-welcome/WelcomeEmailTrigger";
 import AdGate from "@/components/AdGate";
 import { CreativeEconomyGate } from "@/components/creative/CreativeEconomyComingSoon";
 import { shouldRedirect, buildTarget } from "@/lib/canonicalRedirect";
@@ -40,6 +41,7 @@ const DataDeletionPage = lazy(() => import("./pages/DataDeletionPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const PricingPage = lazy(() => import("./pages/PricingPage"));
 const AlternativesPage = lazy(() => import("./pages/AlternativesPage"));
+const IntegrationsPage = lazy(() => import("./pages/IntegrationsPage"));
 const DownloadPage = lazy(() => import("./pages/DownloadPage"));
 const SupportPage = lazy(() => import("./pages/SupportPage"));
 const ConnectPage = lazy(() => import("./pages/ConnectPage"));
@@ -65,7 +67,7 @@ const ConnectorChannelPage = lazy(() => import("./pages/ConnectorChannelPage"));
 const ConnectorRenderPage = lazy(() => import("./pages/ConnectorRenderPage"));
 const ConnectorEcosystemPage = lazy(() => import("./pages/ConnectorEcosystemPage"));
 const EcosystemPage = lazy(() => import("./pages/EcosystemPage"));
-const ShortlinksPage = lazy(() => import("./pages/ShortlinksPage"));
+const RewardsPage = lazy(() => import("./pages/RewardsPage"));
 const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
 const PublicAppPage = lazy(() => import("./pages/PublicAppPage"));
 const EmailDashboardPage = lazy(() => import("./pages/EmailDashboardPage"));
@@ -226,6 +228,7 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
           <Toaster />
           <Sonner />
           <ClockRinger />
+          <WelcomeEmailTrigger />
           <BrowserRouter>
             <AdGate />
             <ErrorBoundary global resourceName="App">
@@ -242,6 +245,8 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/ecossistema" element={<EcosystemPage />} />
                 <Route path="/alternativas" element={<AlternativesPage />} />
                 <Route path="/alternativas/:slug" element={<AlternativesPage />} />
+                <Route path="/integracoes" element={<IntegrationsPage />} />
+                <Route path="/integracoes/:slug" element={<IntegrationsPage />} />
                 <Route path="/download" element={<DownloadPage />} />
                 <Route path="/support" element={<SupportPage />} />
                 <Route path="/docs" element={<DocsPage />} />
@@ -285,7 +290,9 @@ const App = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Route path="/connectors/:slug/about" element={<ProtectedRoute><ConnectorAboutPage /></ProtectedRoute>} />
                 <Route path="/connectors/:slug" element={<ProtectedRoute><ConnectorDetailPage /></ProtectedRoute>} />
                 
-                <Route path="/shortlinks" element={<ProtectedRoute><ShortlinksPage /></ProtectedRoute>} />
+                <Route path="/recompensas" element={<ProtectedRoute><RewardsPage /></ProtectedRoute>} />
+                {/* O sistema de shortlinks foi desativado; links antigos caem no painel de recompensas. */}
+                <Route path="/shortlinks" element={<Navigate to="/recompensas" replace />} />
                 <Route path="/leaderboard" element={<ProtectedRoute><LeaderboardPage /></ProtectedRoute>} />
                 <Route path="/emails" element={<ProtectedRoute><EmailDashboardPage /></ProtectedRoute>} />
                 <Route path="/plan/:id" element={<ProtectedRoute><PlanPage /></ProtectedRoute>} />

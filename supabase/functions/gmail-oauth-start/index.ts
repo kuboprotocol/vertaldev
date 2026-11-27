@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { gmailOAuthScopes } from '../_shared/gmailOAuthScopes.ts'
+import { gmailRedirectUri } from '../_shared/gmailOAuthRedirect.ts'
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -36,7 +37,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       client_id_configured: !!Deno.env.get('GMAIL_OAUTH_CLIENT_ID'),
       client_secret_configured: !!Deno.env.get('GMAIL_OAUTH_CLIENT_SECRET'),
-      redirect_uri: `${Deno.env.get('SUPABASE_URL')}/functions/v1/gmail-oauth-callback`,
+      redirect_uri: gmailRedirectUri((k) => Deno.env.get(k)),
     }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
   try {
@@ -59,7 +60,7 @@ Deno.serve(async (req) => {
     const returnUrl = body.returnUrl && isSafeReturnUrl(body.returnUrl) ? body.returnUrl : '/connectors/gmail'
     const origin = body.origin && isAllowedOrigin(body.origin) ? body.origin : (Deno.env.get('APP_ORIGIN') || 'https://vertal.dev')
 
-    const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/gmail-oauth-callback`
+    const redirectUri = gmailRedirectUri((k) => Deno.env.get(k))
     const nonce = crypto.randomUUID() + '.' + crypto.randomUUID()
 
     // Persiste nonce server-side (CSRF/replay protection)

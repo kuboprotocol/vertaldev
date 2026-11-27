@@ -3,7 +3,7 @@
  *
  * - `index.html`: substitui `%SITE_ORIGIN%` (canonical, og:url, JSON-LD) pela
  *   origem canônica do site e aplica o título/descrição da home.
- * - build: gera `sitemap.xml` (páginas públicas + /alternativas/*) e
+ * - build: gera `sitemap.xml` (páginas públicas + /alternativas/* + /integracoes/*) e
  *   `robots.txt` apontando para o sitemap.
  * - build: pré-renderiza cada página pública em `<rota>.html` com título,
  *   descrição, canonical e JSON-LD próprios. As páginas de comparação também
@@ -35,11 +35,17 @@ import {
   type RouteSeo,
 } from "../src/config/seo";
 import { hreflangLinks, localizedUrls, renderLocalizedPages } from "./seoLocales";
+import { ROOT_LOCALE } from "../src/config/locales";
+import { isEnglishRoute } from "../src/config/siteLanguage";
 import { renderVibePayPages, vibePayUrls } from "./vibePay";
 import { VIBE_PAY, VIBE_PAY_COPY } from "../src/config/vibePay";
 // Vertal CRM grátis (landing + docs em vários idiomas). Interruptor: VERTAL_FREE_CRM_SEO=false.
 import { isFreeCrmSeoEnabled } from "../src/config/freeCrm";
 import { freeCrmSitemapEntries, renderFreeCrmPages } from "./freeCrm";
+// Páginas de integração (/integracoes e /integracoes/<slug>), geradas do catálogo de conectores.
+import { renderIntegrationPages } from "./integrations";
+// Mesmas páginas em 21 idiomas + sitemaps por idioma (índice em /sitemap_index.xml).
+import { renderIntegrationI18nPages, renderIntegrationSitemaps, renderSitemapIndex } from "./integrationsI18n";
 
 /** Rotas públicas indexáveis (sem login). */
 const PUBLIC_ROUTES = [
@@ -129,7 +135,8 @@ ${body}
 
 export function renderRobots(origin: string = SITE_ORIGIN): string {
   // Allow explícito das landings do Vertal Vibe Pay (todas as línguas).
-  return `User-agent: *\nAllow: /\nAllow: /vibe-pay\nAllow: /*/vibe-pay\nDisallow: /admin/\n\nSitemap: ${origin}/sitemap.xml\n`;
+  // Allow explícito das páginas de integração (uma por conector).
+  return `User-agent: *\nAllow: /\nAllow: /vibe-pay\nAllow: /*/vibe-pay\nAllow: /integracoes\nAllow: /integracoes/\nDisallow: /admin/\n\nSitemap: ${origin}/sitemap.xml\nSitemap: ${origin}/sitemap_index.xml\n`;
 }
 
 const esc = (v: string) =>
@@ -232,10 +239,17 @@ function withBody(html: string, body: string): string {
   return html.replace(/<div id="root">[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/, `<div id="root">${body}</div>`);
 }
 
-/** HTML de cada página pública em pt-BR (raiz), indexado pelo arquivo de saída. */
+/** HTML de cada página pública (inglês ou pt-BR, conforme siteLanguage), indexado pelo arquivo de saída. */
 export function prerenderPages(html: string, origin: string = SITE_ORIGIN): Map<string, string> {
   // O index.html traz o hreflang da home; cada página põe o seu.
-  const indexHtml = html.replace(/\s*<link rel="alternate" hreflang="[^"]*" href="[^"]*" \/>/g, "");
+  // A home ("/") é em inglês; as páginas pré-renderizadas aqui são em pt-BR.
+  // Páginas já convertidas para inglês (src/config/siteLanguage.ts) mantêm lang="en".
+  const englishHtml = html.replace(/\s*<link rel="alternate" hreflang="[^"]*" href="[^"]*" \/>/g, "");
+  const indexHtml = html
+    .replace(/\s*<link rel="alternate" hreflang="[^"]*" href="[^"]*" \/>/g, "")
+    .replace('<html lang="en">', `<html lang="${ROOT_LOCALE}">`)
+    .replace('<meta property="og:locale" content="en_US" />', '<meta property="og:locale" content="pt_BR" />')
+    .replace(/\s*<meta property="og:locale:alternate" content="pt_BR" \/>/, "");
   const pages = new Map<string, string>();
   const home = [APP_NAME, "/"] as [string, string];
 
@@ -243,7 +257,8 @@ export function prerenderPages(html: string, origin: string = SITE_ORIGIN): Map<
     if (path === "/") continue;
     const extra = [jsonLd(breadcrumb(origin, [home, [seo.title, path]]))];
     if (path === "/alternativas") extra.push(hreflangLinks(origin, path));
-    let html = applyHead(indexHtml, seo, `${origin}${path}`, extra.join("\n    "));
+    const base = isEnglishRoute(path) ? englishHtml : indexHtml;
+    let html = applyHead(base, seo, `${origin}${path}`, extra.join("\n    "));
     if (path === "/alternativas") html = withBody(html, renderAlternativesIndexBody());
     pages.set(`${path.slice(1)}.html`, html);
   }
@@ -267,6 +282,7 @@ export function prerenderPages(html: string, origin: string = SITE_ORIGIN): Map<
     ].join("\n    ");
     pages.set(`alternativas/${alt.slug}.html`, withBody(applyHead(indexHtml, seo, `${origin}${path}`, head), renderAlternativeBody(alt)));
   }
+  for (const [file, page] of renderIntegrationPages(indexHtml, applyHead, origin)) pages.set(file, page);
   return pages;
 }
 
@@ -289,6 +305,8 @@ export function seoPlugin(): Plugin {
       this.emitFile({ type: "asset", fileName: "sitemap.xml", source: renderSitemap() });
       this.emitFile({ type: "asset", fileName: "robots.txt", source: renderRobots() });
       this.emitFile({ type: "asset", fileName: "rss.xml", source: renderRss() });
+      this.emitFile({ type: "asset", fileName: "sitemap_index.xml", source: renderSitemapIndex() });
+      for (const [fileName, source] of renderIntegrationSitemaps()) this.emitFile({ type: "asset", fileName, source });
     },
     // Depois que o Vite gravou o index.html final (com os scripts com hash).
     writeBundle(options) {
@@ -304,6 +322,7 @@ export function seoPlugin(): Plugin {
         ...prerenderPages(indexHtml),
         ...renderLocalizedPages(),
         ...renderVibePayPages(),
+        ...renderIntegrationI18nPages(),
         ...(isFreeCrmSeoEnabled() ? renderFreeCrmPages() : []),
       ]);
       for (const [file, html] of pages) {

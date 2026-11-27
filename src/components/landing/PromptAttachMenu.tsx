@@ -40,6 +40,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { UPLOAD_ACCEPT } from '@/lib/fileUpload'
 
 interface PromptAttachMenuProps {
   onAttachFile: (file: File) => void
@@ -257,6 +258,8 @@ export default function PromptAttachMenu({ onAttachFile, onScreenshot, onAddRefe
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    // Limpa o seletor para poder escolher o mesmo arquivo de novo.
+    e.target.value = ''
     if (file) onAttachFile(file)
   }
 
@@ -353,7 +356,7 @@ export default function PromptAttachMenu({ onAttachFile, onScreenshot, onAddRefe
         ref={fileInputRef}
         onChange={handleFileChange}
         className="hidden"
-        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.zip,.rar"
+        accept={UPLOAD_ACCEPT}
       />
 
       <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setView('main') }}>

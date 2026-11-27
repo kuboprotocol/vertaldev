@@ -1,21 +1,33 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Pages written in English (copy of ENGLISH_ROUTES in src/config/siteLanguage.ts);
+      // the other app routes keep pt-BR. Set before first paint so browsers offer the right translation.
+      (function () {
+        var en = ["/", "/pricing", "/ecossistema", "/download", "/support", "/docs", "/docs/mcp", "/terms", "/privacy", "/data-deletion", "/anywhere", "/reset-password", "/dashboard", "/profile", "/recompensas", "/affiliate-program", "/domains", "/secrets", "/mcp", "/leaderboard", "/emails", "/orchestrator", "/connect", "/vibe-agents", "/pay", "/creative", "/creative/investigation", "/creative/audit", "/vertal-code-ai", "/game", "/game/editor", "/game/retro", "/game/rpg", "/game/metaverse", "/game/sdk", "/game/vr", "/game/ai", "/game/scene", "/games"];
+        var enp = ["/connectors", "/fluxos/oauth", "/agents", "/plan", "/admin", "/pwa/telemetry"];
+        var p = location.pathname.replace(/\/+$/, "") || "/";
+        var isEn = en.indexOf(p) >= 0 || enp.some(function (x) { return p === x || p.indexOf(x + "/") === 0; });
+        if (!isEn) document.documentElement.lang = "pt-BR";
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0a0c12" />
-    <title>Vertal Vibe Dev — Crie apps com inteligência artificial</title>
-    <meta name="description" content="A plataforma definitiva para criar, gerenciar e escalar seus aplicativos usando IA. Registro de domínios, integração com GitHub, Gmail e muito mais.">
+    <title>Vertal Vibe Dev: build apps with AI</title>
+    <meta name="description" content="Describe your idea and Vertal Vibe Dev builds the app with AI, including the backend, connectors, and your own domain.">
     <meta name="author" content="KUBO PROTOCOL" />
     <link rel="canonical" href="%SITE_ORIGIN%/" />
     <link rel="alternate" type="application/rss+xml" title="Vertal Vibe Dev" href="%SITE_ORIGIN%/rss.xml" />
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Vertal Vibe Dev" />
-    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale:alternate" content="pt_BR" />
     <meta property="og:url" content="%SITE_ORIGIN%/" />
-    <meta property="og:title" content="Vertal Vibe Dev — Crie apps com inteligência artificial">
-    <meta property="og:description" content="A plataforma definitiva para criar, gerenciar e escalar seus aplicativos usando IA.">
+    <meta property="og:title" content="Vertal Vibe Dev: build apps with AI">
+    <meta property="og:description" content="Describe your idea and Vertal Vibe Dev builds the app with AI.">
     <meta property="og:image" content="%SITE_ORIGIN%/og-image.png">
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
@@ -23,8 +35,8 @@
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@KuboVibe" />
-    <meta name="twitter:title" content="Vertal Vibe Dev — Crie apps com inteligência artificial">
-    <meta name="twitter:description" content="A plataforma definitiva para criar, gerenciar e escalar seus aplicativos usando IA.">
+    <meta name="twitter:title" content="Vertal Vibe Dev: build apps with AI">
+    <meta name="twitter:description" content="Describe your idea and Vertal Vibe Dev builds the app with AI.">
     <meta name="twitter:image" content="%SITE_ORIGIN%/og-image.png">
     
     <script type="application/ld+json">
@@ -55,7 +67,7 @@
             "url": "%SITE_ORIGIN%/",
             "applicationCategory": "DeveloperApplication",
             "operatingSystem": "Web, Windows, macOS, Linux, Android, iOS",
-            "description": "Plataforma de vibe coding: descreva sua ideia e a IA cria o app com backend, Web3, conectores e domínio em um só lugar.",
+            "description": "Vibe coding platform: describe your idea and the AI builds the app with backend, Web3, connectors, and domain in one place.",
             "publisher": { "@id": "%SITE_ORIGIN%/#organization" },
             "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
           }
@@ -89,9 +101,23 @@
   <body>
     <div id="root">
       <div class="boot-fallback" role="status" aria-live="polite">
-        <div class="boot-fallback__content"><span class="boot-fallback__spinner" aria-hidden="true"></span><h1 class="boot-fallback__title">Vertal Vibe Dev — crie apps com IA</h1></div>
+        <div class="boot-fallback__content"><span class="boot-fallback__spinner" aria-hidden="true"></span><h1 class="boot-fallback__title">Vertal Vibe Dev: build apps with AI</h1></div>
       </div>
     </div>
+    <script>
+      // vertal.dev/embed inside a frame where the browser blocks storage (Safari
+      // with all cookies blocked, Chrome private windows): the app can't start
+      // there, so show a plain "Open in Vertal Dev" link instead of a spinner.
+      (function () {
+        var p = location.pathname;
+        if (p !== '/embed' && p.indexOf('/embed/') !== 0) return;
+        try { localStorage.setItem('__vertal_embed_probe__', '1'); localStorage.removeItem('__vertal_embed_probe__'); return; } catch (e) {}
+        var root = document.getElementById('root');
+        if (!root) return;
+        root.innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#080B14;color:#EEF2FF;font-family:Inter,system-ui,sans-serif;text-align:center;padding:24px"><div><p style="margin:0 0 16px">Your browser blocks sign-in inside embedded pages.</p><a href="/builder" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:8px 16px;border-radius:999px;background:#D4AF37;color:#0B0B0B;font-weight:600;text-decoration:none">Open in Vertal Dev</a></div></div>';
+        window.__VERTAL_EMBED_BLOCKED__ = true;
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

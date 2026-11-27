@@ -27,11 +27,13 @@ import { walletApi, connectPendingText, brandLabel, isExpired, FUNDING_LABEL, ty
 import { CHARGE_CURRENCIES, platformFeeFor, formatMinor, toMinorUnits, findCurrency } from '@/lib/wallet/currency'
 import { loadStripe, type StripeJs } from '@/lib/wallet/stripe'
 import { PIX_KEY_TYPES, PIX_COUNTRIES, validatePixKey, type PixKeyType } from '@/lib/wallet/pix'
+import { PIX_KEY_LABEL_EN, PIX_KEY_PLACEHOLDER_EN, formatDate, pixKeyErrorEn, regionName } from '@/components/bank/payCopyEn'
 
 const countryFlag = (code: string) => PIX_COUNTRIES.find((c) => c.code === code)?.flag ?? code
-const PIX_TEAL = '#32BCAD' // cor oficial da marca Pix (Banco Central)
+const pixKeyLabel = (t: PixKeyType) => PIX_KEY_LABEL_EN[t] ?? PIX_KEY_TYPES.find((x) => x.value === t)?.label
+const PIX_TEAL = '#32BCAD' // official Pix brand color (Central Bank of Brazil)
 
-// Gradientes por bandeira: o cartão na tela lembra o plástico de verdade.
+// Gradients per card brand: the card on screen looks like the real one.
 const BRAND_SKIN: Record<string, string> = {
   visa: 'from-[#1a1f71] via-[#2a3a9f] to-[#0e1240]',
   mastercard: 'from-[#2b2b2b] via-[#3d2a1f] to-[#120c08]',
@@ -79,18 +81,18 @@ function CardVisual({ card }: { card: WalletCard }) {
           </div>
           {card.isDefault && (
             <span className="flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-medium backdrop-blur">
-              <Star className="h-3 w-3 fill-current" />Padrão
+              <Star className="h-3 w-3 fill-current" />Default
             </span>
           )}
         </div>
         <p className="font-mono text-lg tracking-[0.18em] sm:text-xl">•••• •••• •••• {card.last4}</p>
         <div className="flex items-end justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[9px] uppercase tracking-[0.2em] text-white/60">{card.label ? 'Apelido' : 'Titular'}</p>
-            <p className="truncate text-sm font-medium uppercase">{card.label || card.holderName || 'Seu cartão'}</p>
+            <p className="text-[9px] uppercase tracking-[0.2em] text-white/60">{card.label ? 'Nickname' : 'Cardholder'}</p>
+            <p className="truncate text-sm font-medium uppercase">{card.label || card.holderName || 'Your card'}</p>
           </div>
           <div className="shrink-0 text-right">
-            <p className="text-[9px] uppercase tracking-[0.2em] text-white/60">{expired ? 'Vencido' : 'Validade'}</p>
+            <p className="text-[9px] uppercase tracking-[0.2em] text-white/60">{expired ? 'Expired' : 'Expires'}</p>
             <p className="font-mono text-sm">{String(card.expMonth).padStart(2, '0')}/{String(card.expYear).slice(-2)}</p>
           </div>
           <BrandMark brand={card.brand} />
@@ -101,7 +103,7 @@ function CardVisual({ card }: { card: WalletCard }) {
 }
 
 function PixLogo({ className = 'h-5 w-5' }: { className?: string }) {
-  // Losango estilizado na cor oficial do Pix.
+  // Stylized diamond in the official Pix color.
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
       <path fill={PIX_TEAL} d="M12 2.2 21.8 12 12 21.8 2.2 12Z" opacity=".18" />
@@ -112,14 +114,14 @@ function PixLogo({ className = 'h-5 w-5' }: { className?: string }) {
 
 function TrustStrip() {
   const items = [
-    { icon: Lock, title: 'PCI DSS nível 1', text: 'Cartão digitado direto no Stripe' },
-    { icon: Fingerprint, title: 'AES-256-GCM', text: 'Chaves Pix cifradas em repouso' },
-    { icon: BadgeCheck, title: 'LGPD', text: 'Só você vê e remove seus dados' },
+    { icon: Lock, title: 'PCI DSS Level 1', text: 'Card details go straight to Stripe' },
+    { icon: Fingerprint, title: 'AES-256-GCM', text: 'Pix keys are encrypted at rest' },
+    { icon: BadgeCheck, title: 'LGPD', text: 'Only you can see and remove your data' },
   ]
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
       {items.map(({ icon: Icon, title, text }) => (
-        <div key={title} className="flex items-start gap-2.5 rounded-xl border border-border/60 bg-background/40 p-3">
+        <div key={title} className="flex items-start gap-2.5 rounded-xl border border-white/[0.06] p-3">
           <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10">
             <Icon className="h-3.5 w-3.5 text-primary" />
           </span>
@@ -139,10 +141,10 @@ function EmptyState({ icon, title, text, action, onAction }: {
   return (
     <button
       onClick={onAction}
-      className="group flex w-full flex-col items-center gap-3 rounded-2xl border border-dashed border-border bg-background/30 px-6 py-10 text-center transition-colors hover:border-primary/50 hover:bg-primary/5"
+      className="group flex w-full flex-col items-center gap-3 rounded-xl border border-dashed border-white/[0.1] px-6 py-10 text-center transition-colors hover:border-primary/50 hover:bg-primary/5"
     >
       <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 transition-transform group-hover:scale-105">{icon}</span>
-      <span className="font-display font-semibold text-foreground">{title}</span>
+      <span className="font-semibold text-foreground">{title}</span>
       <span className="max-w-xs text-sm text-muted-foreground">{text}</span>
       <span className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-primary"><Plus className="h-4 w-4" />{action}</span>
     </button>
@@ -154,9 +156,9 @@ function Skeleton() {
 }
 
 /**
- * Vertal Vibe Pay — cartões e Pix (antiga "Carteira").
- * variant="profile": bloco no perfil, com atalho para /pay.
- * variant="bank": aba "Cartões e Pix" dentro do /pay.
+ * Vertal Vibe Pay: cards and Pix (formerly "Carteira").
+ * variant="profile": block in the profile, with a shortcut to /pay.
+ * variant="bank": "Cards and Pix" tab inside /pay.
  */
 export default function WalletSection({ variant = 'profile' }: { variant?: 'profile' | 'bank' } = {}) {
   const [loading, setLoading] = useState(true)
@@ -174,7 +176,7 @@ export default function WalletSection({ variant = 'profile' }: { variant?: 'prof
       setCards(data.cards)
       setPix(data.pix)
     } catch (e) {
-      toast.error((e as Error).message || 'Erro ao carregar o Vertal Vibe Pay')
+      toast.error((e as Error).message || 'Could not load Vertal Vibe Pay')
     } finally {
       setLoading(false)
     }
@@ -182,8 +184,8 @@ export default function WalletSection({ variant = 'profile' }: { variant?: 'prof
 
   useEffect(() => { refresh() }, [refresh])
 
-  // Volta de um redirecionamento do Stripe (3D Secure / autenticação do banco)
-  // no cadastro de cartão: conclui o card-attach que o navegador não chegou a fazer.
+  // Back from a Stripe redirect (3D Secure / card issuer authentication) while
+  // adding a card: finishes the card-attach the browser did not get to do.
   useEffect(() => {
     const url = new URL(window.location.href)
     const seti = url.searchParams.get('setup_intent')
@@ -192,22 +194,22 @@ export default function WalletSection({ variant = 'profile' }: { variant?: 'prof
     if (!seti && !setupSession) return
     ;['setup_intent', 'setup_intent_client_secret', 'redirect_status', 'wallet', 'setup_session'].forEach((k) => url.searchParams.delete(k))
     window.history.replaceState(null, '', url.pathname + (url.search ? url.search : '') + url.hash)
-    // Volta da página hospedada do Stripe (sem chave publicável configurada).
+    // Back from the Stripe hosted page (no publishable key set up).
     if (setupSession) {
-      if (!setupSession.startsWith('cs_')) { toast.message('Cadastro do cartão cancelado.'); return }
+      if (!setupSession.startsWith('cs_')) { toast.message('Adding the card was canceled.'); return }
       walletApi.cardAttachSession(setupSession)
-        .then(() => { toast.success('Cartão adicionado!'); refresh() })
-        .catch((e) => { if (!/já está/.test((e as Error).message)) toast.error((e as Error).message); refresh() })
+        .then(() => { toast.success('Card added'); refresh() })
+        .catch((e) => { if (!/já está|already in your/.test((e as Error).message)) toast.error((e as Error).message); refresh() })
       return
     }
     if (!seti) return
     if (status !== 'succeeded') {
-      toast.error('O banco não autorizou o cartão. Tente outro cartão.')
+      toast.error('The card issuer did not authorize the card. Try another card.')
       return
     }
     walletApi.cardAttach(seti)
-      .then(() => { toast.success('Cartão adicionado!'); refresh() })
-      .catch((e) => { if (!/já está/.test((e as Error).message)) toast.error((e as Error).message); refresh() })
+      .then(() => { toast.success('Card added'); refresh() })
+      .catch((e) => { if (!/já está|already in your/.test((e as Error).message)) toast.error((e as Error).message); refresh() })
   }, [refresh])
 
   const run = async (id: string, fn: () => Promise<unknown>, ok: string) => {
@@ -228,61 +230,60 @@ export default function WalletSection({ variant = 'profile' }: { variant?: 'prof
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.2 }}
-      className="glass glass-border relative overflow-hidden rounded-2xl p-6 sm:p-8 space-y-6"
+      className="relative space-y-6 overflow-hidden rounded-2xl border border-white/[0.06] bg-card/50 p-6 sm:p-8"
       data-testid="wallet-section"
       aria-labelledby="wallet-title"
     >
-      <div className="pointer-events-none absolute -top-24 right-0 h-48 w-72 rounded-full bg-primary/15 blur-3xl" />
 
-      {/* Cabeçalho */}
+      {/* Header */}
       <header className="relative flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-2xl gradient-primary shadow-glow">
-            <Wallet className="h-5 w-5 text-primary-foreground" />
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10">
+            <Wallet className="h-5 w-5 text-primary" />
           </span>
           <div>
-            <h3 id="wallet-title" className="font-display text-lg font-semibold text-foreground">
-              {variant === 'bank' ? 'Cartões e Pix' : <>VERTAL VIBE <span className="text-primary">PAY</span></>}
+            <h3 id="wallet-title" className="text-lg font-semibold text-foreground">
+              {variant === 'bank' ? 'Cards and Pix' : <span translate="no">Vertal Vibe Pay</span>}
             </h3>
             <p className="text-sm text-muted-foreground">
-              {variant === 'bank' ? 'Seus cartões salvos e chaves Pix' : 'Conta Brasil, conta global, cartões e Pix no Vertal Dev'}
+              {variant === 'bank' ? 'Your saved cards and Pix keys' : 'Brazil account, global account, cards and Pix in Vertal Dev'}
             </p>
           </div>
         </div>
         {variant === 'profile' && (
-          <Button asChild size="sm" className="gap-1.5 gradient-primary text-primary-foreground">
-            <Link to="/pay"><ArrowUpRight className="h-4 w-4" />Abrir Vertal Vibe Pay</Link>
+          <Button asChild size="sm" className="gap-1.5 rounded-full">
+            <Link to="/pay"><ArrowUpRight className="h-4 w-4" />Open Vertal Vibe Pay</Link>
           </Button>
         )}
         <div className="flex gap-2 text-center">
-          <div className="rounded-xl bg-secondary/50 px-3 py-1.5">
-            <p className="font-display text-base font-bold text-foreground">{loading ? '–' : cards.length}</p>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Cartões</p>
+          <div className="rounded-xl bg-white/[0.04] px-3 py-1.5">
+            <p className="text-base font-semibold text-foreground">{loading ? '–' : cards.length}</p>
+            <p className="text-[11px] text-muted-foreground">Cards</p>
           </div>
-          <div className="rounded-xl bg-secondary/50 px-3 py-1.5">
-            <p className="font-display text-base font-bold text-foreground">{loading ? '–' : pix.length}</p>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Chaves Pix</p>
+          <div className="rounded-xl bg-white/[0.04] px-3 py-1.5">
+            <p className="text-base font-semibold text-foreground">{loading ? '–' : pix.length}</p>
+            <p className="text-[11px] text-muted-foreground">Pix keys</p>
           </div>
         </div>
       </header>
 
       <Tabs defaultValue="cards" className="relative">
         <TabsList className={`grid h-11 w-full rounded-xl ${variant === 'bank' ? 'grid-cols-2' : 'grid-cols-3'}`}>
-          <TabsTrigger value="cards" className="gap-2 rounded-lg"><CreditCard className="h-4 w-4" />Cartões</TabsTrigger>
+          <TabsTrigger value="cards" className="gap-2 rounded-lg"><CreditCard className="h-4 w-4" />Cards</TabsTrigger>
           <TabsTrigger value="pix" className="gap-2 rounded-lg"><PixLogo className="h-4 w-4" />Pix</TabsTrigger>
-          {variant === 'profile' && <TabsTrigger value="receive" className="gap-2 rounded-lg"><HandCoins className="h-4 w-4" />Receber</TabsTrigger>}
+          {variant === 'profile' && <TabsTrigger value="receive" className="gap-2 rounded-lg"><HandCoins className="h-4 w-4" />Receive</TabsTrigger>}
         </TabsList>
 
-        {/* ── Cartões ───────────────────────────────────────────── */}
+        {/* ── Cards ─────────────────────────────────────────────── */}
         <TabsContent value="cards" className="pt-5">
           {loading ? (
             <div className="grid gap-4 sm:grid-cols-2"><Skeleton /><Skeleton /></div>
           ) : cards.length === 0 ? (
             <EmptyState
               icon={<CreditCard className="h-6 w-6 text-primary" />}
-              title="Nenhum cartão ainda"
-              text="Adicione um cartão de crédito ou débito, de qualquer país. O número nunca passa pelos nossos servidores."
-              action="Adicionar cartão"
+              title="No cards yet"
+              text="Add a credit or debit card from any country. The card number never goes through our servers."
+              action="Add card"
               onAction={() => setCardOpen(true)}
             />
           ) : (
@@ -304,22 +305,22 @@ export default function WalletSection({ variant = 'profile' }: { variant?: 'prof
                         <ItemMenu
                           busy={busyId === c.id}
                           isDefault={c.isDefault}
-                          onDefault={() => run(c.id, () => walletApi.setDefault(c.id), 'Cartão definido como padrão')}
-                          onRemove={() => setConfirmRemove({ id: c.id, what: `o cartão final ${c.last4}` })}
+                          onDefault={() => run(c.id, () => walletApi.setDefault(c.id), 'Card set as default')}
+                          onRemove={() => setConfirmRemove({ id: c.id, what: `the card ending in ${c.last4}` })}
                           light
                         />
                       </div>
                       {c.country && (
-                        <p className="mt-2 px-1 text-[11px] text-muted-foreground">Emitido em {c.country}</p>
+                        <p className="mt-2 px-1 text-[11px] text-muted-foreground">Issued in {regionName(c.country, c.country)}</p>
                       )}
                     </motion.div>
                   ))}
                 </AnimatePresence>
                 <button
                   onClick={() => setCardOpen(true)}
-                  className="flex aspect-[1.586] w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-background/30 text-sm font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                  className="flex aspect-[1.586] w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-white/[0.1] text-sm font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
                 >
-                  <Plus className="h-6 w-6" />Adicionar cartão
+                  <Plus className="h-6 w-6" />Add card
                 </button>
               </div>
             </div>
@@ -333,9 +334,9 @@ export default function WalletSection({ variant = 'profile' }: { variant?: 'prof
           ) : pix.length === 0 ? (
             <EmptyState
               icon={<PixLogo className="h-7 w-7" />}
-              title="Nenhuma chave Pix ainda"
-              text="Cadastre CPF, CNPJ, e-mail, celular ou chave aleatória para receber com QR Code."
-              action="Adicionar chave Pix"
+              title="No Pix keys yet"
+              text="Add a CPF, CNPJ, email, mobile number or random key to receive payments with a QR code."
+              action="Add Pix key"
               onAction={() => setPixOpen(true)}
             />
           ) : (
@@ -348,7 +349,7 @@ export default function WalletSection({ variant = 'profile' }: { variant?: 'prof
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
-                    className="flex items-center gap-4 rounded-2xl border border-border/60 bg-background/40 p-4 transition-colors hover:border-[#32BCAD]/40"
+                    className="flex items-center gap-4 rounded-xl border border-white/[0.06] bg-card/50 p-4 transition-colors hover:border-[#32BCAD]/40"
                     data-testid="wallet-pix"
                   >
                     <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl" style={{ backgroundColor: `${PIX_TEAL}1f` }}>
@@ -356,12 +357,12 @@ export default function WalletSection({ variant = 'profile' }: { variant?: 'prof
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="font-medium text-foreground">{p.label || PIX_KEY_TYPES.find((t) => t.value === p.keyType)?.label}</span>
-                        <Badge variant="secondary" className="text-[10px]">{PIX_KEY_TYPES.find((t) => t.value === p.keyType)?.label}</Badge>
-                        {p.isDefault && <Badge className="gap-1 text-[10px]"><Star className="h-2.5 w-2.5 fill-current" />Padrão</Badge>}
+                        <span className="font-medium text-foreground">{p.label || pixKeyLabel(p.keyType)}</span>
+                        <Badge variant="secondary" className="text-[10px]">{pixKeyLabel(p.keyType)}</Badge>
+                        {p.isDefault && <Badge className="gap-1 text-[10px]"><Star className="h-2.5 w-2.5 fill-current" />Default</Badge>}
                       </div>
                       <p className="mt-0.5 truncate font-mono text-sm text-muted-foreground">{p.maskedKey}</p>
-                      <p className="mt-1 text-sm leading-none" title="Países onde você usa este Pix">
+                      <p className="mt-1 text-sm leading-none" title="Countries where you use this Pix key">
                         {p.countries.map((c) => <span key={c} className="mr-1">{countryFlag(c)}</span>)}
                       </p>
                     </div>
@@ -371,32 +372,32 @@ export default function WalletSection({ variant = 'profile' }: { variant?: 'prof
                       className="hidden gap-1.5 text-white sm:inline-flex"
                       style={{ backgroundColor: PIX_TEAL }}
                     >
-                      <QrCode className="h-4 w-4" />Receber
+                      <QrCode className="h-4 w-4" />Receive
                     </Button>
                     <ItemMenu
                       busy={busyId === p.id}
                       isDefault={p.isDefault}
                       onReceive={() => setReceiveFrom(p)}
-                      onDefault={() => run(p.id, () => walletApi.setDefault(p.id), 'Chave Pix definida como padrão')}
-                      onRemove={() => setConfirmRemove({ id: p.id, what: `a chave Pix ${p.maskedKey}` })}
+                      onDefault={() => run(p.id, () => walletApi.setDefault(p.id), 'Pix key set as default')}
+                      onRemove={() => setConfirmRemove({ id: p.id, what: `the Pix key ${p.maskedKey}` })}
                     />
                   </motion.div>
                 ))}
               </AnimatePresence>
               <Button variant="outline" className="h-11 w-full gap-2 rounded-xl" onClick={() => setPixOpen(true)}>
-                <Plus className="h-4 w-4" />Adicionar chave Pix
+                <Plus className="h-4 w-4" />Add Pix key
               </Button>
             </div>
           )}
-          <div className="flex items-start gap-2.5 rounded-xl bg-secondary/40 p-3">
+          <div className="flex items-start gap-2.5 rounded-xl border border-white/[0.06] p-3">
             <Globe2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
             <p className="text-[11px] leading-relaxed text-muted-foreground">
-              A chave Pix é sempre de uma conta no Brasil. Fora do país, o Pix é aceito em comércios parceiros de{' '}
-              {PIX_COUNTRIES.filter((c) => !c.domestic).map((c) => `${c.flag} ${c.name}`).join(', ')}, com conversão de moeda no app do seu banco.
+              A Pix key always belongs to an account in Brazil. Outside Brazil, Pix is accepted at partner stores in{' '}
+              {PIX_COUNTRIES.filter((c) => !c.domestic).map((c) => `${c.flag} ${regionName(c.code, c.name)}`).join(', ')}, with currency conversion in your banking app.
             </p>
           </div>
         </TabsContent>
-        {/* ── Receber com Stripe ───────────────────────────────── */}
+        {/* ── Receive with Stripe ──────────────────────────────── */}
         <TabsContent value="receive" className="pt-5">
           <ReceiveTab />
         </TabsContent>
@@ -411,22 +412,22 @@ export default function WalletSection({ variant = 'profile' }: { variant?: 'prof
       <AlertDialog open={!!confirmRemove} onOpenChange={(o) => { if (!o) setConfirmRemove(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover do Vertal Vibe Pay?</AlertDialogTitle>
+            <AlertDialogTitle>Remove from Vertal Vibe Pay?</AlertDialogTitle>
             <AlertDialogDescription>
-              Vamos remover {confirmRemove?.what}. Você pode adicionar de novo quando quiser.
+              We will remove {confirmRemove?.what}. You can add it again at any time.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
                 const target = confirmRemove
                 setConfirmRemove(null)
-                if (target) run(target.id, () => walletApi.remove(target.id), 'Removido')
+                if (target) run(target.id, () => walletApi.remove(target.id), 'Removed')
               }}
             >
-              Remover
+              Remove
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -435,12 +436,12 @@ export default function WalletSection({ variant = 'profile' }: { variant?: 'prof
   )
 }
 
-// ── Receber com Stripe Connect (qualquer moeda) ────────────────────────────
+// ── Receive with Stripe Connect (any currency) ─────────────────────────────
 const CHARGE_STATUS: Record<WalletCharge['status'], { label: string; icon: typeof Clock; cls: string }> = {
-  open: { label: 'Aguardando', icon: Clock, cls: 'text-amber-400 bg-amber-400/10' },
-  paid: { label: 'Pago', icon: CircleCheck, cls: 'text-emerald-400 bg-emerald-400/10' },
-  expired: { label: 'Expirado', icon: CircleX, cls: 'text-muted-foreground bg-muted/40' },
-  failed: { label: 'Falhou', icon: CircleX, cls: 'text-destructive bg-destructive/10' },
+  open: { label: 'Waiting', icon: Clock, cls: 'text-amber-400 bg-amber-400/10' },
+  paid: { label: 'Paid', icon: CircleCheck, cls: 'text-emerald-400 bg-emerald-400/10' },
+  expired: { label: 'Expired', icon: CircleX, cls: 'text-muted-foreground bg-muted/40' },
+  failed: { label: 'Failed', icon: CircleX, cls: 'text-destructive bg-destructive/10' },
 }
 
 function ReceiveTab() {
@@ -467,7 +468,7 @@ function ReceiveTab() {
   const go = async (kind: 'onboard' | 'dashboard') => {
     setBusy(kind)
     try {
-      // Conta nova: escolhe o país na conta global do Vertal Vibe Pay.
+      // New account: choose the country in the Vertal Vibe Pay global account.
       if (kind === 'onboard' && !account) { window.location.assign('/pay?tab=contas'); return }
       const { url } = kind === 'onboard'
         ? await walletApi.connectOnboard({ returnPath: '/profile' })
@@ -489,45 +490,44 @@ function ReceiveTab() {
 
   return (
     <div className="space-y-4">
-      {/* Estado da conta */}
-      <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-br from-[#635bff]/20 via-background/40 to-background/20 p-5">
-        <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-[#635bff]/30 blur-2xl" />
+      {/* Account status */}
+      <div className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-card/50 p-5">
         <div className="relative flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#635bff] text-lg font-bold text-white shadow-lg">S</span>
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#635bff] text-lg font-bold text-white">S</span>
             <div>
-              <p className="font-display font-semibold text-foreground">
-                {ready ? 'Recebimentos ativos' : account ? (account.pastDue ? 'Verificação pendente' : 'Verificação em andamento') : 'Receba em qualquer moeda'}
+              <p className="font-semibold text-foreground">
+                {ready ? 'Payments on' : account ? (account.pastDue ? 'Verification needed' : 'Verification in progress') : 'Receive in other currencies'}
               </p>
               <p className="text-sm text-muted-foreground">
                 {ready
-                  ? `Conta ${account?.country ?? ''} · repasse em ${account?.defaultCurrency ?? 'BRL'}${account?.payoutsEnabled ? '' : ' · saque pendente'}`
+                  ? `Account ${account?.country ?? ''} · paid out in ${account?.defaultCurrency ?? 'BRL'}${account?.payoutsEnabled ? '' : ' · payouts pending'}`
                   : account
                     ? connectPendingText(account)
-                    : 'Conta global: real, dólar, euro e mais 13 moedas, em 40+ países'}
+                    : 'Global account: BRL, US dollars, euros and 13 more currencies'}
               </p>
             </div>
           </div>
           {ready ? (
             <div className="flex gap-2">
               <Button variant="outline" size="sm" className="gap-1.5" disabled={busy !== null} onClick={() => go('dashboard')}>
-                {busy === 'dashboard' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}Painel
+                {busy === 'dashboard' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpRight className="h-4 w-4" />}Dashboard
               </Button>
-              <Button size="sm" className="gap-1.5 gradient-primary text-primary-foreground" onClick={() => setNewOpen(true)}>
-                <Plus className="h-4 w-4" />Nova cobrança
+              <Button size="sm" className="gap-1.5 rounded-full" onClick={() => setNewOpen(true)}>
+                <Plus className="h-4 w-4" />New payment request
               </Button>
             </div>
           ) : (
             <Button className="gap-1.5 bg-[#635bff] text-white hover:bg-[#5249e0]" disabled={busy !== null} onClick={() => go('onboard')}>
               {busy === 'onboard' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              {account ? (account.pastDue ? 'Concluir verificação' : 'Continuar verificação') : 'Abrir conta global'}
+              {account ? (account.pastDue ? 'Finish verification' : 'Continue verification') : 'Open global account'}
             </Button>
           )}
         </div>
         {Object.keys(paidTotals).length > 0 && (
           <div className="relative mt-4 flex flex-wrap gap-2">
             {Object.entries(paidTotals).map(([cur, minor]) => (
-              <span key={cur} className="rounded-xl bg-background/60 px-3 py-1.5 text-sm font-semibold text-foreground">
+              <span key={cur} className="rounded-xl bg-white/[0.04] px-3 py-1.5 text-sm font-semibold text-foreground">
                 {findCurrency(cur)?.flag} {formatMinor(minor, cur)}
               </span>
             ))}
@@ -535,9 +535,9 @@ function ReceiveTab() {
         )}
       </div>
 
-      {/* Cobranças */}
+      {/* Payment requests */}
       {charges.length > 0 && (
-        <div className="divide-y divide-border/50 overflow-hidden rounded-2xl border border-border/60 bg-background/40">
+        <div className="divide-y divide-white/[0.06] overflow-hidden rounded-xl border border-white/[0.06] bg-card/50">
           {charges.map((c) => {
             const st = CHARGE_STATUS[c.status]
             const Icon = st.icon
@@ -546,12 +546,12 @@ function ReceiveTab() {
                 key={c.id}
                 disabled={!c.url}
                 onClick={() => setShown(c)}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors enabled:hover:bg-primary/5"
+                className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors enabled:hover:bg-white/[0.03]"
               >
                 <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${st.cls}`}><Icon className="h-4 w-4" /></span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">{c.description || 'Pagamento'}</p>
-                  <p className="text-[11px] text-muted-foreground">{new Date(c.createdAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })} · {st.label}</p>
+                  <p className="truncate text-sm font-medium text-foreground">{c.description || 'Payment'}</p>
+                  <p className="text-[11px] text-muted-foreground">{formatDate(c.createdAt, true)} · {st.label}</p>
                 </div>
                 <span className="shrink-0 font-mono text-sm font-semibold text-foreground">{formatMinor(c.amountMinor, c.currency)}</span>
               </button>
@@ -560,9 +560,9 @@ function ReceiveTab() {
         </div>
       )}
 
-      <p className="flex items-start gap-2 rounded-xl bg-secondary/40 p-3 text-[11px] leading-relaxed text-muted-foreground">
+      <p className="flex items-start gap-2 rounded-xl border border-white/[0.06] p-3 text-[12px] leading-relaxed text-muted-foreground">
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-        Taxa da plataforma: 1% de cada cobrança, na moeda cobrada (em {formatMinor(10000, 'BRL')}, {formatMinor(platformFeeFor(10000), 'BRL')}). As tarifas do Stripe aparecem no seu painel. O valor cai na sua conta Stripe e é repassado ao seu banco.
+        Platform fee: 1% of each payment, in the currency of the payment (on {formatMinor(10000, 'BRL')}, the fee is {formatMinor(platformFeeFor(10000), 'BRL')}). Stripe fees show in your Stripe dashboard. The money goes to your Stripe account and is then paid out to your bank account.
       </p>
 
       <NewChargeDialog open={newOpen} onOpenChange={setNewOpen} onCreated={(c) => { setShown(c); refresh() }} />
@@ -584,7 +584,7 @@ function NewChargeDialog({ open, onOpenChange, onCreated }: {
   const minor = toMinorUnits(value, currency)
 
   const submit = async () => {
-    if (minor === null) return toast.error('Informe um valor válido')
+    if (minor === null) return toast.error('Enter a valid amount')
     setSaving(true)
     try {
       const { charge } = await walletApi.connectCharge({ amount: value, currency, description: description.trim() || undefined })
@@ -601,17 +601,17 @@ function NewChargeDialog({ open, onOpenChange, onCreated }: {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><HandCoins className="h-5 w-5 text-primary" />Nova cobrança</DialogTitle>
-          <DialogDescription>Gere um link de pagamento seguro do Stripe. Seu cliente paga com cartão, Apple Pay ou Google Pay.</DialogDescription>
+          <DialogTitle className="flex items-center gap-2"><HandCoins className="h-5 w-5 text-primary" />New payment request</DialogTitle>
+          <DialogDescription>Create a secure Stripe payment link. Your customer pays by card, Apple Pay or Google Pay.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="grid grid-cols-[1fr_auto] gap-2">
             <div className="space-y-1.5">
-              <Label htmlFor="charge-amount">Valor</Label>
+              <Label htmlFor="charge-amount">Amount</Label>
               <Input id="charge-amount" inputMode="decimal" placeholder="0,00" value={amount} onChange={(e) => setAmount(e.target.value)} className="h-12 font-mono text-lg" autoFocus />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="charge-currency">Moeda</Label>
+              <Label htmlFor="charge-currency">Currency</Label>
               <select
                 id="charge-currency"
                 value={currency}
@@ -623,21 +623,21 @@ function NewChargeDialog({ open, onOpenChange, onCreated }: {
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="charge-desc">Descrição (opcional)</Label>
-            <Input id="charge-desc" maxLength={120} placeholder="Ex.: Consultoria de novembro" value={description} onChange={(e) => setDescription(e.target.value)} />
+            <Label htmlFor="charge-desc">Description (optional)</Label>
+            <Input id="charge-desc" maxLength={120} placeholder="For example: November consulting" value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
           {minor !== null && (
-            <div className="space-y-1 rounded-xl bg-secondary/40 p-3 text-sm">
-              <div className="flex justify-between"><span className="text-muted-foreground">Cliente paga</span><span className="font-mono">{formatMinor(minor, currency)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Taxa da plataforma (1%)</span><span className="font-mono">− {formatMinor(platformFeeFor(minor), currency)}</span></div>
-              <p className="pt-1 text-[11px] text-muted-foreground">Mais as tarifas do Stripe, descontadas na sua conta.</p>
+            <div className="space-y-1 rounded-xl border border-white/[0.06] p-3 text-sm">
+              <div className="flex justify-between"><span className="text-muted-foreground">Customer pays</span><span className="font-mono">{formatMinor(minor, currency)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Platform fee (1%)</span><span className="font-mono">− {formatMinor(platformFeeFor(minor), currency)}</span></div>
+              <p className="pt-1 text-[11px] text-muted-foreground">Plus Stripe fees, taken from your account.</p>
             </div>
           )}
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={submit} disabled={saving || minor === null} className="gradient-primary text-primary-foreground">
-            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Link2 className="mr-2 h-4 w-4" />}Gerar link
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={submit} disabled={saving || minor === null} className="rounded-full">
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Link2 className="mr-2 h-4 w-4" />}Create link
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -652,15 +652,15 @@ function ChargeLinkDialog({ charge, onClose }: { charge: WalletCharge | null; on
     if (!charge?.url) return
     await navigator.clipboard.writeText(charge.url)
     setCopied(true)
-    toast.success('Link copiado')
+    toast.success('Link copied')
     setTimeout(() => setCopied(false), 2000)
   }
   return (
     <Dialog open={!!charge} onOpenChange={(o) => { if (!o) onClose() }}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Cobrança de {charge ? formatMinor(charge.amountMinor, charge.currency) : ''}</DialogTitle>
-          <DialogDescription>{charge?.description || 'Envie o link ou mostre o QR Code para o cliente.'}</DialogDescription>
+          <DialogTitle>Payment request for {charge ? formatMinor(charge.amountMinor, charge.currency) : ''}</DialogTitle>
+          <DialogDescription>{charge?.description || 'Send the link or show the QR code to your customer.'}</DialogDescription>
         </DialogHeader>
         {charge?.url && (
           <div className="space-y-4">
@@ -669,13 +669,13 @@ function ChargeLinkDialog({ charge, onClose }: { charge: WalletCharge | null; on
             </div>
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1 gap-2" onClick={copy}>
-                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{copied ? 'Copiado' : 'Copiar link'}
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{copied ? 'Copied' : 'Copy link'}
               </Button>
               <Button asChild className="flex-1 gap-2 bg-[#635bff] text-white hover:bg-[#5249e0]">
-                <a href={charge.url} target="_blank" rel="noopener noreferrer"><ArrowUpRight className="h-4 w-4" />Abrir</a>
+                <a href={charge.url} target="_blank" rel="noopener noreferrer"><ArrowUpRight className="h-4 w-4" />Open</a>
               </Button>
             </div>
-            <p className="text-center text-[11px] text-muted-foreground">O link expira em 24 horas.</p>
+            <p className="text-center text-[11px] text-muted-foreground">The link expires in 24 hours.</p>
           </div>
         )}
       </DialogContent>
@@ -691,7 +691,7 @@ function ItemMenu({ busy, isDefault, onDefault, onRemove, onReceive, light }: {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          variant="ghost" size="icon" aria-label="Opções"
+          variant="ghost" size="icon" aria-label="Options"
           className={light ? 'h-8 w-8 rounded-full bg-black/30 text-white backdrop-blur hover:bg-black/50 hover:text-white' : 'shrink-0'}
         >
           <MoreHorizontal className="h-4 w-4" />
@@ -699,19 +699,19 @@ function ItemMenu({ busy, isDefault, onDefault, onRemove, onReceive, light }: {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         {onReceive && (
-          <DropdownMenuItem onClick={onReceive} className="gap-2"><HandCoins className="h-4 w-4" />Receber com QR Code</DropdownMenuItem>
+          <DropdownMenuItem onClick={onReceive} className="gap-2"><HandCoins className="h-4 w-4" />Receive with QR code</DropdownMenuItem>
         )}
         {!isDefault && (
-          <DropdownMenuItem onClick={onDefault} className="gap-2"><Star className="h-4 w-4" />Definir como padrão</DropdownMenuItem>
+          <DropdownMenuItem onClick={onDefault} className="gap-2"><Star className="h-4 w-4" />Set as default</DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={onRemove} className="gap-2 text-destructive focus:text-destructive"><Trash2 className="h-4 w-4" />Remover</DropdownMenuItem>
+        <DropdownMenuItem onClick={onRemove} className="gap-2 text-destructive focus:text-destructive"><Trash2 className="h-4 w-4" />Remove</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )
 }
 
-// ── Adicionar cartão (Stripe Payment Element, só cartão) ───────────────────
+// ── Add card (Stripe Payment Element, cards only) ──────────────────────────
 function AddCardDialog({ open, onOpenChange, onAdded }: {
   open: boolean; onOpenChange: (o: boolean) => void; onAdded: () => void
 }) {
@@ -732,7 +732,7 @@ function AddCardDialog({ open, onOpenChange, onAdded }: {
       try {
         const setup = await walletApi.cardSetup(['/pay', '/bank'].includes(window.location.pathname) ? '/pay' : '/profile')
         if (setup.checkoutUrl) {
-          // Sem chave publicável: cadastro na página segura do Stripe.
+          // No publishable key: add the card on the secure Stripe page.
           if (!cancelled) window.location.assign(setup.checkoutUrl)
           return
         }
@@ -746,7 +746,7 @@ function AddCardDialog({ open, onOpenChange, onAdded }: {
           appearance: { theme: isDark ? 'night' : 'stripe', variables: { borderRadius: '10px' } },
         })
         element = elements.create('payment', { layout: 'tabs', wallets: { applePay: 'never', googlePay: 'never' } })
-        // O Dialog monta o conteúdo num portal; espera o nó existir.
+        // The Dialog mounts its content in a portal; wait for the node.
         await new Promise((r) => requestAnimationFrame(r))
         if (cancelled || !mountRef.current) return
         element.mount(mountRef.current)
@@ -754,13 +754,13 @@ function AddCardDialog({ open, onOpenChange, onAdded }: {
         stripeRef.current = stripe
         elementsRef.current = elements
       } catch (e) {
-        toast.error((e as Error).message || 'Não foi possível iniciar o cadastro do cartão')
+        toast.error((e as Error).message || 'Could not start adding the card')
         onOpenChange(false)
       }
     })()
     return () => {
       cancelled = true
-      try { element?.destroy() } catch { /* já destruído */ }
+      try { element?.destroy() } catch { /* already destroyed */ }
       stripeRef.current = null
       elementsRef.current = null
     }
@@ -777,7 +777,7 @@ function AddCardDialog({ open, onOpenChange, onAdded }: {
       })
       if (error) throw new Error(error.message)
       await walletApi.cardAttach(setupIntent.id, label.trim() || undefined, makeDefault)
-      toast.success('Cartão adicionado!')
+      toast.success('Card added')
       setLabel('')
       setMakeDefault(false)
       onOpenChange(false)
@@ -793,9 +793,9 @@ function AddCardDialog({ open, onOpenChange, onAdded }: {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Adicionar cartão</DialogTitle>
+          <DialogTitle>Add card</DialogTitle>
           <DialogDescription>
-            Crédito ou débito, de qualquer país. Os dados vão direto para o Stripe; guardamos só a bandeira e os 4 últimos dígitos.
+            Credit or debit, from any country. The card details go straight to Stripe. We keep only the card brand and the last 4 digits.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -803,28 +803,28 @@ function AddCardDialog({ open, onOpenChange, onAdded }: {
             {!ready && <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="card-label" className="text-sm text-muted-foreground">Apelido (opcional)</Label>
-            <Input id="card-label" maxLength={40} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Ex.: Nubank PJ" />
+            <Label htmlFor="card-label" className="text-sm text-muted-foreground">Nickname (optional)</Label>
+            <Input id="card-label" maxLength={40} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="For example: Business card" />
           </div>
           <label className="flex items-center justify-between text-sm">
-            Usar como cartão padrão
+            Use as default card
             <Switch checked={makeDefault} onCheckedChange={setMakeDefault} />
           </label>
         </div>
         <DialogFooter>
-          <Button onClick={submit} disabled={!ready || saving} className="w-full gradient-primary text-primary-foreground">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Lock className="h-4 w-4 mr-2" />}Salvar cartão com segurança
+          <Button onClick={submit} disabled={!ready || saving} className="w-full rounded-full">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Lock className="h-4 w-4 mr-2" />}Save card
           </Button>
         </DialogFooter>
         <p className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
-          <ShieldCheck className="h-3.5 w-3.5 text-primary" />Processado pelo Stripe · certificado PCI DSS nível 1
+          <ShieldCheck className="h-3.5 w-3.5 text-primary" />Processed by Stripe · PCI DSS Level 1 certified
         </p>
       </DialogContent>
     </Dialog>
   )
 }
 
-// ── Adicionar chave Pix ────────────────────────────────────────────────────
+// ── Add Pix key ────────────────────────────────────────────────────────────
 function AddPixDialog({ open, onOpenChange, onAdded }: {
   open: boolean; onOpenChange: (o: boolean) => void; onAdded: () => void
 }) {
@@ -836,15 +836,15 @@ function AddPixDialog({ open, onOpenChange, onAdded }: {
   const [touched, setTouched] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  const error = touched ? validatePixKey(keyType, key) : null
-  const placeholder = PIX_KEY_TYPES.find((t) => t.value === keyType)?.placeholder
+  const error = touched ? pixKeyErrorEn(validatePixKey(keyType, key)) : null
+  const placeholder = PIX_KEY_PLACEHOLDER_EN[keyType]
 
   const reset = () => {
     setKeyType('cpf'); setKey(''); setLabel(''); setCountries(['BR']); setMakeDefault(false); setTouched(false)
   }
 
   const toggleCountry = (code: string) => {
-    if (code === 'BR') return // a chave é sempre de conta brasileira
+    if (code === 'BR') return // the key always belongs to a Brazilian account
     setCountries((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]))
   }
 
@@ -854,7 +854,7 @@ function AddPixDialog({ open, onOpenChange, onAdded }: {
     setSaving(true)
     try {
       await walletApi.pixAdd({ keyType, key, label: label.trim() || undefined, countries, makeDefault })
-      toast.success('Chave Pix adicionada!')
+      toast.success('Pix key added')
       reset()
       onOpenChange(false)
       onAdded()
@@ -869,12 +869,12 @@ function AddPixDialog({ open, onOpenChange, onAdded }: {
     <Dialog open={open} onOpenChange={(o) => { if (!o) reset(); onOpenChange(o) }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Adicionar chave Pix</DialogTitle>
-          <DialogDescription>A chave fica cifrada; no Vertal Vibe Pay aparece só a versão mascarada.</DialogDescription>
+          <DialogTitle>Add Pix key</DialogTitle>
+          <DialogDescription>The key is stored encrypted. Vertal Vibe Pay shows only a masked version.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label className="text-sm text-muted-foreground">Tipo de chave</Label>
+            <Label className="text-sm text-muted-foreground">Key type</Label>
             <div className="flex flex-wrap gap-1.5">
               {PIX_KEY_TYPES.map((t) => (
                 <Button
@@ -882,13 +882,13 @@ function AddPixDialog({ open, onOpenChange, onAdded }: {
                   variant={keyType === t.value ? 'default' : 'outline'}
                   onClick={() => { setKeyType(t.value); setTouched(false) }}
                 >
-                  {t.label}
+                  {pixKeyLabel(t.value)}
                 </Button>
               ))}
             </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="pix-key" className="text-sm text-muted-foreground">Chave</Label>
+            <Label htmlFor="pix-key" className="text-sm text-muted-foreground">Key</Label>
             <Input
               id="pix-key" value={key} placeholder={placeholder} autoComplete="off"
               inputMode={keyType === 'cpf' || keyType === 'cnpj' || keyType === 'phone' ? 'numeric' : 'text'}
@@ -898,12 +898,12 @@ function AddPixDialog({ open, onOpenChange, onAdded }: {
             {error && <p className="text-xs text-destructive">{error}</p>}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="pix-label" className="text-sm text-muted-foreground">Apelido (opcional)</Label>
-            <Input id="pix-label" maxLength={40} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Ex.: Conta Itaú" />
+            <Label htmlFor="pix-label" className="text-sm text-muted-foreground">Nickname (optional)</Label>
+            <Input id="pix-label" maxLength={40} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="For example: Main account" />
           </div>
           <div className="space-y-2">
             <Label className="text-sm text-muted-foreground flex items-center gap-1.5">
-              <Globe2 className="h-3.5 w-3.5" />Onde você usa este Pix
+              <Globe2 className="h-3.5 w-3.5" />Where you use this Pix key
             </Label>
             <div className="flex flex-wrap gap-1.5">
               {PIX_COUNTRIES.map((c) => (
@@ -914,33 +914,33 @@ function AddPixDialog({ open, onOpenChange, onAdded }: {
                   onClick={() => toggleCountry(c.code)}
                   className="gap-1"
                 >
-                  <span>{c.flag}</span>{c.name}
+                  <span>{c.flag}</span>{regionName(c.code, c.name)}
                 </Button>
               ))}
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Fora do Brasil o Pix funciona só em comércios parceiros, via empresas de câmbio.
+              Outside Brazil, Pix works only at partner stores, through currency exchange companies.
             </p>
           </div>
           <label className="flex items-center justify-between text-sm">
-            Usar como Pix padrão
+            Use as default Pix key
             <Switch checked={makeDefault} onCheckedChange={setMakeDefault} />
           </label>
         </div>
         <DialogFooter>
-          <Button onClick={submit} disabled={saving} className="w-full gradient-primary text-primary-foreground">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Lock className="h-4 w-4 mr-2" />}Salvar chave Pix
+          <Button onClick={submit} disabled={saving} className="w-full rounded-full">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Lock className="h-4 w-4 mr-2" />}Save Pix key
           </Button>
         </DialogFooter>
         <p className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
-          <Fingerprint className="h-3.5 w-3.5 text-primary" />Cifrada com AES-256-GCM · só você vê a chave
+          <Fingerprint className="h-3.5 w-3.5 text-primary" />Encrypted with AES-256-GCM · only you can see the key
         </p>
       </DialogContent>
     </Dialog>
   )
 }
 
-// ── Receber via Pix: gera BR Code (copia e cola) + QR Code ─────────────────
+// ── Receive with Pix: creates a BR Code (copy and paste) + QR code ─────────
 function ReceivePixDialog({ pix, onClose }: { pix: WalletPix | null; onClose: () => void }) {
   const [amount, setAmount] = useState('')
   const [name, setName] = useState('')
@@ -955,7 +955,7 @@ function ReceivePixDialog({ pix, onClose }: { pix: WalletPix | null; onClose: ()
   const generate = async () => {
     if (!pix) return
     const value = amount.trim() ? Number(amount.replace(/\./g, '').replace(',', '.')) : 0
-    if (Number.isNaN(value) || value < 0) return toast.error('Valor inválido')
+    if (Number.isNaN(value) || value < 0) return toast.error('Invalid amount')
     setLoading(true)
     try {
       const res = await walletApi.pixBrCode({
@@ -973,7 +973,7 @@ function ReceivePixDialog({ pix, onClose }: { pix: WalletPix | null; onClose: ()
     if (!brCode) return
     await navigator.clipboard.writeText(brCode)
     setCopied(true)
-    toast.success('Pix copia e cola copiado!')
+    toast.success('Pix code copied')
     setTimeout(() => setCopied(false), 2000)
   }
 
@@ -981,47 +981,47 @@ function ReceivePixDialog({ pix, onClose }: { pix: WalletPix | null; onClose: ()
     <Dialog open={!!pix} onOpenChange={(o) => { if (!o) onClose() }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><PixLogo />Receber via Pix</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><PixLogo />Receive with Pix</DialogTitle>
           <DialogDescription>
-            {pix ? `Chave ${pix.maskedKey}. ` : ''}Gera um QR Code estático no padrão BR Code do Banco Central.
+            {pix ? `Key ${pix.maskedKey}. ` : ''}Creates a static QR code in the BR Code standard of the Central Bank of Brazil.
           </DialogDescription>
         </DialogHeader>
         {brCode ? (
           <div className="space-y-4">
             <div className="mx-auto w-fit rounded-2xl bg-white p-5 shadow-lg ring-1 ring-black/5">
               <QRCodeSVG value={brCode} size={220} level="M" fgColor="#0b1f1d" />
-              <p className="mt-3 flex items-center justify-center gap-1.5 text-xs font-medium text-[#0b1f1d]"><PixLogo className="h-4 w-4" />Pague com Pix</p>
+              <p className="mt-3 flex items-center justify-center gap-1.5 text-xs font-medium text-[#0b1f1d]"><PixLogo className="h-4 w-4" />Pay with Pix</p>
             </div>
             <div className="flex gap-2">
               <Input readOnly value={brCode} className="text-xs font-mono bg-muted/30" />
-              <Button variant="outline" size="icon" onClick={copy} className="shrink-0">
+              <Button variant="outline" size="icon" onClick={copy} className="shrink-0" aria-label="Copy Pix code">
                 {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               </Button>
             </div>
-            <Button variant="ghost" className="w-full" onClick={() => setBrCode(null)}>Gerar outro</Button>
+            <Button variant="ghost" className="w-full" onClick={() => setBrCode(null)}>Create another</Button>
           </div>
         ) : (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="rx-amount" className="text-sm text-muted-foreground">Valor em R$ (vazio = quem paga digita)</Label>
+              <Label htmlFor="rx-amount" className="text-sm text-muted-foreground">Amount in R$ (leave empty to let the payer enter it)</Label>
               <Input id="rx-amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0,00" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="rx-name" className="text-sm text-muted-foreground">Nome do recebedor</Label>
-                <Input id="rx-name" maxLength={25} value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome" />
+                <Label htmlFor="rx-name" className="text-sm text-muted-foreground">Receiver name</Label>
+                <Input id="rx-name" maxLength={25} value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="rx-city" className="text-sm text-muted-foreground">Cidade</Label>
+                <Label htmlFor="rx-city" className="text-sm text-muted-foreground">City</Label>
                 <Input id="rx-city" maxLength={15} value={city} onChange={(e) => setCity(e.target.value)} />
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="rx-desc" className="text-sm text-muted-foreground">Descrição (opcional)</Label>
+              <Label htmlFor="rx-desc" className="text-sm text-muted-foreground">Description (optional)</Label>
               <Input id="rx-desc" maxLength={40} value={description} onChange={(e) => setDescription(e.target.value)} />
             </div>
-            <Button onClick={generate} disabled={loading || !name.trim() || !city.trim()} className="w-full gradient-primary text-primary-foreground">
-              {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Gerar QR Code
+            <Button onClick={generate} disabled={loading || !name.trim() || !city.trim()} className="w-full rounded-full">
+              {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Create QR code
             </Button>
           </div>
         )}

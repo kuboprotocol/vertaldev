@@ -4,6 +4,7 @@ import { ArrowLeft, ExternalLink, Zap, Server } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { PROVIDERS } from '@/lib/web3Providers'
+import { SITE_FONT, siteRoot } from '@/components/site/siteUi'
 
 const ICONS: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
   alchemy: Zap,
@@ -20,10 +21,10 @@ export default function ConnectorWeb3HubPage() {
   const navigate = useNavigate()
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className={`min-h-screen ${siteRoot}`} style={SITE_FONT}>
       <header className="border-b border-border bg-card/50 backdrop-blur-xl sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/connectors')} aria-label="Voltar para conectores">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/connectors')} aria-label="Back to connectors">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex-1">
@@ -32,7 +33,7 @@ export default function ConnectorWeb3HubPage() {
               Conectores Web3
             </h1>
             <p className="text-sm text-muted-foreground">
-              Escolha um provedor RPC para conectar EVM, Solana ou UTXO chains.
+              Choose an RPC provider to connect EVM, Solana or UTXO chains.
             </p>
           </div>
         </div>
@@ -45,7 +46,7 @@ export default function ConnectorWeb3HubPage() {
           variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
           className="max-w-5xl mx-auto px-4 py-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 list-none"
           data-testid="web3-providers-grid"
-          aria-label="Provedores Web3 disponíveis"
+          aria-label="Available Web3 providers"
         >
           {PROVIDERS.map((p) => {
             const Icon = ICONS[p.id] ?? Zap
@@ -67,8 +68,8 @@ export default function ConnectorWeb3HubPage() {
                   }}
                   whileHover={{ y: -4, scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  aria-label={`Abrir ${p.label} · ${p.supportedNetworks.length} networks · ${href}`}
-                  className="group block text-left p-5 rounded-2xl border border-border bg-card hover:border-primary/40 hover:shadow-glow transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  aria-label={`Open ${p.label} · ${p.supportedNetworks.length} networks · ${href}`}
+                  className="group block text-left p-5 rounded-2xl border border-border bg-card hover:border-white/[0.14] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   <Card className="border-0 bg-transparent shadow-none p-0 space-y-4">
                     <div className="flex items-start gap-3">

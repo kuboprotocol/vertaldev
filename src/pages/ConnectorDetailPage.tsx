@@ -17,6 +17,8 @@ import {
 } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { getConnectorBySlug } from '@/lib/connectorsConfig'
+import { localizeConnector } from '@/lib/connectorsCopyEn'
+import { SITE_FONT, siteRoot, surface } from '@/components/site/siteUi'
 import { ConnectorIcon } from '@/components/connectors/ConnectorIcon'
 import { useGitHubConnection } from '@/hooks/useGitHubConnection'
 import { useAuth } from '@/hooks/useAuth'
@@ -30,14 +32,13 @@ import { useConnectorLogs, logConnectorEvent } from '@/hooks/useConnectorLogs'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { formatDistanceToNow } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
 
 type StatusFilter = 'all' | 'success' | 'error' | 'info' | 'warning'
 
 export default function ConnectorDetailPage() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
-  const connector = getConnectorBySlug(slug || '')
+  const connector = localizeConnector(getConnectorBySlug(slug || ''))
   const { user, isAdmin } = useAuth()
 
   // Real GitHub OAuth hook
@@ -144,8 +145,8 @@ export default function ConnectorDetailPage() {
       try { window.sessionStorage.removeItem(pasteStorageKey) } catch { /* noop */ }
       setPasteState('expired')
       setPasteExpiresAt(null)
-      toast.info('Estado de colagem expirou', {
-        description: 'O TTL de 10 min terminou enquanto a página estava fechada.',
+      toast.info('Copy check expired', {
+        description: 'The 10-minute check ended while the page was closed.',
         duration: 3500,
       })
       const timer = window.setTimeout(() => {
@@ -194,8 +195,8 @@ export default function ConnectorDetailPage() {
         clearInterval(tick)
         // Notify user (only meaningful while modal is visible).
         if (shareOpen) {
-          toast.info('Estado de colagem expirou', {
-            description: 'Copie a URL novamente para revalidar (TTL de 10 min).',
+          toast.info('Copy check expired', {
+            description: 'Copy the URL again to check it (valid for 10 minutes).',
             duration: 3500,
           })
         }
@@ -262,9 +263,9 @@ export default function ConnectorDetailPage() {
       setPasteStateWithTTL(pasteConfirmed ? 'verified' : 'unverified')
 
       const baseTitle = count === 0
-        ? 'Link copiado (sem filtros ativos)'
-        : `Recorte copiado · ${count} filtro${count === 1 ? '' : 's'}`
-      const title = pasteConfirmed ? `${baseTitle} ✓ colagem confirmada` : baseTitle
+        ? 'Link copied (no filters)'
+        : `Filtered link copied · ${count} filter${count === 1 ? '' : 's'}`
+      const title = pasteConfirmed ? `${baseTitle} · paste checked` : baseTitle
 
       if (opts.keepOpen) {
         toast.success(title, {
@@ -272,13 +273,13 @@ export default function ConnectorDetailPage() {
             <div className="space-y-1.5">
               <div className="font-mono text-[11px] break-all text-foreground/80">{url}</div>
               <div className="text-[11px] text-muted-foreground">
-                Diálogo continua aberto. Use <span className="font-medium text-foreground">“Copiar e fechar”</span> se quiser sair.
+                The dialog stays open. Use <span className="font-medium text-foreground">"Copy and close"</span> to leave.
               </div>
             </div>
           ),
           duration: 2500,
           action: {
-            label: 'Copiar e fechar',
+            label: 'Copy and close',
             onClick: () => {
               setShareOpen(false)
             },
@@ -296,7 +297,7 @@ export default function ConnectorDetailPage() {
         setShareOpen(false)
       }
     } catch {
-      toast.error('Não foi possível copiar o link')
+      toast.error('We could not copy the link')
     }
   }, [buildShareUrl, activeFilterChips, setPasteStateWithTTL])
 
@@ -324,11 +325,11 @@ export default function ConnectorDetailPage() {
       connectorSlug: slug ?? 'unknown',
       eventType: 'filters_paste_ttl_renewed',
       status: 'info',
-      message: 'TTL da colagem renovado manualmente sem nova cópia',
+      message: 'Copy check renewed by hand, without a new copy',
       metadata: { state: nextState, expiresAt: refreshed },
     }).catch(() => { /* non-blocking */ })
     toast.success('TTL renovado', {
-      description: 'Estado de colagem revalidado por mais 10 minutos.',
+      description: 'Copy check renewed for 10 more minutes.',
       duration: 2200,
     })
   }, [pasteState, pasteStorageKey, PASTE_TTL_MS, slug])
@@ -440,17 +441,17 @@ export default function ConnectorDetailPage() {
 
     toast(`Filtros resetados · ${snapshot.removed.join(' e ')} removido${snapshot.removed.length === 1 ? '' : 's'}`, {
       description: statusFilter !== 'all'
-        ? `Filtro padrão restaurado. Mantido: ?status=${statusFilter}. Banner de desfazer disponível abaixo.`
-        : 'Filtro padrão restaurado. Banner de desfazer disponível abaixo.',
+        ? `Default filter restored. Kept: ?status=${statusFilter}. You can undo this below.`
+        : 'Default filter restored. You can undo this below.',
       duration: 4000,
       action: {
-        label: 'Restaurar',
+        label: 'Restore',
         onClick: () => {
           logConnectorEvent({
             connectorSlug: slug ?? 'unknown',
             eventType: 'filters_reset_undone',
             status: 'success',
-            message: 'Reset de filtros desfeito via toast',
+            message: 'Filter reset undone from the toast',
             metadata: { source: 'toast', restored: snapshot.removed },
           }).catch(() => { /* non-blocking */ })
           handleRestoreSnapshot(snapshot)
@@ -585,11 +586,11 @@ export default function ConnectorDetailPage() {
       connectorSlug: slug ?? 'unknown',
       eventType: 'filters_undo_banner_renewed',
       status: 'info',
-      message: 'TTL do banner de desfazer reiniciado manualmente',
+      message: 'Undo banner timer restarted by hand',
       metadata: { removed: undoSnapshot.removed },
     }).catch(() => { /* non-blocking */ })
     toast.success('Contador reiniciado', {
-      description: `Você tem mais ${Math.round(UNDO_DURATION_MS / 1000)}s para restaurar.`,
+      description: `You have ${Math.round(UNDO_DURATION_MS / 1000)} more seconds to restore.`,
       duration: 1800,
     })
   }, [undoSnapshot, resetConfirmOpen, slug])
@@ -610,7 +611,7 @@ export default function ConnectorDetailPage() {
         connectorSlug: slug ?? 'unknown',
         eventType: `filters_undo_dismiss_modal_${phase}`,
         status: 'info',
-        message: `Modal de dispensar (${phase}) via ${source}`,
+        message: `Dismiss dialog ${phase} (${source})`,
         metadata: { phase, source, removed: undoSnapshot?.removed ?? [] },
       }).catch(() => { /* non-blocking */ })
     },
@@ -629,7 +630,7 @@ export default function ConnectorDetailPage() {
         connectorSlug: slug ?? 'unknown',
         eventType: 'filters_undo_banner_dismissed',
         status: 'info',
-        message: `Banner de desfazer dispensado (${reason})`,
+        message: `Undo banner dismissed (${reason})`,
         metadata: { reason, removed: undoSnapshot.removed },
       }).catch(() => { /* non-blocking */ })
     }
@@ -642,7 +643,7 @@ export default function ConnectorDetailPage() {
       connectorSlug: slug ?? 'unknown',
       eventType: 'filters_reset_undone',
       status: 'success',
-      message: `Reset de filtros desfeito via ${source}`,
+      message: `Filter reset undone from ${source}`,
       metadata: { source, restored: snapshot.removed },
     }).catch(() => { /* non-blocking */ })
     handleRestoreSnapshot(snapshot)
@@ -720,9 +721,9 @@ export default function ConnectorDetailPage() {
     const { error } = await clearLogs()
     setClearing(false)
     if (error) {
-      toast.error('Erro ao limpar histórico')
+      toast.error('We could not clear the history')
     } else {
-      toast.success('Histórico limpo!')
+      toast.success('History cleared')
     }
   }
 
@@ -732,10 +733,10 @@ export default function ConnectorDetailPage() {
 
   if (!connector) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className={cn("min-h-screen flex items-center justify-center", siteRoot)} style={SITE_FONT}>
         <div className="text-center space-y-4">
-          <p className="text-xl font-semibold text-foreground">Conector não encontrado</p>
-          <Button onClick={() => navigate('/connectors')}>Voltar aos Conectores</Button>
+          <p className="text-xl font-semibold text-foreground">Connector not found</p>
+          <Button onClick={() => navigate('/connectors')}>Back to connectors</Button>
         </div>
       </div>
     )
@@ -748,7 +749,7 @@ export default function ConnectorDetailPage() {
 
   const handleConnect = async () => {
     if (connector.status === 'coming_soon') {
-      toast.info(`${connector.name} estará disponível em breve!`)
+      toast.info(`${connector.name} is coming soon.`)
       return
     }
     if (isGitHub) {
@@ -763,11 +764,11 @@ export default function ConnectorDetailPage() {
       await new Promise(r => setTimeout(r, 2000))
       setFakeConnected(true)
       setFakeConnecting(false)
-      toast.success(`${connector.name} conectado com sucesso!`)
+      toast.success(`${connector.name} is connected`)
       logConnectorEvent({
         connectorSlug: connector.slug,
         eventType: 'connected',
-        message: `${connector.name} conectado (simulado)`,
+        message: `${connector.name} connected (simulated)`,
         status: 'success',
       })
     }
@@ -778,11 +779,11 @@ export default function ConnectorDetailPage() {
       github.disconnect()
     } else {
       setFakeConnected(false)
-      toast.info(`${connector.name} desconectado.`)
+      toast.info(`${connector.name} is disconnected.`)
       logConnectorEvent({
         connectorSlug: connector.slug,
         eventType: 'disconnected',
-        message: `${connector.name} desconectado`,
+        message: `${connector.name} disconnected`,
         status: 'info',
       })
     }
@@ -790,11 +791,11 @@ export default function ConnectorDetailPage() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
-    toast.success('Copiado!')
+    toast.success('Copied')
   }
 
   const authLabel: Record<string, string> = {
-    oauth: 'OAuth 2.0', api_key: 'API Key', webhook: 'Webhook', manual: 'Manual',
+    oauth: 'OAuth 2.0', api_key: 'API key', webhook: 'Webhook', manual: 'Manual setup',
   }
 
   const githubProfileUrl = github.connection?.github_username
@@ -802,9 +803,9 @@ export default function ConnectorDetailPage() {
     : ''
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className={cn("min-h-screen", siteRoot)} style={SITE_FONT}>
       {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur-xl sticky top-0 z-10">
+      <div className={cn("border-b sticky top-0 z-10", surface.bar)}>
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => navigate('/connectors')}>
             <ArrowLeft className="h-5 w-5" />
@@ -816,7 +817,7 @@ export default function ConnectorDetailPage() {
             <ConnectorIcon connector={connector} className="h-5 w-5" />
           </div>
           <div className="flex-1">
-            <h1 className="text-xl font-bold font-display">{connector.name}</h1>
+            <h1 className="text-xl font-semibold tracking-[-0.01em]">{connector.name}</h1>
             <p className="text-xs text-muted-foreground">{authLabel[connector.authType]}</p>
           </div>
           <Badge
@@ -827,9 +828,9 @@ export default function ConnectorDetailPage() {
             )}
           >
             {isConnected ? (
-              <><CheckCircle className="h-3 w-3" /> Conectado</>
+              <><CheckCircle className="h-3 w-3" /> Connected</>
             ) : (
-              <><XCircle className="h-3 w-3" /> Não conectado</>
+              <><XCircle className="h-3 w-3" /> Not connected</>
             )}
           </Badge>
         </div>
@@ -843,11 +844,11 @@ export default function ConnectorDetailPage() {
       >
         {/* Overview */}
         <Card>
-          <CardHeader><CardTitle className="text-lg">Visão Geral</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-lg">Overview</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <p className="text-muted-foreground">{connector.longDescription}</p>
             <div>
-              <h4 className="text-sm font-semibold mb-2 text-foreground">Recursos</h4>
+              <h4 className="text-sm font-semibold mb-2 text-foreground">Features</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {connector.features.map(feature => (
                   <div key={feature} className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -860,7 +861,7 @@ export default function ConnectorDetailPage() {
             {connector.docsUrl && (
               <a href={connector.docsUrl} target="_blank" rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
-                <ExternalLink className="h-3.5 w-3.5" /> Ver documentação
+                <ExternalLink className="h-3.5 w-3.5" /> See the docs
               </a>
             )}
           </CardContent>
@@ -868,32 +869,32 @@ export default function ConnectorDetailPage() {
 
         {/* Action */}
         <Card>
-          <CardHeader><CardTitle className="text-lg">Conexão</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-lg">Connection</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             {!isConnected && isGitHub && (
               <p className="text-xs text-muted-foreground">
-                Você entra com sua conta do GitHub e autoriza a Vertal a ler e criar repositórios em seu nome.
-                Prefere colar um token?{' '}
+                You sign in with your GitHub account and allow Vertal to read and create repositories for you.
+                Prefer to paste a token?{' '}
                 <button
                   type="button"
                   className="text-primary hover:underline"
                   onClick={() => navigate('/connectors/github/setup')}
                   data-testid="github-use-token"
                 >
-                  Avançado: usar token
+                  Advanced: use a token
                 </button>
               </p>
             )}
             {!isConnected ? (
               <Button variant="hero" size="lg" onClick={handleConnect} disabled={connecting} className="w-full sm:w-auto">
                 {connecting ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" /> Conectando...</>
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Connecting…</>
                 ) : connector.status === 'coming_soon' ? (
-                  <><Clock className="h-4 w-4" /> Em breve</>
+                  <><Clock className="h-4 w-4" /> Coming soon</>
                 ) : isGitHub ? (
-                  <>Entrar com GitHub</>
+                  <>Sign in with GitHub</>
                 ) : (
-                  <>Conectar com {connector.name}</>
+                  <>Connect {connector.name}</>
                 )}
               </Button>
             ) : (
@@ -910,7 +911,7 @@ export default function ConnectorDetailPage() {
                           @{github.connection.github_username}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Conectado em {new Date(github.connection.connected_at).toLocaleDateString('pt-BR')}
+                          Connected on {new Date(github.connection.connected_at).toLocaleDateString()}
                         </p>
                       </div>
                       <Badge variant="secondary" className="text-[10px]">{github.connection.scope === 'pat' ? 'Token' : 'OAuth'}</Badge>
@@ -933,10 +934,10 @@ export default function ConnectorDetailPage() {
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" size="sm" onClick={handleConnect} disabled={connecting}>
                     <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                    {connecting ? 'Reconectando...' : 'Reconectar'}
+                    {connecting ? 'Reconnecting…' : 'Reconnect'}
                   </Button>
                   <Button variant="destructive" size="sm" onClick={handleDisconnect}>
-                    <Unplug className="h-3.5 w-3.5 mr-1.5" /> Desconectar
+                    <Unplug className="h-3.5 w-3.5 mr-1.5" /> Disconnect
                   </Button>
                 </div>
               </div>
@@ -998,7 +999,7 @@ export default function ConnectorDetailPage() {
                 <RotateCcw className={cn('h-4 w-4 mt-0.5 shrink-0', isUrgent ? 'text-destructive' : 'text-primary')} />
                 <div className="min-w-0">
                   <div className="font-medium text-foreground flex items-center gap-1.5 flex-wrap">
-                    Filtros resetados — você pode desfazer
+                    Filters reset. You can undo this.
                     <span
                       className={cn(
                         'font-mono tabular-nums text-[11px] px-1.5 py-0.5 rounded border',
@@ -1006,14 +1007,14 @@ export default function ConnectorDetailPage() {
                           ? 'bg-destructive/10 text-destructive border-destructive/30 animate-pulse'
                           : 'bg-background text-foreground border-border'
                       )}
-                      aria-label={`Expira em ${undoSecondsLeft} segundos`}
+                      aria-label={`Ends in ${undoSecondsLeft} seconds`}
                       data-testid="undo-counter"
                     >
-                      {isPaused ? '⏸ pausado' : `${undoSecondsLeft}s`}
+                      {isPaused ? 'paused' : `${undoSecondsLeft}s`}
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap items-center gap-1.5">
-                    <span>Removido:</span>
+                    <span>Removed:</span>
                     {undoSnapshot.run && (
                       <code className="font-mono px-1 py-0.5 rounded bg-destructive/10 text-destructive text-[10px]">
                         ?run={undoSnapshot.run.slice(0, 8)}…
@@ -1025,12 +1026,12 @@ export default function ConnectorDetailPage() {
                       </code>
                     )}
                     {shareOpen && (
-                      <span className="text-[10px] italic text-muted-foreground/70">(continua contando sob o modal)</span>
+                      <span className="text-[10px] italic text-muted-foreground/70">(still counting while the dialog is open)</span>
                     )}
                     <span className="hidden sm:inline">
-                      · atalhos <kbd className="px-1 py-0.5 rounded border bg-background text-[10px] font-mono">Ctrl/Cmd+Z</kbd>
-                      {' '}restaurar · <kbd className="px-1 py-0.5 rounded border bg-background text-[10px] font-mono">Esc</kbd> dispensar
-                      {anyDialogOpen && <span className="ml-1 italic text-muted-foreground/70">· atalhos pausados</span>}
+                      · shortcuts <kbd className="px-1 py-0.5 rounded border bg-background text-[10px] font-mono">Ctrl/Cmd+Z</kbd>
+                      {' '}restore · <kbd className="px-1 py-0.5 rounded border bg-background text-[10px] font-mono">Esc</kbd> dismiss
+                      {anyDialogOpen && <span className="ml-1 italic text-muted-foreground/70">· shortcuts paused</span>}
                     </span>
                   </div>
                 </div>
@@ -1041,14 +1042,14 @@ export default function ConnectorDetailPage() {
                   variant="ghost"
                   onClick={resetUndoTTL}
                   className="h-8 text-xs"
-                  title={`Reiniciar contador para ${totalSeconds}s`}
+                  title={`Restart the timer at ${totalSeconds}s`}
                   data-testid="undo-renew-button"
                   id="undo-renew-button"
-                  aria-label="Renovar contador do banner de desfazer"
+                  aria-label="Renew the undo banner timer"
                   aria-keyshortcuts="Control+R"
                 >
                   <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                  Renovar
+                  Renew
                 </Button>
                 <Button
                   size="sm"
@@ -1057,11 +1058,11 @@ export default function ConnectorDetailPage() {
                   className="h-8 text-xs"
                   data-testid="undo-dismiss-button"
                   id="undo-dismiss-button"
-                  aria-label="Dispensar banner de desfazer (Esc para confirmar, Shift+Esc para dispensar direto)"
+                  aria-label="Dismiss the undo banner (Esc asks first, Shift+Esc dismisses right away)"
                   aria-keyshortcuts="Escape Shift+Escape"
-                  title="Dispensar (Esc = confirma, Shift+Esc = direto)"
+                  title="Dismiss (Esc asks first, Shift+Esc dismisses right away)"
                 >
-                  Dispensar
+                  Dismiss
                 </Button>
                 <Button
                   size="sm"
@@ -1069,7 +1070,7 @@ export default function ConnectorDetailPage() {
                   className="h-8 text-xs"
                 >
                   <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                  Restaurar
+                  Restore
                 </Button>
               </div>
             </motion.div>
@@ -1081,7 +1082,7 @@ export default function ConnectorDetailPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-2">
               <CardTitle className="text-lg flex items-center gap-2">
-                <Activity className="h-4 w-4 text-primary" /> Atividade Recente
+                <Activity className="h-4 w-4 text-primary" /> Recent activity
               </CardTitle>
               <div className="flex items-center gap-1">
                 {canResetFilters && (() => {
@@ -1092,11 +1093,11 @@ export default function ConnectorDetailPage() {
                       size="sm"
                       onClick={handleRequestReset}
                       className="h-8 text-xs text-muted-foreground hover:text-foreground gap-1.5"
-                      title={`Remove ${removableCount} filtro${removableCount === 1 ? '' : 's'}: ${[runFilter && '?run=', dbRunsActive && '?runs=db'].filter(Boolean).join(' e ')} (mantém ?status=)`}
+                      title={`Removes ${removableCount} filter${removableCount === 1 ? '' : 's'}: ${[runFilter && '?run=', dbRunsActive && '?runs=db'].filter(Boolean).join(' and ')} (keeps ?status=)`}
                       data-testid="reset-filters-trigger"
                     >
                       <RotateCcw className="h-3.5 w-3.5" />
-                      Resetar filtros
+                      Reset filters
                       <Badge
                         variant="secondary"
                         className="h-4 min-w-4 px-1 text-[10px] leading-none rounded-full bg-primary/15 text-primary border-primary/20"
@@ -1114,13 +1115,13 @@ export default function ConnectorDetailPage() {
                     'h-8 text-xs',
                     hasActiveSlice ? 'text-primary hover:text-primary' : 'text-muted-foreground'
                   )}
-                  title={hasActiveSlice ? 'Copiar URL com filtros normalizados' : 'Copiar URL da página (sem filtros)'}
+                  title={hasActiveSlice ? 'Copy the URL with the current filters' : 'Copy the page URL (no filters)'}
                 >
                   <Share2 className="h-3.5 w-3.5 mr-1.5" />
-                  Compartilhar recorte
+                  Share filtered view
                   {hasActiveSlice && (
                     <Badge variant="secondary" className="ml-1.5 h-4 px-1 text-[9px] bg-primary/15 text-primary border-primary/30">
-                      {[runFilter && 'run', statusFilter !== 'all' && 'status', dbRunsActive && 'banco'].filter(Boolean).length}
+                      {[runFilter && 'run', statusFilter !== 'all' && 'status', dbRunsActive && 'database'].filter(Boolean).length}
                     </Badge>
                   )}
                 </Button>
@@ -1128,25 +1129,25 @@ export default function ConnectorDetailPage() {
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive h-8">
-                        <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Limpar
+                        <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Clear
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Limpar histórico de logs?</AlertDialogTitle>
+                        <AlertDialogTitle>Clear the activity log?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          Todos os {logs.length} registros de atividade do conector <strong>{connector.name}</strong> serão permanentemente excluídos. Esta ação não pode ser desfeita.
+                          All {logs.length} activity entries for <strong>{connector.name}</strong> will be deleted. You cannot undo this.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel disabled={clearing}>Cancelar</AlertDialogCancel>
+                        <AlertDialogCancel disabled={clearing}>Cancel</AlertDialogCancel>
                         <AlertDialogAction
                           onClick={handleClearLogs}
                           disabled={clearing}
                           className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         >
                           {clearing ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Trash2 className="h-3.5 w-3.5 mr-1.5" />}
-                          Limpar tudo
+                          Clear all
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
@@ -1164,13 +1165,13 @@ export default function ConnectorDetailPage() {
                     variant="ghost" size="sm" className="ml-auto h-6 px-2 text-[11px]"
                     onClick={handleOpenShare}
                   >
-                    <Copy className="h-3 w-3 mr-1" /> Copiar link
+                    <Copy className="h-3 w-3 mr-1" /> Copy link
                   </Button>
                   <Button
                     variant="ghost" size="sm" className="h-6 px-2 text-[11px]"
                     onClick={() => setRunFilter(null)}
                   >
-                    Limpar filtro
+                    Clear filter
                   </Button>
                 </div>
               )}
@@ -1178,10 +1179,10 @@ export default function ConnectorDetailPage() {
               {logs.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mb-4">
                   {([
-                    { value: 'all', label: 'Todos', count: logs.length },
-                    { value: 'success', label: 'Sucesso', count: logs.filter(l => l.status === 'success').length },
-                    { value: 'error', label: 'Erros', count: logs.filter(l => l.status === 'error').length },
-                    { value: 'warning', label: 'Avisos', count: logs.filter(l => l.status === 'warning').length },
+                    { value: 'all', label: 'All', count: logs.length },
+                    { value: 'success', label: 'Success', count: logs.filter(l => l.status === 'success').length },
+                    { value: 'error', label: 'Errors', count: logs.filter(l => l.status === 'error').length },
+                    { value: 'warning', label: 'Warnings', count: logs.filter(l => l.status === 'warning').length },
                     { value: 'info', label: 'Info', count: logs.filter(l => l.status === 'info').length },
                   ] as { value: StatusFilter; label: string; count: number }[]).map(f => (
                     <button
@@ -1204,11 +1205,11 @@ export default function ConnectorDetailPage() {
 
               {logsLoading ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando logs...
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading activity…
                 </div>
               ) : filteredLogs.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  {logs.length === 0 ? 'Nenhuma atividade registrada ainda.' : 'Nenhum log para este filtro.'}
+                  {logs.length === 0 ? 'No activity yet.' : 'No activity for this filter.'}
                 </p>
               ) : (
                 <div className="space-y-3">
@@ -1223,7 +1224,7 @@ export default function ConnectorDetailPage() {
                       )} />
                       <span className="text-foreground flex-1 truncate">{log.message}</span>
                       <span className="text-xs text-muted-foreground/60 shrink-0">
-                        {formatDistanceToNow(new Date(log.created_at), { addSuffix: true, locale: ptBR })}
+                        {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
                       </span>
                     </div>
                   ))}
@@ -1240,10 +1241,10 @@ export default function ConnectorDetailPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Share2 className="h-4 w-4 text-primary" />
-              Compartilhar recorte
+              Share filtered view
             </DialogTitle>
             <DialogDescription>
-              Revise os filtros incluídos antes de copiar a URL.
+              Check the filters in the link before you copy it.
             </DialogDescription>
           </DialogHeader>
 
@@ -1251,11 +1252,11 @@ export default function ConnectorDetailPage() {
             {/* Filter chips */}
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-2">
-                Filtros incluídos ({activeFilterChips.length})
+                Filters in the link ({activeFilterChips.length})
               </p>
               {activeFilterChips.length === 0 ? (
                 <p className="text-xs text-muted-foreground italic">
-                  Nenhum filtro ativo — o link aponta para a página padrão do conector.
+                  No filters. The link opens the default connector page.
                 </p>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
@@ -1273,8 +1274,8 @@ export default function ConnectorDetailPage() {
                         )}
                         title={
                           removable
-                            ? `Será removido ao clicar em "Resetar filtros" (?${chip.key}=${chip.value})`
-                            : 'Mantido após "Resetar filtros"'
+                            ? `Removed by "Reset filters" (?${chip.key}=${chip.value})`
+                            : 'Kept after "Reset filters"'
                         }
                       >
                         <span className="opacity-70">{chip.label}=</span>
@@ -1293,7 +1294,7 @@ export default function ConnectorDetailPage() {
                     <RotateCcw className="h-3.5 w-3.5 text-destructive mt-0.5 shrink-0" />
                     <div className="text-[11px] text-foreground/80 leading-relaxed">
                       <span className="font-medium text-destructive">
-                        “Resetar filtros” removerá:
+                        "Reset filters" removes:
                       </span>{' '}
                       {[
                         runFilter && (
@@ -1308,14 +1309,14 @@ export default function ConnectorDetailPage() {
                         ),
                       ].filter(Boolean).reduce((acc: any[], el, i, arr) => {
                         acc.push(el)
-                        if (i < arr.length - 1) acc.push(<span key={`sep-${i}`}> e </span>)
+                        if (i < arr.length - 1) acc.push(<span key={`sep-${i}`}> and </span>)
                         return acc
                       }, [])}
                       {statusFilter !== 'all' && (
                         <>
                           {' '}
                           <span className="text-muted-foreground">
-                            · mantém{' '}
+                            · keeps{' '}
                             <code className="font-mono px-1 py-0.5 rounded bg-primary/10 text-primary">
                               ?status={statusFilter}
                             </code>
@@ -1331,7 +1332,7 @@ export default function ConnectorDetailPage() {
             {/* URL preview */}
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-2">
-                Preview da URL
+                URL preview
               </p>
               <div className="rounded-md border border-border bg-secondary/40 p-3 font-mono text-[11px] text-foreground break-all">
                 {buildShareUrl()}
@@ -1352,15 +1353,15 @@ export default function ConnectorDetailPage() {
                   )}
                   title={
                     pasteState === 'verified'
-                      ? 'Conteúdo da área de transferência verificado'
+                      ? 'Clipboard content checked'
                       : pasteState === 'expired'
-                        ? 'Estado de colagem expirou — copie novamente para revalidar'
-                        : 'Não foi possível ler de volta a área de transferência (permissão/foco)'
+                        ? 'The copy check expired. Copy again to check it.'
+                        : 'We could not read the clipboard back (permission or focus)'
                   }
                 >
-                  {pasteState === 'verified' && (<><Check className="h-3 w-3" /> Colagem verificada</>)}
-                  {pasteState === 'unverified' && (<><Copy className="h-3 w-3" /> Copiado (não verificado)</>)}
-                  {pasteState === 'expired' && (<><Clock className="h-3 w-3" /> Colagem expirada</>)}
+                  {pasteState === 'verified' && (<><Check className="h-3 w-3" /> Paste checked</>)}
+                  {pasteState === 'unverified' && (<><Copy className="h-3 w-3" /> Copied (not checked)</>)}
+                  {pasteState === 'expired' && (<><Clock className="h-3 w-3" /> Check expired</>)}
                 </Badge>
               )}
               {pasteState !== 'idle' && (
@@ -1371,27 +1372,27 @@ export default function ConnectorDetailPage() {
                   onClick={renewPasteTTL}
                   data-testid="renew-paste-ttl"
                   className="h-6 px-2 text-[10px] gap-1 text-muted-foreground hover:text-foreground"
-                  title="Renovar o TTL de 10 minutos sem copiar a URL novamente (Ctrl/Cmd+Shift+R)"
+                  title="Renew the 10-minute check without copying the URL again (Ctrl/Cmd+Shift+R)"
                   aria-keyshortcuts="Control+Shift+R Meta+Shift+R"
-                  aria-label="Renovar TTL da colagem (Ctrl ou Cmd + Shift + R)"
+                  aria-label="Renew the copy check (Ctrl or Cmd + Shift + R)"
                 >
                   <RefreshCw className="h-3 w-3" />
-                  Renovar TTL
+                  Renew
                 </Button>
               )}
               {pasteState !== 'idle' && pasteState !== 'expired' && pasteSecondsLeft > 0 && (
                 <span
                   className="text-[10px] font-mono text-muted-foreground tabular-nums"
-                  title="Tempo restante até o estado de colagem expirar (use Renovar TTL para estender)"
-                  aria-label={`Estado de colagem expira em ${formatPasteCountdown(pasteSecondsLeft)}`}
+                  title="Time left on the copy check (use Renew to extend it)"
+                  aria-label={`Copy check ends in ${formatPasteCountdown(pasteSecondsLeft)}`}
                 >
-                  expira em {formatPasteCountdown(pasteSecondsLeft)}
+                  ends in {formatPasteCountdown(pasteSecondsLeft)}
                 </span>
               )}
             </div>
             <div className="flex items-center gap-2 flex-wrap justify-end">
             <Button variant="ghost" onClick={() => setShareOpen(false)}>
-              Cancelar
+              Cancel
             </Button>
             <TooltipProvider delayDuration={150}>
               <Tooltip open={justCopied ? false : undefined}>
@@ -1403,12 +1404,12 @@ export default function ConnectorDetailPage() {
                     {justCopied ? (
                       <>
                         <Check className="h-3.5 w-3.5 mr-1.5 text-primary" />
-                        Copiado
+                        Copied
                       </>
                     ) : (
                       <>
                         <Copy className="h-3.5 w-3.5 mr-1.5" />
-                        Copiar URL
+                        Copy URL
                       </>
                     )}
                   </Button>
@@ -1420,13 +1421,13 @@ export default function ConnectorDetailPage() {
                   collisionPadding={12}
                   className="max-w-[min(20rem,calc(100vw-2rem))] text-xs leading-snug whitespace-normal break-words"
                 >
-                  Copia a URL sem fechar este diálogo — útil para revisar antes de compartilhar. Use “Copiar e fechar” para sair.
+                  Copies the URL and keeps this dialog open, so you can check it before sharing. Use "Copy and close" to leave.
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
             <Button onClick={handleConfirmCopy}>
               <Copy className="h-3.5 w-3.5 mr-1.5" />
-              Copiar e fechar
+              Copy and close
             </Button>
             </div>
           </DialogFooter>
@@ -1439,11 +1440,11 @@ export default function ConnectorDetailPage() {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <RotateCcw className="h-4 w-4 text-destructive" />
-              Resetar filtros?
+              Reset filters?
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3 text-sm">
-                <p>Os seguintes parâmetros serão removidos da URL:</p>
+                <p>These parameters will be removed from the URL:</p>
                 <div className="flex flex-wrap gap-1.5">
                   {runFilter && (
                     <Badge
@@ -1465,23 +1466,23 @@ export default function ConnectorDetailPage() {
                 </div>
                 {statusFilter !== 'all' && (
                   <p className="text-xs text-muted-foreground">
-                    Mantido:{' '}
+                    Kept:{' '}
                     <code className="font-mono px-1 py-0.5 rounded bg-primary/10 text-primary">
                       ?status={statusFilter}
                     </code>
                   </p>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Você poderá desfazer pelo botão “Restaurar” no toast logo após confirmar.
+                  You can undo this with the "Restore" button in the message that shows after you confirm.
                 </p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel data-testid="reset-filters-cancel">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel data-testid="reset-filters-cancel">Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmReset} data-testid="reset-filters-confirm">
               <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-              Resetar
+              Reset
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1503,13 +1504,13 @@ export default function ConnectorDetailPage() {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <XCircle className="h-4 w-4 text-destructive" />
-              Dispensar banner de desfazer?
+              Dismiss the undo banner?
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm">
                 <p>
-                  Você perderá a possibilidade de restaurar os filtros removidos.
-                  Esta ação não pode ser desfeita.
+                  You will no longer be able to restore the removed filters.
+                  You cannot undo this.
                 </p>
                 {undoSnapshot && (
                   <div className="flex flex-wrap gap-1.5">
@@ -1527,7 +1528,7 @@ export default function ConnectorDetailPage() {
                   </div>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Dica: o contador permanece pausado. Use <kbd className="px-1 py-0.5 rounded border bg-background text-[10px] font-mono">Shift+Esc</kbd> para dispensar direto sem este aviso.
+                  Tip: the timer stays paused. Use <kbd className="px-1 py-0.5 rounded border bg-background text-[10px] font-mono">Shift+Esc</kbd> to dismiss right away without this message.
                 </p>
               </div>
             </AlertDialogDescription>
@@ -1537,7 +1538,7 @@ export default function ConnectorDetailPage() {
               data-testid="undo-dismiss-cancel"
               onClick={() => logDismissModal('cancelled', 'button')}
             >
-              Manter banner
+              Keep banner
             </AlertDialogCancel>
             <AlertDialogAction
               data-testid="undo-dismiss-confirm-button"
@@ -1548,7 +1549,7 @@ export default function ConnectorDetailPage() {
               }}
             >
               <XCircle className="h-3.5 w-3.5 mr-1.5" />
-              Dispensar mesmo assim
+              Dismiss anyway
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

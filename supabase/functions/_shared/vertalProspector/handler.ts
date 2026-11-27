@@ -10,7 +10,7 @@ import {
   buildOverpassQuery, buildOverpassQueryByName, candidateEmails, classifyEmail, classifyInbound, dailyCap, describeSignals, detectSignals,
   domainOf, extractCnpjs, extractEmails, extractJson, extractPhones, hasMxAnswer, htmlToText, icpMissing, inferPattern,
   isBlocked, isEmail, isPublicHost, isRoleAddress, isValidCnpj, meetingSlots, meetingText, normalizeDnc, normalizeWebsite,
-  keepIcpCategories, onlyDigits, optOutFooter, overpassAreaId, parseArea, parseCompanyProfile, parseIcp, parseOverpassElements, parseSequence,
+  isBrazilArea, joinAreas, keepIcpCategories, onlyDigits, parseAreas, optOutFooter, overpassAreaId, parseArea, parseCompanyProfile, parseIcp, parseOverpassElements, parseSequence,
   pickInternalLinks, sendGate, slugName, textProblems, waLink,
   type DncKind, type EmailPattern, type Icp, type MessageKind, type ProspectorEnv, type Sender,
 } from "./core.ts";
@@ -301,6 +301,9 @@ export async function handleProspector(body: Record<string, Loose>, deps: Prospe
       if (!out) return err(502, "model_failed");
       const profile = { ...parseCompanyProfile(out.profile), registry: registry ? { ...registry, partners: undefined } : undefined };
       const icp = parseIcp(out.icp);
+      // Região digitada pelo usuário vence a sugerida pela IA (e a do cadastro).
+      const userArea = joinAreas(parseAreas(typeof body.area === "string" ? body.area : ""));
+      if (userArea) icp.area = userArea;
       if (!icp.area && registry?.city) icp.area = `${registry.city}, ${registry.uf}`;
       const { data: c, error } = await deps.admin.from(T.c).insert({
         user_id: deps.userId, company_name: companyName, cnpj: cnpj || null, website, profile, icp, status: "icp_pending",
@@ -362,7 +365,10 @@ export async function handleProspector(body: Record<string, Loose>, deps: Prospe
         // Rede de segurança: só as categorias do ICP (o navegador já filtra município e categoria).
         found = parseOverpassElements({ elements: keepIcpCategories((body.elements as unknown[]).slice(0, 400), icp.osmTags) }, icp.osmTags);
       } else {
-        const geo = await fetchJson(deps.fetch, `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=br&q=${encodeURIComponent(icp.area)}`, {
+        // Caminho do servidor (raro: o navegador faz a busca): só a 1ª região; país livre quando não é do Brasil.
+        const area1 = parseAreas(icp.area)[0] ?? icp.area;
+        const brOnly = isBrazilArea(area1) !== false ? "&countrycodes=br" : "";
+        const geo = await fetchJson(deps.fetch, `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5${brOnly}&q=${encodeURIComponent(area1)}`, {
           headers: { "User-Agent": UA, "Accept-Language": "pt-BR" },
         });
         const places = Array.isArray(geo.data) ? (geo.data as Array<{ osm_type?: string; osm_id?: number; display_name?: string }>) : [];
@@ -370,8 +376,8 @@ export async function handleProspector(body: Record<string, Loose>, deps: Prospe
         areaId = place ? overpassAreaId(String(place.osm_type), Number(place.osm_id)) : null;
         if (place?.display_name) placeName = place.display_name;
         // Geocodificador fora (recusa/limite): procura o município pelo nome no próprio mapa.
-        const byName = areaId ? null : parseArea(icp.area);
-        if (!areaId && !byName) return err(400, "area_not_found", { finding: `Não achei a região "${icp.area}" no mapa. Use "Cidade, UF" (ex.: "Campinas, SP").` });
+        const byName = areaId ? null : parseArea(area1);
+        if (!areaId && !byName) return err(400, "area_not_found", { finding: `Não achei a região "${icp.area}" no mapa. Use "Cidade, UF" ou "Cidade, País" (ex.: "São Paulo, SP" ou "Lisboa, Portugal").` });
         if (!areaId) log(`[vertal-prospector] geocodificador status=${geo.status}; usando busca do município pelo nome`);
         const q = areaId ? buildOverpassQuery(icp.osmTags, areaId, 200) : buildOverpassQueryByName(icp.osmTags, byName!.city, byName!.uf, 200);
         // Servidor público principal do mapa e, se ocupado/fora, um espelho (mesmos dados, mesma licença).

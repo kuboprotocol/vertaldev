@@ -4,7 +4,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Rocket } from 'lucide-react';
 import { useVertalGrowthAccess, vertalGrowthHref } from '@/lib/vertalGrowth/client';
-import { preferredUiLang } from '@/lib/vertalGrowth/i18n';
+import { preferredUiLang, type UiLang } from '@/lib/vertalUiLang';
 
 interface Props {
   from: 'chat' | 'code' | 'builder';
@@ -17,13 +17,18 @@ interface Props {
   enabledOverride?: boolean;
 }
 
-const LABEL = { pt: 'Buscar clientes', en: 'Find customers', es: 'Buscar clientes' } as const;
+// Rótulo nos 21 idiomas (o mesmo de GROWTH_UI[*].entryLabel; aqui à parte para não carregar o dicionário inteiro no chat).
+const LABEL: Record<UiLang, string> = {
+  pt: 'Buscar clientes', 'pt-PT': 'Encontrar clientes', en: 'Find customers', es: 'Buscar clientes', fr: 'Trouver des clients', de: 'Kunden finden',
+  it: 'Trova clienti', nl: 'Klanten vinden', pl: 'Znajdź klientów', tr: 'Müşteri bul', ru: 'Найти клиентов', uk: 'Знайти клієнтів', ar: 'ابحث عن عملاء',
+  hi: 'ग्राहक खोजें', id: 'Cari pelanggan', vi: 'Tìm khách hàng', th: 'หาลูกค้า', ja: '顧客を探す', ko: '고객 찾기', 'zh-CN': '寻找客户', 'zh-TW': '尋找客戶',
+};
 
 export function VertalGrowthEntryButton({ from, projectId, hidden, floating, enabledOverride }: Props) {
   const navigate = useNavigate();
   const access = useVertalGrowthAccess(enabledOverride);
   if (access !== 'allowed' || hidden) return null;
-  const label = LABEL[preferredUiLang()];
+  const label = LABEL[preferredUiLang()] ?? LABEL.pt;
   return (
     <button
       type="button"

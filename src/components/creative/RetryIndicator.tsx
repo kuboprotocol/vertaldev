@@ -23,15 +23,15 @@ export function RetryIndicator({ failureCount, error, onRetry, isLoading, maxRet
       <div className="flex-1 space-y-0.5">
         <div className="flex items-center gap-2">
           <p className="text-xs font-bold text-destructive">
-            Falha na conexão ({failureCount}/{maxRetries})
+            Connection failed ({failureCount}/{maxRetries})
           </p>
           <Badge variant="outline" className="text-[9px] h-4 px-1 border-destructive/30 text-destructive/70">
-            Auto-retry ativo
+            Auto retry on
           </Badge>
         </div>
         {error && (
           <p className="text-[10px] text-muted-foreground line-clamp-1 max-w-[250px]" title={error.message}>
-            Motivo: {error.message}
+            Reason: {error.message}
           </p>
         )}
       </div>
@@ -44,7 +44,7 @@ export function RetryIndicator({ failureCount, error, onRetry, isLoading, maxRet
             </div>
           </TooltipTrigger>
           <TooltipContent className="text-[10px] w-48">
-            Tentando reconectar automaticamente. Erros de rede costumam ser temporários.
+            Trying to reconnect on its own. Network errors are usually temporary.
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -57,7 +57,7 @@ export function RetryIndicator({ failureCount, error, onRetry, isLoading, maxRet
         className="h-8 text-[10px] px-2"
       >
         {isLoading ? <RotateCcw className="h-3 w-3 animate-spin mr-1" /> : <RotateCcw className="h-3 w-3 mr-1" />}
-        Tentar agora
+        Try now
       </Button>
     </div>
   );

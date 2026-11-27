@@ -1,11 +1,11 @@
-// Página pública de status da exclusão de dados pedida pela Meta (Facebook, Instagram,
-// WhatsApp, Meta Ads). A Meta mostra ao usuário o link https://vertal.dev/data-deletion?code=…
-// devolvido pela Edge Function meta-data-deletion.
+// Public status page of a data deletion requested through Meta (Facebook, Instagram,
+// WhatsApp, Meta Ads). Meta shows the user the link https://vertal.dev/data-deletion?code=…
+// returned by the meta-data-deletion Edge Function.
 import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
-import AnimatedLogo from '@/components/branding/AnimatedLogo'
-import { Button } from '@/components/ui/button'
+import { useSearchParams } from 'react-router-dom'
+import SitePage from '@/components/site/SitePage'
+import { PageHeader, Prose, surface } from '@/components/site/siteUi'
+import { cn } from '@/lib/utils'
 import { APP_NAME } from '@/config/brand'
 
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL ?? 'https://sccizjlpwezsgaxkclot.supabase.co'}/functions/v1/meta-data-deletion`
@@ -28,29 +28,28 @@ type State =
   | { kind: 'ok'; data: DeletionStatus }
 
 function fmt(iso: string | null): string {
-  if (!iso) return '—'
+  if (!iso) return 'Not yet'
   const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })
+  return Number.isNaN(d.getTime()) ? 'Not yet' : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 export function statusText(data: DeletionStatus): { title: string; body: string } {
   if (data.status === 'completed') {
     const n = data.removed_connections
     return {
-      title: 'Exclusão concluída',
+      title: 'Deletion complete',
       body: n > 0
-        ? `Removemos ${n === 1 ? '1 conexão' : `${n} conexões`} da sua conta da Meta (Facebook, Instagram, WhatsApp ou Meta Ads) e os tokens de acesso que estavam guardados.`
-        : `Não havia dados da sua conta da Meta guardados no ${APP_NAME}. Nada mais precisa ser feito.`,
+        ? `We removed ${n === 1 ? '1 connection' : `${n} connections`} to your Meta account (Facebook, Instagram, WhatsApp or Meta Ads) and the access tokens we had stored.`
+        : `${APP_NAME} had no data from your Meta account. You do not need to do anything else.`,
     }
   }
   return {
-    title: 'Exclusão em andamento',
-    body: 'Recebemos o seu pedido e vamos concluir a exclusão em até 30 dias. Volte a esta página com o mesmo código para acompanhar.',
+    title: 'Deletion in progress',
+    body: 'We received your request and will finish the deletion within 30 days. Come back to this page with the same code to check the status.',
   }
 }
 
 export default function DataDeletionPage() {
-  const navigate = useNavigate()
   const [params] = useSearchParams()
   const code = (params.get('code') ?? '').trim().toUpperCase()
   const [state, setState] = useState<State>({ kind: code ? 'loading' : 'none' })
@@ -72,38 +71,33 @@ export default function DataDeletionPage() {
     return () => { alive = false }
   }, [code])
 
-  useEffect(() => { document.title = `Exclusão de dados · ${APP_NAME}` }, [])
+  useEffect(() => { document.title = `Data deletion · ${APP_NAME}` }, [])
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 glass glass-border">
-        <div className="max-w-3xl mx-auto px-6 h-16 flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="rounded-xl" aria-label="Voltar">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <AnimatedLogo size={17} />
-        </div>
-      </header>
+    <SitePage>
+      <PageHeader title="Data deletion">
+        Check the status of a data deletion request, and learn what we delete.
+      </PageHeader>
 
-      <main className="max-w-3xl mx-auto px-6 py-16 space-y-8">
-        <h1 className="text-3xl font-display font-bold text-foreground">Exclusão de dados</h1>
-
+      <div className="mx-auto max-w-3xl space-y-10 px-6 pb-24">
         {state.kind !== 'none' && (
-          <section className="rounded-2xl border border-border bg-card p-6 space-y-3" aria-live="polite">
-            <p className="text-sm text-muted-foreground">Código de confirmação: <span className="font-mono text-foreground">{code || '—'}</span></p>
-            {state.kind === 'loading' && <p className="text-muted-foreground">Consultando o pedido…</p>}
-            {state.kind === 'invalid' && <p className="text-foreground">Este código não é válido. Confira o link que a Meta mostrou para você.</p>}
-            {state.kind === 'not_found' && <p className="text-foreground">Não encontramos um pedido com este código. Confira o link que a Meta mostrou para você.</p>}
-            {state.kind === 'error' && <p className="text-foreground">Não foi possível consultar o pedido agora. Tente de novo em alguns minutos.</p>}
+          <section className={cn(surface.card, 'space-y-3 p-6')} aria-live="polite">
+            <p className="text-[13px] text-muted-foreground">
+              Confirmation code: <span className="font-mono text-foreground">{code || 'none'}</span>
+            </p>
+            {state.kind === 'loading' && <p className="text-muted-foreground">Checking your request…</p>}
+            {state.kind === 'invalid' && <p className="text-foreground">This code is not valid. Check the link that Meta showed you.</p>}
+            {state.kind === 'not_found' && <p className="text-foreground">We did not find a request with this code. Check the link that Meta showed you.</p>}
+            {state.kind === 'error' && <p className="text-foreground">We could not check your request right now. Please try again in a few minutes.</p>}
             {state.kind === 'ok' && (() => {
               const t = statusText(state.data)
               return (
                 <>
-                  <h2 className="text-xl font-display font-semibold text-foreground">{t.title}</h2>
+                  <h2 className="text-xl font-semibold text-foreground">{t.title}</h2>
                   <p className="text-muted-foreground">{t.body}</p>
-                  <dl className="grid grid-cols-2 gap-2 text-sm pt-2">
-                    <dt className="text-muted-foreground">Pedido recebido</dt><dd className="text-foreground">{fmt(state.data.requested_at)}</dd>
-                    <dt className="text-muted-foreground">Concluído</dt><dd className="text-foreground">{fmt(state.data.completed_at)}</dd>
+                  <dl className="grid grid-cols-2 gap-2 pt-2 text-[15px]">
+                    <dt className="text-muted-foreground">Request received</dt><dd className="text-foreground">{fmt(state.data.requested_at)}</dd>
+                    <dt className="text-muted-foreground">Completed</dt><dd className="text-foreground">{fmt(state.data.completed_at)}</dd>
                   </dl>
                 </>
               )
@@ -111,21 +105,21 @@ export default function DataDeletionPage() {
           </section>
         )}
 
-        <section className="space-y-3 text-muted-foreground leading-relaxed">
-          <h2 className="text-xl font-display font-semibold text-foreground">O que é apagado</h2>
+        <Prose>
+          <h2>What we delete</h2>
           <p>
-            Quando você conecta o Facebook, o Instagram, o WhatsApp ou o Meta Ads ao {APP_NAME}, guardamos só o necessário para a
-            conexão funcionar: o token de acesso (criptografado), o ID e o nome da conta. Ao remover o app nas configurações da Meta
-            ou pedir a exclusão dos dados, apagamos essas conexões e os tokens. Seus projetos e sua conta do {APP_NAME} continuam.
+            When you connect Facebook, Instagram, WhatsApp or Meta Ads to {APP_NAME}, we store only what the connection needs:
+            the access token (encrypted), the account ID and the account name. When you remove the app in your Meta settings,
+            or ask us to delete your data, we delete these connections and tokens. Your projects and your {APP_NAME} account stay.
           </p>
-          <h2 className="text-xl font-display font-semibold text-foreground pt-2">Como pedir a exclusão</h2>
-          <ul className="list-disc list-inside space-y-1">
-            <li>No Facebook: Configurações e privacidade → Configurações → Apps e sites → Vertal Dev → Remover, e marque a opção de excluir as atividades.</li>
-            <li>No {APP_NAME}: Conectores → o app da Meta → Desconectar.</li>
-            <li>Para apagar a sua conta inteira do {APP_NAME}, escreva para o suporte em <a className="underline text-foreground" href="/support">vertal.dev/support</a>.</li>
+          <h2>How to ask for deletion</h2>
+          <ul>
+            <li>On Facebook: Settings &amp; privacy → Settings → Apps and websites → Vertal Dev → Remove. Then choose the option to delete your activity.</li>
+            <li>In {APP_NAME}: Connectors → the Meta app → Disconnect.</li>
+            <li>To delete your whole {APP_NAME} account, contact support at <a href="/support">vertal.dev/support</a>.</li>
           </ul>
-        </section>
-      </main>
-    </div>
+        </Prose>
+      </div>
+    </SitePage>
   )
 }

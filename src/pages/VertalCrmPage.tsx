@@ -13,6 +13,9 @@ import { CrmDeals } from '@/components/vertal-crm/CrmDeals';
 import { CrmSettings } from '@/components/vertal-crm/CrmSettings';
 import { CrmWaitlist } from '@/components/vertal-crm/CrmWaitlist';
 import { isCrmWaitlistEnabled } from '@/lib/vertalCrm/waitlist';
+import { crmLocale, uiDir } from '@/lib/vertalCrm/i18n';
+import { SITE_FONT, siteRoot, surface } from '@/components/site/siteUi';
+import { localizedWorkspaceName } from '../../supabase/functions/_shared/vertalCrm/core';
 
 const NotFound = lazy(() => import('@/pages/NotFound'));
 
@@ -27,7 +30,7 @@ const TABS = [
 type TabId = (typeof TABS)[number]['id'];
 
 function CrmShell() {
-  const { ready, error, workspace, t } = useCrm();
+  const { ready, error, workspace, t, lang } = useCrm();
   const navigate = useNavigate();
   const [sp, setSp] = useSearchParams();
   const tab = (TABS.find((x) => x.id === sp.get('aba'))?.id ?? 'dashboard') as TabId;
@@ -35,19 +38,19 @@ function CrmShell() {
     setSp((p) => { const n = new URLSearchParams(p); n.set('aba', id); return n; }, { replace: true });
   };
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-10 border-b bg-card/70 backdrop-blur-xl">
+    <div className={`min-h-screen ${siteRoot}`} style={SITE_FONT} lang={crmLocale(lang)} dir={uiDir(lang)} data-testid="crm-root">
+      <header className={`sticky top-0 z-10 border-b ${surface.bar}`}>
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/connectors')} aria-label={t.back}><ArrowLeft className="h-5 w-5" /></Button>
+          <Button variant="ghost" size="icon" onClick={() => navigate('/connectors')} aria-label={t.back}><ArrowLeft className="h-5 w-5 rtl:rotate-180" /></Button>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-display text-xl font-bold">{t.title}{workspace ? <span className="ml-2 text-sm font-normal text-muted-foreground">{' · '}{workspace.name}</span> : null}</h1>
+            <h1 className="truncate text-xl font-semibold tracking-[-0.01em]">{t.title}{workspace ? <span className="ml-2 text-sm font-normal text-muted-foreground">{' · '}{localizedWorkspaceName(workspace.name, lang)}</span> : null}</h1>
             <p className="truncate text-xs text-muted-foreground">{t.subtitle}</p>
           </div>
         </div>
         <nav className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4 pb-2" aria-label="Vertal CRM">
           {TABS.map(({ id, icon: Icon }) => (
             <button key={id} type="button" onClick={() => go(id)} data-testid={`crm-tab-${id}`}
-              className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm ${tab === id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent'}`}>
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm transition-colors ${tab === id ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-white/[0.06] hover:text-foreground'}`}>
               <Icon className="h-4 w-4" />{t.tabs[id]}
             </button>
           ))}

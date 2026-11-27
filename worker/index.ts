@@ -5,7 +5,8 @@
 // Também atende a API do conector Spotify em /api/spotify/* (docs/SPOTIFY_CONNECTOR.md)
 // e o navegador na nuvem do Vertal Chat em /api/browser/* (docs/BROWSER_FORM_AGENT.md)
 // e o Vertal Navigator em /api/navigator/* (docs/VERTAL_NAVIGATOR.md)
-// e a busca de vídeos do YouTube do chat em /api/media/* (docs/VERTAL_NAVIGATOR.md, fase 3).
+// e a busca de vídeos do YouTube do chat em /api/media/* (docs/VERTAL_NAVIGATOR.md, fase 3)
+// e o callback OAuth do conector Gmail em /oauth/gmail/callback (worker/gmailOAuthCallback.ts).
 import { crawlPriceFor, formatCrawlerPrice, isInBandPricing } from './payPerCrawl';
 import { isPaidPath, parsePaidPrefixes, verifyPaymentContext } from './monetizationGateway';
 import { siteVerificationResponse } from './siteVerification';
@@ -14,8 +15,11 @@ import { handleSpotify, SPOTIFY_API_PREFIX, type SpotifyRoutesEnv } from './spot
 import { BROWSER_API_PREFIX, handleBrowserForm, type BrowserFormEnv } from './browserFormRoutes';
 import { NAVIGATOR_API_PREFIX, handleNavigator, type NavigatorEnv } from './navigatorRoutes';
 import { MEDIA_API_PREFIX, handleMedia, type MediaEnv } from './mediaRoutes';
+import { FRAME_ANCESTORS, frameAncestorsFor, isEmbedPath } from './embedPolicy';
+import { EMBED_SESSION_PATH, handleEmbedSession, type EmbedSessionEnv } from './embedSession';
+import { handleGmailOAuthCallback, isGmailOAuthCallback, type GmailOAuthEnv } from './gmailOAuthCallback';
 
-export interface Env extends SpotifyRoutesEnv, BrowserFormEnv, NavigatorEnv, MediaEnv {
+export interface Env extends SpotifyRoutesEnv, BrowserFormEnv, NavigatorEnv, MediaEnv, GmailOAuthEnv, EmbedSessionEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
   /** Prefixos protegidos pelo Monetization Gateway, separados por vírgula. */
   MONETIZATION_GATEWAY_PATHS?: string;
@@ -26,8 +30,9 @@ export interface Env extends SpotifyRoutesEnv, BrowserFormEnv, NavigatorEnv, Med
 // Em vez de X-Frame-Options (que só aceita SAMEORIGIN), o CSP frame-ancestors
 // libera o iframe apenas para os apps do Ecossistema Vertal (vertal.app e
 // vertalrun.com), que abrem o Vertal Dev pelo botão "Abrir aqui".
-export const FRAME_ANCESTORS =
-  "frame-ancestors 'self' https://vertal.app https://*.vertal.app https://vertalrun.com https://www.vertalrun.com";
+// Exceção: /embed (worker/embedPolicy.ts) pode ser emoldurado por qualquer site;
+// o login dele abre em popup e as páginas de login continuam protegidas.
+export { FRAME_ANCESTORS, EMBED_FRAME_ANCESTORS } from './embedPolicy';
 
 const SECURITY_HEADERS: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff',
@@ -54,6 +59,16 @@ export default {
     // Rotas antigas do Vertal Vibe Pay (/vibe-bank, /<idioma>/vibe-bank, /bank…) → 301.
     const moved = legacyRedirect(url);
     if (moved) return moved;
+
+    // Callback OAuth do conector Gmail (redirect_uri no domínio vertal.dev).
+    if (isGmailOAuthCallback(url.pathname)) {
+      return handleGmailOAuthCallback(request, env, url);
+    }
+
+    // Embed sign-in handoff (worker/embedSession.ts).
+    if (url.pathname === EMBED_SESSION_PATH) {
+      return handleEmbedSession(request, env);
+    }
 
     if (url.pathname === SPOTIFY_API_PREFIX || url.pathname.startsWith(`${SPOTIFY_API_PREFIX}/`)) {
       const res = await handleSpotify(request, env, url);
@@ -85,6 +100,11 @@ export default {
     const response = new Response(assetResponse.body, assetResponse);
     for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
       if (!response.headers.has(name)) response.headers.set(name, value);
+    }
+    if (isEmbedPath(url.pathname)) {
+      // /embed: any site may frame it. Overwrite whatever _headers added.
+      response.headers.set('Content-Security-Policy', frameAncestorsFor(url.pathname));
+      response.headers.delete('X-Frame-Options');
     }
     if (paid) response.headers.set('Cache-Control', 'private, no-store');
 

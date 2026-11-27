@@ -8,12 +8,12 @@ const base: ConnectAccount = {
 
 describe('connectPendingText', () => {
   it('flags past-due requirements', () => {
-    expect(connectPendingText({ ...base, pastDue: 1, disabledReason: 'requirements.past_due' })).toMatch(/prazo vencido/)
+    expect(connectPendingText({ ...base, pastDue: 1, disabledReason: 'requirements.past_due' })).toMatch(/overdue/)
   })
   it('shows review state when nothing is due', () => {
-    expect(connectPendingText({ ...base, pendingRequirements: 0 })).toMatch(/analisando/)
+    expect(connectPendingText({ ...base, pendingRequirements: 0 })).toMatch(/reviewing/)
   })
   it('falls back to the pending count', () => {
-    expect(connectPendingText({ ...base, detailsSubmitted: false, pendingRequirements: 3 })).toMatch(/Faltam 3/)
+    expect(connectPendingText({ ...base, detailsSubmitted: false, pendingRequirements: 3 })).toMatch(/needs 3 more details/)
   })
 })

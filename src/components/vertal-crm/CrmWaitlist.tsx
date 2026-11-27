@@ -8,17 +8,20 @@ import { ArrowLeft, CheckCircle2, Clock3, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { crmDb } from '@/lib/vertalCrm/client';
-import { uiLangFrom, type CrmLang } from '@/lib/vertalCrm/i18n';
+import { crmLocale, uiDir, uiLangFrom, type CrmLang } from '@/lib/vertalCrm/i18n';
+import { useDocumentLang } from '@/lib/useDocumentLang';
 import { WAITLIST_TEXT } from '@/lib/vertalCrm/waitlist';
 
-const DOCS_PATH: Record<CrmLang, string> = { pt: '/docs/vertal-crm', en: '/en/docs/vertal-crm', es: '/es/docs/vertal-crm' };
+// Documentação do CRM grátis em cada idioma (src/config/freeCrm: pt-BR na raiz, os outros com prefixo).
+const docsPath = (lang: CrmLang): string => (lang === 'pt' ? '/docs/vertal-crm' : `/${lang}/docs/vertal-crm`);
 
 type State = 'checking' | 'idle' | 'saving' | 'joined' | 'error';
 
 export function CrmWaitlist({ langHint }: { langHint?: string | null }) {
   const [sp] = useSearchParams();
   const lang = uiLangFrom(langHint, sp.get('lang'), typeof navigator !== 'undefined' ? navigator.language : null);
-  const t = WAITLIST_TEXT[lang];
+  const t = WAITLIST_TEXT[lang] ?? WAITLIST_TEXT.pt;
+  useDocumentLang(crmLocale(lang), uiDir(lang));
   const [state, setState] = useState<State>('checking');
 
   useEffect(() => {
@@ -74,7 +77,7 @@ export function CrmWaitlist({ langHint }: { langHint?: string | null }) {
         )}
         {state === 'error' && <p className="mt-3 text-sm text-destructive" role="alert">{t.error}</p>}
         <div className="mt-6 flex flex-col items-center gap-2 text-sm">
-          <a href={DOCS_PATH[lang]} className="text-primary hover:underline">{t.docs}</a>
+          <a href={docsPath(lang)} className="text-primary hover:underline">{t.docs}</a>
           <Link to="/connectors" className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground">
             <ArrowLeft className="h-4 w-4" />{t.back}
           </Link>

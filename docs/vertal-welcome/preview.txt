@@ -1,0 +1,25 @@
+Subject: Welcome to Vertal Dev, Ana
+Preheader: Everything you need to build, launch and grow is already in your account.
+
+Hi Ana,
+
+Welcome to Vertal Dev. We're so glad you're here!
+
+Here's what's already in your account:
+• Free CRM: opening soon
+• Deploy and rendering: go live fast
+• Vertal App: repo to live app
+• Vertal Run: safe code sandboxes
+• Vertal Vibe Pay: opening soon
+• Design, CAD, Office: free manually
+
+You only pay for Vertal AI, by the credit.
+
+Our docs are the quickest way to get started.
+Explore the docs: https://vertal.dev/docs
+
+Questions or ideas? Just reply, we'd love to hear from you.
+
+Welcome aboard,
+Laércio Borges
+Founder, Vertal

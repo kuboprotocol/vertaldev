@@ -7,16 +7,16 @@ describe('ManusLauncher · banner Vertal Office', () => {
   it('mostra o banner logo abaixo do Design Premium', () => {
     render(<MemoryRouter><ManusLauncher setActive={() => {}} /></MemoryRouter>);
     const design = screen.getByText('Design Premium');
-    const banner = screen.getByRole('button', { name: 'Abrir Vertal Office' });
+    const banner = screen.getByRole('button', { name: 'Open Vertal Office' });
     // o banner vem depois do item Design Premium na mesma lista
     expect(design.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByText(/totalmente grátis/)).toBeTruthy();
+    expect(screen.getByText(/completely free/)).toBeTruthy();
   });
 
   it('abre direto o painel do Vertal Office ao clicar', () => {
     const setActive = vi.fn();
     render(<MemoryRouter><ManusLauncher setActive={setActive} /></MemoryRouter>);
-    fireEvent.click(screen.getByRole('button', { name: 'Abrir Vertal Office' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Vertal Office' }));
     expect(setActive).toHaveBeenCalledWith('office');
   });
 });

@@ -1,4 +1,4 @@
-import AnimatedLogo from '@/components/branding/AnimatedLogo'
+import AppShell, { AppTopBar, PanelHeader } from '@/components/site/AppShell'
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -69,10 +69,10 @@ export default function ProfilePage() {
     try {
       await navigator.clipboard.writeText(referralLink(referralCode))
       setCopied(true)
-      toast.success('Link copiado!')
+      toast.success('Link copied')
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      toast.error('Erro ao copiar')
+      toast.error('We could not copy the link')
     }
   }
 
@@ -81,11 +81,11 @@ export default function ProfilePage() {
     if (!file || !user) return
 
     if (!file.type.startsWith('image/')) {
-      toast.error('Selecione um arquivo de imagem')
+      toast.error('Choose an image file')
       return
     }
     if (file.size > 2 * 1024 * 1024) {
-      toast.error('A imagem deve ter no máximo 2MB')
+      toast.error('The image must be 2 MB or smaller')
       return
     }
 
@@ -98,7 +98,7 @@ export default function ProfilePage() {
       .upload(filePath, file, { upsert: true })
 
     if (uploadError) {
-      toast.error('Erro ao enviar imagem')
+      toast.error('We could not upload the image')
       setUploading(false)
       return
     }
@@ -109,7 +109,7 @@ export default function ProfilePage() {
       .createSignedUrl(filePath, 60 * 60 * 24 * 365) // 1 year expiry
 
     if (signError || !data?.signedUrl) {
-      toast.error('Erro ao gerar URL de acesso')
+      toast.error('We could not create the image link')
       setUploading(false)
       return
     }
@@ -122,10 +122,10 @@ export default function ProfilePage() {
       .eq('id', user.id)
 
     if (updateError) {
-      toast.error('Erro ao atualizar perfil')
+      toast.error('We could not update your profile')
     } else {
       await refreshAvatar()
-      toast.success('Avatar atualizado!')
+      toast.success('Profile photo updated')
     }
     setUploading(false)
   }
@@ -140,9 +140,9 @@ export default function ProfilePage() {
       .eq('id', user.id)
 
     if (error) {
-      toast.error('Erro ao salvar perfil')
+      toast.error('We could not save your profile')
     } else {
-      toast.success('Perfil atualizado!')
+      toast.success('Profile saved')
     }
     setSaving(false)
   }
@@ -160,35 +160,22 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background gradient-mesh">
-      {/* Header */}
-      <header className="glass glass-border sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-6 py-4 flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')} className="hover:bg-accent">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="flex items-center gap-2">
-            <AnimatedLogo size={15} />
-            <h1 className="text-xl font-bold text-foreground font-display">Meu Perfil</h1>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-3xl mx-auto px-6 py-10">
+    <AppShell width="narrow" topBar={<AppTopBar back={{ to: '/dashboard', label: 'Dashboard' }} />}>
+      <PanelHeader title="Your profile" description="Your account details, wallet and referral link." />
+      <div>
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           className="space-y-6"
         >
-          {/* Vertal Vibe Pay: atalho em destaque no topo do perfil */}
+          {/* Vertal Vibe Pay shortcut at the top of the profile */}
           <VibePayPromo variant="compact" />
 
           {/* Avatar Section */}
-          <div className="glass glass-border rounded-2xl p-8 flex flex-col sm:flex-row items-center gap-6">
+          <div className="rounded-2xl border border-white/[0.06] bg-card/50 p-8 flex flex-col sm:flex-row items-center gap-6">
             <div className="relative group shrink-0">
-              <div className="absolute -inset-1.5 rounded-full bg-gradient-to-br from-primary/40 to-primary/10 blur-sm group-hover:blur-md transition-all" />
-              <Avatar className="h-28 w-28 text-lg ring-2 ring-border relative">
+                            <Avatar className="h-28 w-28 text-lg ring-2 ring-border relative">
                 {avatarUrl ? (
                   <AvatarImage src={avatarUrl} alt="Avatar" className="object-cover" />
                 ) : null}
@@ -197,6 +184,8 @@ export default function ProfilePage() {
                 </AvatarFallback>
               </Avatar>
               <button
+                type="button"
+                aria-label="Change profile photo"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
                 className="absolute inset-0 flex items-center justify-center rounded-full bg-foreground/60 opacity-0 group-hover:opacity-100 transition-all duration-300 cursor-pointer"
@@ -216,15 +205,15 @@ export default function ProfilePage() {
               />
             </div>
             <div className="text-center sm:text-left">
-              <h2 className="text-2xl font-bold text-foreground font-display">
-                {displayName || 'Sem nome'}
+              <h2 className="text-2xl font-semibold tracking-[-0.015em] text-foreground">
+                {displayName || 'No name'}
               </h2>
               <p className="text-muted-foreground text-sm mt-1 flex items-center gap-1.5 justify-center sm:justify-start">
                 <Mail className="h-3.5 w-3.5" />
                 {user?.email}
               </p>
               <p className="text-xs text-muted-foreground/60 mt-2">
-                Clique na foto para alterar o avatar
+                Click the photo to change it
               </p>
             </div>
           </div>
@@ -234,11 +223,11 @@ export default function ProfilePage() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.15 }}
-            className="glass glass-border rounded-2xl p-8 space-y-6"
+            className="rounded-2xl border border-white/[0.06] bg-card/50 p-8 space-y-6"
           >
             <div className="flex items-center gap-2 mb-2">
               <Shield className="h-4 w-4 text-primary" />
-              <h3 className="font-semibold text-foreground font-display">Informações da conta</h3>
+              <h3 className="font-semibold text-foreground">Account details</h3>
             </div>
 
             <div className="space-y-2">
@@ -255,14 +244,14 @@ export default function ProfilePage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="displayName" className="text-muted-foreground text-sm">Nome de exibição</Label>
+              <Label htmlFor="displayName" className="text-muted-foreground text-sm">Display name</Label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
                 <Input
                   id="displayName"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Seu nome"
+                  placeholder="Your name"
                   className="pl-10"
                 />
               </div>
@@ -271,11 +260,11 @@ export default function ProfilePage() {
             <Button
               onClick={handleSave}
               disabled={saving || !displayName.trim()}
-              className="w-full gradient-primary text-primary-foreground shadow-glow hover:shadow-glow-lg transition-all duration-300"
+              className="w-full rounded-full"
               size="lg"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Salvar alterações
+              Save changes
             </Button>
           </motion.div>
 
@@ -287,29 +276,29 @@ export default function ProfilePage() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.25 }}
-            className="glass glass-border rounded-2xl p-8 space-y-5"
+            className="rounded-2xl border border-white/[0.06] bg-card/50 p-8 space-y-5"
           >
             <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
               <div className="flex items-center gap-2">
                 <Gift className="h-4 w-4 text-primary" />
-                <h3 className="font-semibold text-foreground font-display">Programa de indicações e afiliados</h3>
+                <h3 className="font-semibold text-foreground">Referrals and affiliate program</h3>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => navigate('/shortlinks')}
+                  onClick={() => navigate('/recompensas')}
                   className="gap-2"
                 >
                   <Video className="h-3.5 w-3.5" />
-                  Shortlinks
+                  Rewards
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => navigate('/affiliate-program')}
                 >
-                  Ver programa completo →
+                  See the full program
                 </Button>
               </div>
             </div>
@@ -318,30 +307,30 @@ export default function ProfilePage() {
               <div className="rounded-xl bg-secondary/50 p-4 text-center">
                 <div className="flex items-center justify-center gap-1.5 mb-1">
                   <Users className="h-4 w-4 text-primary" />
-                  <span className="text-xs text-muted-foreground">Indicados</span>
+                  <span className="text-xs text-muted-foreground">People invited</span>
                 </div>
-                <p className="text-2xl font-display font-bold text-foreground">{referralCount}</p>
+                <p className="text-2xl font-semibold tracking-[-0.015em] text-foreground">{referralCount}</p>
               </div>
               <div className="rounded-xl bg-secondary/50 p-4 text-center">
                 <div className="flex items-center justify-center gap-1.5 mb-1">
                   <Gift className="h-4 w-4 text-primary" />
-                  <span className="text-xs text-muted-foreground">Créditos ganhos</span>
+                  <span className="text-xs text-muted-foreground">Credits earned</span>
                 </div>
-                <p className="text-2xl font-display font-bold text-foreground">{referralCredits}</p>
+                <p className="text-2xl font-semibold tracking-[-0.015em] text-foreground">{referralCredits}</p>
               </div>
               <div className="col-span-2 rounded-xl bg-secondary/50 p-4 text-center" data-testid="affiliate-commissions">
                 <div className="flex items-center justify-center gap-1.5 mb-1">
                   <Gift className="h-4 w-4 text-primary" />
-                  <span className="text-xs text-muted-foreground">Comissões de afiliado ({AFFILIATE_RATE * 100}%)</span>
+                  <span className="text-xs text-muted-foreground">Affiliate commissions ({AFFILIATE_RATE * 100}%)</span>
                 </div>
-                <p className="text-2xl font-display font-bold text-foreground">{formatCents(commissionPending)}</p>
-                <p className="text-[11px] text-muted-foreground">a receber · {formatCents(commissionPaid)} já pagos</p>
+                <p className="text-2xl font-semibold tracking-[-0.015em] text-foreground">{formatCents(commissionPending)}</p>
+                <p className="text-[11px] text-muted-foreground">pending · {formatCents(commissionPaid)} paid</p>
               </div>
             </div>
 
             {referralCode && (
               <div className="space-y-2">
-                <Label className="text-muted-foreground text-sm">Seu link de indicação</Label>
+                <Label className="text-muted-foreground text-sm">Your referral link</Label>
                 <div className="flex flex-wrap gap-2">
                   <Input
                     value={referralLink(referralCode)}
@@ -352,17 +341,18 @@ export default function ProfilePage() {
                     variant="outline"
                     size="icon"
                     onClick={handleCopyReferral}
+                    aria-label="Copy referral link"
                     className="shrink-0 border-primary/20 text-primary hover:bg-primary/10"
                   >
                     {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                   </Button>
                 </div>
-                <p className="text-[11px] text-muted-foreground">Quem se cadastrar pelo seu link: +50 créditos para você e 5% de tudo que a pessoa indicada pagar (planos, renovações e créditos). A pessoa indicada ganha 5 créditos por dia, a cada 24 horas.</p>
+                <p className="text-[11px] text-muted-foreground">For each person who signs up with your link, you get 50 credits plus 5% of everything they pay (plans, renewals and credits). The person you invite gets 5 credits per day, every 24 hours.</p>
               </div>
             )}
           </motion.div>
         </motion.div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   )
 }

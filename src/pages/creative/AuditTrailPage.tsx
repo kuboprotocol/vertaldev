@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { 
-  ArrowLeft, Search, FileDown, ArrowUpDown, Loader2, X, Filter, 
+  Search, FileDown, ArrowUpDown, Loader2, X, Filter, 
   AlertTriangle, Save, History, ChevronRight, Info, AlertCircle, Share2, TrendingUp, Clock,
   Layers, Copy, ArrowLeftRight, Check, ListChecks, GripVertical, AlertOctagon
 } from "lucide-react";
@@ -61,6 +61,7 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { AppTopBar, SITE_FONT, siteRoot } from "@/components/site";
 
 type AuditTrail = {
   id: string;
@@ -90,7 +91,7 @@ const TimelineViewer = ({ correlationId, currentId }: { correlationId: string, c
   });
 
   if (isLoading) return <Skeleton className="h-20 w-full" />;
-  if (!timeline || timeline.length === 0) return <p className="text-[10px] text-muted-foreground">Nenhum histórico encontrado.</p>;
+  if (!timeline || timeline.length === 0) return <p className="text-[10px] text-muted-foreground">No history found.</p>;
 
   return (
     <div className="space-y-2 relative before:absolute before:left-2 before:top-2 before:bottom-2 before:w-px before:bg-muted-foreground/30 pl-6">
@@ -181,13 +182,13 @@ export default function CreativeAuditPage() {
 
   const availableColumns = useMemo(() => [
     { id: "id", label: "ID" },
-    { id: "created_at", label: "Data/Hora" },
-    { id: "user", label: "Usuário" },
-    { id: "step", label: "Etapa" },
-    { id: "action", label: "Ação" },
-    { id: "correlation_id", label: "ID de Correlação" },
-    { id: "trace_id", label: "ID de Trace" },
-    { id: "params", label: "Parâmetros" },
+    { id: "created_at", label: "Date and time" },
+    { id: "user", label: "User" },
+    { id: "step", label: "Step" },
+    { id: "action", label: "Action" },
+    { id: "correlation_id", label: "Correlation ID" },
+    { id: "trace_id", label: "Trace ID" },
+    { id: "params", label: "Parameters" },
   ], []);
 
   // Load preferences from localStorage per user
@@ -283,7 +284,7 @@ export default function CreativeAuditPage() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["creative-audit-trail", user?.id, debouncedSearch, step, status, startDate, endDate, sortDir, page],
     queryFn: async () => {
-      if (!user) throw new Error("Não autenticado");
+      if (!user) throw new Error("Not signed in");
 
       let q = supabase
         .from("creative_audit_trail")
@@ -364,7 +365,7 @@ export default function CreativeAuditPage() {
       const exists = prev.find(e => e.id === entry.id);
       if (exists) return prev.filter(e => e.id !== entry.id);
       if (prev.length >= 2) {
-        toast.warning("Selecione apenas 2 eventos para comparar");
+        toast.warning("Select only 2 events to compare");
         return prev;
       }
       return [...prev, entry];
@@ -373,7 +374,7 @@ export default function CreativeAuditPage() {
 
   const startComparison = () => {
     if (compareEntries.length !== 2) {
-      toast.error("Selecione exatamente 2 eventos para comparar");
+      toast.error("Select exactly 2 events to compare");
       return;
     }
     setIsComparing(true);
@@ -451,7 +452,7 @@ export default function CreativeAuditPage() {
 
   const saveRecurrenceThreshold = () => {
     localStorage.setItem("creative_audit_recurrence_threshold", String(recurrenceThreshold));
-    toast.success(`Limite de recorrência padrão salvo como ${recurrenceThreshold}`);
+    toast.success(`Default repeat limit saved as ${recurrenceThreshold}`);
   };
 
   const toggleCorrelationExpansion = (cid: string) => {
@@ -536,7 +537,7 @@ export default function CreativeAuditPage() {
       link.href = url;
       link.download = `audit-comparison-snapshot-${Date.now()}.${format}`;
       link.click();
-      toast.success("Comparação e estado dos filtros exportados");
+      toast.success("Comparison and filter state exported");
     };
 
     handleExport();
@@ -548,16 +549,16 @@ export default function CreativeAuditPage() {
     const causes = [];
     
     if (JSON.stringify(a.params) !== JSON.stringify(b.params)) {
-      causes.push("Diferença nos parâmetros de entrada detectada.");
+      causes.push("The input parameters are different.");
     }
     if (a.step !== b.step) {
-      causes.push("Eventos ocorridos em etapas diferentes do fluxo.");
+      causes.push("The events happened in different steps of the flow.");
     }
     if (a.params?.error && b.params?.error && a.params.error.message !== b.params.error.message) {
-      causes.push("Mensagens de erro distintas sugerem falhas em sub-processos diferentes.");
+      causes.push("Different error messages point to failures in different sub-processes.");
     }
     
-    return causes.length > 0 ? causes : ["Padrões técnicos idênticos - possível falha intermitente de ambiente."];
+    return causes.length > 0 ? causes : ["Same technical pattern. This may be an intermittent environment failure."];
   };
 
   const loadTimeline = async (correlationId: string) => {
@@ -572,7 +573,7 @@ export default function CreativeAuditPage() {
       if (error) throw error;
       setTimelineEntries(data || []);
     } catch (err) {
-      toast.error("Erro ao carregar linha do tempo");
+      toast.error("Could not load the timeline");
     } finally {
       setIsTimelineLoading(false);
     }
@@ -581,19 +582,19 @@ export default function CreativeAuditPage() {
   const shareCurrentView = () => {
     const url = window.location.href;
     navigator.clipboard.writeText(url);
-    toast.success("Link da consulta copiado!");
+    toast.success("Search link copied");
   };
 
   const saveCurrentFilters = () => {
     const newFilter = {
       id: Date.now(),
-      name: `Busca ${new Date().toLocaleTimeString()}`,
+      name: `Search ${new Date().toLocaleTimeString('en-US')}`,
       filters: { search, step, status, startDate, endDate }
     };
     const updated = [newFilter, ...savedFilters].slice(0, 5);
     setSavedFilters(updated);
     localStorage.setItem("creative_audit_filters", JSON.stringify(updated));
-    toast.success("Filtros salvos localmente");
+    toast.success("Filters saved on this device");
   };
 
   const applySavedFilter = (f: any) => {
@@ -603,11 +604,11 @@ export default function CreativeAuditPage() {
     setStartDate(f.filters.startDate);
     setEndDate(f.filters.endDate);
     setPage(1);
-    toast.info(`Filtro "${f.name}" aplicado`);
+    toast.info(`Filter "${f.name}" applied`);
   };
 
   const exportData = (format: "json" | "csv") => {
-    if (entries.length === 0) return toast.error("Sem dados para exportar");
+    if (entries.length === 0) return toast.error("No data to export");
     
     if (format === "csv") {
       setIsExportModalOpen(true);
@@ -623,12 +624,12 @@ export default function CreativeAuditPage() {
     link.download = filename;
     link.click();
     URL.revokeObjectURL(url);
-    toast.success(`Exportado (${entries.length} registros filtrados)`);
+    toast.success(`Exported (${entries.length} filtered records)`);
   };
 
   const handleDownloadCSV = () => {
     if (selectedColumns.length === 0) {
-      toast.error("Selecione pelo menos uma coluna para exportar.");
+      toast.error("Select at least one column to export.");
       return;
     }
 
@@ -668,32 +669,30 @@ export default function CreativeAuditPage() {
     URL.revokeObjectURL(url);
     
     setIsExportModalOpen(false);
-    toast.success(`CSV exportado com ${entries.length} registros. Suas configurações foram salvas.`);
+    toast.success(`CSV exported with ${entries.length} records. Your settings were saved.`);
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-4 md:p-8">
-      <header className="max-w-7xl mx-auto mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className={`min-h-screen ${siteRoot}`} style={SITE_FONT}>
+      <AppTopBar back={{ to: "/creative", label: "Creative" }} />
+      <header className="mx-auto mb-8 flex max-w-7xl flex-col justify-between gap-4 px-4 pt-8 sm:px-6 md:flex-row md:items-end">
         <div>
-          <Button variant="ghost" size="sm" onClick={() => navigate("/creative")} className="mb-2">
-            <ArrowLeft className="h-4 w-4 mr-2" /> Voltar ao Painel
-          </Button>
-          <h1 className="text-3xl font-bold tracking-tight">Trilha de Auditoria</h1>
+                    <h1 className="text-3xl font-semibold tracking-[-0.02em]">Audit trail</h1>
           <p className="text-muted-foreground mt-1">
-            Consulte o histórico técnico de execuções e eventos do painel criativo.
+            The technical history of runs and events in the Creative panel.
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => exportData("json")}>
-            <FileDown className="h-4 w-4 mr-2" /> Exportar JSON
+          <Button variant="outline" className="rounded-full" onClick={() => exportData("json")}>
+            <FileDown className="h-4 w-4 mr-2" /> Export JSON
           </Button>
-          <Button variant="outline" onClick={() => exportData("csv")}>
-            <FileDown className="h-4 w-4 mr-2" /> Exportar CSV
+          <Button variant="outline" className="rounded-full" onClick={() => exportData("csv")}>
+            <FileDown className="h-4 w-4 mr-2" /> Export CSV
           </Button>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto space-y-6">
+      <main id="main" className="mx-auto max-w-7xl space-y-6 px-4 pb-16 sm:px-6">
         {/* Alerts & Insights */}
         {(recurrentFailures.length > 0 || multipleAttempts > 0) && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -701,7 +700,7 @@ export default function CreativeAuditPage() {
               <Card className="p-4 border-destructive/20 bg-destructive/5 lg:col-span-1">
                 <div className="flex items-center gap-2 mb-3 text-destructive">
                   <AlertCircle className="h-5 w-5" />
-                  <h3 className="font-semibold">Falhas Recorrentes</h3>
+                  <h3 className="font-semibold">Repeated failures</h3>
                 </div>
                 <div className="space-y-2">
                   {recurrentFailures.map(([cause, info]) => (
@@ -718,7 +717,7 @@ export default function CreativeAuditPage() {
               <Card className="p-4 lg:col-span-1">
                 <div className="flex items-center gap-2 mb-3 text-primary">
                   <TrendingUp className="h-5 w-5" />
-                  <h3 className="font-semibold">Tendência de Falhas</h3>
+                  <h3 className="font-semibold">Failure trend</h3>
                 </div>
                 <div className="h-[120px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -742,13 +741,13 @@ export default function CreativeAuditPage() {
               <Card className="p-4 border-yellow-500/20 bg-yellow-500/5 lg:col-span-1">
                 <div className="flex items-center gap-2 mb-3 text-yellow-600">
                   <History className="h-5 w-5" />
-                  <h3 className="font-semibold">Alerta de Retries</h3>
+                  <h3 className="font-semibold">Retry alert</h3>
                 </div>
                 <p className="text-sm text-muted-foreground mb-2">
-                  Identificamos <strong>{multipleAttempts}</strong> IDs com múltiplas tentativas.
+                  <strong>{multipleAttempts}</strong> IDs have more than one attempt.
                 </p>
                 <Button variant="outline" size="sm" onClick={() => setSearch("retry")}>
-                  Investigar Retries
+                  Investigate retries
                 </Button>
               </Card>
             )}
@@ -761,7 +760,7 @@ export default function CreativeAuditPage() {
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="ID, Correlation, Trace ou Ação..."
+                placeholder="ID, correlation, trace or action"
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 pl-9"
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
@@ -770,13 +769,13 @@ export default function CreativeAuditPage() {
             <Select value={step} onValueChange={(v) => { setStep(v); setPage(1); }}>
               <SelectTrigger>
                 <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
-                <SelectValue placeholder="Etapa" />
+                <SelectValue placeholder="Step" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas as etapas</SelectItem>
-                <SelectItem value="Selection">Seleção</SelectItem>
-                <SelectItem value="Config">Configuração</SelectItem>
-                <SelectItem value="Execution">Execução</SelectItem>
+                <SelectItem value="all">All steps</SelectItem>
+                <SelectItem value="Selection">Selection</SelectItem>
+                <SelectItem value="Config">Configuration</SelectItem>
+                <SelectItem value="Execution">Execution</SelectItem>
               </SelectContent>
             </Select>
             <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
@@ -785,9 +784,9 @@ export default function CreativeAuditPage() {
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos os status</SelectItem>
-                <SelectItem value="success">Sucesso</SelectItem>
-                <SelectItem value="failed">Falhas / Erros</SelectItem>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="success">Success</SelectItem>
+                <SelectItem value="failed">Failures and errors</SelectItem>
               </SelectContent>
             </Select>
             <input
@@ -806,9 +805,9 @@ export default function CreativeAuditPage() {
 
           <div className="flex flex-wrap items-center gap-4 mb-4">
             <div className="flex items-center gap-2 bg-accent/20 px-3 py-1 rounded-full border">
-              <span className="text-xs font-medium">Limite de Recorrência:</span>
+              <span className="text-xs font-medium">Repeat limit:</span>
               <span className="text-xs font-bold">{recurrenceThreshold}x</span>
-              <Button variant="ghost" size="icon" className="h-5 w-5 ml-1" onClick={() => setShowConfig(true)} title="Configurar limite padrão">
+              <Button variant="ghost" size="icon" className="h-5 w-5 ml-1" onClick={() => setShowConfig(true)} title="Set the default limit" aria-label="Set the default limit">
                 <Save className="h-3 w-3" />
               </Button>
             </div>
@@ -819,14 +818,14 @@ export default function CreativeAuditPage() {
                 className="text-xs h-8"
                 onClick={() => setSearch(recurrentFailures[0][0])}
               >
-                <Layers className="h-3 w-3 mr-1" /> Ver falhas mais recorrentes
+                <Layers className="h-3 w-3 mr-1" /> View the most repeated failures
               </Button>
             )}
             {compareEntries.length > 0 && (
               <div className="flex items-center gap-2 ml-auto">
                 <span className="text-xs font-medium">{compareEntries.length}/2 selecionados</span>
                 <Button size="sm" className="h-8" disabled={compareEntries.length !== 2} onClick={startComparison}>
-                  <ArrowLeftRight className="h-3 w-3 mr-1" /> Comparar
+                  <ArrowLeftRight className="h-3 w-3 mr-1" /> Compare
                 </Button>
                 <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => setCompareEntries([])}>
                   <X className="h-3 w-3" />
@@ -838,10 +837,10 @@ export default function CreativeAuditPage() {
           <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t">
             <div className="flex gap-2">
               <Button variant="secondary" size="sm" onClick={saveCurrentFilters}>
-                <Save className="h-4 w-4 mr-2" /> Salvar Busca
+                <Save className="h-4 w-4 mr-2" /> Save search
               </Button>
               <Button variant="outline" size="sm" onClick={shareCurrentView}>
-                <Share2 className="h-4 w-4 mr-2" /> Compartilhar Link
+                <Share2 className="h-4 w-4 mr-2" /> Share link
               </Button>
               {savedFilters.length > 0 && (
                 <div className="flex gap-1">
@@ -862,7 +861,7 @@ export default function CreativeAuditPage() {
               <Button variant="ghost" size="sm" onClick={() => {
                 setSearch(""); setStep("all"); setStatus("all"); setStartDate(""); setEndDate(""); setPage(1);
               }}>
-                <X className="h-4 w-4 mr-2" /> Limpar Filtros
+                <X className="h-4 w-4 mr-2" /> Clear filters
               </Button>
             )}
           </div>
@@ -878,12 +877,12 @@ export default function CreativeAuditPage() {
                       Data <ArrowUpDown className="h-3 w-3" />
                     </button>
                   </TableHead>
-                  <TableHead>Usuário</TableHead>
-                  <TableHead>Etapa</TableHead>
-                  <TableHead>Ação</TableHead>
+                  <TableHead>User</TableHead>
+                  <TableHead>Step</TableHead>
+                  <TableHead>Action</TableHead>
                   <TableHead>Correlation / Trace ID</TableHead>
-                  <TableHead className="text-center">Comparar</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+                  <TableHead className="text-center">Compare</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -901,7 +900,7 @@ export default function CreativeAuditPage() {
                 ) : entries.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
-                      Nenhum registro encontrado com os filtros atuais.
+                      No records match these filters.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -926,7 +925,7 @@ export default function CreativeAuditPage() {
                             </div>
                           </TableCell>
                           <TableCell className="text-xs truncate max-w-[150px]" title={entry.user_email}>
-                            {entry.user_email || "Usuário não identificado"}
+                            {entry.user_email || "Unknown user"}
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">{entry.step}</Badge>
@@ -939,7 +938,7 @@ export default function CreativeAuditPage() {
                                   {entry.statusCounts?.success} sucessos
                                 </Badge>
                                 <Badge variant="secondary" className="h-4 px-1 text-[8px] bg-destructive/10 text-destructive border-destructive/20">
-                                  {entry.statusCounts?.error} falhas
+                                  {entry.statusCounts?.error} failures
                                 </Badge>
                               </div>
                             ) : (
@@ -954,7 +953,7 @@ export default function CreativeAuditPage() {
                                 )}
                                 {retries > 1 && (
                                   <Badge variant="secondary" className="h-4 px-1 text-[8px] bg-yellow-500/10 text-yellow-600 border-yellow-500/20">
-                                    {retries}x tentativas
+                                    {retries} attempts
                                   </Badge>
                                 )}
                               </div>
@@ -1034,7 +1033,7 @@ export default function CreativeAuditPage() {
         {totalPages > 1 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-2 py-4">
             <p className="text-sm text-muted-foreground">
-              Mostrando {entries.length} de {count} registros
+              Showing {entries.length} of {count} records
             </p>
             <Pagination>
               <PaginationContent>
@@ -1081,10 +1080,10 @@ export default function CreativeAuditPage() {
         <SheetContent className="sm:max-w-md overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
-              <Info className="h-5 w-5 text-primary" /> Detalhes do Evento
+              <Info className="h-5 w-5 text-primary" /> Event details
             </SheetTitle>
             <SheetDescription>
-              Informações técnicas registradas para esta etapa.
+              Technical details recorded for this step.
             </SheetDescription>
           </SheetHeader>
           
@@ -1092,23 +1091,23 @@ export default function CreativeAuditPage() {
             <div className="mt-6 space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground uppercase font-bold">Etapa</p>
+                  <p className="text-xs text-muted-foreground font-medium">Step</p>
                   <Badge>{selectedEntry.step}</Badge>
                 </div>
                 <div className="space-y-1 text-right">
-                  <p className="text-xs text-muted-foreground uppercase font-bold">Data/Hora</p>
+                  <p className="text-xs text-muted-foreground uppercase font-bold">Date and time</p>
                   <p className="text-sm">{new Date(selectedEntry.created_at).toLocaleString()}</p>
                 </div>
               </div>
 
               <div className="space-y-1 p-3 bg-muted rounded-md border">
-                <p className="text-xs text-muted-foreground uppercase font-bold mb-1">Ação</p>
+                <p className="text-xs text-muted-foreground font-medium mb-1">Action</p>
                 <p className="text-sm font-mono break-all">{selectedEntry.action}</p>
               </div>
 
               <div className="space-y-3">
                 <div className="flex justify-between items-center border-b pb-1">
-                  <h4 className="text-sm font-semibold">Identificadores</h4>
+                  <h4 className="text-sm font-semibold">Identifiers</h4>
                   {selectedEntry.correlation_id && (
                     <Button 
                       variant="ghost" 
@@ -1116,7 +1115,7 @@ export default function CreativeAuditPage() {
                       className="h-7 text-[10px]"
                       onClick={() => loadTimeline(selectedEntry.correlation_id!)}
                     >
-                      <Clock className="h-3 w-3 mr-1" /> Ver Linha do Tempo
+                      <Clock className="h-3 w-3 mr-1" /> View timeline
                     </Button>
                   )}
                 </div>
@@ -1136,7 +1135,7 @@ export default function CreativeAuditPage() {
               {timelineEntries.length > 0 && (
                 <div className="space-y-3 bg-accent/20 p-3 rounded-md border border-accent">
                   <h4 className="text-sm font-semibold flex items-center gap-2">
-                    <Clock className="h-4 w-4" /> Histórico de Correlação
+                    <Clock className="h-4 w-4" /> Correlation history
                   </h4>
                   <div className="space-y-3 relative before:absolute before:left-2 before:top-2 before:bottom-2 before:w-px before:bg-muted-foreground/30">
                     {timelineEntries.map((te, i) => (
@@ -1153,7 +1152,7 @@ export default function CreativeAuditPage() {
               )}
 
               <div className="space-y-2">
-                <h4 className="text-sm font-semibold border-b pb-1">Parâmetros / Stack</h4>
+                <h4 className="text-sm font-semibold border-b pb-1">Parameters and stack</h4>
                 <div className="bg-black/95 text-green-400 p-4 rounded-md overflow-x-auto font-mono text-xs max-h-[300px]">
                   <pre>{JSON.stringify(selectedEntry.params, null, 2)}</pre>
                 </div>
@@ -1162,14 +1161,14 @@ export default function CreativeAuditPage() {
               {selectedEntry.params?.error && (
                 <div className="p-3 border border-destructive/50 bg-destructive/5 rounded-md">
                   <p className="text-xs font-bold text-destructive uppercase mb-1 flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3" /> Causa Detectada
+                    <AlertCircle className="h-3 w-3" /> Cause found
                   </p>
                   <p className="text-sm text-destructive font-medium">
-                    {selectedEntry.params.error.message || "Erro desconhecido"}
+                    {selectedEntry.params.error.message || "Unknown error"}
                   </p>
                   {selectedEntry.params.error.stack && (
                     <details className="mt-2">
-                      <summary className="text-[10px] cursor-pointer hover:underline text-destructive/80">Ver stack trace</summary>
+                      <summary className="text-[10px] cursor-pointer hover:underline text-destructive/80">View stack trace</summary>
                       <pre className="mt-1 text-[10px] opacity-70 whitespace-pre-wrap">{selectedEntry.params.error.stack}</pre>
                     </details>
                   )}
@@ -1186,7 +1185,7 @@ export default function CreativeAuditPage() {
           <SheetHeader>
             <div className="flex items-center justify-between">
               <SheetTitle className="flex items-center gap-2">
-                <ArrowLeftRight className="h-5 w-5 text-primary" /> Comparação Técnica Avançada
+                <ArrowLeftRight className="h-5 w-5 text-primary" /> Technical comparison
               </SheetTitle>
               <div className="flex gap-2 mr-6">
                 <Button variant="outline" size="sm" onClick={() => exportComparison("json")}>
@@ -1198,13 +1197,13 @@ export default function CreativeAuditPage() {
               </div>
             </div>
             <SheetDescription>
-              Comparação detalhada com destaque de discrepâncias de parâmetros e causas prováveis.
+              A side-by-side comparison that highlights parameter differences and likely causes.
             </SheetDescription>
           </SheetHeader>
           
           <div className="mt-6 p-4 bg-primary/5 rounded-md border border-primary/20">
             <h4 className="text-sm font-bold flex items-center gap-2 mb-2">
-              <AlertCircle className="h-4 w-4" /> Causas Prováveis da Divergência
+              <AlertCircle className="h-4 w-4" /> Likely causes of the difference
             </h4>
             <ul className="list-disc list-inside text-xs space-y-1">
               {getDiffProbableCauses().map((cause, i) => (
@@ -1221,19 +1220,19 @@ export default function CreativeAuditPage() {
                 return (
                   <div key={entry.id} className="space-y-6">
                     <div className="p-3 bg-accent/20 rounded-md border flex justify-between items-center">
-                      <h4 className="font-bold text-sm">Evento #{idx + 1}</h4>
+                      <h4 className="font-semibold text-sm">Event #{idx + 1}</h4>
                       <Badge variant="outline">{new Date(entry.created_at).toLocaleString()}</Badge>
                     </div>
                     
                     <div className="space-y-1">
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Ação</p>
+                      <p className="text-[11px] text-muted-foreground font-medium">Action</p>
                       <p className={`text-xs font-mono p-2 rounded truncate border ${entry.action !== other.action ? 'border-yellow-500/50 bg-yellow-500/5' : 'bg-muted'}`} title={entry.action}>
                         {entry.action}
                       </p>
                     </div>
 
                     <div className="space-y-1">
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Parâmetros (Com Destaque)</p>
+                      <p className="text-[11px] text-muted-foreground font-medium">Parameters (differences highlighted)</p>
                       <div className="bg-black/95 p-3 rounded-md overflow-x-auto font-mono text-[10px] h-[300px]">
                         {Object.keys(entry.params || {}).map(key => {
                           const val = entry.params[key];
@@ -1252,14 +1251,14 @@ export default function CreativeAuditPage() {
                     {/* Timeline per attempt for comparison */}
                     {entry.correlation_id && (
                       <div className="space-y-2">
-                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Linha do Tempo (Tentativas)</p>
+                        <p className="text-[11px] text-muted-foreground font-medium">Timeline (attempts)</p>
                         <TimelineViewer correlationId={entry.correlation_id} currentId={entry.id} />
                       </div>
                     )}
 
                     {entry.params?.error && (
                       <div className="p-2 border border-destructive/30 bg-destructive/5 rounded-md">
-                        <p className="text-[10px] font-bold text-destructive uppercase">Erro Detectado</p>
+                        <p className="text-[11px] font-medium text-destructive">Error found</p>
                         <p className="text-xs text-destructive">{entry.params.error.message}</p>
                       </div>
                     )}
@@ -1275,15 +1274,15 @@ export default function CreativeAuditPage() {
         <SheetContent className="sm:max-w-md">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
-              <Save className="h-5 w-5 text-primary" /> Configurações de Auditoria
+              <Save className="h-5 w-5 text-primary" /> Audit settings
             </SheetTitle>
             <SheetDescription>
-              Defina parâmetros padrão que persistem entre suas visitas.
+              Set defaults that stay between your visits.
             </SheetDescription>
           </SheetHeader>
           <div className="mt-6 space-y-6">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Limite Padrão de Recorrência</label>
+              <label className="text-sm font-medium">Default repeat limit</label>
               <div className="flex gap-2">
                 <Input 
                   type="number" 
@@ -1292,11 +1291,11 @@ export default function CreativeAuditPage() {
                   onChange={(e) => setRecurrenceThreshold(Number(e.target.value))}
                 />
                 <Button onClick={() => { saveRecurrenceThreshold(); setShowConfig(false); }}>
-                  Salvar
+                  Save
                 </Button>
               </div>
               <p className="text-[10px] text-muted-foreground">
-                Alertas de falhas recorrentes aparecerão quando uma causa atingir este número de ocorrências.
+                Repeated failure alerts show when one cause reaches this number of occurrences.
               </p>
             </div>
           </div>
@@ -1308,10 +1307,10 @@ export default function CreativeAuditPage() {
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <FileDown className="h-5 w-5 text-primary" /> Exportar Auditoria (CSV)
+              <FileDown className="h-5 w-5 text-primary" /> Export audit (CSV)
             </DialogTitle>
             <DialogDescription>
-              Personalize seu relatório antes de baixar.
+              Set up your report before you download it.
             </DialogDescription>
           </DialogHeader>
 
@@ -1319,17 +1318,17 @@ export default function CreativeAuditPage() {
             {/* Summary Section */}
             <div className="bg-accent/20 p-4 rounded-lg border border-accent/50">
               <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                <Info className="h-4 w-4" /> Resumo da Exportação
+                <Info className="h-4 w-4" /> Export summary
               </h4>
               <div className="grid grid-cols-2 gap-y-2 text-xs">
-                <div className="text-muted-foreground">Total de registros:</div>
-                <div className="font-medium">{count} registros filtrados</div>
-                <div className="text-muted-foreground">Intervalo de datas:</div>
+                <div className="text-muted-foreground">Total records:</div>
+                <div className="font-medium">{count} filtered records</div>
+                <div className="text-muted-foreground">Date range:</div>
                 <div className="font-medium">
-                  {startDate || "Início"} até {endDate || "Hoje"}
+                  {startDate || "Start"} to {endDate || "Today"}
                 </div>
-                <div className="text-muted-foreground">Colunas selecionadas:</div>
-                <div className="font-medium">{selectedColumns.length} de {availableColumns.length}</div>
+                <div className="text-muted-foreground">Selected columns:</div>
+                <div className="font-medium">{selectedColumns.length} of {availableColumns.length}</div>
               </div>
             </div>
 
@@ -1337,15 +1336,15 @@ export default function CreativeAuditPage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <h4 className="text-sm font-semibold">Selecione e Reordene as Colunas</h4>
-                  <p className="text-[10px] text-muted-foreground">Arraste para mudar a ordem no CSV</p>
+                  <h4 className="text-sm font-semibold">Select and reorder the columns</h4>
+                  <p className="text-[10px] text-muted-foreground">Drag to change the order in the CSV</p>
                 </div>
                 <div className="flex gap-2">
                   <Button variant="ghost" size="sm" className="h-7 text-[10px]" onClick={selectAllColumns}>
-                    <ListChecks className="h-3 w-3 mr-1" /> Selecionar Tudo
+                    <ListChecks className="h-3 w-3 mr-1" /> Select all
                   </Button>
                   <Button variant="ghost" size="sm" className="h-7 text-[10px]" onClick={clearColumns}>
-                    <X className="h-3 w-3 mr-1" /> Limpar Seleção
+                    <X className="h-3 w-3 mr-1" /> Clear selection
                   </Button>
                 </div>
               </div>
@@ -1395,7 +1394,7 @@ export default function CreativeAuditPage() {
 
             {/* Formatting Options */}
             <div className="space-y-3">
-              <h4 className="text-sm font-semibold">Formatação de Datas</h4>
+              <h4 className="text-sm font-semibold">Date format</h4>
               <div className="flex gap-4">
                 <div className="flex items-center space-x-2">
                   <Checkbox 
@@ -1403,7 +1402,7 @@ export default function CreativeAuditPage() {
                     checked={exportDateFormat === "DD/MM/AAAA"} 
                     onCheckedChange={() => setExportDateFormat("DD/MM/AAAA")}
                   />
-                  <Label htmlFor="date-br" className="text-xs cursor-pointer">DD/MM/AAAA (Brasil)</Label>
+                  <Label htmlFor="date-br" className="text-xs cursor-pointer">DD/MM/YYYY (Brazil)</Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Checkbox 
@@ -1411,7 +1410,7 @@ export default function CreativeAuditPage() {
                     checked={exportDateFormat === "ISO"} 
                     onCheckedChange={() => setExportDateFormat("ISO")}
                   />
-                  <Label htmlFor="date-iso" className="text-xs cursor-pointer">ISO (AAAA-MM-DD)</Label>
+                  <Label htmlFor="date-iso" className="text-xs cursor-pointer">ISO (YYYY-MM-DD)</Label>
                 </div>
               </div>
             </div>
@@ -1421,7 +1420,7 @@ export default function CreativeAuditPage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-semibold flex items-center gap-2">
-                    <ListChecks className="h-4 w-4" /> Pré-visualização (Primeiras {previewRowsCount} linhas)
+                    <ListChecks className="h-4 w-4" /> Preview (first {previewRowsCount} rows)
                   </h4>
                   {entries.length > previewRowsCount && (
                     <Button 
@@ -1430,7 +1429,7 @@ export default function CreativeAuditPage() {
                       className="h-7 text-[10px]"
                       onClick={() => setPreviewRowsCount(prev => Math.min(prev + 5, 20))}
                     >
-                      <ChevronRight className="h-3 w-3 mr-1 rotate-90" /> Carregar mais linhas
+                      <ChevronRight className="h-3 w-3 mr-1 rotate-90" /> Load more rows
                     </Button>
                   )}
                 </div>
@@ -1477,8 +1476,8 @@ export default function CreativeAuditPage() {
               <div className="p-3 border border-amber-500/50 bg-amber-500/10 rounded-md flex items-center gap-3">
                 <AlertOctagon className="h-5 w-5 text-amber-500 flex-shrink-0" />
                 <div>
-                  <p className="text-xs font-bold text-amber-600 uppercase">Aviso de Filtro</p>
-                  <p className="text-[11px] text-amber-700">A combinação de filtros atual resultou em 0 registros. Ajuste os filtros antes de exportar.</p>
+                  <p className="text-xs font-semibold text-amber-600">Filter notice</p>
+                  <p className="text-[11px] text-amber-700">These filters return 0 records. Change the filters before you export.</p>
                 </div>
               </div>
             )}
@@ -1486,10 +1485,10 @@ export default function CreativeAuditPage() {
 
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setIsExportModalOpen(false)}>
-              Cancelar
+              Cancel
             </Button>
             <Button onClick={handleDownloadCSV} disabled={selectedColumns.length === 0 || entries.length === 0}>
-              Confirmar e Baixar CSV
+              Confirm and download CSV
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -146,12 +146,12 @@ describe('meta-data-deletion', () => {
 })
 
 describe('página /data-deletion', () => {
-  it('textos em português sem nome do motor', () => {
+  it('English copy without the engine name', () => {
     const base = { code: 'ABCDEFGHIJKLMNOP', requested_at: null, completed_at: null }
-    expect(statusText({ ...base, status: 'completed', removed_connections: 2 }).body).toContain('2 conexões')
-    expect(statusText({ ...base, status: 'completed', removed_connections: 1 }).body).toContain('1 conexão')
-    expect(statusText({ ...base, status: 'completed', removed_connections: 0 }).title).toBe('Exclusão concluída')
-    expect(statusText({ ...base, status: 'pending_review', removed_connections: 0 }).title).toBe('Exclusão em andamento')
+    expect(statusText({ ...base, status: 'completed', removed_connections: 2 }).body).toContain('2 connections')
+    expect(statusText({ ...base, status: 'completed', removed_connections: 1 }).body).toContain('1 connection')
+    expect(statusText({ ...base, status: 'completed', removed_connections: 0 }).title).toBe('Deletion complete')
+    expect(statusText({ ...base, status: 'pending_review', removed_connections: 0 }).title).toBe('Deletion in progress')
     for (const s of ['completed', 'pending_review'] as const) {
       expect(JSON.stringify(statusText({ ...base, status: s, removed_connections: 1 }))).not.toMatch(/automatisch|huginn/i)
     }
