@@ -94,6 +94,21 @@ export default function PrivacyPage() {
             </ul>
           </section>
 
+          <section id="compartilhamento-de-banda" className="scroll-mt-24">
+            <h2 className="text-xl font-display font-semibold text-foreground mb-3">6.1 Bandwidth Sharing (optional) · Compartilhamento de banda (opcional)</h2>
+            <p className="text-muted-foreground mb-3">
+              Compartilhar a conexão de internet ociosa em troca de créditos extras é <strong>opcional e fica desligado por padrão</strong>. Só é ativado quando você liga a chave na tela de consentimento (em Recompensas ou no seu Perfil), e você pode desligar a qualquer momento no mesmo lugar.
+            </p>
+            <ul className="list-disc list-inside space-y-2 text-muted-foreground mb-3">
+              <li><strong>O que é compartilhado:</strong> apenas a banda de internet que você não está usando e o seu endereço IP, usado como ponto de saída pela rede do parceiro (Pawns.app).</li>
+              <li><strong>O que não é compartilhado:</strong> seus arquivos, senhas, mensagens, histórico de navegação, o conteúdo dos seus projetos e o acesso à sua rede local.</li>
+              <li><strong>O que guardamos:</strong> se você aceitou ou desligou, quando, em qual dispositivo (um identificador aleatório) e a versão do texto que você viu.</li>
+            </ul>
+            <p className="text-muted-foreground">
+              Sharing your idle internet connection for extra credits is optional and off by default. It only starts after you turn it on in the consent screen, and you can turn it off at any time. Only idle bandwidth and your IP address (as an exit point for our partner network, Pawns.app) are used; your files, passwords, messages, browsing history and local network are not. We keep a record of your choice, when you made it, a random device identifier and the consent text version.
+            </p>
+          </section>
+
           <section>
             <h2 className="text-xl font-display font-semibold text-foreground mb-3">7. Cookies</h2>
             <p className="text-muted-foreground">

@@ -16,6 +16,7 @@ import { Progress } from '@/components/ui/progress'
 import { PromoCards } from '@/components/dashboard/PromoCards'
 import CreditLedger from '@/components/CreditLedger'
 import { VibePayPromo } from '@/components/vibepay/VibePayPromo'
+import { BandwidthPromoBanner } from '@/components/bandwidth/BandwidthPromoBanner'
 import { Gamepad2, Sparkles, Palette, Bot, NotebookPen, Mic2, Wallet } from 'lucide-react'
 import { useCreativeEconomyEntry } from '@/components/creative/CreativeEconomyComingSoon'
 
@@ -193,6 +194,11 @@ const DashboardPage = forwardRef<HTMLDivElement, any>((props, ref) => {
         {/* Divulgação: Vertal Vibe Pay */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.02 }} className="mb-8">
           <VibePayPromo />
+        </motion.div>
+
+        {/* Convite (opt-in) ao compartilhamento de banda: banner próprio, dispensável */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.025 }}>
+          <BandwidthPromoBanner variant="compact" className="mb-8" />
         </motion.div>
 
         {/* Promo Cards */}

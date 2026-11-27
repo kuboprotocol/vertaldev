@@ -30,7 +30,7 @@ existentes** sigam funcionando até serem canceladas.
 
 ## Anúncios
 
-**Nenhum anúncio de terceiros roda no site (desde 2026-11-27).** O Google Ads
+**Nenhum anúncio de terceiros fora do Google AdSense roda no site (desde 2026-11-27).** O Google Ads
 reprovou o domínio na política "Site comprometido" (redirecionamento malicioso)
 porque o bundle carregava a rede Adsterra / TERRA ADS (`effectivecpmnetwork.com`
 e o banner `bauval.org` com `atOptions`). Saíram do front-end:
@@ -45,12 +45,86 @@ O crédito diário do plano continua rodando no `AdGate` (sem anúncio nenhum).
 
 `shouldShowAd()` e `AD_SUPPORTED_PLANS` continuam em `src/lib/planConfig.ts`
 (com o teste `src/test/ad-policy.test.ts`) e `public.ad_impressions` continua no
-banco, mas nada no app os usa mais. A coluna "Anúncios" da tabela acima é
-histórica: hoje nenhum plano tem anúncio interruptivo.
+banco. Nenhum plano tem anúncio interruptivo (intersticial, pop-up, nova aba).
 
-A única monetização por anúncio que fica é o **vídeo premiado AppLixir**
+### Google AdSense (display, desde 2026-11-27)
+
+Nos lugares onde ficavam os banners TERRA/Adsterra há um bloco de display do
+**Google AdSense**, só com o cliente `ca-pub-6320473908706491`
+(`src/lib/adsense.ts`, componente `src/components/ads/AdSenseDisplay.tsx`):
+
+- só para **Free e Starter** (`useAdEligibility` → `shouldShowAd` / `AD_SUPPORTED_PLANS`);
+  admin, planos pagos, visitante sem login e erro ao ler o plano não veem anúncio;
+- bloco responsivo (`data-ad-format="auto"`, `data-full-width-responsive="true"`)
+  com o rótulo **"Publicidade"**; nada de pop-up, popunder, `window.open`,
+  redirecionamento, intersticial ou outra rede;
+- nunca dentro do painel de recompensas (`CreativeRewardsPanel`, `/recompensas`)
+  nem colado nos botões do vídeo premiado (política do AdSense contra incentivar cliques);
+- o ID do bloco é `ADSENSE_DISPLAY_SLOT_ID` (variável de build
+  `VITE_ADSENSE_DISPLAY_SLOT_ID`). **Vazio = nenhum bloco e o script não carrega.**
+  Crie um bloco de display responsivo no painel do AdSense e preencha o ID.
+- `public/ads.txt` declara `google.com, pub-6320473908706491, DIRECT, f08c47fec0942fa0`.
+
+Lugares: Painel Criativo `/creative` (um bloco acima das abas, no lugar do banner de
+topo + SponsoredSlot, e um no rodapé, no lugar do banner de rodapé); Design Premium
+(topo, fora do modo Canvas); início do mundo Canvas; topo de cada categoria do
+`CreativePanel`; e o fim da página inicial do `CreativePanel` (o lugar antigo, entre o
+Design Premium e as categorias, agora é das recompensas).
+
+Além dos blocos de display do Google AdSense (acima), a outra monetização por anúncio é o **vídeo premiado AppLixir**
 (`src/lib/applixirRewarded.ts`, `RewardedVideoPanel`, função `rewarded-video-claim`),
 que o usuário abre por vontade própria e não redireciona.
+
+### App nativo: Google AdMob (desde 2026-11-27)
+
+O app nativo do Vertal Dev é o **Capacitor** (`capacitor.config.ts`, appId `dev.kubovibe.app`,
+`webDir: dist`; abre direto no cliente `/m`, ver `docs/android-build.md` e `docs/ios-build.md`).
+As pastas `android/` e `ios/` **não ficam no repositório** (são geradas por `npx cap add`).
+O app Android "Vertal Node" em `native/node-sdks/android` é outro app (compartilhamento de banda), sem anúncios.
+
+Dentro do app o AdSense **nunca carrega**; os mesmos lugares (componente `AdSlot`) usam o
+**Google AdMob** (`@capacitor-community/admob` 8.4.2, `src/lib/admob.ts`, `src/config/admob.ts`):
+
+| | Site | App (Android/iOS) |
+|---|---|---|
+| Lugares de display (os 6 acima) | bloco AdSense no lugar | banner adaptativo AdMob fixo embaixo, só enquanto um desses lugares está na tela (some quando sai) |
+| Vídeo premiado (`RewardedVideoPanel`) | AppLixir / Google Ad Manager | AdMob premiado quando há bloco premiado configurado; sem bloco, fica o provedor que já existia |
+
+- Mesma regra de plano: só **Free e Starter** (`useAdEligibility`); admin, pagos e visitante não veem.
+- **Nunca os dois**: `AdSlot` escolhe AdSense no site e AdMob no app; `AdSenseDisplay` também se desliga no app.
+- Banner **nunca** com o painel do vídeo premiado na tela (zona de exclusão no `RewardedVideoPanel`).
+- Sem intersticial, sem anúncio na abertura do app, sem pop-up. O SDK só inicializa quando um
+  lugar de anúncio aparece para Free/Starter ou no clique do vídeo premiado.
+- Consentimento: formulário **UMP** do Google (configure em AdMob → Privacidade e mensagens) e depois
+  **ATT** no iOS 14+; sem ATT autorizado → anúncios não personalizados (`npa`). `VITE_ADMOB_NPA=true` força `npa` sempre.
+- O servidor `rewarded-video-claim` ainda não conhece o provedor `admob`: grava a sessão como `gam`
+  até uma migração ampliar o CHECK de `rewarded_video_sessions.provider`. O crédito segue a mesma regra
+  (nonce, tempo mínimo, cooldown, limite diário).
+
+**IDs** (publisher `pub-6320473908706491`). Ainda **não existe** app/bloco do Vertal Dev no AdMob:
+
+| Build | Blocos (JS) | App ID nativo |
+|---|---|---|
+| `vite` / `--mode development` / `npm run cap:sync:debug` (`VITE_ADMOB_TESTING=true`) | **TESTE** do Google, `isTesting=true` | `npm run cap:admob` sem variáveis = App ID de TESTE |
+| `vite build` (produção) | `VITE_ADMOB_ANDROID_BANNER_ID`, `VITE_ADMOB_IOS_BANNER_ID`, `VITE_ADMOB_ANDROID_REWARDED_ID`, `VITE_ADMOB_IOS_REWARDED_ID` (ou `src/config/admob.ts`). **Vazio = sem anúncio** (nunca bloco de teste para usuário real) | `ADMOB_ANDROID_APP_ID=… ADMOB_IOS_APP_ID=… npm run cap:admob` |
+
+O que criar no AdMob (Apps → Adicionar app, plataforma, "não publicado ainda"):
+1. App **"Vertal Dev"** Android (pacote `dev.kubovibe.app`) → App ID `ca-app-pub-6320473908706491~…`
+2. App **"Vertal Dev"** iOS (bundle `dev.kubovibe.app`) → App ID
+3. Em cada app: bloco **Banner** ("Vertal Dev Android - Banner" / "Vertal Dev iOS - Banner")
+4. Opcional: bloco **Premiado** ("Vertal Dev Android - Premiado" / "Vertal Dev iOS - Premiado"), recompensa 1 crédito
+5. Privacidade e mensagens: mensagem GDPR (UMP) e, para iOS, a mensagem explicativa do IDFA.
+
+`npm run cap:admob` (`scripts/admob-native-config.mjs`) põe o App ID no `AndroidManifest.xml`
+(`com.google.android.gms.ads.APPLICATION_ID`) e no `Info.plist` (`GADApplicationIdentifier`,
+`NSUserTrackingUsageDescription`, `SKAdNetworkItems`). **Obrigatório** depois de `npx cap add`/`sync`:
+sem App ID o app Android fecha na abertura. Outras variáveis: `VITE_ADMOB_ENABLED`, `VITE_ADMOB_BANNER_ENABLED`,
+`VITE_ADMOB_REWARDED_ENABLED`, `VITE_ADMOB_TEST_DEVICE_IDS`, `VITE_ADMOB_DEBUG_GEOGRAPHY` (`EEA`/`NOT_EEA`/`US`),
+`VITE_ADMOB_TAG_UNDER_AGE_OF_CONSENT`. **Nunca clique nos seus próprios anúncios reais.**
+
+`public/app-ads.txt` (`google.com, pub-6320473908706491, DIRECT, f08c47fec0942fa0`) é servido em
+`https://vertal.dev/app-ads.txt`; coloque `https://vertal.dev` como site do desenvolvedor nas fichas da
+Google Play e da App Store para o AdMob verificar.
 
 ### Checklist diário de `/recompensas`
 

@@ -12,6 +12,8 @@ import { FigcraftEditor } from './creative/FigcraftEditor';
 import { CadStudio } from './creative/CadStudio';
 import { DesignWorld, PREMIUM_BACKGROUND, PendingPage } from './creative/DesignWorld';
 import { useAuth } from '@/hooks/useAuth';
+import { CreativeRewardsPanel } from './creative/CreativeRewardsPanel';
+import { AdSlot } from './ads/AdSlot';
 
 type CategoryId = 'design' | 'content' | 'media' | 'digital';
 
@@ -211,6 +213,10 @@ function CategoryWorld({
 }) {
   return (
     <div className={PAGE_BACKGROUND}>
+      {/* Onde ficava o SponsoredSlot (TERRA ADS): Google AdSense, só Free e Starter */}
+      <div className="px-4 sm:px-6 lg:px-8">
+        <AdSlot placement="creative-category-top" />
+      </div>
       <DesignWorld
         backLabel="Painel Criativo"
         eyebrow="Painel Criativo"
@@ -321,6 +327,9 @@ export default function CreativePanel() {
           </div>
         </button>
 
+        {/* Recompensas: vídeo premiado e progresso dos créditos do dia (sem anúncio de terceiros) */}
+        <CreativeRewardsPanel />
+
         {/* Categorias: cada uma abre um mundo com as ferramentas como páginas */}
         <section aria-labelledby="creative-categories-title" className="space-y-5">
           <h2 id="creative-categories-title" className="text-xl font-semibold text-white">
@@ -350,6 +359,11 @@ export default function CreativePanel() {
             })}
           </div>
         </section>
+
+        {/* Antes o SponsoredSlot (TERRA ADS) ficava entre o Design Premium e as categorias; esse lugar
+            agora é das recompensas (vídeo premiado), e o AdSense não pode ficar colado nos botões de
+            recompensa. Por isso o bloco do Google AdSense fica no fim da página. Só Free e Starter. */}
+        <AdSlot placement="creative-panel-bottom" />
       </main>
     </div>
   );

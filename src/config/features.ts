@@ -21,3 +21,22 @@ export const CREATIVE_ECONOMY_COPY = {
 export function canAccessCreativeEconomy(isAdmin: boolean): boolean {
   return FEATURES.creativeEconomy || isAdmin
 }
+
+/**
+ * Compartilhamento de banda ociosa (Vertal Node / parceiro Pawns.app).
+ *
+ * - `ui`: mostra o convite (banner), o painel de consentimento e a chave em Recompensas e no Perfil.
+ *   Ligado por padrão; `VITE_BANDWIDTH_SHARING_UI=false` esconde tudo.
+ * - `sdk`: libera o SDK do parceiro a rodar. DESLIGADO por padrão e nenhum SDK está integrado ainda.
+ *   Mesmo ligado, nada roda sem o consentimento explícito do usuário no dispositivo
+ *   (ver `canRunBandwidthSharing` em `src/lib/bandwidthSharing.ts`).
+ */
+function envFlag(value: unknown, fallback: boolean): boolean {
+  if (typeof value !== 'string' || !value.trim()) return fallback
+  return ['1', 'true', 'on', 'yes'].includes(value.trim().toLowerCase())
+}
+
+export const BANDWIDTH_SHARING_FLAGS = {
+  ui: envFlag(import.meta.env.VITE_BANDWIDTH_SHARING_UI, true),
+  sdk: envFlag(import.meta.env.VITE_BANDWIDTH_SHARING_SDK, false),
+} as const
