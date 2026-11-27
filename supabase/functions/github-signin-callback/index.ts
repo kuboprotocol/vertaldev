@@ -71,7 +71,7 @@ function isAllowedOrigin(origin: string): boolean {
 }
 
 // Allowlist of safe internal paths (prefix match)
-const ALLOWED_RETURN_PREFIXES = ['/dashboard', '/connectors', '/builder', '/canvas', '/profile', '/agents', '/docs', '/game', '/']
+const ALLOWED_RETURN_PREFIXES = ['/dashboard', '/connectors', '/builder', '/canvas', '/profile', '/agents', '/docs', '/game', '/embed', '/']
 function safeReturnPath(p: string): string {
   if (typeof p !== 'string' || !p.startsWith('/') || p.startsWith('//')) return '/dashboard'
   if (ALLOWED_RETURN_PREFIXES.some(prefix => p === prefix || p.startsWith(prefix + '/') || p.startsWith(prefix + '?'))) {

@@ -104,6 +104,20 @@
         <div class="boot-fallback__content"><span class="boot-fallback__spinner" aria-hidden="true"></span><h1 class="boot-fallback__title">Vertal Vibe Dev: build apps with AI</h1></div>
       </div>
     </div>
+    <script>
+      // vertal.dev/embed inside a frame where the browser blocks storage (Safari
+      // with all cookies blocked, Chrome private windows): the app can't start
+      // there, so show a plain "Open in Vertal Dev" link instead of a spinner.
+      (function () {
+        var p = location.pathname;
+        if (p !== '/embed' && p.indexOf('/embed/') !== 0) return;
+        try { localStorage.setItem('__vertal_embed_probe__', '1'); localStorage.removeItem('__vertal_embed_probe__'); return; } catch (e) {}
+        var root = document.getElementById('root');
+        if (!root) return;
+        root.innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#080B14;color:#EEF2FF;font-family:Inter,system-ui,sans-serif;text-align:center;padding:24px"><div><p style="margin:0 0 16px">Your browser blocks sign-in inside embedded pages.</p><a href="/builder" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:8px 16px;border-radius:999px;background:#D4AF37;color:#0B0B0B;font-weight:600;text-decoration:none">Open in Vertal Dev</a></div></div>';
+        window.__VERTAL_EMBED_BLOCKED__ = true;
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
