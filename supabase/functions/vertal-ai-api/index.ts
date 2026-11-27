@@ -17,7 +17,7 @@
 // (chave, Idempotency-Key). Checa saldo e teto mensal da chave ANTES de chamar o
 // modelo (pior caso = max_tokens). Limite por minuto por chave.
 //
-// Desligado por padrão (VERTAL_AI_API_ENABLED=true). Depende das tabelas de
+// Desligado por padrão (VERTAL_AI_API_ENABLED=true, segredo avulso ou chave dentro do VERTAL_GPU_CONFIG). Depende das tabelas de
 // docs/vertal-code-ai/proposed-migration.sql (não aplicada).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -82,7 +82,7 @@ async function liveFreeIds(): Promise<string[] | null> {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (env("VERTAL_AI_API_ENABLED") !== "true") return json(404, errorBody("A API VERTAL ainda não está disponível.", "api_disabled"));
+  if (!/^(1|true|yes|on|sim)$/i.test((benvObj().VERTAL_AI_API_ENABLED ?? "").trim())) return json(404, errorBody("A API VERTAL ainda não está disponível.", "api_disabled"));
   const path = new URL(req.url).pathname.replace(/\/+$/, "");
   const admin: any = createClient(env("SUPABASE_URL")!, env("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 

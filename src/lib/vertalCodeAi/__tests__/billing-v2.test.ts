@@ -123,6 +123,8 @@ describe('cobrança v2 · config', () => {
     expect(loadBilling(env.VERTAL_BILLING_CONFIG).config.retailMarkup.chat).toBe(2);
     // segredo avulso vence
     expect(expandBillingEnv({ VERTAL_BILLING_V2_ENABLED: 'false', VERTAL_GPU_CONFIG: '{"VERTAL_BILLING_V2_ENABLED":"true"}' }).VERTAL_BILLING_V2_ENABLED).toBe('false');
+    // interruptor da API também pode morar no VERTAL_GPU_CONFIG
+    expect(expandBillingEnv({ VERTAL_GPU_CONFIG: '{"VERTAL_AI_API_ENABLED":"true"}' }).VERTAL_AI_API_ENABLED).toBe('true');
   });
 });
 
