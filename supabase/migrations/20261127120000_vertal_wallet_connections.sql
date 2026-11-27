@@ -25,5 +25,8 @@ drop policy if exists "vertal_wallet_delete_own" on public.vertal_wallet_connect
 create policy "vertal_wallet_delete_own" on public.vertal_wallet_connections
   for delete to authenticated using (auth.uid() = user_id);
 
--- Sem política de insert/update: só o service role (edge function vertal-code-ai, ação "wallet") grava.
-revoke insert, update on public.vertal_wallet_connections from anon, authenticated;
+-- Permissões explícitas: anon não vê nada; o usuário logado só lê/apaga (e o RLS limita à própria linha);
+-- só o service role (edge function vertal-code-ai, ação "wallet") grava.
+revoke all on public.vertal_wallet_connections from anon, authenticated;
+grant select, delete on public.vertal_wallet_connections to authenticated;
+grant all on public.vertal_wallet_connections to service_role;
