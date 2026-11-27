@@ -14,6 +14,7 @@ import { motion } from 'framer-motion'
 import { AFFILIATE_RATE, formatCents, referralLink } from '@/lib/referral'
 import WalletSection from '@/components/profile/WalletSection'
 import { VibePayPromo } from '@/components/vibepay/VibePayPromo'
+import { BandwidthConsentCard } from '@/components/bandwidth/BandwidthConsentCard'
 
 export default function ProfilePage() {
   const navigate = useNavigate()
@@ -361,6 +362,9 @@ export default function ProfilePage() {
               </div>
             )}
           </motion.div>
+
+          {/* Configurações: compartilhamento de banda (opt-in, desligado por padrão, desliga a qualquer momento) */}
+          <BandwidthConsentCard />
         </motion.div>
       </main>
     </div>

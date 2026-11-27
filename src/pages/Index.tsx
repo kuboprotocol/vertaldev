@@ -8,6 +8,7 @@ import { motion } from "framer-motion";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import LandingSkeleton from "@/components/landing/LandingSkeleton";
 import { VibePayPromo } from "@/components/vibepay/VibePayPromo";
+import { BandwidthPromoBanner } from "@/components/bandwidth/BandwidthPromoBanner";
 
 const HeroSection = lazy(() => import("@/components/landing/HeroSection"));
 const CreditsPromoSection = lazy(() => import("@/components/landing/CreditsPromoSection"));
@@ -41,6 +42,13 @@ const Index = () => {
           <ErrorBoundary resourceName="VibePayPromo" fallback={null}>
             <div className="px-6 py-10">
               <VibePayPromo to="/vibe-pay" className="max-w-6xl mx-auto" />
+            </div>
+          </ErrorBoundary>
+
+          {/* Convite (opt-in) ao compartilhamento de banda: banner próprio, não é anúncio */}
+          <ErrorBoundary resourceName="BandwidthPromoBanner" fallback={null}>
+            <div className="px-6 pb-10">
+              <BandwidthPromoBanner variant="hero" className="max-w-6xl mx-auto" />
             </div>
           </ErrorBoundary>
 

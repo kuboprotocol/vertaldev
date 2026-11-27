@@ -12,6 +12,7 @@ import { FigcraftEditor } from './creative/FigcraftEditor';
 import { CadStudio } from './creative/CadStudio';
 import { DesignWorld, PREMIUM_BACKGROUND, PendingPage } from './creative/DesignWorld';
 import { useAuth } from '@/hooks/useAuth';
+import { CreativeRewardsPanel } from './creative/CreativeRewardsPanel';
 
 type CategoryId = 'design' | 'content' | 'media' | 'digital';
 
@@ -320,6 +321,9 @@ export default function CreativePanel() {
             <ChevronRight className="h-6 w-6 shrink-0 text-white opacity-60 transition-opacity group-hover:opacity-100" aria-hidden="true" />
           </div>
         </button>
+
+        {/* Recompensas: vídeo premiado e progresso dos créditos do dia (sem anúncio de terceiros) */}
+        <CreativeRewardsPanel />
 
         {/* Categorias: cada uma abre um mundo com as ferramentas como páginas */}
         <section aria-labelledby="creative-categories-title" className="space-y-5">

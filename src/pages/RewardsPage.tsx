@@ -10,6 +10,7 @@ import { fetchCreditBalance } from '@/lib/creditBalance'
 import AnimatedLogo from '@/components/branding/AnimatedLogo'
 import RewardedVideoPanel from '@/components/shortlinks/RewardedVideoPanel'
 import VertalNodeCard from '@/components/shortlinks/VertalNodeCard'
+import { BandwidthConsentCard } from '@/components/bandwidth/BandwidthConsentCard'
 import KuboMusicPanel from '@/components/shortlinks/KuboMusicPanel'
 import DailyChecklistCard from '@/components/shortlinks/DailyChecklistCard'
 import { fetchDailyChecklist, reportTerraUnavailable, type DailyChecklist } from '@/lib/dailyRewards'
@@ -18,7 +19,7 @@ import { motion } from 'framer-motion'
 
 /**
  * Painel de recompensas (/recompensas): checklist do dia, vídeo premiado, músicas do Kubo,
- * Vertal Node (bônus opcional) e saldo. As recompensas do dia só vão para o saldo quando as
+ * Vertal Node e o consentimento do compartilhamento de banda (bônus opcional) e saldo. As recompensas do dia só vão para o saldo quando as
  * 3 atividades obrigatórias (vídeo, 5 músicas, vídeo extra) estão feitas.
  * O anúncio TERRA ADS (Adsterra) foi removido do site (política do Google Ads).
  * O antigo sistema de shortlinks (vídeos curtos com crédito diário) foi desativado;
@@ -216,6 +217,8 @@ export default function RewardsPage() {
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Bônus opcional</p>
             <div className="grid gap-4 md:grid-cols-2">
               <VertalNodeCard />
+              {/* Consentimento (opt-in, desligado por padrão) do compartilhamento de banda */}
+              <BandwidthConsentCard />
             </div>
           </motion.div>
         </motion.div>
