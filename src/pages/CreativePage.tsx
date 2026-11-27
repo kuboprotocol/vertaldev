@@ -30,7 +30,7 @@ const VertalNotebook = React.lazy(() => import("@/components/notebook/VertalNote
 // O Clock (relógio, alarmes, cronômetro, timer) carrega quando a aba é aberta.
 const VertalClock = React.lazy(() => import("@/components/clock/VertalClock"));
 import { CreativeDesign } from "@/components/CreativeDesign";
-import { AdSenseDisplay } from "@/components/ads/AdSenseDisplay";
+import { AdSlot } from "@/components/ads/AdSlot";
 
 type ToolKey = "dashboard" | "chat" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "video_studio" | "unified_history" | "sheet" | "design" | "office" | "notebook" | "clock";
 
@@ -1057,7 +1057,7 @@ export default function CreativePage() {
 
         {/* Onde ficavam o banner do topo (CreativeAdFrame) e o SponsoredSlot (TERRA ADS), que eram
             vizinhos: um único bloco do Google AdSense, só Free e Starter. */}
-        <AdSenseDisplay placement="creative-page-top" className="max-w-3xl mx-auto" />
+        <AdSlot placement="creative-page-top" className="max-w-3xl mx-auto" />
 
         <Tabs value={active} onValueChange={(v) => { setActive(v as ToolKey); navigate(v === "dashboard" ? "/creative" : `/creative/${v}`); }}>
           <TabsList className="mb-6 grid grid-cols-2 max-w-md mx-auto bg-muted/20">
@@ -1345,7 +1345,7 @@ export default function CreativePage() {
         </Tabs>
 
         {/* Onde ficava o banner do rodapé (CreativeAdFrame, TERRA/Adsterra): Google AdSense, só Free e Starter */}
-        <AdSenseDisplay placement="creative-page-bottom" className="max-w-3xl mx-auto" />
+        <AdSlot placement="creative-page-bottom" className="max-w-3xl mx-auto" />
 
         {(() => {
           const CSVExportModal = React.lazy(() => import('@/components/builder/CSVExportModal'));

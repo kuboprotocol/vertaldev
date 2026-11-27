@@ -18,6 +18,7 @@ npm install @capacitor/push-notifications
 npx cap add android
 npm run build
 npx cap sync android
+npm run cap:admob   # App ID do AdMob no projeto nativo (obrigatório; ver docs/PLANOS_E_ANUNCIOS.md)
 npx cap run android
 ```
 

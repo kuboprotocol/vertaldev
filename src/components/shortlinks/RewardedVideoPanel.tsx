@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, PlayCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -17,8 +17,15 @@ import {
   loadApplixirSdk,
   showApplixirAd,
 } from "@/lib/applixirRewarded";
+import { nativeRewardedConfigured, showNativeRewarded } from "@/lib/admob";
+import { useNativeAdExclusionZone } from "@/hooks/useNativeAdVisibility";
 
-export type RewardedProvider = "applixir" | "gam";
+/**
+ * "admob" = vídeo premiado do Google AdMob dentro do app nativo (Capacitor). O servidor
+ * (rewarded-video-claim) ainda não conhece "admob" e grava a sessão como "gam" até a migração
+ * que amplia o CHECK de rewarded_video_sessions.provider; o crédito segue a mesma regra.
+ */
+export type RewardedProvider = "applixir" | "gam" | "admob";
 
 /** Resposta da função `rewarded-video-claim` (status/start/claim). */
 export interface RewardedVideoStatus {
@@ -69,19 +76,28 @@ function countdown(ms: number): string {
 /**
  * "Assistir vídeo e ganhar créditos": a cada clique abre um vídeo premiado.
  * Provedor: AppLixir (VITE_APPLIXIR_API_KEY) e, se não houver, Google Ad Manager
- * (VITE_GAM_REWARDED_AD_UNIT). O crédito é decidido no servidor (nonce de uso único,
+ * (VITE_GAM_REWARDED_AD_UNIT). No app nativo, com bloco premiado do AdMob configurado, usa o
+ * AdMob no lugar dos dois (src/lib/admob.ts). O crédito é decidido no servidor (nonce de uso único,
  * tempo mínimo, cooldown e limite diário em São Paulo); o navegador só avisa que o vídeo terminou.
  */
 export default function RewardedVideoPanel({
   onCredited,
   adUnit = rewardedAdUnit(),
   applixirKey = applixirApiKey(),
+  nativeAdMob = nativeRewardedConfigured(),
 }: {
   onCredited?: () => void;
   adUnit?: string | null;
   applixirKey?: string | null;
+  /** App nativo com bloco premiado do AdMob configurado. */
+  nativeAdMob?: boolean;
 }) {
-  const provider: RewardedProvider | null = applixirKey ? "applixir" : adUnit ? "gam" : null;
+  const provider: RewardedProvider | null = nativeAdMob
+    ? "admob"
+    : applixirKey ? "applixir" : adUnit ? "gam" : null;
+  // No app nativo o banner AdMob nunca aparece com este painel na tela.
+  const cardRef = useRef<HTMLDivElement>(null);
+  useNativeAdExclusionZone(cardRef);
   const [status, setStatus] = useState<RewardedVideoStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -164,10 +180,17 @@ export default function RewardedVideoPanel({
         }
       };
 
-      const outcome: RewardedOutcome =
-        provider === "applixir" && applixirKey
-          ? await showApplixirAd({ apiKey: applixirKey, onGranted, customData: { nonce } })
-          : await showRewardedAd({ adUnit: adUnit as string, onGranted });
+      let outcome: RewardedOutcome;
+      if (provider === "admob") {
+        const native = await showNativeRewarded({ nonce });
+        if (native.kind === "granted") await onGranted();
+        outcome = native;
+      } else {
+        outcome =
+          provider === "applixir" && applixirKey
+            ? await showApplixirAd({ apiKey: applixirKey, onGranted, customData: { nonce } })
+            : await showRewardedAd({ adUnit: adUnit as string, onGranted });
+      }
 
       if (outcome.kind === "no_fill") {
         toast.info("Nenhum vídeo disponível agora. Tente de novo em alguns minutos.");
@@ -195,7 +218,7 @@ export default function RewardedVideoPanel({
   else if (waitMs > 0) label = `Próximo vídeo em ${countdown(waitMs)}`;
 
   return (
-    <Card className="glass glass-border" data-testid="rewarded-video-panel">
+    <Card ref={cardRef} className="glass glass-border" data-testid="rewarded-video-panel">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <PlayCircle className="h-5 w-5 text-primary" />

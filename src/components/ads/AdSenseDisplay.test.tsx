@@ -119,4 +119,17 @@ describe('AdSenseDisplay (Google AdSense no lugar do TERRA ADS)', () => {
     expect(container.innerHTML).toBe('')
     expect(document.querySelector('script[src*="adsbygoogle"]')).toBeNull()
   })
+
+  it('dentro do app nativo (Capacitor) o AdSense nunca carrega', async () => {
+    const g = globalThis as unknown as { Capacitor?: unknown }
+    g.Capacitor = { isNativePlatform: () => true, getPlatform: () => 'android' }
+    try {
+      const { container } = render(<AdSenseDisplay />)
+      await new Promise((r) => setTimeout(r, 20))
+      expect(container.innerHTML).toBe('')
+      expect(document.querySelector('script[src*="adsbygoogle"]')).toBeNull()
+    } finally {
+      delete g.Capacitor
+    }
+  })
 })

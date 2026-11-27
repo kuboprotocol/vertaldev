@@ -2,7 +2,7 @@ import { lazy, Suspense, useMemo, type ReactNode } from 'react';
 import { Layers, LayoutGrid, Loader2, Plus, SlidersHorizontal, Sparkles, User, Wand2, Wrench } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { DesignWorld, PendingPage, StartCard } from './DesignWorld';
-import { AdSenseDisplay } from '../ads/AdSenseDisplay';
+import { AdSlot } from '../ads/AdSlot';
 import { DesignGalleryFeed, MyPublishedDesigns, type DesignCopy } from './DesignGallery';
 import { DeckcraftEditor } from './DeckcraftEditor';
 import { FigcraftEditor } from './FigcraftEditor';
@@ -104,7 +104,7 @@ export function CanvasWorld({
                 ]}
               />
               {/* Onde ficava o SponsoredSlot (TERRA ADS): Google AdSense, só Free e Starter */}
-              <AdSenseDisplay placement="canvas-home" />
+              <AdSlot placement="canvas-home" />
             </div>
           ),
         },

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useAdEligibility } from '@/hooks/useAdEligibility'
 import { ADSENSE_CLIENT, ADSENSE_DISPLAY_SLOT_ID, loadAdSenseScript, requestAdSenseFill } from '@/lib/adsense'
+import { isNativeAdsPlatform } from '@/lib/admob'
 
 interface AdSenseDisplayProps {
   className?: string
@@ -13,10 +14,11 @@ interface AdSenseDisplayProps {
  * Fica nos mesmos lugares onde havia o banner TERRA ADS (SponsoredSlot / CreativeAdFrame), só para
  * Free e Starter. Não abre nada sozinho: sem pop-up, popunder, redirecionamento ou intersticial.
  * Não usar dentro do painel de recompensas nem ao lado do vídeo premiado.
+ * Só no site: dentro do app nativo nunca carrega (lá o lugar usa o AdMob, ver AdSlot).
  */
 export function AdSenseDisplay({ className = '', placement }: AdSenseDisplayProps) {
   const eligible = useAdEligibility()
-  const enabled = eligible && ADSENSE_DISPLAY_SLOT_ID !== ''
+  const enabled = eligible && ADSENSE_DISPLAY_SLOT_ID !== '' && !isNativeAdsPlatform()
   const insRef = useRef<HTMLModElement>(null)
   const pushedRef = useRef(false)
 

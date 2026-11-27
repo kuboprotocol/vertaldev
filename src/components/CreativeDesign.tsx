@@ -4,7 +4,7 @@ import { CreativeSlides } from './CreativeSlides';
 import { supabase } from '@/integrations/supabase/client';
 import { AvatarsWorld, CanvasWorld, GalleryWorld, StudioWorld, type StudioPage } from './creative/DesignWorlds';
 import { StartCard } from './creative/DesignWorld';
-import { AdSenseDisplay } from './ads/AdSenseDisplay';
+import { AdSlot } from './ads/AdSlot';
 import type { DesignCopy } from './creative/DesignGallery';
 import {
   DESIGN_FORMATS,
@@ -130,7 +130,7 @@ export function CreativeDesign({ creditsAvailable, open }: CreativeDesignProps) 
         {/* Onde ficava o SponsoredSlot (TERRA ADS): Google AdSense, só Free e Starter.
             O Canvas fica sem anúncio no topo (o editor ocupa a tela); ele tem o seu na página inicial. */}
         <div hidden={mode === 'canvas'} className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <AdSenseDisplay placement="creative-design-top" />
+          <AdSlot placement="creative-design-top" />
         </div>
         <div hidden={mode !== 'home'}>
           <DesignHome onOpenMode={selectMode} />
