@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle2, ExternalLink, Music2, PlayCircle } from "lucide-react";
+import { CheckCircle2, ExternalLink, Music2, Play, PlayCircle, Volume2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Card,
@@ -20,13 +20,22 @@ import {
   type DailyChecklist,
 } from "@/lib/dailyRewards";
 import {
+  canAutoPlayEmbed,
+  embedHeightFor,
+  hardenSpotifyIframe,
+  isIOSDevice,
+  isTouchPlaybackDevice,
   loadSpotifyIframeApi,
+  readPlaybackEnv,
+  spotifyTrackUrl,
   type SpotifyEmbedController,
   type SpotifyPlaybackUpdate,
 } from "@/lib/spotifyEmbed";
 
 /** Intervalo entre relatórios de progresso ao servidor. */
 const REPORT_EVERY_MS = 5000;
+/** Sem evento "ready" do player depois disso, mostra o aviso com o link para o Spotify. */
+const PLAYER_READY_TIMEOUT_MS = 15000;
 
 const trackUri = (id: string) => `spotify:track:${id}`;
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -35,6 +44,11 @@ const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).p
  * "Ouça as 5 músicas do Kubo": player do Spotify (iFrame Embed API) com as 5 faixas.
  * Mede só reprodução real (eventos playback_update, sem pausa/buffer/seek) e manda o tempo ao
  * servidor (função daily-rewards), que confere com o relógio e conta a faixa a partir de 30 s.
+ *
+ * Celular: o navegador só toca com som depois de um toque DENTRO do iframe do Spotify, então
+ * aqui nunca chamamos play() pela página (src/lib/spotifyEmbed.ts, canAutoPlayEmbed). O player
+ * fica maior, com o aviso "toque no play do player", e o medidor só conta quando o próprio
+ * usuário dá o play no player (som real), nunca por um play() silencioso da página.
  */
 export default function KuboMusicPanel({
   checklist,
@@ -67,6 +81,15 @@ export default function KuboMusicPanel({
   const [live, setLive] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [playerError, setPlayerError] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [slowLoad, setSlowLoad] = useState(false);
+
+  // Ambiente lido uma vez: celular/tablet (toque) x computador.
+  const [env] = useState(readPlaybackEnv);
+  const touch = isTouchPlaybackDevice(env);
+  const ios = isIOSDevice(env);
+  const autoPlayAllowedRef = useRef(canAutoPlayEmbed(env));
+  const embedHeight = embedHeightFor(touch);
 
   const flush = useCallback(async (force = false) => {
     const nonce = nonceRef.current;
@@ -121,7 +144,13 @@ export default function KuboMusicPanel({
       const controller = controllerRef.current;
       if (controller) {
         controller.loadUri(trackUri(trackId));
-        if (autoplay) controller.play();
+        // No celular play() da página não é gesto do usuário dentro do iframe: o navegador
+        // bloqueia ou toca sem som. Lá o usuário toca no play do próprio player.
+        if (autoplay && autoPlayAllowedRef.current) controller.play();
+        hardenSpotifyIframe(hostRef.current);
+      }
+      if (!autoPlayAllowedRef.current) {
+        hostRef.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
       }
       await openSession(trackId);
     },
@@ -141,16 +170,21 @@ export default function KuboMusicPanel({
         if (cancelled) return;
         api.createController(
           target,
-          { uri: trackUri(currentRef.current), width: "100%", height: 152 },
+          { uri: trackUri(currentRef.current), width: "100%", height: embedHeight },
           (controller) => {
             if (cancelled) {
               controller.destroy();
               return;
             }
             controllerRef.current = controller;
+            hardenSpotifyIframe(host);
+            controller.addListener("ready", () => {
+              if (!cancelled) setReady(true);
+            });
             void openSession(currentRef.current);
             controller.addListener("playback_update", (e: SpotifyPlaybackUpdate) => {
               const d = e.data;
+              setReady(true);
               const uri = d.playingURI;
               if (uri && uri !== trackUri(currentRef.current)) return; // evento da faixa anterior
               const listened = meterRef.current.update(d, Date.now()) / 1000;
@@ -183,8 +217,13 @@ export default function KuboMusicPanel({
         if (!cancelled) setPlayerError(true);
       });
 
+    const slowTimer = setTimeout(() => {
+      if (!cancelled) setSlowLoad(true);
+    }, PLAYER_READY_TIMEOUT_MS);
+
     return () => {
       cancelled = true;
+      clearTimeout(slowTimer);
       void flush(true);
       controllerRef.current?.destroy();
       controllerRef.current = null;
@@ -219,12 +258,52 @@ export default function KuboMusicPanel({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div ref={hostRef} className="min-h-[152px] overflow-hidden rounded-xl" data-testid="kubo-spotify-embed" />
-        {playerError && (
-          <p className="text-xs text-destructive">
+        <div
+          ref={hostRef}
+          className="w-full overflow-hidden rounded-xl"
+          style={{ minHeight: embedHeight }}
+          data-testid="kubo-spotify-embed"
+          data-touch={touch ? "true" : "false"}
+        />
+        {touch && !playing && !playerError && (
+          <p
+            className="flex items-start gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-foreground"
+            data-testid="kubo-tap-hint"
+          >
+            <Play className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+            <span>
+              Tap the play button inside the Spotify player to start the song. On phones, the sound
+              only starts after a tap on the player itself.
+            </span>
+          </p>
+        )}
+        {touch && playing && (
+          <p className="flex items-start gap-2 text-[11px] text-muted-foreground" data-testid="kubo-sound-hint">
+            <Volume2 className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span>
+              {ios
+                ? "No sound? Turn off Silent mode (the switch on the side of the iPhone) and turn up the volume."
+                : "No sound? Turn up the media volume of your phone."}
+            </span>
+          </p>
+        )}
+        {(playerError || (slowLoad && !ready)) && (
+          <p className="text-xs text-destructive" data-testid="kubo-player-error">
             We could not load the Spotify player. If you use a blocker, allow open.spotify.com and reload the page.
           </p>
         )}
+        <p className="text-[11px] text-muted-foreground">
+          <a
+            href={spotifyTrackUrl(current)}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-foreground underline"
+            data-testid="kubo-open-in-spotify"
+          >
+            Open this song in Spotify <ExternalLink className="h-3 w-3" />
+          </a>{" "}
+          (listening in the Spotify app does not count toward today&apos;s rewards)
+        </p>
         <ul className="space-y-2">
           {tracks.map((t, i) => {
             const isCurrent = t.track_id === current;
