@@ -1,11 +1,13 @@
 // Todos os painéis do Painel Criativo que o Vertal Chat abre dentro do próprio layout.
 import type { ComponentType } from 'react';
 import {
-  BookOpen, Clapperboard, Clock, Code2, Compass, Download, FileText, History, KeyRound, Layout, LayoutTemplate, Mic, Music, NotebookPen,
+  BookOpen, Clapperboard, Clock, Code2, Compass, Download, FileText, History, KeyRound, Layout, LayoutTemplate, Music, NotebookPen,
   Palette, Plug, Puzzle, Ruler, Scissors, Sparkles, Table2, User2, Video,
 } from 'lucide-react';
 import type { PanelKey } from '@/lib/chatAgent/contract';
 import type { DesignCopy } from '@/components/creative/DesignGallery';
+// Ícone dos painéis ocultos (import separado para não mexer na lista de ícones acima).
+import { Mic } from 'lucide-react';
 
 /** Como abrir um painel: além da chave, o que o chat acabou de criar. */
 export interface PanelRequest {

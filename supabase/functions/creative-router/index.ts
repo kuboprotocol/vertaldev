@@ -872,7 +872,7 @@ async function handleAgentChat(
     }
     if (brain.planPhase) actions = actions.filter((a) => a.tool !== "plan");
     // Clonador de voz: conta fora da lista nunca recebe a ação (o creative-music também recusa).
-    if (!voiceCloneOk) actions = actions.filter((a) => a.tool !== "voice_clone" && !(a.tool === "open_panel" && a.panel === "voice_clone"));
+    if (!voiceCloneOk) actions = actions.filter((a) => a.tool !== "voice_clone");
     // Pedido do Vibe Code: só leitura/pesquisa/imagem, filtrado AQUI no servidor (nunca vibe_code).
     const originFilter = filterActionsForOrigin(actions, origin);
     actions = originFilter.actions;

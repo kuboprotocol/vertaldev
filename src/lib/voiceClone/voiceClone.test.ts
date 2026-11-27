@@ -76,7 +76,7 @@ describe('Vertal Chat', () => {
     expect(on).toContain(voiceCloneToolPrompt({ create: 0, speak: 1, sing: 3 }).slice(0, 40));
   });
   it('todo painel que o agente pode abrir existe (antes "voice" derrubava o chat)', () => {
-    for (const key of PANELS) expect(PANEL_BY_KEY[key], key).toBeDefined();
+    for (const key of [...PANELS, 'voice_clone' as const]) expect(PANEL_BY_KEY[key], key).toBeDefined();
     expect(PANEL_LIST.some((p) => p.key === 'voice' || p.key === 'voice_clone')).toBe(false);
   });
   it('mensagens nos 3 idiomas', () => {

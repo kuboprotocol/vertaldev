@@ -79,10 +79,9 @@ export const PANELS = [
   "history", "office", "design", "figcraft", "cad", "canvas", "notebook", "video_studio", "clips", "avatar",
   "shorts", "emo", "sheet", "ebook", "music", "downloader", "builder", "clock", "voice",
   "connectors", "secrets", "agents", "navigator",
-  // Clonador de voz: aberto pela ferramenta voice_clone (flag); fica fora da lista do open_panel no prompt.
-  "voice_clone",
 ] as const;
-export type PanelKey = (typeof PANELS)[number];
+// "voice_clone" (Clonador de voz, flag) só abre pela ferramenta voice_clone: fica fora de PANELS e do prompt.
+export type PanelKey = (typeof PANELS)[number] | "voice_clone";
 
 /** Comandos do engine que o agente pode usar, com o que cada um recebe (confirmados no build). */
 export const FIGCRAFT_COMMAND_HINT = [
@@ -534,7 +533,7 @@ function buildPrompt(ctx: AgentPromptContext): string {
     ctx.scheduler ? SCHEDULER_TOOL_PROMPT : "",
     ctx.voiceClone ? voiceCloneToolPrompt(ctx.voiceClone) : "",
     `- {"tool":"api_request","method":"GET|POST|PUT|PATCH|DELETE","url":"https://...","headers":{},"body":"texto ou JSON em string","reason":"por que esta chamada"} → chama uma API externa quando nenhuma ferramenta acima resolve. O usuário aprova cada chamada. Para autenticar, escreva {{NOME_DO_SEGREDO}} no valor do cabeçalho, na query ou no corpo; o servidor troca pelo valor do cofre. Nunca peça para o usuário colar chaves no chat. Segredos disponíveis: ${secrets}. Se faltar um segredo, explique qual nome criar e use {"tool":"open_panel","panel":"secrets"}.`,
-    `- {"tool":"open_panel","panel":"${PANELS.filter((p) => p !== "navigator" && p !== "voice_clone").join("|")}"} → abre um painel dentro do chat para o usuário trabalhar à mão. Use quando o pedido precisa de arquivos do usuário (video_studio: fotos viram vídeo; clips: cortes de vídeo longo; avatar: avatar falante; emo: animar foto; notebook: conversar com PDFs e links; office/design/canvas: edição manual).`,
+    `- {"tool":"open_panel","panel":"${PANELS.filter((p) => p !== "navigator").join("|")}"} → abre um painel dentro do chat para o usuário trabalhar à mão. Use quando o pedido precisa de arquivos do usuário (video_studio: fotos viram vídeo; clips: cortes de vídeo longo; avatar: avatar falante; emo: animar foto; notebook: conversar com PDFs e links; office/design/canvas: edição manual).`,
     `- {"tool":"weather","place":"bairro ou cidade"} → clima atual e previsão de 3 dias. Sem "place", usa a localização do aparelho do usuário (ele autoriza). Nunca invente o clima: use sempre esta ferramenta.`,
     `- {"tool":"web_search","query":"o que procurar","max":5} → busca na web por informações atuais. Retorna títulos, URLs e resumos (quando usar: veja "Busca na web" abaixo). "max" é opcional (padrão 5 resultados).`,
     mailOn ? "" : `- {"tool":"gmail_search","query":"busca no formato do Gmail","max":10} → lê os e-mails da conta Gmail conectada.`,
