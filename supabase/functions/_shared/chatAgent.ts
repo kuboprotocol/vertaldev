@@ -47,6 +47,8 @@ import { AUTOMATISCH_SECRETS, parseAutomatischOp, type AutomatischOp } from "./a
 import { HUGINN_SECRETS, parseHuginnOp, type HuginnOp } from "./huginnCore.ts";
 // Agendador (tarefas agendadas): só entra no prompt com ctx.scheduler (flag VERTAL_CHAT_SCHEDULER_*, desligada por padrão).
 import { SCHEDULER_RULES, SCHEDULER_TOOL_PROMPT, parseSchedulerAction, type SchedulerOp } from "./chatScheduler.ts";
+// Clonador de voz (flag VERTAL_OWN_VOICE_ENABLED, só contas liberadas): a ferramenta só entra no prompt com ctx.voiceClone.
+import { VOICE_CLONE_RULES, parseVoiceCloneAction, voiceCloneToolPrompt, type VoiceCloneAction } from "./voiceClone.ts";
 
 export type Msg = { role: "system" | "user" | "assistant"; content: string };
 
@@ -77,6 +79,8 @@ export const PANELS = [
   "history", "office", "design", "figcraft", "cad", "canvas", "notebook", "video_studio", "clips", "avatar",
   "shorts", "emo", "sheet", "ebook", "music", "downloader", "builder", "clock", "voice",
   "connectors", "secrets", "agents", "navigator",
+  // Clonador de voz: aberto pela ferramenta voice_clone (flag); fica fora da lista do open_panel no prompt.
+  "voice_clone",
 ] as const;
 export type PanelKey = (typeof PANELS)[number];
 
@@ -187,7 +191,9 @@ export type AgentAction =
   | { tool: "fluxos"; op: "options"; app: string; key: string; parameters?: Record<string, unknown> }
   | { tool: "fluxos"; op: "run"; app: string; kind: "action" | "search"; key: string; parameters?: Record<string, unknown> }
   // Agendador do Vertal Chat (flag): cria/lista/pausa tarefas agendadas, lembretes, consultas e gatilhos de e-mail.
-  | ({ tool: "agendador" } & SchedulerOp);
+  | ({ tool: "agendador" } & SchedulerOp)
+  // Clonador de voz (flag): configurar, listar, falar e cantar com a voz clonada do próprio usuário.
+  | VoiceCloneAction;
 
 /** Conexão que o próprio cliente adicionou (API ou servidor MCP). Só nome, endereço e NOME do segredo. */
 export interface UserConnection {
@@ -279,6 +285,7 @@ export const TOOL_COSTS: Record<AgentToolName, string> = {
   huginn: "grátis (você aprova cada chamada)",
   fluxos: "2 créditos por ação ou busca executada (devolvidos se falhar); listar ações e opções é grátis",
   agendador: "grátis (você confirma no cartão; o que a tarefa fizer tem o custo normal de cada ferramenta)",
+  voice_clone: "salvar a voz é grátis; falar 1 crédito; cantar uma música 3 créditos (devolvidos se falhar)",
 };
 
 export interface AgentPromptContext {
@@ -321,6 +328,8 @@ export interface AgentPromptContext {
   email?: EmailRoute | null;
   /** Agendador (tarefas agendadas): só com a flag ligada para o usuário E a conversa pedindo (ver wantsScheduler). */
   scheduler?: boolean;
+  /** Clonador de voz: só com a flag ligada para o usuário E a conversa pedindo (ver wantsVoiceClone); leva os custos configurados. */
+  voiceClone?: { create: number; speak: number; sing: number };
   /** Atitude Vertal (flag VERTAL_PERSONA_ENABLED, ligada por padrão): soma a camada de personalidade após a PERSONA. */
   persona?: boolean;
 }
@@ -523,8 +532,9 @@ function buildPrompt(ctx: AgentPromptContext): string {
     ctx.huginn ? HUGINN_TOOL : "",
     ctx.fluxosApps?.length ? fluxosTool(ctx.fluxosApps) : "",
     ctx.scheduler ? SCHEDULER_TOOL_PROMPT : "",
+    ctx.voiceClone ? voiceCloneToolPrompt(ctx.voiceClone) : "",
     `- {"tool":"api_request","method":"GET|POST|PUT|PATCH|DELETE","url":"https://...","headers":{},"body":"texto ou JSON em string","reason":"por que esta chamada"} → chama uma API externa quando nenhuma ferramenta acima resolve. O usuário aprova cada chamada. Para autenticar, escreva {{NOME_DO_SEGREDO}} no valor do cabeçalho, na query ou no corpo; o servidor troca pelo valor do cofre. Nunca peça para o usuário colar chaves no chat. Segredos disponíveis: ${secrets}. Se faltar um segredo, explique qual nome criar e use {"tool":"open_panel","panel":"secrets"}.`,
-    `- {"tool":"open_panel","panel":"${PANELS.filter((p) => p !== "navigator").join("|")}"} → abre um painel dentro do chat para o usuário trabalhar à mão. Use quando o pedido precisa de arquivos do usuário (video_studio: fotos viram vídeo; clips: cortes de vídeo longo; avatar: avatar falante; emo: animar foto; notebook: conversar com PDFs e links; office/design/canvas: edição manual).`,
+    `- {"tool":"open_panel","panel":"${PANELS.filter((p) => p !== "navigator" && p !== "voice_clone").join("|")}"} → abre um painel dentro do chat para o usuário trabalhar à mão. Use quando o pedido precisa de arquivos do usuário (video_studio: fotos viram vídeo; clips: cortes de vídeo longo; avatar: avatar falante; emo: animar foto; notebook: conversar com PDFs e links; office/design/canvas: edição manual).`,
     `- {"tool":"weather","place":"bairro ou cidade"} → clima atual e previsão de 3 dias. Sem "place", usa a localização do aparelho do usuário (ele autoriza). Nunca invente o clima: use sempre esta ferramenta.`,
     `- {"tool":"web_search","query":"o que procurar","max":5} → busca na web por informações atuais. Retorna títulos, URLs e resumos (quando usar: veja "Busca na web" abaixo). "max" é opcional (padrão 5 resultados).`,
     mailOn ? "" : `- {"tool":"gmail_search","query":"busca no formato do Gmail","max":10} → lê os e-mails da conta Gmail conectada.`,
@@ -572,6 +582,7 @@ function buildPrompt(ctx: AgentPromptContext): string {
     ctx.automatisch || ctx.huginn ? `${BRAND_RULES}\n` : "",
     ctx.authKit ? `${AUTH_KIT_RULES}\n` : "",
     ctx.scheduler ? `${SCHEDULER_RULES}\n` : "",
+    ctx.voiceClone ? `${VOICE_CLONE_RULES}\n` : "",
     ctx.memoryEnabled === false ? MEMORY_OFF : ctx.memoryEnabled === null ? MEMORY_UNAVAILABLE : MEMORY_RULES,
     ctx.localNow
       ? `Agora, para o usuário: ${ctx.localNow}${ctx.timezone ? ` (fuso ${ctx.timezone})` : ""}.`
@@ -1084,6 +1095,8 @@ export function parseAgentAction(raw: unknown): AgentAction | null {
       const location = str(a.location ?? a.place, 120);
       return location ? { tool: "news_weather", location } : { tool: "news_weather" };
     }
+    case "voice_clone":
+      return parseVoiceCloneAction(a);
     case "voice_input":
       return {
         tool: "voice_input",
