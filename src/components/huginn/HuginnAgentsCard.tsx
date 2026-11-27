@@ -76,9 +76,9 @@ export function HuginnAgentsCard() {
 
   return (
     <section className="rounded-2xl border border-white/[0.06] bg-card/50 p-4 space-y-3" data-testid="huginn-card">
-      <div className="flex items-start gap-3">
+      <div className="flex flex-wrap items-start gap-3">
         <Radar className="h-5 w-5 text-primary mt-0.5" />
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-[14rem]">
           <h2 className="font-semibold flex items-center gap-2">
             Vertal Agentes
             {state.kind === 'ready' && <Badge variant="default" className="text-[10px]">connected</Badge>}
