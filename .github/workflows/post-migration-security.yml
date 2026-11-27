@@ -68,6 +68,16 @@ jobs:
             20260608151215_bf0b0faf-cf06-4da4-9031-3e0368e44588.sql
             20260608161731_0d069cd4-c253-43e9-91f1-3b5d66f8e190.sql
             20260611233127_0652d94d-5262-4fbc-8e6d-ba94f0a68395.sql
+            # Production history recovered verbatim from
+            # supabase_migrations.schema_migrations (2026-11-27). Already applied
+            # in production and kept byte-for-byte, so they are not edited here.
+            20260910233017_part_001_initial_schema.sql
+            20260912165052_vibe_code_checkpoints_and_sandbox_sessions.sql
+            20260915060930_contact_requests_table.sql
+            20260925131201_kubo_prime_orchestrator_fase1_tables.sql
+            20261110143305_shortlinks_schema_fix.sql
+            20260927230736_create_user_credits_table.sql
+            20260927230940_shortlinks_rewards_functions.sql
           )
           is_audited() {
             local b; b=$(basename "$1")
