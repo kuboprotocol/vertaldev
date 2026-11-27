@@ -28,9 +28,10 @@ const searchedNames = ALTERNATIVES.filter((a) => a.category !== 'concept')
   .map((a) => a.name)
   .join(', ')
 
+/** Home ("/") is written in English (see src/pages/Index.tsx). */
 export const HOME_SEO: RouteSeo = {
-  title: `${APP_NAME} — Crie apps com IA | Vibe coding e Web3`,
-  description: `Descreva sua ideia e a IA do ${APP_NAME} cria o app com backend, Web3, conectores e domínio próprio. Vibe coding com plano gratuito.`,
+  title: `${APP_NAME}: build apps with AI | Vibe coding and Web3`,
+  description: `Describe your idea and ${APP_NAME} builds the app with AI, including the backend, Web3, connectors, and your own domain. Free plan available.`,
 }
 
 export const ALTERNATIVES_INDEX_SEO: RouteSeo = {
