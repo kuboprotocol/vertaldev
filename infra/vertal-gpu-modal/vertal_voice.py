@@ -40,11 +40,15 @@ hf_vol = modal.Volume.from_name("vertal-hf-cache", create_if_missing=True)
 gpu_image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("ffmpeg", "git")
+    # descript-audiotools (via descript-audio-codec, usado pelo Seed-VC) fixa protobuf<3.20, o que fazia o uv escolher
+    # onnx 1.12 (sem wheel p/ Python 3.11 -> build falha sem cmake). Override: protobuf/onnx modernos.
+    .run_commands("printf 'protobuf>=3.20.2,<5\\nonnx>=1.16.0,<1.20\\n' > /vertal-voice-overrides.txt")
     .uv_pip_install(
-        "torch==2.6.0", "torchaudio==2.6.0", "chatterbox-tts>=0.1.4", "demucs==4.0.1", "soundfile", "numpy<2",
+        "torch==2.6.0", "torchaudio==2.6.0", "chatterbox-tts==0.1.6", "demucs==4.0.1", "soundfile", "numpy<2",
         "requests", "huggingface_hub", "librosa>=0.10", "scipy", "munch", "einops", "descript-audio-codec",
         "pydub", "transformers==4.46.3", "accelerate", "hydra-core", "omegaconf", "resemblyzer", "jiwer", "pyyaml", "python-dotenv",
         "funasr", "modelscope",
+        extra_options="--override /vertal-voice-overrides.txt",
     )
     .run_commands(f"git clone {SEED_VC_REPO} /opt/seed-vc && cd /opt/seed-vc && git checkout {SEED_VC_COMMIT}")
     .env({"HF_HOME": "/cache/hf", "TORCH_HOME": "/cache/torch", "PYTHONUNBUFFERED": "1"})
