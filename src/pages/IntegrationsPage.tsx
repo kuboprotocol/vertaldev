@@ -1,6 +1,6 @@
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { ArrowRight, Check } from 'lucide-react'
-import Navbar from '@/components/landing/Navbar'
+import SitePage from '@/components/site/SitePage'
 import { Button } from '@/components/ui/button'
 import { APP_NAME } from '@/config/brand'
 import {
@@ -42,7 +42,7 @@ function IntegrationsIndex() {
         <Link to="/" className="hover:text-foreground">{APP_NAME}</Link> › Integrações
       </nav>
       <header className="mt-4 mb-10">
-        <h1 className="text-3xl md:text-5xl font-display font-bold tracking-tight">{INTEGRATIONS_INDEX_SEO.heading}</h1>
+        <h1 className="text-3xl md:text-5xl font-semibold tracking-[-0.025em]">{INTEGRATIONS_INDEX_SEO.heading}</h1>
         <p className="mt-4 text-lg text-muted-foreground max-w-2xl">
           {INTEGRATIONS_INDEX_SEO.description} Cada integração tem uma página com o que dá para fazer, como conectar e exemplos.
         </p>
@@ -55,7 +55,7 @@ function IntegrationsIndex() {
               <Link
                 key={i.slug}
                 to={integrationPath(i)}
-                className="group flex gap-3 rounded-2xl border border-border bg-card/50 p-4 transition-colors hover:border-primary/60"
+                className="group flex gap-3 rounded-2xl border border-white/[0.06] bg-card/50 p-4 transition-colors hover:border-white/[0.14] hover:bg-card/70"
               >
                 <Logo i={i} size="h-10 w-10" />
                 <span>
@@ -67,7 +67,7 @@ function IntegrationsIndex() {
           </div>
         </section>
       ))}
-      <Button asChild size="lg" className="rounded-xl">
+      <Button asChild size="lg" className="rounded-full">
         <Link to="/auth">Começar grátis no {APP_NAME} <ArrowRight className="ml-2 h-4 w-4" /></Link>
       </Button>
       <TrademarkNotice />
@@ -93,7 +93,7 @@ function IntegrationDetail({ i }: { i: Integration }) {
   usePageSeo({ title: seo.title, description: seo.description, path: integrationPath(i) })
   const related = i.related.map((s) => findIntegration(s)).filter((r): r is Integration => Boolean(r))
   const cta = (
-    <Button asChild size="lg" className="rounded-xl h-auto whitespace-normal py-3 text-center">
+    <Button asChild size="lg" className="rounded-full h-auto whitespace-normal py-3 px-6 text-center">
       <Link to={i.signupPath}>Conectar o {i.name} grátis <ArrowRight className="ml-2 h-4 w-4" /></Link>
     </Button>
   )
@@ -105,7 +105,7 @@ function IntegrationDetail({ i }: { i: Integration }) {
       </nav>
       <header className="mt-6 flex flex-col gap-4">
         <Logo i={i} size="h-16 w-16" />
-        <h1 className="text-3xl md:text-5xl font-display font-bold tracking-tight">{seo.heading}</h1>
+        <h1 className="text-3xl md:text-5xl font-semibold tracking-[-0.025em]">{seo.heading}</h1>
         <p className="text-lg text-muted-foreground max-w-2xl">
           {i.summary} {i.lead}
         </p>
@@ -140,7 +140,7 @@ function IntegrationDetail({ i }: { i: Integration }) {
         ) : null}
       </section>
 
-      <section className="mt-8 rounded-2xl border border-border bg-card/50 p-6">
+      <section className="mt-8 rounded-2xl border border-white/[0.06] bg-card/50 p-6">
         <h2 className="text-xl font-semibold">Como conectar o {i.name}</h2>
         <p className="mt-2 text-muted-foreground">{i.connectSummary}</p>
         <ol className="mt-4 space-y-3 list-decimal pl-5">
@@ -176,7 +176,7 @@ function IntegrationDetail({ i }: { i: Integration }) {
         <h2 className="text-xl font-semibold">Integrações relacionadas</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {related.map((r) => (
-            <Link key={r.slug} to={integrationPath(r)} className="group flex items-center gap-3 rounded-xl border border-border bg-card/50 p-3 hover:border-primary/60">
+            <Link key={r.slug} to={integrationPath(r)} className="group flex items-center gap-3 rounded-xl border border-white/[0.06] bg-card/50 p-3 hover:border-white/[0.14]">
               <Logo i={r} size="h-8 w-8" />
               <span className="font-medium group-hover:text-primary">Integração {r.name}</span>
             </Link>
@@ -204,11 +204,11 @@ export default function IntegrationsPage() {
   const item = findIntegration(slug)
   if (slug && !item) return <Navigate to={INTEGRATIONS_PATH} replace />
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <Navbar />
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-12 md:py-16">
+    <SitePage>
+      {/* Conteúdo em pt-BR: raiz de um conjunto multilíngue com hreflang (não traduzir aqui). */}
+      <div lang="pt-BR" className="mx-auto max-w-4xl px-6 py-12 md:py-16">
         {item ? <IntegrationDetail i={item} /> : <IntegrationsIndex />}
-      </main>
-    </div>
+      </div>
+    </SitePage>
   )
 }

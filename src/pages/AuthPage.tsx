@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { clearStoredReferralCode, getStoredReferralCode, storeReferralCode } from '@/lib/referral'
 import { crmBuildFlagOn, isCrmRedirect } from '@/lib/vertalCrm/redirect'
 import { authLang, authUi } from '@/lib/authI18n'
+import { SITE_FONT } from '@/components/site/siteUi'
 
 // Google sign-in (Supabase Auth, provedor Google ligado; callback
 // https://sccizjlpwezsgaxkclot.supabase.co/auth/v1/callback no cliente OAuth).
@@ -267,13 +268,10 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
     )
   }
 
-  const inputClasses = "h-12 pl-11 rounded-xl bg-secondary/50 border-border/50 text-foreground placeholder:text-muted-foreground focus-visible:ring-primary/30 focus-visible:border-primary/50 transition-all duration-200"
+  const inputClasses = "h-12 pl-11 rounded-xl bg-white/[0.04] border-white/[0.08] text-[15px] text-foreground placeholder:text-muted-foreground focus-visible:ring-primary/30 focus-visible:border-primary/50 transition-all duration-200"
 
   return (
-    <div ref={ref} className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">
-      <div className="absolute inset-0 gradient-mesh pointer-events-none" />
-      <div className="absolute inset-0 dot-pattern opacity-30 pointer-events-none" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-primary/[0.03] blur-3xl pointer-events-none" />
+    <div ref={ref} style={SITE_FONT} className="min-h-screen bg-background antialiased flex items-center justify-center p-4 relative overflow-hidden">
 
       <AnimatePresence mode="wait">
         {forgotPassword ? (
@@ -285,13 +283,13 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
             transition={{ duration: 0.3 }}
             className="w-full max-w-md relative z-10"
           >
-            <div className="glass glass-border rounded-3xl p-8 shadow-gold">
+            <div className="rounded-3xl border border-white/[0.06] bg-card/50 p-8 sm:p-10">
               <div className="text-center mb-8">
-                <div className="h-14 w-14 rounded-2xl gradient-primary flex items-center justify-center mx-auto mb-5 shadow-glow">
-                  <KeyRound className="h-7 w-7 text-primary-foreground" />
+                <div className="h-14 w-14 rounded-2xl bg-primary/15 flex items-center justify-center mx-auto mb-5">
+                  <KeyRound className="h-7 w-7 text-primary" />
                 </div>
-                <h1 className="text-2xl font-display font-bold text-foreground">{T.recoverTitle}</h1>
-                <p className="text-sm text-muted-foreground mt-2">{T.recoverSubtitle}</p>
+                <h1 className="text-3xl font-semibold tracking-[-0.02em] text-foreground">{T.recoverTitle}</h1>
+                <p className="text-[15px] text-muted-foreground mt-2">{T.recoverSubtitle}</p>
               </div>
               <form onSubmit={handleForgotPassword} className="space-y-5">
                 <div className="relative">
@@ -305,7 +303,7 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
                     className={inputClasses}
                   />
                 </div>
-                <Button type="submit" data-testid="auth-recover-submit" variant="hero" className="w-full h-12 rounded-xl text-sm font-semibold gap-2" disabled={submitting}>
+                <Button type="submit" data-testid="auth-recover-submit" className="w-full h-12 rounded-full text-[15px] font-medium gap-2" disabled={submitting}>
                   {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
                   {T.sendRecovery}
                 </Button>
@@ -326,7 +324,7 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
             transition={{ duration: 0.3 }}
             className="w-full max-w-md relative z-10"
           >
-            <div className="glass glass-border rounded-3xl p-8 shadow-gold">
+            <div className="rounded-3xl border border-white/[0.06] bg-card/50 p-8 sm:p-10">
               <div className="text-center mb-8">
                 <div className="flex justify-center mb-5">
                   {/* Logo do Vertal Dev em destaque acima do "Entrar com Google" (o botão mantém o "G" do Google, regra de marca do Google). */}
@@ -336,13 +334,13 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
                     width={112}
                     height={112}
                     data-testid="auth-brand-logo"
-                    className="h-28 w-28 rounded-2xl object-contain"
+                    className="h-20 w-20 rounded-2xl object-contain"
                   />
                 </div>
-                <h1 className="text-2xl font-display font-bold text-foreground">
+                <h1 className="text-3xl font-semibold tracking-[-0.02em] text-foreground">
                   {isLogin ? T.welcomeBack : T.createYourAccount}
                 </h1>
-                <p className="text-sm text-muted-foreground mt-2">
+                <p className="text-[15px] text-muted-foreground mt-2">
                   {isLogin ? T.accessProjects(APP_NAME) : T.startBuilding}
                 </p>
               </div>
@@ -405,7 +403,7 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
                 <Button
                   data-testid="auth-google"
                   variant="outline"
-                  className="w-full h-12 rounded-xl mb-3 gap-3 text-sm font-medium border-border/50 hover:bg-secondary/80"
+                  className="w-full h-12 rounded-full mb-3 gap-3 text-[15px] font-medium border-white/[0.12] bg-white/[0.03] hover:bg-white/[0.07]"
                   onClick={handleGoogleLogin}
                 >
                   <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -420,7 +418,7 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
 
               <Button
                 variant="outline"
-                className="w-full h-12 rounded-xl mb-4 gap-3 text-sm font-medium border-border/50 hover:bg-secondary/80"
+                className="w-full h-12 rounded-full mb-4 gap-3 text-[15px] font-medium border-white/[0.12] bg-white/[0.03] hover:bg-white/[0.07]"
                 onClick={handleGithubLogin}
                 disabled={githubLoading}
                 data-testid="auth-github"
@@ -441,10 +439,10 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
               </div>
 
               {/* Tab switcher */}
-              <div className="flex items-center bg-secondary/50 rounded-xl p-1 mb-6">
+              <div className="flex items-center bg-white/[0.05] rounded-full p-1 mb-6">
                 <button
                   onClick={() => setIsLogin(true)}
-                  className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${
+                  className={`flex-1 py-2 text-[13px] font-medium rounded-full transition-all duration-200 ${
                     isLogin ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
@@ -452,7 +450,7 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
                 </button>
                 <button
                   onClick={() => setIsLogin(false)}
-                  className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${
+                  className={`flex-1 py-2 text-[13px] font-medium rounded-full transition-all duration-200 ${
                     !isLogin ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
@@ -520,7 +518,7 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
                   </div>
                 )}
 
-                <Button type="submit" data-testid="auth-submit" variant="hero" className="w-full h-12 rounded-xl text-sm font-semibold gap-2" disabled={submitting}>
+                <Button type="submit" data-testid="auth-submit" className="w-full h-12 rounded-full text-[15px] font-medium gap-2" disabled={submitting}>
                   {submitting ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (

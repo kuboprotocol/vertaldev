@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/integrations/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Sparkles, Loader2 } from 'lucide-react'
+import { KeyRound, Loader2 } from 'lucide-react'
+import { SITE_FONT } from '@/components/site/siteUi'
 import { toast } from 'sonner'
 
 export default function ResetPasswordPage() {
@@ -45,10 +46,10 @@ export default function ResetPasswordPage() {
     try {
       const { error } = await supabase.auth.updateUser({ password })
       if (error) throw error
-      toast.success('Password updated successfully!')
+      toast.success('Your password was updated.')
       navigate('/dashboard')
     } catch (err: any) {
-      toast.error(err.message || 'Error updating password')
+      toast.error(err.message || 'We could not update your password')
     } finally {
       setSubmitting(false)
     }
@@ -56,13 +57,13 @@ export default function ResetPasswordPage() {
 
   if (!ready) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div style={SITE_FONT} className="min-h-screen bg-background antialiased flex items-center justify-center p-4">
         <div className="w-full max-w-sm text-center">
-          <div className="h-12 w-12 rounded-2xl gradient-primary flex items-center justify-center mx-auto mb-4 shadow-glow">
-            <Sparkles className="h-6 w-6 text-primary-foreground" />
+          <div className="h-12 w-12 rounded-2xl bg-primary/15 flex items-center justify-center mx-auto mb-4">
+            <KeyRound className="h-6 w-6 text-primary" aria-hidden />
           </div>
-          <h1 className="text-2xl font-display font-bold text-foreground mb-2">Password recovery</h1>
-          <p className="text-sm text-muted-foreground">Verifying recovery link...</p>
+          <h1 className="text-3xl font-semibold tracking-[-0.02em] text-foreground mb-2">Password recovery</h1>
+          <p className="text-sm text-muted-foreground">Checking your recovery link…</p>
           <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mt-4" />
         </div>
       </div>
@@ -70,13 +71,13 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
+    <div style={SITE_FONT} className="min-h-screen bg-background antialiased flex items-center justify-center p-4">
+      <div className="w-full max-w-sm rounded-3xl border border-white/[0.06] bg-card/50 p-8">
         <div className="text-center mb-8">
-          <div className="h-12 w-12 rounded-2xl gradient-primary flex items-center justify-center mx-auto mb-4 shadow-glow">
-            <Sparkles className="h-6 w-6 text-primary-foreground" />
+          <div className="h-12 w-12 rounded-2xl bg-primary/15 flex items-center justify-center mx-auto mb-4">
+            <KeyRound className="h-6 w-6 text-primary" aria-hidden />
           </div>
-          <h1 className="text-2xl font-display font-bold text-foreground">New password</h1>
+          <h1 className="text-3xl font-semibold tracking-[-0.02em] text-foreground">New password</h1>
           <p className="text-sm text-muted-foreground mt-1">Enter your new password</p>
         </div>
 
@@ -88,6 +89,7 @@ export default function ResetPasswordPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
             minLength={6}
+            className="h-12 rounded-xl border-white/[0.08] bg-white/[0.04] text-[15px]"
           />
           <Input
             type="password"
@@ -96,8 +98,9 @@ export default function ResetPasswordPage() {
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
             minLength={6}
+            className="h-12 rounded-xl border-white/[0.08] bg-white/[0.04] text-[15px]"
           />
-          <Button type="submit" variant="hero" className="w-full" disabled={submitting}>
+          <Button type="submit" className="h-12 w-full rounded-full text-[15px]" disabled={submitting}>
             {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
             Update password
           </Button>

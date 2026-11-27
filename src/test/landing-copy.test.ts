@@ -75,14 +75,20 @@ describe('landing copy', () => {
   it('index.html marks the home page as English', () => {
     const html = readFileSync(join(ROOT, '..', 'index.html'), 'utf8')
     expect(html).toContain('<html lang="en">')
-    expect(html).toContain('if (location.pathname !== "/") document.documentElement.lang = "pt-BR"')
+    expect(html).toContain('if (en.indexOf(p) < 0) document.documentElement.lang = "pt-BR"')
   })
 
-  it('pre-rendered Portuguese pages keep lang="pt-BR"', () => {
+  it('pre-rendered pages report their own language', () => {
     const html = readFileSync(join(ROOT, '..', 'index.html'), 'utf8').split('%SITE_ORIGIN%').join('https://vertal.dev')
-    const pricing = prerenderPages(html, 'https://vertal.dev').get('pricing.html')
-    expect(pricing).toContain('<html lang="pt-BR">')
-    expect(pricing).toContain('<meta property="og:locale" content="pt_BR" />')
-    expect(pricing).not.toContain('og:locale:alternate')
+    const pages = prerenderPages(html, 'https://vertal.dev')
+    // Converted to English (src/config/siteLanguage.ts).
+    const pricing = pages.get('pricing.html')
+    expect(pricing).toContain('<html lang="en">')
+    expect(pricing).toContain('<meta property="og:locale" content="en_US" />')
+    // pt-BR root of a multilingual set (hreflang): stays in Portuguese.
+    const alternatives = pages.get('alternativas.html')
+    expect(alternatives).toContain('<html lang="pt-BR">')
+    expect(alternatives).toContain('<meta property="og:locale" content="pt_BR" />')
+    expect(alternatives).not.toContain('og:locale:alternate')
   })
 })

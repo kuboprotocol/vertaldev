@@ -43,33 +43,34 @@ export const ALTERNATIVES_INDEX_SEO: RouteSeo = {
 export const ROUTE_SEO: Record<string, RouteSeo> = {
   '/': HOME_SEO,
   '/alternativas': ALTERNATIVES_INDEX_SEO,
+  // English pages (see src/config/siteLanguage.ts).
   '/pricing': {
-    title: `Preços e planos — ${APP_NAME}`,
-    description: `Planos do ${APP_NAME}: comece grátis e pague por créditos transparentes para criar apps com IA, backend e Web3.`,
+    title: `Pricing and plans | ${APP_NAME}`,
+    description: `${APP_NAME} plans: start for free and pay with clear credits to build apps with AI, a backend and Web3.`,
   },
   '/download': {
-    title: `Download do app e do agente local — ${APP_NAME}`,
-    description: `Baixe o ${APP_NAME} para Windows, macOS, Linux e celular, e a extensão para VS Code.`,
+    title: `Download the app and the local agent | ${APP_NAME}`,
+    description: `Download ${APP_NAME} for Windows, macOS, Linux and mobile, and the extension for VS Code.`,
   },
   '/docs': {
-    title: `Documentação — ${APP_NAME}`,
-    description: `Guias do ${APP_NAME}: criar apps com IA, backend, conectores, Web3, domínios e deploy.`,
+    title: `Documentation | ${APP_NAME}`,
+    description: `${APP_NAME} guides: build apps with AI, backend, connectors, Web3, domains and deploys.`,
   },
   '/support': {
-    title: `Suporte — ${APP_NAME}`,
-    description: `Fale com o time do ${APP_NAME} e encontre ajuda para criar e publicar seus apps.`,
+    title: `Support | ${APP_NAME}`,
+    description: `Contact the ${APP_NAME} team and get help to build and publish your apps.`,
   },
   '/anywhere': {
-    title: `Kubo Anywhere — ${APP_NAME}`,
-    description: `Use o agente do ${APP_NAME} no seu computador e no celular, de qualquer lugar.`,
+    title: `Vertal Anywhere | ${APP_NAME}`,
+    description: `Use the ${APP_NAME} agent on your computer and on your phone, from anywhere.`,
   },
   '/terms': {
-    title: `Termos de uso — ${APP_NAME}`,
-    description: `Termos de uso do ${APP_NAME}, produto da ${BRAND.company}.`,
+    title: `Terms of Service | ${APP_NAME}`,
+    description: `Terms of Service of ${APP_NAME}, a product of ${BRAND.company}.`,
   },
   '/privacy': {
-    title: `Política de privacidade — ${APP_NAME}`,
-    description: `Como o ${APP_NAME}, produto da ${BRAND.company}, trata seus dados.`,
+    title: `Privacy Policy | ${APP_NAME}`,
+    description: `How ${APP_NAME}, a product of ${BRAND.company}, handles your data.`,
   },
 }
 

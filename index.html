@@ -3,9 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <script>
-      // The home page ("/") is in English; the other app routes keep pt-BR.
-      // Set before first paint so browsers offer the right translation.
-      if (location.pathname !== "/") document.documentElement.lang = "pt-BR";
+      // Pages written in English (copy of ENGLISH_ROUTES in src/config/siteLanguage.ts);
+      // the other app routes keep pt-BR. Set before first paint so browsers offer the right translation.
+      (function () {
+        var en = ["/", "/pricing", "/ecossistema", "/download", "/support", "/docs", "/docs/mcp", "/terms", "/privacy", "/data-deletion", "/anywhere", "/reset-password"];
+        var p = location.pathname.replace(/\/+$/, "") || "/";
+        if (en.indexOf(p) < 0) document.documentElement.lang = "pt-BR";
+      })();
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0a0c12" />
