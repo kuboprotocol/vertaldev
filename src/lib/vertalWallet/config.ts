@@ -49,3 +49,11 @@ export const metamaskConnector: ConnectorConfig = {
 export function metamaskCatalog(env?: Record<string, unknown>): ConnectorConfig[] {
   return isVertalMetaMaskEnabled(env) ? [metamaskConnector] : []
 }
+
+/**
+ * Cartão visível no catálogo /connectors só para quem o servidor libera (ação "wallet" → status.enabled).
+ * Falha fechada: carregando, erro ou negado = sem cartão. A rota direta continua protegida pelo servidor.
+ */
+export function filterMetaMaskByAccess<T extends { slug: string }>(list: T[], access: 'checking' | 'allowed' | 'denied'): T[] {
+  return access === 'allowed' ? list : list.filter((c) => !isMetaMaskSlug(c.slug))
+}

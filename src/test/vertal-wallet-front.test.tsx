@@ -94,3 +94,26 @@ describe('Vertal Chat: comando do Trader', () => {
     expect(on.getByTestId('vertal-wallet-entry')).toBeTruthy()
   })
 })
+
+describe('cartão MetaMask no catálogo: só para quem o servidor libera', () => {
+  const list = [{ slug: 'github' }, { slug: METAMASK_SLUG }, { slug: 'stripe' }]
+  it('liberado mostra; carregando, negado ou erro escondem (falha fechada)', async () => {
+    const { filterMetaMaskByAccess } = await import('@/lib/vertalWallet/config')
+    expect(filterMetaMaskByAccess(list, 'allowed').map((c) => c.slug)).toEqual(['github', 'metamask', 'stripe'])
+    expect(filterMetaMaskByAccess(list, 'checking').map((c) => c.slug)).toEqual(['github', 'stripe'])
+    expect(filterMetaMaskByAccess(list, 'denied').map((c) => c.slug)).toEqual(['github', 'stripe'])
+  })
+  it('com o flag ligado e sem sessão (status falha), o acesso fica negado', async () => {
+    vi.stubEnv('VITE_VERTAL_METAMASK', 'true')
+    try {
+      const { renderHook, waitFor } = await import('@testing-library/react')
+      const { useVertalWalletAccess, resetWalletAccessCache } = await import('@/lib/vertalWallet/client')
+      resetWalletAccessCache()
+      const { result } = renderHook(() => useVertalWalletAccess())
+      expect(result.current).toBe('checking')
+      await waitFor(() => expect(result.current).toBe('denied'))
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+})
