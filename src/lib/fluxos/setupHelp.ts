@@ -18,47 +18,47 @@ const REDIRECT = (app: string) => `https://vertal.dev/fluxos/oauth/${app}`
 
 export const FLUXOS_SETUP_HELP: Record<string, FluxosSetupHelp> = {
   monday: {
-    login: 'Você entra no monday.com e autoriza o app Vertal Dev (na primeira vez o monday pede para instalar o app na sua conta). Depois, peça no Vertal Chat para criar itens, boards, colunas ou comentar em itens — sempre com a sua confirmação.',
+    login: 'You sign in to monday.com and authorize the Vertal Dev app (the first time, monday asks you to install the app in your account). Then ask Vertal Chat to create items, boards or columns, or to comment on items, always after you confirm.',
     advanced: [
-      'No monday.com, clique na sua foto → Developers.',
-      'Abra "My access tokens" → Show → copie o token.',
-      'Cole abaixo e conecte. O token tem as mesmas permissões que a sua conta.',
+      'On monday.com, click your photo → Developers.',
+      'Open "My access tokens" → Show → copy the token.',
+      'Paste it below and connect. The token has the same permissions as your account.',
     ],
   },
   'firefly-iii': {
     ownClient: [
-      'No seu Firefly III: Options → Profile → aba OAuth → "Create new client".',
-      'Nome: Vertal Dev. Redirect URL: ' + REDIRECT('firefly-iii') + '. Deixe "Confidential" marcado e crie.',
-      'Copie o Client ID e o Client Secret e cole abaixo, junto com o endereço da sua instância (ex.: https://firefly.seudominio.com).',
-      'Clique em "Entrar com Firefly III": você faz login na sua instância e autoriza. O cliente fica só na sua conexão.',
+      'In your Firefly III: Options → Profile → OAuth tab → "Create new client".',
+      'Name: Vertal Dev. Redirect URL: ' + REDIRECT('firefly-iii') + '. Keep "Confidential" checked and create it.',
+      'Copy the Client ID and Client Secret and paste them below, with the address of your instance (for example https://firefly.yourdomain.com).',
+      'Click "Sign in with Firefly III": you sign in to your instance and authorize. The client is only used by your connection.',
     ],
     advanced: [
-      'No Firefly III: Options → Profile → aba OAuth → "Personal Access Tokens" → "Create new token".',
-      'Copie o token (aparece uma vez só), preencha o endereço da instância acima e cole o token abaixo.',
+      'In Firefly III: Options → Profile → OAuth tab → "Personal Access Tokens" → "Create new token".',
+      'Copy the token (it is shown only once), fill in the instance address above and paste the token below.',
     ],
   },
   freescout: {
     noOAuth: true,
     fields: [
-      'O FreeScout não tem login OAuth oficial: a API usa chave, pelo módulo "API & Webhooks" (ative em Manage → Modules).',
-      'Copie a chave em Manage → Settings → API & Webhooks (ou a sua chave pessoal em "My API Keys").',
-      'Informe o endereço da sua instância (ex.: https://suporte.seudominio.com) e a chave.',
+      'FreeScout has no official OAuth sign-in: the API uses a key, from the "API & Webhooks" module (turn it on in Manage → Modules).',
+      'Copy the key in Manage → Settings → API & Webhooks (or your personal key in "My API Keys").',
+      'Enter the address of your instance (for example https://support.yourdomain.com) and the key.',
     ],
   },
   airbrake: {
     noOAuth: true,
     fields: [
-      'O Airbrake não oferece OAuth: a API usa a sua User API key.',
-      'No Airbrake: foto do perfil → Profile → copie a "User API key" (não é a chave do projeto).',
-      'Mantenha o endereço da API em https://api.airbrake.io e cole a chave.',
+      'Airbrake does not offer OAuth: the API uses your User API key.',
+      'In Airbrake: profile photo → Profile → copy the "User API key" (not the project key).',
+      'Keep the API address as https://api.airbrake.io and paste the key.',
     ],
   },
   virtualq: {
     noOAuth: true,
     fields: [
-      'O VirtualQ não oferece OAuth: a API usa token.',
-      'No painel do VirtualQ (dashboard.virtualq.tech): Contact Center → aba API Tokens → New token.',
-      'Copie o token na hora (ele aparece uma vez só) e cole abaixo.',
+      'VirtualQ does not offer OAuth: the API uses a token.',
+      'In the VirtualQ dashboard (dashboard.virtualq.tech): Contact Center → API Tokens tab → New token.',
+      'Copy the token right away (it is shown only once) and paste it below.',
     ],
   },
 }

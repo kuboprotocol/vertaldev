@@ -12,7 +12,7 @@ import { fluxosSetupHelp } from '@/lib/fluxos/setupHelp'
 const SECRET_HINT = /token|secret|password|senha|key|chave/i
 
 function fieldLabel(f: FluxosField): string {
-  if (f.key === 'screenName') return 'Nome da conexão'
+  if (f.key === 'screenName') return 'Connection name'
   return f.label || f.key
 }
 
@@ -51,10 +51,10 @@ export function FluxosConnectPanel({ app, name, returnPath, intro }: {
   useEffect(() => { void load() }, [load])
 
   if (loading) {
-    return <Card className="p-6 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" /> Carregando {name}…</Card>
+    return <Card className="p-6 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" /> Loading {name}…</Card>
   }
   if (!info) {
-    return <Card className="p-6 text-sm text-destructive">{error ?? 'Não foi possível carregar este app.'}</Card>
+    return <Card className="p-6 text-sm text-destructive">{error ?? 'We could not load this app.'}</Card>
   }
 
   const connected = info.connection?.status === 'connected'
@@ -75,7 +75,7 @@ export function FluxosConnectPanel({ app, name, returnPath, intro }: {
     for (const f of sendFields) if (values[f.key]) fields[f.key] = values[f.key]
     if (mode === 'token' && !advancedFields.some((f) => values[f.key]?.trim())) {
       setBusy(false)
-      setError('Cole o token em Avançado.')
+      setError('Paste the token under Advanced.')
       return
     }
     const res = await callFluxosApps<{ mode: 'oauth' | 'connected'; url?: string }>({ op: 'start', app, fields })
@@ -112,47 +112,47 @@ export function FluxosConnectPanel({ app, name, returnPath, intro }: {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Plug className="w-4 h-4 text-primary" />
-          <h2 className="font-semibold">Conectar {name}</h2>
+          <h2 className="font-semibold">Connect {name}</h2>
         </div>
         {connected
-          ? <Badge className="gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Conectado</Badge>
-          : <Badge variant="outline">Não conectado</Badge>}
+          ? <Badge className="gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Connected</Badge>
+          : <Badge variant="outline">Not connected</Badge>}
       </div>
 
       {connected ? (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Conta: <span className="text-foreground font-medium">{info.connection?.screen_name ?? name}</span>. O Vertal Chat já pode usar {name}
-            {info.actions.length + info.searches.length > 0 ? ` (${info.actions.length} ações, ${info.searches.length} buscas)` : ''}. Peça no chat, por exemplo: “use o {name} para …”.
+            Account: <span className="text-foreground font-medium">{info.connection?.screen_name ?? name}</span>. Vertal Chat can now use {name}
+            {info.actions.length + info.searches.length > 0 ? ` (${info.actions.length} actions, ${info.searches.length} searches)` : ''}. Ask in the chat, for example: "use {name} to …".
           </p>
           <div className="flex gap-2">
             <Button variant="outline" onClick={disconnect} disabled={busy}>
-              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />} Desconectar
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />} Disconnect
             </Button>
-            <Button variant="ghost" onClick={() => connect('login')} disabled={busy}>Reconectar</Button>
+            <Button variant="ghost" onClick={() => connect('login')} disabled={busy}>Reconnect</Button>
           </div>
         </div>
       ) : (
         <div className="space-y-4">
           {oauthReady ? (
             <>
-              <p className="text-sm text-muted-foreground">Você entra na sua conta {name} e autoriza o Vertal Dev. Nenhuma senha passa por aqui.</p>
+              <p className="text-sm text-muted-foreground">You sign in to your {name} account and authorize Vertal Dev. No password goes through this page.</p>
               {intro && <p className="text-xs text-muted-foreground">{intro}</p>}
             </>
           ) : info.app.oauth && help?.ownClient ? (
             <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">{`O ${name} roda no seu próprio servidor, então o login usa um cliente OAuth criado por você na sua instância (fica só na sua conexão):`}</p>
+              <p className="text-sm text-muted-foreground">{`${name} runs on your own server, so sign-in uses an OAuth client you create in your instance (only your connection uses it):`}</p>
               <ol className="list-decimal pl-5 space-y-1 text-xs text-muted-foreground">
                 {help.ownClient.map((s) => <li key={s}>{s}</li>)}
               </ol>
             </div>
           ) : info.app.oauth ? (
             <p className="text-sm text-muted-foreground">
-              {`O login direto com ${name} ainda não está liberado. Se você tem um app próprio no ${name}, informe o client ID e o secret abaixo (endereço de retorno: https://vertal.dev/fluxos/oauth/${app}).`}
+              {`Direct sign-in with ${name} is not available yet. If you have your own ${name} app, enter its client ID and secret below (redirect address: https://vertal.dev/fluxos/oauth/${app}).`}
             </p>
           ) : (
             <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Informe os dados de acesso do {name}. Ficam guardados criptografados no servidor e nunca voltam para o navegador.</p>
+              <p className="text-sm text-muted-foreground">Enter your {name} access details. They are stored encrypted on the server and are never sent back to the browser.</p>
               {help?.fields && (
                 <ol className="list-decimal pl-5 space-y-1 text-xs text-muted-foreground">
                   {help.fields.map((s) => <li key={s}>{s}</li>)}
@@ -172,7 +172,7 @@ export function FluxosConnectPanel({ app, name, returnPath, intro }: {
                   value={values[f.key] ?? ''}
                   onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
                 >
-                  <option value="">Escolha…</option>
+                  <option value="">Choose…</option>
                   {f.options.map((o) => <option key={String(o.value)} value={String(o.value)}>{o.label ?? String(o.value)}</option>)}
                 </select>
               ) : (
@@ -180,7 +180,7 @@ export function FluxosConnectPanel({ app, name, returnPath, intro }: {
                   id={`fx-${f.key}`}
                   type={SECRET_HINT.test(f.key) && f.key !== 'screenName' ? 'password' : 'text'}
                   autoComplete="off"
-                  placeholder={f.key === 'screenName' ? `Minha conta ${name}` : f.placeholder ?? ''}
+                  placeholder={f.key === 'screenName' ? `My ${name} account` : f.placeholder ?? ''}
                   value={values[f.key] ?? ''}
                   onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
                 />
@@ -194,7 +194,7 @@ export function FluxosConnectPanel({ app, name, returnPath, intro }: {
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => connect('login')} disabled={busy}>
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : info.app.oauth ? <LogIn className="w-4 h-4" /> : <Plug className="w-4 h-4" />}
-              {info.app.oauth && (oauthReady || help?.ownClient) ? `Entrar com ${name}` : 'Conectar'}
+              {info.app.oauth && (oauthReady || help?.ownClient) ? `Sign in with ${name}` : 'Connect'}
             </Button>
           </div>
 
@@ -207,7 +207,7 @@ export function FluxosConnectPanel({ app, name, returnPath, intro }: {
                 aria-expanded={showAdvanced}
               >
                 {showAdvanced ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                Avançado: usar token pessoal em vez do login
+                Advanced: use a personal token instead of sign-in
               </button>
               {showAdvanced && (
                 <div className="space-y-3">
@@ -229,7 +229,7 @@ export function FluxosConnectPanel({ app, name, returnPath, intro }: {
                     </div>
                   ))}
                   <Button variant="outline" onClick={() => connect('token')} disabled={busy}>
-                    {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />} Conectar com token
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />} Connect with a token
                   </Button>
                 </div>
               )}

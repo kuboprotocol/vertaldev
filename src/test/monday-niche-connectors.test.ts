@@ -68,7 +68,7 @@ describe('monday.com por OAuth', () => {
 
   it('a tela mostra "Entrar com …" e o token em "Avançado"', () => {
     const panel = read('src/components/connectors/FluxosConnectPanel.tsx')
-    expect(panel).toMatch(/Avançado: usar token pessoal em vez do login/)
+    expect(panel).toMatch(/Advanced: use a personal token instead of sign-in/)
     expect(panel).toMatch(/connect\('token'\)/)
     expect(panel).not.toMatch(/automatisch|huginn/i)
     expect(getConnectorBySlug('fluxos-monday')?.name).toBe('monday.com')
@@ -88,7 +88,7 @@ describe('FreeScout, Firefly III, VirtualQ e Airbrake', () => {
   it('FreeScout, Airbrake e VirtualQ: sem OAuth (dito na tela) e passos da chave', () => {
     for (const app of ['freescout', 'airbrake', 'virtualq']) {
       expect(FLUXOS_SETUP_HELP[app].noOAuth, app).toBe(true)
-      expect(FLUXOS_SETUP_HELP[app].fields?.[0], app).toMatch(/não (tem|oferece)/)
+      expect(FLUXOS_SETUP_HELP[app].fields?.[0], app).toMatch(/(has no|does not offer)/)
       expect(ENGINE_APPS[app].auth, app).toBe('fields')
     }
   })

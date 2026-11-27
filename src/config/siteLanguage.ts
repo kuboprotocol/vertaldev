@@ -28,10 +28,21 @@ export const ENGLISH_ROUTES: readonly string[] = [
   '/profile',
   '/recompensas',
   '/affiliate-program',
+  // Connectors
+  '/connect',
+]
+
+/**
+ * Route prefixes written in English: the prefix itself and every route under it
+ * (for example /connectors, /connectors/github/setup). index.html has a copy too.
+ */
+export const ENGLISH_PREFIXES: readonly string[] = [
+  '/connectors',
+  '/fluxos/oauth',
 ]
 
 /** True when the route (without query or hash) is written in English. */
 export function isEnglishRoute(pathname: string): boolean {
   const p = pathname.replace(/\/+$/, '') || '/'
-  return ENGLISH_ROUTES.includes(p)
+  return ENGLISH_ROUTES.includes(p) || ENGLISH_PREFIXES.some((x) => p === x || p.startsWith(`${x}/`))
 }

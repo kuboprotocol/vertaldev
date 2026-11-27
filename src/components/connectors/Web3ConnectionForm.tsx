@@ -33,7 +33,7 @@ export default function Web3ConnectionForm({ providerId, onSaved, editing, onCan
   const networks = useMemo(() => getNetworksForProvider(providerId), [providerId])
   const isEditing = !!editing
 
-  const [connectionName, setConnectionName] = useState(editing?.connection_name ?? `Minha conexão ${provider.label}`)
+  const [connectionName, setConnectionName] = useState(editing?.connection_name ?? `My ${provider.label} connection`)
   const [networkId, setNetworkId] = useState<string>(editing?.network ?? networks[0]?.id ?? '')
   const [apiKey, setApiKey] = useState('')
   const [showKey, setShowKey] = useState(false)
@@ -50,7 +50,7 @@ export default function Web3ConnectionForm({ providerId, onSaved, editing, onCan
 
   // Reset when "editing" prop changes
   useEffect(() => {
-    setConnectionName(editing?.connection_name ?? `Minha conexão ${provider.label}`)
+    setConnectionName(editing?.connection_name ?? `My ${provider.label} connection`)
     setNetworkId(editing?.network ?? networks[0]?.id ?? '')
     setApiKey('')
     setRpcUrl('')
@@ -70,7 +70,7 @@ export default function Web3ConnectionForm({ providerId, onSaved, editing, onCan
   }, [dirty])
 
   function tryCancelEdit() {
-    if (dirty && !confirm('Descartar alterações não salvas?')) return
+    if (dirty && !confirm('Discard unsaved changes?')) return
     onCancelEdit?.()
   }
 
@@ -91,17 +91,17 @@ export default function Web3ConnectionForm({ providerId, onSaved, editing, onCan
   const familyOf = (id: string) => getNetwork(id)?.family ?? 'evm'
 
   function validate(): string | null {
-    if (!connectionName.trim()) return 'Informe um nome para a conexão.'
-    if (!networkId) return 'Selecione uma network.'
-    if (provider.requiresApiKey && apiKey.trim().length < 8) return 'API Key inválida (mínimo 8 caracteres).'
+    if (!connectionName.trim()) return 'Enter a name for the connection.'
+    if (!networkId) return 'Choose a network.'
+    if (provider.requiresApiKey && apiKey.trim().length < 8) return 'This API key looks too short (8 characters or more).'
     try {
       const u = new URL(rpcUrl)
       if (!/^https?:$/.test(u.protocol)) return 'RPC URL deve usar http(s).'
-    } catch { return 'RPC URL inválida.' }
+    } catch { return 'This RPC URL is not valid.' }
     try {
       const u = new URL(explorerUrl)
       if (!/^https?:$/.test(u.protocol)) return 'Explorer URL deve usar http(s).'
-    } catch { return 'Explorer URL inválida.' }
+    } catch { return 'This explorer URL is not valid.' }
     return null
   }
 
@@ -116,10 +116,10 @@ export default function Web3ConnectionForm({ providerId, onSaved, editing, onCan
       const r = data as TestResult
       setTestResult(r)
       if (r.ok) toast.success(`Conectado · block ${r.blockNumber ?? '?'} · ${r.latencyMs}ms`)
-      else toast.error(`Falha: ${r.detail ?? `HTTP ${r.status}`}`)
+      else toast.error(`Test failed: ${r.detail ?? `HTTP ${r.status}`}`)
     } catch (e: any) {
-      const r = { ok: false, status: 0, detail: e?.message ?? 'erro desconhecido', latencyMs: 0 }
-      setTestResult(r); toast.error(`Erro: ${r.detail}`)
+      const r = { ok: false, status: 0, detail: e?.message ?? 'unknown error', latencyMs: 0 }
+      setTestResult(r); toast.error(`Error: ${r.detail}`)
     } finally { setTesting(false) }
   }
 
@@ -139,11 +139,11 @@ export default function Web3ConnectionForm({ providerId, onSaved, editing, onCan
       const { data, error } = await supabase.functions.invoke('web3-connection-save', { body })
       if (error) throw error
       if ((data as any)?.error) throw new Error(JSON.stringify((data as any).error))
-      toast.success(isEditing ? 'Conexão atualizada' : 'Conexão salva')
+      toast.success(isEditing ? 'Connection updated' : 'Connection saved')
       setDirty(false)
       onSaved?.()
     } catch (e: any) {
-      toast.error(`Falha ao salvar: ${e.message ?? 'erro'}`)
+      toast.error(`We could not save: ${e.message ?? 'error'}`)
     } finally { setSaving(false) }
   }
 
@@ -152,7 +152,7 @@ export default function Web3ConnectionForm({ providerId, onSaved, editing, onCan
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="font-semibold text-lg">
-            {isEditing ? 'Editar conexão' : 'Configurar conexão'}
+            {isEditing ? 'Edit connection' : 'Set up connection'}
           </h2>
           <p className="text-xs text-muted-foreground">{provider.description}</p>
         </div>
@@ -165,11 +165,11 @@ export default function Web3ConnectionForm({ providerId, onSaved, editing, onCan
               aria-live="polite"
               className="text-[10px] uppercase tracking-wider text-amber-300"
             >
-              Não salvo
+              Not saved
             </span>
           )}
           {isEditing && onCancelEdit && (
-            <Button variant="ghost" size="icon" onClick={tryCancelEdit} aria-label="Cancelar edição" data-testid="btn-cancel-edit">
+            <Button variant="ghost" size="icon" onClick={tryCancelEdit} aria-label="Cancel editing" data-testid="btn-cancel-edit">
               <X className="h-4 w-4" />
             </Button>
           )}
@@ -183,20 +183,20 @@ export default function Web3ConnectionForm({ providerId, onSaved, editing, onCan
           data-testid="edit-safety-banner"
           className="text-xs rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-amber-200"
         >
-          Por segurança, RPC URL e API Key não são exibidas. Reinforme os valores para atualizar a conexão.
+          For security, the RPC URL and API key are not shown. Enter them again to update the connection.
           {editing?.api_key_hint && <> Hint atual: <code className="opacity-80">{editing.api_key_hint}</code></>}
         </div>
       )}
 
       <div className="space-y-2">
-        <Label htmlFor="connectionName">Nome da conexão</Label>
-        <Input id="connectionName" data-testid="field-connection-name" value={connectionName} onChange={(e) => { setConnectionName(e.target.value); markDirty() }} placeholder="Ex.: Produção Mainnet" maxLength={80} />
+        <Label htmlFor="connectionName">Connection name</Label>
+        <Input id="connectionName" data-testid="field-connection-name" value={connectionName} onChange={(e) => { setConnectionName(e.target.value); markDirty() }} placeholder="For example: Production mainnet" maxLength={80} />
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="network">Network</Label>
         <Select value={networkId} onValueChange={(v) => { setNetworkId(v); setRpcTouched(false); setExplorerTouched(false); setTestResult(null); markDirty() }}>
-          <SelectTrigger id="network" data-testid="field-network"><SelectValue placeholder="Selecione uma network" /></SelectTrigger>
+          <SelectTrigger id="network" data-testid="field-network"><SelectValue placeholder="Choose a network" /></SelectTrigger>
           <SelectContent>
             {(['evm', 'solana', 'utxo'] as const).map((fam) => {
               const items = networks.filter((n) => n.family === fam)
@@ -228,7 +228,7 @@ export default function Web3ConnectionForm({ providerId, onSaved, editing, onCan
           <button
             type="button"
             onClick={() => setShowKey((v) => !v)}
-            aria-label={showKey ? 'Ocultar API key' : 'Mostrar API key'}
+            aria-label={showKey ? 'Hide API key' : 'Show API key'}
             className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
           >
             {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -245,10 +245,10 @@ export default function Web3ConnectionForm({ providerId, onSaved, editing, onCan
           type="url"
           value={rpcUrl}
           onChange={(e) => { setRpcUrl(e.target.value.replace(/\s+/g, '')); setRpcTouched(true); markDirty() }}
-          placeholder="https://eth-mainnet.g.alchemy.com/v2/SUA_API_KEY"
+          placeholder="https://eth-mainnet.g.alchemy.com/v2/YOUR_API_KEY"
         />
         <p className="text-xs text-muted-foreground">
-          Auto-gerada com base na network. Você pode editar para apontar para outro endpoint.
+          Filled in from the network. You can change it to use another endpoint.
         </p>
       </div>
 
@@ -264,7 +264,7 @@ export default function Web3ConnectionForm({ providerId, onSaved, editing, onCan
             placeholder="https://etherscan.io"
           />
           {explorerUrl && (
-            <Button type="button" variant="outline" size="icon" asChild aria-label="Abrir explorer em nova aba">
+            <Button type="button" variant="outline" size="icon" asChild aria-label="Open the explorer in a new tab">
               <a href={explorerUrl} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4" /></a>
             </Button>
           )}
@@ -280,7 +280,7 @@ export default function Web3ConnectionForm({ providerId, onSaved, editing, onCan
           className={`rounded-lg border p-3 text-sm ${testResult.ok ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' : 'border-red-500/40 bg-red-500/10 text-red-200'}`}
         >
           <p className="font-medium">
-            {testResult.ok ? 'Conexão OK' : 'Falha na conexão'} · {testResult.latencyMs}ms{testResult.status ? ` · HTTP ${testResult.status}` : ''}
+            {testResult.ok ? 'Connection OK' : 'Connection failed'} · {testResult.latencyMs}ms{testResult.status ? ` · HTTP ${testResult.status}` : ''}
           </p>
           {testResult.blockNumber !== undefined && <p className="text-xs opacity-80">Block: {testResult.blockNumber}</p>}
           {testResult.detail && <p className="text-xs opacity-80 break-words">{testResult.detail}</p>}
@@ -290,16 +290,16 @@ export default function Web3ConnectionForm({ providerId, onSaved, editing, onCan
       <div className="flex gap-3 pt-2">
         <Button variant="outline" onClick={handleTest} disabled={testing || saving} className="flex-1" data-testid="btn-test-connection">
           {testing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plug className="h-4 w-4 mr-2" />}
-          Testar conexão
+          Test connection
         </Button>
         <Button onClick={handleSave} disabled={saving || testing} className="flex-1" data-testid="btn-save-connection">
           {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-          {isEditing ? 'Atualizar' : 'Salvar'}
+          {isEditing ? 'Update' : 'Save'}
         </Button>
       </div>
 
       <a href={provider.docsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline">
-        Documentação oficial do {provider.label} <ExternalLink className="h-3 w-3" />
+        Official {provider.label} docs <ExternalLink className="h-3 w-3" />
       </a>
     </Card>
   )

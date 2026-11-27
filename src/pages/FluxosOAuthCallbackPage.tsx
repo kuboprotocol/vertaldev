@@ -4,6 +4,7 @@ import { Loader2, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { callFluxosApps, connectorPathFor, oauthReturnParams, PENDING_APP_KEY, RETURN_PATH_KEY, safeReturnPath } from '@/lib/fluxos/apps'
+import { SITE_FONT, siteRoot } from '@/components/site/siteUi'
 
 /** Janela de login aberta pelo próprio painel do Vertal Fluxos (não pelo Vertal Dev): devolve o retorno para ela. */
 const FLUXOS_UI_ORIGIN = (import.meta.env.VITE_FLUXOS_UI_ORIGIN as string | undefined) ?? 'https://automatisch-main-production.up.railway.app'
@@ -36,7 +37,7 @@ export default function FluxosOAuthCallbackPage() {
       const back = safeReturnPath(sessionStorage.getItem(RETURN_PATH_KEY)) ?? connectorPathFor(app)
       sessionStorage.removeItem(RETURN_PATH_KEY)
       if (res.ok) {
-        toast.success('Conectado.')
+        toast.success('Connected')
         navigate(back, { replace: true })
       } else {
         setError(res.message)
@@ -45,16 +46,16 @@ export default function FluxosOAuthCallbackPage() {
   }, [app, navigate])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background text-foreground p-6">
+    <div className={`min-h-screen flex items-center justify-center ${siteRoot} p-6`} style={SITE_FONT}>
       {error ? (
         <div className="max-w-md text-center space-y-4">
           <XCircle className="w-10 h-10 text-destructive mx-auto" />
           <p className="text-sm">{error}</p>
-          <Button onClick={() => navigate(connectorPathFor(app), { replace: true })}>Voltar ao conector</Button>
+          <Button onClick={() => navigate(connectorPathFor(app), { replace: true })}>Back to the connector</Button>
         </div>
       ) : (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="w-4 h-4 animate-spin" /> Concluindo a conexão…
+          <Loader2 className="w-4 h-4 animate-spin" /> Finishing the connection…
         </div>
       )}
     </div>

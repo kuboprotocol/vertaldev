@@ -121,7 +121,7 @@ describe('ConnectorDetailPage — Renovar in real undo banner', () => {
     expect(banner).toBeInTheDocument()
     const btn = getRenew(banner)
     expect(btn).toBeEnabled()
-    expect(btn).toHaveTextContent(/renovar/i)
+    expect(btn).toHaveTextContent(/renew/i)
     expect(getCounter(banner)).toHaveTextContent(/15s/)
     expect(widthPct(banner)).toBe(100)
     expect(dataPct(banner)).toBe(100)
@@ -144,7 +144,7 @@ describe('ConnectorDetailPage — Renovar in real undo banner', () => {
     expect(getCounter(banner)).toHaveTextContent('15s')
     expect(widthPct(banner)).toBe(100)
     expect(dataPct(banner)).toBe(100)
-    expect(getCounter(banner)).toHaveAttribute('aria-label', 'Expira em 15 segundos')
+    expect(getCounter(banner)).toHaveAttribute('aria-label', 'Ends in 15 seconds')
   })
 
   it('after Renovar, the real banner ticks down again from the new deadline', async () => {

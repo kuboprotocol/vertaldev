@@ -72,18 +72,18 @@ export default function GitHubReposList() {
         logConnectorEvent({
           connectorSlug: 'github',
           eventType: 'repos_synced',
-          message: `Sincronização concluída: ${list.length} repositórios`,
+          message: `Sync finished: ${list.length} repositories`,
           status: 'success',
           metadata: { count: list.length },
         })
       }
     } catch (err: any) {
       console.error('Error fetching repos:', err)
-      setError('Erro ao carregar repositórios')
+      setError('We could not load the repositories')
       logConnectorEvent({
         connectorSlug: 'github',
         eventType: 'repos_sync_failed',
-        message: 'Falha ao sincronizar repositórios',
+        message: 'Repository sync failed',
         status: 'error',
         metadata: { error: err?.message },
       })
@@ -103,7 +103,7 @@ export default function GitHubReposList() {
     logConnectorEvent({
       connectorSlug: 'github',
       eventType: 'ipfs_deploy_started',
-      message: `Deploy IPFS iniciado para ${repo.full_name}`,
+      message: `IPFS deploy started for ${repo.full_name}`,
       status: 'info',
       metadata: { repo: repo.full_name },
     })
@@ -117,11 +117,11 @@ export default function GitHubReposList() {
       if (data?.error) throw new Error(data.error)
 
       setDeployResult(data)
-      toast.success(`${repo.name} publicado no IPFS!`)
+      toast.success(`${repo.name} is published on IPFS`)
       logConnectorEvent({
         connectorSlug: 'github',
         eventType: 'ipfs_deploy_completed',
-        message: `Deploy concluído: ${repo.full_name}`,
+        message: `Deploy finished: ${repo.full_name}`,
         status: 'success',
         metadata: {
           repo: repo.full_name,
@@ -133,13 +133,13 @@ export default function GitHubReposList() {
       })
     } catch (err: any) {
       console.error('Deploy error:', err)
-      const msg = err?.message || 'Erro ao fazer deploy'
+      const msg = err?.message || 'The deploy failed'
       setDeployError(msg)
       toast.error(msg)
       logConnectorEvent({
         connectorSlug: 'github',
         eventType: 'ipfs_deploy_failed',
-        message: `Falha no deploy de ${repo.full_name}`,
+        message: `Deploy failed for ${repo.full_name}`,
         status: 'error',
         metadata: { repo: repo.full_name, error: msg },
       })
@@ -160,7 +160,7 @@ export default function GitHubReposList() {
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
-            <GitBranch className="h-4 w-4 text-primary" /> Repositórios
+            <GitBranch className="h-4 w-4 text-primary" /> Repositories
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -177,7 +177,7 @@ export default function GitHubReposList() {
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
-            <GitBranch className="h-4 w-4 text-primary" /> Repositórios
+            <GitBranch className="h-4 w-4 text-primary" /> Repositories
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -195,7 +195,7 @@ export default function GitHubReposList() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
-            <GitBranch className="h-4 w-4 text-primary" /> Repositórios
+            <GitBranch className="h-4 w-4 text-primary" /> Repositories
             <Badge variant="secondary" className="text-[10px] ml-1">{repos.length}</Badge>
           </CardTitle>
           <Button variant="ghost" size="icon" onClick={() => fetchRepos(true)} className="h-8 w-8">
@@ -205,7 +205,7 @@ export default function GitHubReposList() {
         <CardContent className="space-y-2">
           {repos.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">
-              Nenhum repositório encontrado.
+              No repositories found.
             </p>
           ) : (
             <>
@@ -268,7 +268,7 @@ export default function GitHubReposList() {
                         className="h-7 w-7 text-muted-foreground hover:text-primary"
                         onClick={(e) => { e.stopPropagation(); handleDeploy(repo) }}
                         disabled={deploying === repo.full_name}
-                        title="Deploy para IPFS"
+                        title="Deploy to IPFS"
                       >
                         {deploying === repo.full_name ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -291,7 +291,7 @@ export default function GitHubReposList() {
                   className="w-full text-xs text-muted-foreground"
                 >
                   <ChevronDown className={cn('h-3.5 w-3.5 mr-1 transition-transform', showAll && 'rotate-180')} />
-                  {showAll ? 'Mostrar menos' : `Ver todos (${repos.length})`}
+                  {showAll ? 'Show less' : `Show all (${repos.length})`}
                 </Button>
               )}
             </>
@@ -308,7 +308,7 @@ export default function GitHubReposList() {
               Deploy IPFS
             </DialogTitle>
             <DialogDescription>
-              Publicando repositório na rede descentralizada
+              Publishing the repository to IPFS
             </DialogDescription>
           </DialogHeader>
 
@@ -318,7 +318,7 @@ export default function GitHubReposList() {
               <div className="flex flex-col items-center gap-3 py-6">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 <div className="text-center">
-                  <p className="text-sm font-medium text-foreground">Fazendo deploy...</p>
+                  <p className="text-sm font-medium text-foreground">Deploying…</p>
                   <p className="text-xs text-muted-foreground mt-1">{deploying}</p>
                 </div>
                 <div className="w-full bg-secondary rounded-full h-1.5 overflow-hidden">
@@ -334,7 +334,7 @@ export default function GitHubReposList() {
                   <AlertCircle className="h-6 w-6 text-destructive" />
                 </div>
                 <div className="text-center">
-                  <p className="text-sm font-medium text-foreground">Falha no deploy</p>
+                  <p className="text-sm font-medium text-foreground">Deploy failed</p>
                   <p className="text-xs text-muted-foreground mt-1">{deployError}</p>
                 </div>
               </div>
@@ -348,7 +348,7 @@ export default function GitHubReposList() {
                     <CheckCircle className="h-6 w-6 text-primary" />
                   </div>
                   <p className="text-sm font-medium text-foreground">
-                    {deployResult.status === 'deployed' ? 'Deploy concluído!' : 'Deploy simulado'}
+                    {deployResult.status === 'deployed' ? 'Deploy finished' : 'Simulated deploy'}
                   </p>
                   {deployResult.status === 'simulated' && (
                     <p className="text-[10px] text-muted-foreground text-center">
@@ -403,7 +403,7 @@ export default function GitHubReposList() {
                   onClick={() => window.open(deployResult.gateway_url, '_blank')}
                 >
                   <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                  Abrir no navegador
+                  Open in the browser
                 </Button>
               </div>
             )}

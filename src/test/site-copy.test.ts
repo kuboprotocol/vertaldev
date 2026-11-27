@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { ENGLISH_ROUTES, isEnglishRoute } from '@/config/siteLanguage'
+import { ENGLISH_PREFIXES, ENGLISH_ROUTES, isEnglishRoute } from '@/config/siteLanguage'
 import { ROUTE_SEO } from '@/config/seo'
 
 const ROOT = join(__dirname, '..')
@@ -44,6 +44,26 @@ const FILES = [
   'components/shortlinks/VertalNodeCard.tsx',
   'pages/AffiliateProgramPage.tsx',
   'components/affiliate/AffiliateInstallsManager.tsx',
+  // Connector pages (batch 3)
+  'lib/connectorsCopyEn.ts',
+  'lib/fluxos/setupHelp.ts',
+  'pages/ConnectorsHubPage.tsx',
+  'pages/ConnectorAboutPage.tsx',
+  'pages/ConnectorSetupPage.tsx',
+  'pages/ConnectorDetailPage.tsx',
+  'pages/ConnectorGmailPage.tsx',
+  'pages/ConnectorSpotifyPage.tsx',
+  'pages/ConnectorSlackPage.tsx',
+  'pages/ConnectorChannelPage.tsx',
+  'pages/ConnectorRenderPage.tsx',
+  'pages/ConnectorWeb3HubPage.tsx',
+  'pages/ConnectorWeb3Page.tsx',
+  'pages/FluxosOAuthCallbackPage.tsx',
+  'components/connectors/FluxosConnectPanel.tsx',
+  'components/connectors/Web3ConnectionForm.tsx',
+  'components/connectors/Web3ConnectionList.tsx',
+  'components/connectors/GitHubReposList.tsx',
+  'components/connectors/GlobalActivityPanel.tsx',
 ]
 
 function visibleText(file: string): string {
@@ -94,6 +114,15 @@ describe('site copy (English, Apple-style pages)', () => {
     const m = html.match(/var en = (\[[^\]]*\]);/)
     expect(m).not.toBeNull()
     expect(JSON.parse(m![1])).toEqual([...ENGLISH_ROUTES])
+    const mp = html.match(/var enp = (\[[^\]]*\]);/)
+    expect(mp).not.toBeNull()
+    expect(JSON.parse(mp![1])).toEqual([...ENGLISH_PREFIXES])
+  })
+
+  it('English prefixes cover the routes under them only', () => {
+    expect(isEnglishRoute('/connectors')).toBe(true)
+    expect(isEnglishRoute('/connectors/github/setup')).toBe(true)
+    expect(isEnglishRoute('/connectorsx')).toBe(false)
   })
 
   it('routes in Portuguese multilingual sets are not marked English', () => {

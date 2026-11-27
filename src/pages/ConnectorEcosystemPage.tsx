@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { getEcosystemProduct } from '@/lib/ecosystem'
 import EcosystemShowcase, { EcosystemActions, ProductLogo, useEcosystemDialogs } from '@/components/ecosystem/EcosystemShowcase'
 import NotFound from './NotFound'
+import { SITE_FONT, siteRoot } from '@/components/site/siteUi'
 
 /** Conector de um produto irmão do ecossistema (Vertal.app ou Vertal Run). */
 export default function ConnectorEcosystemPage() {
@@ -16,7 +17,7 @@ export default function ConnectorEcosystemPage() {
   if (!product || product.id === 'vertal-dev') return <NotFound />
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className={`min-h-screen ${siteRoot}`} style={SITE_FONT}>
       <div className="sticky top-0 z-10 border-b border-border bg-card/50 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-4">
           <Button variant="ghost" size="icon" onClick={() => navigate('/connectors')} aria-label="Back">
