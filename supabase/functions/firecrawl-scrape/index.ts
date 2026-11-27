@@ -2,6 +2,36 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { validatePublicUrl } from "../_shared/security.ts";
 
+// Firecrawl API v2 (a v1 responde 410 a partir de 10/12/2026 15:00 UTC).
+const FIRECRAWL_SCRAPE_URL = "https://api.firecrawl.dev/v2/scrape";
+
+/**
+ * Converte formatos no estilo v1 vindos do cliente para o formato da v2:
+ * "screenshot@fullPage" → { type: "screenshot", fullPage: true };
+ * "json"/"extract" + jsonOptions/extract → { type: "json", prompt, schema }.
+ * Strings simples ("markdown", "html", "links", "screenshot"…) valem igual na v2.
+ */
+function toV2Formats(formats: unknown, options: Record<string, unknown> | undefined): unknown[] {
+  const list = Array.isArray(formats) ? formats : ["markdown", "html", "screenshot", "links"];
+  const jsonOpts = (options?.jsonOptions ?? options?.extract) as Record<string, unknown> | undefined;
+  const out: unknown[] = [];
+  for (const f of list) {
+    if (f === "screenshot@fullPage") {
+      out.push({ type: "screenshot", fullPage: true });
+    } else if (f === "json" || f === "extract") {
+      const prompt = [jsonOpts?.systemPrompt, jsonOpts?.prompt].filter((v) => typeof v === "string" && v).join("\n\n");
+      out.push({
+        type: "json",
+        ...(prompt ? { prompt } : {}),
+        ...(jsonOpts?.schema ? { schema: jsonOpts.schema } : {}),
+      });
+    } else {
+      out.push(f);
+    }
+  }
+  return out;
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -76,7 +106,8 @@ serve(async (req) => {
 
     console.log("Scraping URL:", formattedUrl);
 
-    const response = await fetch("https://api.firecrawl.dev/v1/scrape", {
+    const location = options?.location;
+    const response = await fetch(FIRECRAWL_SCRAPE_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -84,10 +115,15 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         url: formattedUrl,
-        formats: options?.formats || ["markdown", "html", "screenshot", "links"],
+        formats: toV2Formats(options?.formats, options),
         onlyMainContent: options?.onlyMainContent ?? false,
         waitFor: options?.waitFor,
-        location: options?.location,
+        location,
+        // Mesmos padrões da v1: sem cache (v2 usa 2 dias), timeout de 30 s (v2 usa 60 s)
+        // e, com país definido, proxy "basic" (v2 passaria a "auto").
+        maxAge: 0,
+        timeout: 30_000,
+        ...(location?.country ? { proxy: "basic" } : {}),
       }),
     });
 

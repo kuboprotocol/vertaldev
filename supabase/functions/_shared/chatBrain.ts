@@ -19,6 +19,7 @@ import type { AgentTurn, ToolResult } from "./chatAgent.ts";
 import {
   buildFirecrawlScrapeBody,
   buildFirecrawlSearchBody,
+  FIRECRAWL_API_BASE,
   ddgHtmlUrl,
   formatReadResult,
   jinaReaderUrl,
@@ -49,7 +50,7 @@ import { buildReviewMessages, parsePlanState, parseReviewOutput, planPromptBlock
 
 type Admin = ReturnType<typeof supaAdmin>;
 
-const FIRECRAWL_URL = "https://api.firecrawl.dev/v1";
+const FIRECRAWL_URL = FIRECRAWL_API_BASE;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Roda depois da resposta (EdgeRuntime.waitUntil); sem ele, segue solto. Nunca lança. */

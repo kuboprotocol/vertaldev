@@ -80,7 +80,8 @@ serve(async (req) => {
 
     console.log("Step 1: Scraping", formattedUrl, "with branding extraction...");
 
-    const scrapeResponse = await fetch("https://api.firecrawl.dev/v1/scrape", {
+    // Firecrawl API v2 (a v1 responde 410 a partir de 10/12/2026 15:00 UTC).
+    const scrapeResponse = await fetch("https://api.firecrawl.dev/v2/scrape", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${FIRECRAWL_API_KEY}`,
@@ -91,6 +92,9 @@ serve(async (req) => {
         formats: ["html", "markdown", "links", "branding"],
         onlyMainContent: false,
         waitFor: 5000,
+        // Mesmos padrões da v1: sem cache (v2 usa 2 dias) e timeout de 30 s (v2 usa 60 s).
+        maxAge: 0,
+        timeout: 30_000,
       }),
     });
 
