@@ -30,7 +30,7 @@ existentes** sigam funcionando até serem canceladas.
 
 ## Anúncios
 
-**Nenhum anúncio de terceiros roda no site (desde 2026-11-27).** O Google Ads
+**Nenhum anúncio de terceiros fora do Google AdSense roda no site (desde 2026-11-27).** O Google Ads
 reprovou o domínio na política "Site comprometido" (redirecionamento malicioso)
 porque o bundle carregava a rede Adsterra / TERRA ADS (`effectivecpmnetwork.com`
 e o banner `bauval.org` com `atOptions`). Saíram do front-end:
@@ -45,10 +45,33 @@ O crédito diário do plano continua rodando no `AdGate` (sem anúncio nenhum).
 
 `shouldShowAd()` e `AD_SUPPORTED_PLANS` continuam em `src/lib/planConfig.ts`
 (com o teste `src/test/ad-policy.test.ts`) e `public.ad_impressions` continua no
-banco, mas nada no app os usa mais. A coluna "Anúncios" da tabela acima é
-histórica: hoje nenhum plano tem anúncio interruptivo.
+banco. Nenhum plano tem anúncio interruptivo (intersticial, pop-up, nova aba).
 
-A única monetização por anúncio que fica é o **vídeo premiado AppLixir**
+### Google AdSense (display, desde 2026-11-27)
+
+Nos lugares onde ficavam os banners TERRA/Adsterra há um bloco de display do
+**Google AdSense**, só com o cliente `ca-pub-6320473908706491`
+(`src/lib/adsense.ts`, componente `src/components/ads/AdSenseDisplay.tsx`):
+
+- só para **Free e Starter** (`useAdEligibility` → `shouldShowAd` / `AD_SUPPORTED_PLANS`);
+  admin, planos pagos, visitante sem login e erro ao ler o plano não veem anúncio;
+- bloco responsivo (`data-ad-format="auto"`, `data-full-width-responsive="true"`)
+  com o rótulo **"Publicidade"**; nada de pop-up, popunder, `window.open`,
+  redirecionamento, intersticial ou outra rede;
+- nunca dentro do painel de recompensas (`CreativeRewardsPanel`, `/recompensas`)
+  nem colado nos botões do vídeo premiado (política do AdSense contra incentivar cliques);
+- o ID do bloco é `ADSENSE_DISPLAY_SLOT_ID` (variável de build
+  `VITE_ADSENSE_DISPLAY_SLOT_ID`). **Vazio = nenhum bloco e o script não carrega.**
+  Crie um bloco de display responsivo no painel do AdSense e preencha o ID.
+- `public/ads.txt` declara `google.com, pub-6320473908706491, DIRECT, f08c47fec0942fa0`.
+
+Lugares: Painel Criativo `/creative` (um bloco acima das abas, no lugar do banner de
+topo + SponsoredSlot, e um no rodapé, no lugar do banner de rodapé); Design Premium
+(topo, fora do modo Canvas); início do mundo Canvas; topo de cada categoria do
+`CreativePanel`; e o fim da página inicial do `CreativePanel` (o lugar antigo, entre o
+Design Premium e as categorias, agora é das recompensas).
+
+Além dos blocos de display do Google AdSense (acima), a outra monetização por anúncio é o **vídeo premiado AppLixir**
 (`src/lib/applixirRewarded.ts`, `RewardedVideoPanel`, função `rewarded-video-claim`),
 que o usuário abre por vontade própria e não redireciona.
 

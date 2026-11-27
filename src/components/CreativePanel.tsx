@@ -13,6 +13,7 @@ import { CadStudio } from './creative/CadStudio';
 import { DesignWorld, PREMIUM_BACKGROUND, PendingPage } from './creative/DesignWorld';
 import { useAuth } from '@/hooks/useAuth';
 import { CreativeRewardsPanel } from './creative/CreativeRewardsPanel';
+import { AdSenseDisplay } from './ads/AdSenseDisplay';
 
 type CategoryId = 'design' | 'content' | 'media' | 'digital';
 
@@ -212,6 +213,10 @@ function CategoryWorld({
 }) {
   return (
     <div className={PAGE_BACKGROUND}>
+      {/* Onde ficava o SponsoredSlot (TERRA ADS): Google AdSense, só Free e Starter */}
+      <div className="px-4 sm:px-6 lg:px-8">
+        <AdSenseDisplay placement="creative-category-top" />
+      </div>
       <DesignWorld
         backLabel="Painel Criativo"
         eyebrow="Painel Criativo"
@@ -354,6 +359,11 @@ export default function CreativePanel() {
             })}
           </div>
         </section>
+
+        {/* Antes o SponsoredSlot (TERRA ADS) ficava entre o Design Premium e as categorias; esse lugar
+            agora é das recompensas (vídeo premiado), e o AdSense não pode ficar colado nos botões de
+            recompensa. Por isso o bloco do Google AdSense fica no fim da página. Só Free e Starter. */}
+        <AdSenseDisplay placement="creative-panel-bottom" />
       </main>
     </div>
   );
