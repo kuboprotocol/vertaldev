@@ -45,7 +45,7 @@ describe('Ecossistema Vertal', () => {
     const runCard = screen.getByTestId('ecosystem-card-vertal-run')
     fireEvent.click(runCard.querySelector('button')!)
     expect(document.querySelector('iframe')).toBeNull()
-    const link = screen.getByRole('link', { name: /Abrir Vertal Run em nova aba/ }) as HTMLAnchorElement
+    const link = screen.getByRole('link', { name: /Open Vertal Run in a new tab/ }) as HTMLAnchorElement
     expect(link.href).toContain('https://vertalrun.com/')
     expect(link.href).toContain('utm_source=vertal-dev')
     expect(link.target).toBe('_blank')
@@ -58,7 +58,7 @@ describe('Ecossistema Vertal', () => {
         <EcosystemShowcase />
       </MemoryRouter>,
     )
-    fireEvent.click(screen.getAllByRole('button', { name: /Conectar MCP/ })[1])
+    fireEvent.click(screen.getAllByRole('button', { name: /Connect MCP/ })[1])
     const dialog = screen.getByTestId('ecosystem-mcp-dialog')
     expect(dialog.textContent).toContain('https://vertal.app/mcp')
     expect(dialog.textContent).toContain('create_deployment')

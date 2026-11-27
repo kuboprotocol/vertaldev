@@ -90,7 +90,7 @@ export default function CanvasPage() {
   }
 
   const handleExport = (format: 'png' | 'svg' | 'json') => {
-    toast.info(`Export ${format.toUpperCase()} — feature in development`)
+    toast.info(`Export ${format.toUpperCase()}: coming later`)
   }
 
   const handleShare = () => {
@@ -214,7 +214,7 @@ export default function CanvasPage() {
       <RunwayDialog
         open={showRunway}
         onOpenChange={setShowRunway}
-        onResult={(url) => toast.success(`Runway ready — ${url}`)}
+        onResult={(url) => toast.success(`Runway ready: ${url}`)}
       />
     </div>
   )

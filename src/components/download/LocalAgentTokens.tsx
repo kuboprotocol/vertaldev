@@ -17,7 +17,7 @@ interface AgentKey {
   revoked_at: string | null
 }
 
-const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '—')
+const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString() : 'never')
 
 /**
  * Tokens de longa duração do KUBO Local Agent. O usuário gera aqui, cola no
@@ -53,7 +53,7 @@ export default function LocalAgentTokens() {
     })
     setCreating(false)
     if (error || !data?.ok) {
-      toast.error(data?.error ?? 'Não foi possível gerar o token')
+      toast.error(data?.error ?? 'We could not create the token')
       return
     }
     setFresh(data.key as string)
@@ -66,10 +66,10 @@ export default function LocalAgentTokens() {
       method: 'DELETE',
     })
     if (error || !data?.ok) {
-      toast.error('Não foi possível revogar o token')
+      toast.error('We could not revoke the token')
       return
     }
-    toast.success('Token revogado')
+    toast.success('Token revoked')
     load()
   }
 
@@ -79,51 +79,51 @@ export default function LocalAgentTokens() {
       await navigator.clipboard.writeText(fresh)
       setCopied(true)
     } catch {
-      toast.error('Copie manualmente — o navegador bloqueou a área de transferência')
+      toast.error('Copy it by hand. The browser blocked the clipboard.')
     }
   }
 
   const active = keys.filter((k) => !k.revoked_at)
 
   return (
-    <section className="mt-10 rounded-2xl border border-border/50 bg-card/40 p-6 backdrop-blur-sm">
+    <section className="mt-10 rounded-2xl border border-white/[0.06] bg-card/50 p-6">
       <div className="flex items-start gap-4">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10">
           <Wallet className="h-6 w-6 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <h2 className="text-lg font-semibold text-foreground">Conecte o agent ao seu saldo</h2>
+          <h2 className="text-lg font-semibold text-foreground">Connect the agent to your balance</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Gere um token e cole no comando <strong className="text-foreground">Vertal: Pair this workspace</strong>{' '}
-            no VS Code/Cursor. As ações de IA feitas na sua máquina passam a ser cobradas no mesmo saldo de
-            créditos do {APP_NAME}. Terminal e git continuam grátis.
+            Create a token and paste it into the <strong className="text-foreground">Vertal: Pair this workspace</strong>{' '}
+            command in VS Code or Cursor. AI actions on your computer then use the same {APP_NAME} credit balance.
+            Terminal and git stay free.
           </p>
 
           {!user ? (
-            <Button asChild variant="outline" className="mt-4 rounded-xl">
-              <Link to="/auth">Entrar para gerar um token</Link>
+            <Button asChild variant="outline" className="mt-4 rounded-full">
+              <Link to="/auth">Log in to create a token</Link>
             </Button>
           ) : (
             <>
               {fresh && (
                 <div className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
                   <p className="text-xs text-muted-foreground">
-                    Copie agora — por segurança, este token não será mostrado de novo.
+                    Copy it now. For your security, we will not show this token again.
                   </p>
                   <div className="mt-2 flex items-center gap-2">
                     <code className="flex-1 min-w-0 overflow-x-auto whitespace-nowrap rounded-lg bg-secondary/60 px-3 py-2 text-xs text-foreground">
                       {fresh}
                     </code>
-                    <Button size="icon" variant="outline" className="shrink-0 rounded-lg" onClick={copy} aria-label="Copiar token">
+                    <Button size="icon" variant="outline" className="shrink-0 rounded-lg" onClick={copy} aria-label="Copy token">
                       {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     </Button>
                   </div>
                 </div>
               )}
 
-              <Button onClick={create} disabled={creating} className="mt-4 rounded-xl">
+              <Button onClick={create} disabled={creating} className="mt-4 rounded-full">
                 {creating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <KeyRound className="h-4 w-4 mr-2" />}
-                Gerar token do Local Agent
+                Create a Local Agent token
               </Button>
 
               {loading && keys.length === 0 ? null : active.length > 0 && (
@@ -132,17 +132,17 @@ export default function LocalAgentTokens() {
                     <li key={k.id} className="flex items-center gap-3 px-4 py-3 text-sm">
                       <code className="text-foreground">{k.key_prefix}…</code>
                       <Badge variant="outline" className="hidden sm:inline-flex text-[10px] text-muted-foreground">
-                        criado {fmt(k.created_at)}
+                        created {fmt(k.created_at)}
                       </Badge>
                       <span className="flex-1 min-w-0 truncate text-xs text-muted-foreground">
-                        último uso: {fmt(k.last_used_at)}
+                        last used: {fmt(k.last_used_at)}
                       </span>
                       <Button
                         size="icon"
                         variant="ghost"
                         className="shrink-0 rounded-lg text-muted-foreground hover:text-destructive"
                         onClick={() => revoke(k.id)}
-                        aria-label="Revogar token"
+                        aria-label="Revoke token"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

@@ -11,6 +11,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
+import { SITE_FONT, siteRoot, surface } from '@/components/site/siteUi'
 import { ArrowLeft, Mail, Plus, RefreshCw, Send, Trash2, Inbox, Search, ChevronLeft, ChevronRight, X, Reply, Forward, MessageSquare, MailOpen, Download, ChevronDown, ChevronUp } from 'lucide-react'
 
 interface GmailAccount {
@@ -88,8 +90,8 @@ export default function ConnectorGmailPage() {
     const err = params.get('error')
     const gmail = params.get('gmail')
     const email = params.get('email')
-    if (err) toast.error(`Falha ao conectar Gmail: ${err}`)
-    if (gmail === 'connected' && email) toast.success(`${email} conectado com sucesso`)
+    if (err) toast.error(`We could not connect Gmail: ${err}`)
+    if (gmail === 'connected' && email) toast.success(`${email} is connected`)
     if (gmail === 'connected') void syncFluxosConnection('gmail')
     if (err || gmail) {
       const next = new URLSearchParams(params); next.delete('error'); next.delete('gmail'); next.delete('email')
@@ -124,8 +126,8 @@ export default function ConnectorGmailPage() {
       try { code = (await (error as { context?: Response })?.context?.json())?.error ?? '' } catch { /* corpo sem JSON */ }
       toast.error(
         code === 'gmail_oauth_not_configured'
-          ? 'Conexão com Gmail indisponível: o login do Google ainda não foi configurado no servidor.'
-          : 'Não foi possível iniciar a conexão com o Gmail. Tente de novo em instantes.',
+          ? 'Gmail connection is not available: Google sign-in is not set up on the server yet.'
+          : 'We could not start the Gmail connection. Please try again in a moment.',
       )
       return
     }
@@ -274,7 +276,7 @@ export default function ConnectorGmailPage() {
   const csvEscape = (v: string) => `"${(v ?? '').replace(/"/g, '""')}"`
 
   const exportInboxCsv = () => {
-    if (messages.length === 0) { toast.error('Nada para exportar'); return }
+    if (messages.length === 0) { toast.error('Nothing to export'); return }
     const header = ['date', 'from', 'subject', 'snippet', 'unread', 'id', 'threadId']
     const rows = messages.map(m => [
       m.date, m.from, m.subject, m.snippet,
@@ -282,7 +284,7 @@ export default function ConnectorGmailPage() {
       m.id, m.threadId ?? '',
     ].map(csvEscape).join(','))
     downloadBlob(`gmail-inbox-${Date.now()}.csv`, [header.join(','), ...rows].join('\n'), 'text/csv;charset=utf-8')
-    toast.success(`${messages.length} mensagens exportadas`)
+    toast.success(`${messages.length} messages exported`)
   }
 
   const exportThread = (fmt: 'json' | 'txt') => {
@@ -298,7 +300,7 @@ export default function ConnectorGmailPage() {
       )).join('\n')
       downloadBlob(`gmail-${safe}-${Date.now()}.txt`, txt, 'text/plain;charset=utf-8')
     }
-    toast.success('Conversa exportada')
+    toast.success('Conversation exported')
   }
 
 
@@ -307,7 +309,7 @@ export default function ConnectorGmailPage() {
     const fromMatch = lastMsg.from.match(/<([^>]+)>/)
     const to = fromMatch ? fromMatch[1] : lastMsg.from
     const subj = lastMsg.subject.startsWith('Re:') ? lastMsg.subject : `Re: ${lastMsg.subject}`
-    const quote = `\n\nEm ${lastMsg.date}, ${lastMsg.from} escreveu:\n> ${(lastMsg.bodyText || lastMsg.snippet).split('\n').join('\n> ')}`
+    const quote = `\n\nOn ${lastMsg.date}, ${lastMsg.from} wrote:\n> ${(lastMsg.bodyText || lastMsg.snippet).split('\n').join('\n> ')}`
     setReplyDraft({ to, subject: subj, body: quote })
     setReplyMode('reply')
   }
@@ -315,7 +317,7 @@ export default function ConnectorGmailPage() {
   const startForward = () => {
     if (!lastMsg) return
     const subj = lastMsg.subject.startsWith('Fwd:') ? lastMsg.subject : `Fwd: ${lastMsg.subject}`
-    const fwd = `\n\n---------- Mensagem encaminhada ----------\nDe: ${lastMsg.from}\nData: ${lastMsg.date}\nAssunto: ${lastMsg.subject}\nPara: ${lastMsg.to}\n\n${lastMsg.bodyText || lastMsg.snippet}`
+    const fwd = `\n\n---------- Forwarded message ----------\nFrom: ${lastMsg.from}\nDate: ${lastMsg.date}\nSubject: ${lastMsg.subject}\nTo: ${lastMsg.to}\n\n${lastMsg.bodyText || lastMsg.snippet}`
     setReplyDraft({ to: '', subject: subj, body: fwd })
     setReplyMode('forward')
   }
@@ -335,7 +337,7 @@ export default function ConnectorGmailPage() {
     const { error } = await supabase.functions.invoke('gmail-send-message', { body: payload })
     setReplying(false)
     if (error) { toast.error(error.message); return }
-    toast.success(replyMode === 'forward' ? 'Email encaminhado' : 'Resposta enviada')
+    toast.success(replyMode === 'forward' ? 'Email forwarded' : 'Reply sent')
     setReplyMode(null); setReplyDraft({ to: '', subject: '', body: '' })
     // Recarrega thread e inbox
     await Promise.all([
@@ -345,10 +347,10 @@ export default function ConnectorGmailPage() {
   }
 
   const handleDisconnect = async (id: string) => {
-    if (!confirm('Desconectar esta conta Gmail?')) return
+    if (!confirm('Disconnect this Gmail account?')) return
     const { error } = await supabase.functions.invoke('gmail-disconnect', { body: { accountId: id } })
     if (error) toast.error(error.message)
-    else { toast.success('Conta desconectada'); if (activeId === id) { setActiveId(null); setMessages([]) } fetchAccounts() }
+    else { toast.success('Account disconnected'); if (activeId === id) { setActiveId(null); setMessages([]) } fetchAccounts() }
   }
 
   const handleSend = async () => {
@@ -359,7 +361,7 @@ export default function ConnectorGmailPage() {
     })
     setSending(false)
     if (error) { toast.error(error.message); return }
-    toast.success('Email enviado')
+    toast.success('Email sent')
     setComposeOpen(false)
     setComposeData({ to: '', subject: '', body: '' })
     fetchMessages(activeId, { pageToken: currentToken, filters: appliedFilters })
@@ -389,38 +391,38 @@ export default function ConnectorGmailPage() {
     }
     const labels = (data as { labelIds?: string[] })?.labelIds
     if (labels) setMessages(prev => prev.map(x => x.id === m.id ? { ...x, labelIds: labels } : x))
-    toast.success(markAs === 'read' ? 'Marcado como lida' : 'Marcado como não lida')
+    toast.success(markAs === 'read' ? 'Marked as read' : 'Marked as unread')
   }
 
   const active = accounts.find(a => a.id === activeId)
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-border bg-card/50">
+    <div className={cn("min-h-screen", siteRoot)} style={SITE_FONT}>
+      <header className={cn("border-b sticky top-0 z-10", surface.bar)}>
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/connectors')} aria-label="Voltar">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/connectors')} aria-label="Back">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex-1">
-            <h1 className="text-xl font-bold font-['Orbitron'] flex items-center gap-2">
+            <h1 className="text-xl font-semibold tracking-[-0.01em] flex items-center gap-2">
               <img src="/connectors/gmail.png" alt="" className="h-5 w-5 object-contain" draggable={false} /> Gmail
             </h1>
-            <p className="text-sm text-muted-foreground">Conecte suas contas Gmail para leitura e envio via IA.</p>
+            <p className="text-sm text-muted-foreground">Connect your Gmail accounts so the AI can read and send email.</p>
           </div>
           <Button onClick={handleConnect} className="gap-2" data-testid="gmail-connect-btn">
-            <Plus className="h-4 w-4" /> Conectar conta
+            <Plus className="h-4 w-4" /> Connect account
           </Button>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6 grid md:grid-cols-[280px_1fr] gap-6">
         <aside className="space-y-2">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">Contas conectadas</h2>
-          {loading && <p className="text-sm text-muted-foreground">Carregando…</p>}
+          <h2 className="text-[13px] font-medium text-muted-foreground mb-2">Connected accounts</h2>
+          {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
           {!loading && accounts.length === 0 && (
             <Card className="border-dashed">
               <CardContent className="py-6 text-center text-sm text-muted-foreground">
-                Nenhuma conta conectada. Clique em "Conectar conta".
+                No accounts connected yet. Click "Connect account".
               </CardContent>
             </Card>
           )}
@@ -450,35 +452,35 @@ export default function ConnectorGmailPage() {
 
         <section>
           {!active ? (
-            <Card><CardContent className="py-12 text-center text-muted-foreground">Selecione uma conta ou conecte uma nova.</CardContent></Card>
+            <Card><CardContent className="py-12 text-center text-muted-foreground">Choose an account or connect a new one.</CardContent></Card>
           ) : (
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Inbox className="h-4 w-4" /> {active.email}
-                  <Badge variant="outline" className="ml-2">OAuth Google</Badge>
+                  <Badge variant="outline" className="ml-2">Google OAuth</Badge>
                 </CardTitle>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={() => fetchMessages(active.id, { pageToken: currentToken, filters: appliedFilters })} disabled={loadingMsgs} className="gap-1">
-                    <RefreshCw className={`h-3.5 w-3.5 ${loadingMsgs ? 'animate-spin' : ''}`} /> Atualizar
+                    <RefreshCw className={`h-3.5 w-3.5 ${loadingMsgs ? 'animate-spin' : ''}`} /> Refresh
                   </Button>
-                  <Button variant="outline" size="sm" onClick={exportInboxCsv} disabled={messages.length === 0} className="gap-1" data-testid="gmail-export-csv" title="Exportar resultados em CSV">
+                  <Button variant="outline" size="sm" onClick={exportInboxCsv} disabled={messages.length === 0} className="gap-1" data-testid="gmail-export-csv" title="Export results as CSV">
                     <Download className="h-3.5 w-3.5" /> CSV
                   </Button>
                   <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
                     <DialogTrigger asChild>
-                      <Button size="sm" className="gap-1" data-testid="gmail-compose-btn"><Send className="h-3.5 w-3.5" /> Novo</Button>
+                      <Button size="sm" className="gap-1" data-testid="gmail-compose-btn"><Send className="h-3.5 w-3.5" /> New</Button>
                     </DialogTrigger>
                     <DialogContent>
-                      <DialogHeader><DialogTitle>Enviar email via {active.email}</DialogTitle></DialogHeader>
+                      <DialogHeader><DialogTitle>Send email from {active.email}</DialogTitle></DialogHeader>
                       <div className="space-y-3">
-                        <div><Label htmlFor="to">Para</Label><Input id="to" type="email" value={composeData.to} onChange={e => setComposeData(d => ({ ...d, to: e.target.value }))} placeholder="destinatario@exemplo.com" /></div>
-                        <div><Label htmlFor="subject">Assunto</Label><Input id="subject" value={composeData.subject} onChange={e => setComposeData(d => ({ ...d, subject: e.target.value }))} /></div>
-                        <div><Label htmlFor="body">Mensagem</Label><Textarea id="body" rows={8} value={composeData.body} onChange={e => setComposeData(d => ({ ...d, body: e.target.value }))} /></div>
+                        <div><Label htmlFor="to">To</Label><Input id="to" type="email" value={composeData.to} onChange={e => setComposeData(d => ({ ...d, to: e.target.value }))} placeholder="name@example.com" /></div>
+                        <div><Label htmlFor="subject">Subject</Label><Input id="subject" value={composeData.subject} onChange={e => setComposeData(d => ({ ...d, subject: e.target.value }))} /></div>
+                        <div><Label htmlFor="body">Message</Label><Textarea id="body" rows={8} value={composeData.body} onChange={e => setComposeData(d => ({ ...d, body: e.target.value }))} /></div>
                       </div>
                       <DialogFooter>
-                        <Button variant="outline" onClick={() => setComposeOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleSend} disabled={sending || !composeData.to || !composeData.subject || !composeData.body}>{sending ? 'Enviando…' : 'Enviar'}</Button>
+                        <Button variant="outline" onClick={() => setComposeOpen(false)}>Cancel</Button>
+                        <Button onClick={handleSend} disabled={sending || !composeData.to || !composeData.subject || !composeData.body}>{sending ? 'Sending…' : 'Send'}</Button>
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
@@ -490,13 +492,13 @@ export default function ConnectorGmailPage() {
                   <form onSubmit={(e) => { e.preventDefault(); applyFilters() }} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-2">
                     <div className="relative">
                       <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                      <Input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Busca (sintaxe Gmail)" className="pl-8 h-9 text-sm" aria-label="Busca livre" />
+                      <Input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Search (Gmail syntax)" className="pl-8 h-9 text-sm" aria-label="Search" />
                     </div>
-                    <Input value={filterFrom} onChange={e => setFilterFrom(e.target.value)} placeholder="Remetente" className="h-9 text-sm" aria-label="Filtrar por remetente" />
-                    <Input value={filterSubject} onChange={e => setFilterSubject(e.target.value)} placeholder="Assunto" className="h-9 text-sm" aria-label="Filtrar por assunto" />
+                    <Input value={filterFrom} onChange={e => setFilterFrom(e.target.value)} placeholder="From" className="h-9 text-sm" aria-label="Filter by sender" />
+                    <Input value={filterSubject} onChange={e => setFilterSubject(e.target.value)} placeholder="Subject" className="h-9 text-sm" aria-label="Filter by subject" />
                     <div className="flex gap-1">
-                      <Button type="submit" size="sm" className="h-9">Aplicar</Button>
-                      {hasActiveFilters && <Button type="button" variant="ghost" size="sm" className="h-9 px-2" onClick={clearFilters} aria-label="Limpar filtros"><X className="h-3.5 w-3.5" /></Button>}
+                      <Button type="submit" size="sm" className="h-9">Apply</Button>
+                      {hasActiveFilters && <Button type="button" variant="ghost" size="sm" className="h-9 px-2" onClick={clearFilters} aria-label="Clear filters"><X className="h-3.5 w-3.5" /></Button>}
                     </div>
                   </form>
                   {hasActiveFilters && (
@@ -511,9 +513,9 @@ export default function ConnectorGmailPage() {
                 </div>
 
                 {loadingMsgs ? (
-                  <div className="p-8 text-center text-muted-foreground text-sm">Carregando emails…</div>
+                  <div className="p-8 text-center text-muted-foreground text-sm">Loading emails…</div>
                 ) : messages.length === 0 ? (
-                  <div className="p-8 text-center text-muted-foreground text-sm">{hasActiveFilters ? 'Nenhum email corresponde aos filtros.' : 'Caixa de entrada vazia.'}</div>
+                  <div className="p-8 text-center text-muted-foreground text-sm">{hasActiveFilters ? 'No emails match these filters.' : 'Your inbox is empty.'}</div>
                 ) : (
                   <ul className="divide-y divide-border">
                     {messages.map(m => {
@@ -529,12 +531,12 @@ export default function ConnectorGmailPage() {
                             >
                               <div className="flex items-center justify-between gap-3 mb-1">
                                 <p className={`text-sm truncate flex-1 ${unread ? 'font-bold' : 'font-medium'}`}>
-                                  {unread && <span className="inline-block w-2 h-2 rounded-full bg-[#C9941A] mr-2 align-middle" aria-label="Não lida" />}
-                                  {m.from || '(sem remetente)'}
+                                  {unread && <span className="inline-block w-2 h-2 rounded-full bg-[#C9941A] mr-2 align-middle" aria-label="Unread" />}
+                                  {m.from || '(no sender)'}
                                 </p>
                                 <span className="text-xs text-muted-foreground whitespace-nowrap">{m.date ? new Date(m.date).toLocaleString() : ''}</span>
                               </div>
-                              <p className={`text-sm truncate ${unread ? 'font-semibold' : ''}`}>{m.subject || '(sem assunto)'}</p>
+                              <p className={`text-sm truncate ${unread ? 'font-semibold' : ''}`}>{m.subject || '(no subject)'}</p>
                               <p className="text-xs text-muted-foreground truncate mt-0.5">{m.snippet}</p>
                             </button>
                             <Button
@@ -545,8 +547,8 @@ export default function ConnectorGmailPage() {
                               onClick={(e) => toggleRead(m, e)}
                               disabled={togglingId === m.id}
                               data-testid="gmail-toggle-read"
-                              aria-label={unread ? 'Marcar como lida' : 'Marcar como não lida'}
-                              title={unread ? 'Marcar como lida' : 'Marcar como não lida'}
+                              aria-label={unread ? 'Mark as read' : 'Mark as unread'}
+                              title={unread ? 'Mark as read' : 'Mark as unread'}
                             >
                               {unread ? <MailOpen className="h-4 w-4" /> : <Mail className="h-4 w-4" />}
                             </Button>
@@ -559,10 +561,10 @@ export default function ConnectorGmailPage() {
 
                 {(messages.length > 0 || pageTokens.length > 0) && (
                   <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/20">
-                    <p className="text-xs text-muted-foreground">Página {pageNumber} · {messages.length} de ~{resultEstimate} {hasActiveFilters ? '(filtrado)' : ''}</p>
+                    <p className="text-xs text-muted-foreground">Page {pageNumber} · {messages.length} of about {resultEstimate} {hasActiveFilters ? '(filtered)' : ''}</p>
                     <div className="flex gap-1">
-                      <Button variant="outline" size="sm" onClick={goPrevPage} disabled={loadingMsgs || pageTokens.length === 0} className="gap-1 h-8"><ChevronLeft className="h-3.5 w-3.5" /> Anterior</Button>
-                      <Button variant="outline" size="sm" onClick={goNextPage} disabled={loadingMsgs || !nextToken} className="gap-1 h-8">Próximo <ChevronRight className="h-3.5 w-3.5" /></Button>
+                      <Button variant="outline" size="sm" onClick={goPrevPage} disabled={loadingMsgs || pageTokens.length === 0} className="gap-1 h-8"><ChevronLeft className="h-3.5 w-3.5" /> Previous</Button>
+                      <Button variant="outline" size="sm" onClick={goNextPage} disabled={loadingMsgs || !nextToken} className="gap-1 h-8">Next <ChevronRight className="h-3.5 w-3.5" /></Button>
                     </div>
                   </div>
                 )}
@@ -577,11 +579,11 @@ export default function ConnectorGmailPage() {
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto" data-testid="gmail-thread-dialog">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 flex-wrap">
-              <MessageSquare className="h-4 w-4" /> {sortedThread[0]?.subject || 'Conversa'}
-              <Badge variant="outline">{sortedThread.length} {sortedThread.length === 1 ? 'mensagem' : 'mensagens'}</Badge>
+              <MessageSquare className="h-4 w-4" /> {sortedThread[0]?.subject || 'Conversation'}
+              <Badge variant="outline">{sortedThread.length} {sortedThread.length === 1 ? 'message' : 'messages'}</Badge>
               <div className="ml-auto flex items-center gap-1">
-                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={expandAll} disabled={sortedThread.length === 0}>Expandir tudo</Button>
-                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={collapseAll} disabled={sortedThread.length === 0}>Recolher</Button>
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={expandAll} disabled={sortedThread.length === 0}>Expand all</Button>
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={collapseAll} disabled={sortedThread.length === 0}>Collapse all</Button>
                 <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => exportThread('json')} disabled={sortedThread.length === 0} data-testid="gmail-thread-export-json">
                   <Download className="h-3 w-3" /> JSON
                 </Button>
@@ -592,18 +594,18 @@ export default function ConnectorGmailPage() {
             </DialogTitle>
           </DialogHeader>
           {threadLoading ? (
-            <div className="py-10 text-center text-muted-foreground text-sm">Carregando conversa…</div>
+            <div className="py-10 text-center text-muted-foreground text-sm">Loading conversation…</div>
           ) : (
             <div className="space-y-3">
               {sortedThread.length > 1 && (
-                <p className="text-xs text-muted-foreground">Ordenado por data (mais antiga → mais recente)</p>
+                <p className="text-xs text-muted-foreground">Sorted by date (oldest first)</p>
               )}
               {sortedThread.map((m, idx) => {
                 const isFocused = m.id === focusedMsgId
                 const isExpanded = expandedIds.has(m.id)
                 const focusedIdx = sortedThread.findIndex(x => x.id === focusedMsgId)
                 const position = focusedIdx >= 0
-                  ? (idx < focusedIdx ? 'antes' : idx > focusedIdx ? 'depois' : 'selecionada')
+                  ? (idx < focusedIdx ? 'before' : idx > focusedIdx ? 'after' : 'selected')
                   : null
                 return (
                   <Card
@@ -622,7 +624,7 @@ export default function ConnectorGmailPage() {
                           <div className="flex items-center gap-2 min-w-0">
                             <span className="text-xs text-muted-foreground tabular-nums">#{idx + 1}</span>
                             {position && (
-                              <Badge variant={position === 'selecionada' ? 'default' : 'outline'} className="text-[10px] uppercase">{position}</Badge>
+                              <Badge variant={position === 'selected' ? 'default' : 'outline'} className="text-[11px]">{position}</Badge>
                             )}
                             <p className="text-sm font-medium truncate">{m.from}</p>
                           </div>
@@ -631,7 +633,7 @@ export default function ConnectorGmailPage() {
                             {isExpanded ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
                           </div>
                         </div>
-                        <p className="text-xs text-muted-foreground truncate">Para: {m.to}{m.cc ? ` · Cc: ${m.cc}` : ''}</p>
+                        <p className="text-xs text-muted-foreground truncate">To: {m.to}{m.cc ? ` · Cc: ${m.cc}` : ''}</p>
                         {!isExpanded && <p className="text-xs text-muted-foreground truncate mt-1">{m.snippet}</p>}
                       </CardHeader>
                     </button>
@@ -647,20 +649,20 @@ export default function ConnectorGmailPage() {
 
               {replyMode === null ? (
                 <div className="flex gap-2 pt-2">
-                  <Button onClick={startReply} className="gap-1" data-testid="gmail-thread-reply"><Reply className="h-3.5 w-3.5" /> Responder</Button>
-                  <Button variant="outline" onClick={startForward} className="gap-1" data-testid="gmail-thread-forward"><Forward className="h-3.5 w-3.5" /> Encaminhar</Button>
+                  <Button onClick={startReply} className="gap-1" data-testid="gmail-thread-reply"><Reply className="h-3.5 w-3.5" /> Reply</Button>
+                  <Button variant="outline" onClick={startForward} className="gap-1" data-testid="gmail-thread-forward"><Forward className="h-3.5 w-3.5" /> Forward</Button>
                 </div>
               ) : (
                 <Card data-testid="gmail-reply-form">
-                  <CardHeader className="pb-2"><CardTitle className="text-sm">{replyMode === 'reply' ? 'Responder' : 'Encaminhar'}</CardTitle></CardHeader>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">{replyMode === 'reply' ? 'Reply' : 'Forward'}</CardTitle></CardHeader>
                   <CardContent className="space-y-2">
-                    <div><Label htmlFor="rto">Para</Label><Input id="rto" type="email" value={replyDraft.to} onChange={e => setReplyDraft(d => ({ ...d, to: e.target.value }))} /></div>
-                    <div><Label htmlFor="rsubj">Assunto</Label><Input id="rsubj" value={replyDraft.subject} onChange={e => setReplyDraft(d => ({ ...d, subject: e.target.value }))} /></div>
-                    <div><Label htmlFor="rbody">Mensagem</Label><Textarea id="rbody" rows={8} value={replyDraft.body} onChange={e => setReplyDraft(d => ({ ...d, body: e.target.value }))} /></div>
+                    <div><Label htmlFor="rto">To</Label><Input id="rto" type="email" value={replyDraft.to} onChange={e => setReplyDraft(d => ({ ...d, to: e.target.value }))} /></div>
+                    <div><Label htmlFor="rsubj">Subject</Label><Input id="rsubj" value={replyDraft.subject} onChange={e => setReplyDraft(d => ({ ...d, subject: e.target.value }))} /></div>
+                    <div><Label htmlFor="rbody">Message</Label><Textarea id="rbody" rows={8} value={replyDraft.body} onChange={e => setReplyDraft(d => ({ ...d, body: e.target.value }))} /></div>
                     <div className="flex gap-2 justify-end pt-1">
-                      <Button variant="outline" onClick={() => { setReplyMode(null); setReplyDraft({ to: '', subject: '', body: '' }) }}>Cancelar</Button>
+                      <Button variant="outline" onClick={() => { setReplyMode(null); setReplyDraft({ to: '', subject: '', body: '' }) }}>Cancel</Button>
                       <Button onClick={submitReply} disabled={replying || !replyDraft.to || !replyDraft.subject || !replyDraft.body} data-testid="gmail-reply-submit">
-                        {replying ? 'Enviando…' : (replyMode === 'forward' ? 'Encaminhar' : 'Enviar resposta')}
+                        {replying ? 'Sending…' : (replyMode === 'forward' ? 'Forward' : 'Send reply')}
                       </Button>
                     </div>
                   </CardContent>

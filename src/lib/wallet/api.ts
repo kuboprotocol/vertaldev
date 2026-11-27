@@ -48,13 +48,13 @@ export interface ConnectAccount {
 export function connectPendingText(a: ConnectAccount): string {
   const n = a.pendingRequirements
   if (a.disabledReason === 'requirements.past_due' || (a.pastDue ?? 0) > 0) {
-    return `Cobranças pausadas: o Stripe pede ${n || 'alguns'} ${n === 1 ? 'item' : 'itens'} com prazo vencido (p.ex. verificação de identidade). Conclua a verificação para liberar.`
+    return `Payments paused: Stripe needs ${n || 'some'} overdue ${n === 1 ? 'item' : 'items'} (for example, identity verification). Finish the verification to turn payments back on.`
   }
   if (a.disabledReason === 'requirements.pending_verification' || (a.detailsSubmitted && n === 0)) {
-    return 'Dados enviados. O Stripe está analisando sua conta.'
+    return 'Details sent. Stripe is reviewing your account.'
   }
-  if (a.disabledReason?.startsWith('rejected')) return 'Conta recusada pelo Stripe. Fale com o suporte.'
-  return `Faltam ${n || 'alguns'} dados no Stripe para liberar as cobranças`
+  if (a.disabledReason?.startsWith('rejected')) return 'Stripe declined the account. Please contact support.'
+  return `Stripe needs ${n || 'some'} more ${n === 1 ? 'detail' : 'details'} before you can take payments`
 }
 
 export interface WalletCharge {
@@ -70,17 +70,17 @@ export interface WalletCharge {
 }
 
 export const ERRORS: Record<string, string> = {
-  invalid_country: 'País não disponível para a conta global',
-  connect_not_started: 'Ative os recebimentos com Stripe primeiro',
-  connect_not_ready: 'Sua conta Stripe ainda está em verificação',
-  invalid_currency: 'Moeda não suportada',
-  limit_reached: 'Limite de 10 itens deste tipo no Vertal Vibe Pay',
-  duplicate_card: 'Este cartão já está no seu Vertal Vibe Pay',
-  duplicate_pix_key: 'Esta chave Pix já está no seu Vertal Vibe Pay',
-  not_found: 'Item não encontrado',
-  invalid_amount: 'Valor inválido',
-  missing_merchant: 'Informe nome e cidade do recebedor',
-  'STRIPE_PUBLISHABLE_KEY not configured': 'Pagamentos com cartão ainda não estão configurados',
+  invalid_country: 'This country is not available for the global account',
+  connect_not_started: 'Turn on Stripe payments first',
+  connect_not_ready: 'Your Stripe account is still being verified',
+  invalid_currency: 'Currency not supported',
+  limit_reached: 'Vertal Vibe Pay allows up to 10 items of this type',
+  duplicate_card: 'This card is already in your Vertal Vibe Pay',
+  duplicate_pix_key: 'This Pix key is already in your Vertal Vibe Pay',
+  not_found: 'Item not found',
+  invalid_amount: 'Invalid amount',
+  missing_merchant: 'Enter the receiver name and city',
+  'STRIPE_PUBLISHABLE_KEY not configured': 'Card payments are not set up yet',
 }
 
 /** Erro de uma ação da função `wallet`: `code` é o código do servidor e `details` o corpo inteiro. */

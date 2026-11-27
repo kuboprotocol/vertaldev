@@ -23,6 +23,8 @@ import {
   LayoutGrid, List, X, AlertTriangle, ShieldAlert, ShieldCheck, History, Ban, Settings, BarChart3, Database
 } from "lucide-react";
 import { toast } from "sonner";
+import AppShell, { AppTopBar, PanelHeader } from "@/components/site/AppShell";
+import { SITE_FONT, siteRoot } from "@/components/site/siteUi";
 import { MetricsView } from "@/components/pwa-telemetry/MetricsView";
 import { AuditView } from "@/components/pwa-telemetry/AuditView";
 import { ExportJobsView } from "@/components/pwa-telemetry/ExportJobsView";
@@ -115,7 +117,7 @@ const PwaTelemetry = () => {
         updateParam({ sigma: json.appliedSigma });
       }
     } catch (e: any) {
-      toast.error(`Falha ao carregar: ${e.message}`);
+      toast.error(`Could not load: ${e.message}`);
     } finally {
       setLoading(false);
     }
@@ -165,7 +167,7 @@ const PwaTelemetry = () => {
         },
         body: JSON.stringify({ action: "cancel", jobId: currentJobId }),
       });
-      toast.info("Exportação cancelada.");
+      toast.info("Export cancelled.");
     } catch (e) {
       console.error("Cancel error:", e);
     } finally {
@@ -192,12 +194,12 @@ const PwaTelemetry = () => {
             stopPolling();
             setExporting(false);
             setExportProgress(100);
-            toast.success("Exportação em background concluída.");
+            toast.success("Background export finished.");
             setCurrentJobId(null);
           } else if (job.status === "failed") {
             stopPolling();
             setExporting(false);
-            toast.error(`Exportação falhou: ${job.error_message}`);
+            toast.error(`Export failed: ${job.error_message}`);
             setCurrentJobId(null);
           } else if (job.status === "cancelled") {
             stopPolling();
@@ -233,8 +235,8 @@ const PwaTelemetry = () => {
       });
       
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Export falhou" }));
-        throw new Error(err.message || err.error || "Export falhou");
+        const err = await res.json().catch(() => ({ error: "Export failed" }));
+        throw new Error(err.message || err.error || "Export failed");
       }
       
       const { jobId } = await res.json();
@@ -253,7 +255,7 @@ const PwaTelemetry = () => {
       }
     } catch (e: any) {
       console.error("Export error:", e);
-      toast.error(`Erro ao exportar: ${e.message}`);
+      toast.error(`Export error: ${e.message}`);
       setExporting(false);
       setExportProgress(0);
     }
@@ -306,7 +308,7 @@ const PwaTelemetry = () => {
         }),
       });
       if (!res.ok) throw new Error("Failed to update settings");
-      toast.success(enabled ? "Notificações ativadas" : "Notificações desativadas");
+      toast.success(enabled ? "Notifications on" : "Notifications off");
       fetchSettings();
     } catch (e: any) {
       toast.error(e.message);
@@ -349,8 +351,8 @@ const PwaTelemetry = () => {
         body: JSON.stringify(body),
       });
       const j = await res.json();
-      if (!res.ok) throw new Error(j.error ?? "Falha ao limpar");
-      toast.success(`Removidos ${j.deleted} eventos`);
+      if (!res.ok) throw new Error(j.error ?? "Could not clear");
+      toast.success(`Removed ${j.deleted} events`);
       setClearOpen(false);
       fetchData();
     } catch (e: any) {
@@ -360,45 +362,48 @@ const PwaTelemetry = () => {
     }
   };
 
-  if (authLoading) return <div className="container py-10">Carregando…</div>;
+  if (authLoading) return <div className={`min-h-screen px-6 py-10 ${siteRoot}`} style={SITE_FONT}>Loading...</div>;
 
   if (!canRead) {
     return (
-      <div className="container max-w-2xl py-10">
+      <div className={`min-h-screen ${siteRoot}`} style={SITE_FONT}><div className="mx-auto max-w-2xl px-4 py-10">
         <Alert variant="destructive">
           <ShieldAlert className="h-4 w-4" />
-          <AlertTitle>Acesso restrito</AlertTitle>
+          <AlertTitle>Access restricted</AlertTitle>
           <AlertDescription>
-            Você precisa do papel <strong>admin</strong>, <strong>analyst</strong> ou <strong>viewer</strong> para
-            acessar a telemetria do PWA. Papéis atuais: {roles.join(", ") || "nenhum"}.
+            You need the <strong>admin</strong>, <strong>analyst</strong> or <strong>viewer</strong> role to
+            see PWA telemetry. Your roles: {roles.join(", ") || "none"}.
           </AlertDescription>
         </Alert>
-      </div>
+      </div></div>
     );
   }
 
   const activeChips: Array<{ key: string; label: string }> = [];
-  if (filters.type !== "all") activeChips.push({ key: "type", label: `Tipo: ${filters.type}` });
+  if (filters.type !== "all") activeChips.push({ key: "type", label: `Type: ${filters.type}` });
   if (filters.canvasId)       activeChips.push({ key: "canvasId", label: `Canvas: ${filters.canvasId}` });
   if (filters.userId)         activeChips.push({ key: "userId", label: `User: ${filters.userId.slice(0, 8)}…` });
-  if (filters.sessionId)      activeChips.push({ key: "sessionId", label: `Sessão: ${filters.sessionId.slice(0, 8)}…` });
-  if (filters.q)              activeChips.push({ key: "q", label: `Busca: ${filters.q}` });
+  if (filters.sessionId)      activeChips.push({ key: "sessionId", label: `Session: ${filters.sessionId.slice(0, 8)}…` });
+  if (filters.q)              activeChips.push({ key: "q", label: `Search: ${filters.q}` });
   if (filters.sigma !== 2)    activeChips.push({ key: "sigma", label: `Nσ: ${filters.sigma}` });
 
   return (
-    <div className="container mx-auto py-10 space-y-6 animate-fade-in">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">PWA Audit & Telemetry</h1>
-          <p className="text-muted-foreground">
-            Eventos de fallback offline com controle de acesso por papel. Papéis:{" "}
-            <Badge variant="outline" className="gap-1"><ShieldCheck className="w-3 h-3" /> {roles.join(", ") || "—"}</Badge>
-          </p>
-        </div>
-        <div className="flex gap-2">
+    <AppShell width="wide" topBar={<AppTopBar back={{ to: "/dashboard", label: "Dashboard" }} title="PWA telemetry" />}>
+      <div className="space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+        <PanelHeader
+          title="PWA audit and telemetry"
+          description={
+            <>
+              Offline fallback events, with access by role. Your roles:{" "}
+              <Badge variant="outline" className="gap-1 rounded-full"><ShieldCheck className="w-3 h-3" /> {roles.join(", ") || "-"}</Badge>
+            </>
+          }
+        />
+        <div className="flex flex-wrap gap-2 md:pb-8">
           {exporting && currentJobId && (
             <div className="flex items-center gap-3 bg-muted px-4 py-2 rounded-lg border">
-              <div className="text-xs font-medium">Exportando em background ({exportProgress}%)</div>
+              <div className="text-xs font-medium">Exporting in the background ({exportProgress}%)</div>
               <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={cancelExport}>
                 <X className="h-4 w-4" />
               </Button>
@@ -407,34 +412,34 @@ const PwaTelemetry = () => {
 
           <Dialog open={exportOpen} onOpenChange={setExportOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline" disabled={exporting}><Download className="w-4 h-4 mr-2" />Exportar</Button>
+              <Button variant="outline" disabled={exporting}><Download className="w-4 h-4 mr-2" />Export</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Exportar telemetria</DialogTitle>
+                <DialogTitle>Export telemetry</DialogTitle>
                 <DialogDescription className="space-y-2">
-                  <p>Defina um período para exportar. Volumes grandes são processados em background (streaming).</p>
+                  <p>Choose a time range to export. Large exports run in the background.</p>
                   <div className="text-xs bg-muted p-2 rounded border space-y-1">
-                    <p className="font-semibold">Filtros Ativos:</p>
+                    <p className="font-semibold">Active filters:</p>
                     <ul className="list-disc list-inside">
-                      {activeChips.length > 0 ? activeChips.map(c => <li key={c.key}>{c.label}</li>) : <li>Nenhum filtro aplicado</li>}
-                      {exportStart && <li>Início: {new Date(exportStart).toLocaleString()}</li>}
-                      {exportEnd && <li>Fim: {new Date(exportEnd).toLocaleString()}</li>}
+                      {activeChips.length > 0 ? activeChips.map(c => <li key={c.key}>{c.label}</li>) : <li>No filters</li>}
+                      {exportStart && <li>Start: {new Date(exportStart).toLocaleString()}</li>}
+                      {exportEnd && <li>End: {new Date(exportEnd).toLocaleString()}</li>}
                     </ul>
                   </div>
                 </DialogDescription>
               </DialogHeader>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="start">Início</Label>
+                  <Label htmlFor="start">Start</Label>
                   <Input id="start" type="datetime-local" value={exportStart} onChange={(e) => setExportStart(e.target.value)} disabled={exporting} />
                 </div>
                 <div>
-                  <Label htmlFor="end">Fim</Label>
+                  <Label htmlFor="end">End</Label>
                   <Input id="end" type="datetime-local" value={exportEnd} onChange={(e) => setExportEnd(e.target.value)} disabled={exporting} />
                 </div>
                 <div className="col-span-2">
-                  <Label>Formato</Label>
+                  <Label>Format</Label>
                   <Select value={exportFmt} onValueChange={(v: any) => setExportFmt(v)} disabled={exporting}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -448,7 +453,7 @@ const PwaTelemetry = () => {
               {exporting && (
                 <div className="space-y-2 mt-4">
                   <div className="flex justify-between text-xs font-medium">
-                    <span>{currentJobId ? 'Processando em background...' : 'Preparando download...'}</span>
+                    <span>{currentJobId ? 'Processing in the background...' : 'Preparing download...'}</span>
                     <span>{exportProgress}%</span>
                   </div>
                   <Progress value={exportProgress} className="h-2" />
@@ -458,10 +463,10 @@ const PwaTelemetry = () => {
               <DialogFooter className="gap-2">
                 {exporting ? (
                   <Button variant="outline" className="gap-2" onClick={cancelExport}>
-                    <Ban className="w-4 h-4" /> Cancelar
+                    <Ban className="w-4 h-4" /> Cancel
                   </Button>
                 ) : (
-                  <Button onClick={doExport}>Iniciar Exportação</Button>
+                  <Button onClick={doExport}>Start export</Button>
                 )}
               </DialogFooter>
             </DialogContent>
@@ -470,24 +475,24 @@ const PwaTelemetry = () => {
           {canManage && (
             <Dialog open={clearOpen} onOpenChange={setClearOpen}>
               <DialogTrigger asChild>
-                <Button variant="destructive"><Trash2 className="w-4 h-4 mr-2" />Limpar</Button>
+                <Button variant="destructive"><Trash2 className="w-4 h-4 mr-2" />Clear</Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Limpar telemetria</DialogTitle>
-                  <DialogDescription>Esta ação é irreversível. Escolha o escopo.</DialogDescription>
+                  <DialogTitle>Clear telemetry</DialogTitle>
+                  <DialogDescription>This cannot be undone. Choose what to clear.</DialogDescription>
                 </DialogHeader>
                 <Select value={clearScope} onValueChange={(v: any) => setClearScope(v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="filtered">Apenas filtros ativos (tipo/sessão)</SelectItem>
-                    <SelectItem value="all">Tudo</SelectItem>
+                    <SelectItem value="filtered">Only active filters (type and session)</SelectItem>
+                    <SelectItem value="all">Everything</SelectItem>
                   </SelectContent>
                 </Select>
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setClearOpen(false)} disabled={clearing}>Cancelar</Button>
+                  <Button variant="outline" onClick={() => setClearOpen(false)} disabled={clearing}>Cancel</Button>
                   <Button variant="destructive" onClick={doClear} disabled={clearing}>
-                    {clearing ? "Limpando..." : "Confirmar"}
+                    {clearing ? "Clearing..." : "Confirm"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -497,17 +502,17 @@ const PwaTelemetry = () => {
       </div>
 
       <Tabs defaultValue="events" className="w-full">
-        <TabsList className="grid w-full grid-cols-5 max-w-[700px]">
-          <TabsTrigger value="events">Eventos</TabsTrigger>
-          <TabsTrigger value="summary">Sessões</TabsTrigger>
+        <TabsList className="flex h-auto w-full max-w-[700px] flex-wrap justify-start">
+          <TabsTrigger value="events">Events</TabsTrigger>
+          <TabsTrigger value="summary">Sessions</TabsTrigger>
           <TabsTrigger value="jobs">
             <Database className="w-4 h-4 mr-2" /> Jobs
           </TabsTrigger>
           <TabsTrigger value="metrics" disabled={!hasAnyRole(['admin'])}>
-            <BarChart3 className="w-4 h-4 mr-2" /> Métricas
+            <BarChart3 className="w-4 h-4 mr-2" /> Metrics
           </TabsTrigger>
           <TabsTrigger value="settings" disabled={!hasAnyRole(['admin'])}>
-            <Settings className="w-4 h-4 mr-2" /> Ajustes
+            <Settings className="w-4 h-4 mr-2" /> Settings
           </TabsTrigger>
         </TabsList>
 
@@ -515,9 +520,9 @@ const PwaTelemetry = () => {
           {anomaly && (
             <Alert role="alert" aria-live="polite">
               <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Anomalia detectada</AlertTitle>
+              <AlertTitle>Anomaly detected</AlertTitle>
               <AlertDescription>
-                {anomaly.anomalous.length} sessão(ões) acima do limite estatístico ({anomaly.threshold}, média {anomaly.mean}).{" "}
+                {anomaly.anomalous.length} sessions above the statistical limit ({anomaly.threshold}, mean {anomaly.mean}).{" "}
                 {anomaly.anomalous.slice(0, 5).map((s) => (
                   <Link key={s.session_id} to={`?sessionId=${s.session_id}`} className="underline mr-2">
                     {s.session_id.slice(0, 8)}… ({s.count})
@@ -527,14 +532,14 @@ const PwaTelemetry = () => {
             </Alert>
           )}
 
-          <Card>
+          <Card className="rounded-xl border-white/[0.06] bg-card/50">
             <CardHeader className="space-y-4">
-              <CardTitle>Filtros</CardTitle>
+              <CardTitle>Filters</CardTitle>
               <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
                 <div className="relative md:col-span-2">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
-                    placeholder="Busca livre…"
+                    placeholder="Search..."
                     className="pl-9"
                     defaultValue={filters.q}
                     onKeyDown={(e) => { if (e.key === "Enter") updateParam({ q: (e.target as HTMLInputElement).value }); }}
@@ -554,7 +559,7 @@ const PwaTelemetry = () => {
                   <Select value={filters.type} onValueChange={(v) => updateParam({ type: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="all">All</SelectItem>
                       <SelectItem value="image">PNG</SelectItem>
                       <SelectItem value="svg">SVG</SelectItem>
                       <SelectItem value="font">WOFF2</SelectItem>
@@ -569,17 +574,17 @@ const PwaTelemetry = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Timestamp</TableHead>
-                      <TableHead>Sessão</TableHead>
+                      <TableHead>Session</TableHead>
                       <TableHead>Canvas</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Arquivo</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>File</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loading ? (
-                      <TableRow><TableCell colSpan={5} className="text-center py-10">Carregando…</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={5} className="text-center py-10">Loading...</TableCell></TableRow>
                     ) : events.length === 0 ? (
-                      <TableRow><TableCell colSpan={5} className="text-center py-10">Nenhum evento.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={5} className="text-center py-10">No events.</TableCell></TableRow>
                     ) : events.map((e) => (
                       <TableRow key={e.id}>
                         <TableCell className="text-xs font-mono">{new Date(e.created_at).toLocaleString()}</TableCell>
@@ -593,7 +598,7 @@ const PwaTelemetry = () => {
                             <button className="underline" onClick={() => updateParam({ canvasId: e.canvas_id! })}>
                               {e.canvas_id.slice(0, 8)}
                             </button>
-                          ) : "—"}
+                          ) : "-"}
                         </TableCell>
                         <TableCell>{typeBadge(e.type)}</TableCell>
                         <TableCell className="font-medium truncate max-w-[200px]" title={e.url}>
@@ -608,7 +613,7 @@ const PwaTelemetry = () => {
                 <Button variant="outline" size="sm" disabled={filters.page <= 1} onClick={() => updateParam({ page: filters.page - 1 })}>
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <div className="text-sm">Página {filters.page} de {totalPages}</div>
+                <div className="text-sm">Page {filters.page} of {totalPages}</div>
                 <Button variant="outline" size="sm" disabled={filters.page >= totalPages} onClick={() => updateParam({ page: filters.page + 1 })}>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
@@ -624,7 +629,7 @@ const PwaTelemetry = () => {
         <TabsContent value="summary" className="pt-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {summary.map((s) => (
-              <Card key={s.session_id}>
+              <Card key={s.session_id} className="rounded-xl border-white/[0.06] bg-card/50">
                 <CardHeader>
                   <CardTitle className="text-sm truncate">
                     <button className="underline" onClick={() => updateParam({ sessionId: s.session_id })}>
@@ -634,7 +639,7 @@ const PwaTelemetry = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{s.count}</div>
-                  <div className="text-xs text-muted-foreground">Fallbacks registrados</div>
+                  <div className="text-xs text-muted-foreground">Recorded fallbacks</div>
                 </CardContent>
               </Card>
             ))}
@@ -647,21 +652,21 @@ const PwaTelemetry = () => {
         </TabsContent>
 
         <TabsContent value="settings" className="pt-6">
-          <Card>
+          <Card className="rounded-xl border-white/[0.06] bg-card/50">
             <CardHeader>
-              <CardTitle>Ajustes de Telemetria</CardTitle>
-              <CardDescription>Configurações de anomalias e notificações.</CardDescription>
+              <CardTitle>Telemetry settings</CardTitle>
+              <CardDescription>Anomaly and notification settings.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center justify-between space-x-2 border-b pb-4">
                 <div className="space-y-0.5">
-                  <Label>Notificações via Webhook</Label>
-                  <p className="text-sm text-muted-foreground">Receba alertas quando a taxa de fallback ultrapassar Nσ.</p>
+                  <Label>Webhook notifications</Label>
+                  <p className="text-sm text-muted-foreground">Get an alert when the fallback rate goes above Nσ.</p>
                 </div>
                 <div className="flex items-center gap-4">
                   <Input 
                     placeholder="https://webhook.site/..." 
-                    className="w-[300px]" 
+                    className="w-full sm:w-[300px]" 
                     defaultValue={settings?.webhook_url}
                     onBlur={(e) => toggleNotifications(settings?.is_notifications_enabled, e.target.value)}
                   />
@@ -673,7 +678,7 @@ const PwaTelemetry = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="sigma-settings">Anomaly Threshold (Nσ)</Label>
+                <Label htmlFor="sigma-settings">Anomaly threshold (Nσ)</Label>
                 <Input
                   id="sigma-settings"
                   type="number"
@@ -684,13 +689,14 @@ const PwaTelemetry = () => {
                   className="w-24"
                   onBlur={(e) => updateParam({ sigma: parseFloat(e.target.value) || 2 })}
                 />
-                <p className="text-xs text-muted-foreground">Valores recomendados entre 1.5 e 3.0.</p>
+                <p className="text-xs text-muted-foreground">Values between 1.5 and 3.0 work well.</p>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+      </div>
+    </AppShell>
   );
 };
 

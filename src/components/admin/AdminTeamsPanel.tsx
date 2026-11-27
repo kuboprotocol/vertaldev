@@ -108,7 +108,7 @@ export default function AdminTeamsPanel() {
 
   const createAccount = async () => {
     if (!newEmail.trim()) {
-      toast.error("Informe um e-mail");
+      toast.error("Enter an email");
       return;
     }
     setCreating(true);
@@ -123,10 +123,10 @@ export default function AdminTeamsPanel() {
       });
       const payload = data as { temp_password?: string; error?: string } | null;
       if (error || payload?.error) {
-        toast.error(payload?.error ?? error?.message ?? "Falha ao criar conta");
+        toast.error(payload?.error ?? error?.message ?? "Could not create the account");
         return;
       }
-      toast.success(`Conta criada. Senha temporária: ${payload?.temp_password ?? "-"}`, { duration: 15000 });
+      toast.success(`Account created. Temporary password: ${payload?.temp_password ?? "-"}`, { duration: 15000 });
       setNewEmail("");
       setNewName("");
       await load();

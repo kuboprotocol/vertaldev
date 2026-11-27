@@ -34,17 +34,17 @@ describe('FluxosAgentBuilder', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderIt(onCreated);
     fireEvent.click(screen.getByTestId('fluxos-agent-open'));
-    await waitFor(() => expect(screen.getByLabelText('App conectado')).toBeTruthy());
+    await waitFor(() => expect(screen.getByLabelText('Connected app')).toBeTruthy());
     expect(screen.queryByText('Notion')).toBeNull();
-    expect(screen.getByText('Formatter (não precisa conectar)')).toBeTruthy();
-    fireEvent.change(screen.getByLabelText('App conectado'), { target: { value: 'todoist' } });
-    await waitFor(() => expect(screen.getByLabelText('Ação ou busca')).toBeTruthy());
+    expect(screen.getByText('Formatter (no connection needed)')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Connected app'), { target: { value: 'todoist' } });
+    await waitFor(() => expect(screen.getByLabelText('Action or search')).toBeTruthy());
     expect(fluxos).toHaveBeenNthCalledWith(2, { op: 'describe', app: 'todoist' });
-    fireEvent.change(screen.getByLabelText('Ação ou busca'), { target: { value: 'action:createTask' } });
-    fireEvent.change(screen.getByLabelText('Parâmetros'), { target: { value: '{"content":"{{ title }}"}' } });
-    fireEvent.click(screen.getByLabelText(/Quando outro agente/));
-    fireEvent.change(screen.getByLabelText('Agente que dispara'), { target: { value: '7' } });
-    fireEvent.click(screen.getByRole('button', { name: /Criar agente \(2 créditos/ }));
+    fireEvent.change(screen.getByLabelText('Action or search'), { target: { value: 'action:createTask' } });
+    fireEvent.change(screen.getByLabelText('Parameters'), { target: { value: '{"content":"{{ title }}"}' } });
+    fireEvent.click(screen.getByLabelText(/When another agent/));
+    fireEvent.change(screen.getByLabelText('Agent that starts it'), { target: { value: '7' } });
+    fireEvent.click(screen.getByRole('button', { name: /Create agent \(2 credits/ }));
     await waitFor(() => expect(huginn).toHaveBeenCalled());
     expect(huginn).toHaveBeenCalledWith({
       op: 'create_fluxos_agent', app: 'todoist', kind: 'action', key: 'createTask', parameters: { content: '{{ title }}' }, source_ids: [7],
@@ -57,9 +57,9 @@ describe('FluxosAgentBuilder', () => {
     fluxos.mockResolvedValueOnce({ ok: true, message: 'ok', data: { connections: [] } });
     renderIt();
     fireEvent.click(screen.getByTestId('fluxos-agent-open'));
-    await waitFor(() => expect(screen.getByLabelText('App conectado')).toBeTruthy());
-    const options = Array.from((screen.getByLabelText('App conectado') as HTMLSelectElement).options).map((o) => o.value);
+    await waitFor(() => expect(screen.getByLabelText('Connected app')).toBeTruthy());
+    const options = Array.from((screen.getByLabelText('Connected app') as HTMLSelectElement).options).map((o) => o.value);
     expect(options).toEqual(['', 'formatter']);
-    expect(screen.getByText(/Nenhum app com login conectado/)).toBeTruthy();
+    expect(screen.getByText(/No app with a sign-in is connected/)).toBeTruthy();
   });
 });

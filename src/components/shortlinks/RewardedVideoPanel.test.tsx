@@ -50,7 +50,7 @@ describe('RewardedVideoPanel', () => {
     const button = screen.getByTestId('rewarded-video-button')
     expect(button).toBeEnabled()
     await userEvent.click(button)
-    expect(toast.info).toHaveBeenCalledWith(expect.stringMatching(/ainda não estão disponíveis/))
+    expect(toast.info).toHaveBeenCalledWith(expect.stringMatching(/are not available yet/))
     expect(invoke).not.toHaveBeenCalled()
   })
 
@@ -97,7 +97,7 @@ describe('RewardedVideoPanel', () => {
     render(<RewardedVideoPanel adUnit={null} applixirKey="k" />)
     await screen.findByTestId('rewarded-video-progress')
     await userEvent.click(screen.getByTestId('rewarded-video-button'))
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/Não foi possível iniciar/)))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/We could not start/)))
     expect(showApplixirAd).not.toHaveBeenCalled()
   })
 
@@ -135,7 +135,7 @@ describe('RewardedVideoPanel', () => {
     render(<RewardedVideoPanel applixirKey={null} adUnit="/123/rewarded" />)
     await screen.findByTestId('rewarded-video-progress')
     await userEvent.click(screen.getByTestId('rewarded-video-button'))
-    await waitFor(() => expect(toast.info).toHaveBeenCalledWith(expect.stringMatching(/Nenhum vídeo disponível/)))
+    await waitFor(() => expect(toast.info).toHaveBeenCalledWith(expect.stringMatching(/No video is available/)))
     expect(invoke).not.toHaveBeenCalledWith('rewarded-video-claim?action=claim', expect.anything())
   })
 
@@ -145,7 +145,7 @@ describe('RewardedVideoPanel', () => {
       error: null,
     })
     render(<RewardedVideoPanel applixirKey={null} adUnit="/123/rewarded" />)
-    await waitFor(() => expect(screen.getByTestId('rewarded-video-button')).toHaveTextContent('Limite de hoje atingido'))
+    await waitFor(() => expect(screen.getByTestId('rewarded-video-button')).toHaveTextContent('Daily limit reached'))
     expect(screen.getByTestId('rewarded-video-button')).toBeDisabled()
   })
 })

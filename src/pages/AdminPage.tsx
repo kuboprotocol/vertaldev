@@ -8,7 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AdminTeamsPanel from "@/components/admin/AdminTeamsPanel";
 import AdminRewardsActivity from "@/components/admin/AdminRewardsActivity";
 import { Input } from "@/components/ui/input";
-import { Loader2, Shield, Users, Bot, FileText, ArrowLeft, ScrollText } from "lucide-react";
+import { Loader2, Shield, Users, Bot, FileText, ScrollText } from "lucide-react";
+import AppShell, { AppTopBar, PanelHeader } from "@/components/site/AppShell";
+import { Brand } from "@/components/site/siteUi";
 
 
 
@@ -59,48 +61,42 @@ export default function AdminPage() {
   const totalCredits = jobs.reduce((s, j) => s + (j.credits_charged ?? 0), 0);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <Link to="/dashboard" className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-2 mb-4">
-          <ArrowLeft className="w-4 h-4" /> Dashboard
-        </Link>
-        <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
-          <div>
-            <h1 className="text-4xl font-bold tracking-tight" style={{ fontFamily: "Orbitron, sans-serif" }}>
-              <Shield className="inline w-7 h-7 mr-2 text-primary" /> Vertal Admin
-            </h1>
-            <p className="text-muted-foreground mt-1">Operações, monitoramento e auditoria global.</p>
-          </div>
-          <div className="flex gap-2">
-            <Link to="/admin/teams"><Badge variant="outline" className="cursor-pointer">Teams</Badge></Link>
-            <Link to="/admin/builds"><Badge variant="outline" className="cursor-pointer">Builds</Badge></Link>
-            <Link to="/admin/billing"><Badge variant="outline" className="cursor-pointer">Billing</Badge></Link>
-            <Link to="/admin/agent"><Badge variant="outline" className="cursor-pointer">Local Agent</Badge></Link>
-            <Link to="/admin/ios-build"><Badge variant="outline" className="cursor-pointer">iOS build</Badge></Link>
+    <AppShell width="wide" topBar={<AppTopBar back={{ to: "/dashboard", label: "Dashboard" }} title="Admin" />}>
+      <div>
+        <PanelHeader
+          icon={<Shield className="h-7 w-7" aria-hidden />}
+          title={<Brand>Vertal Admin</Brand>}
+          description="Operations, monitoring and the global audit log."
+        />
+        <div className="mb-8 -mt-2 flex flex-wrap gap-2">
+            <Link to="/admin/teams"><Badge variant="outline" className="cursor-pointer rounded-full">Teams</Badge></Link>
+            <Link to="/admin/builds"><Badge variant="outline" className="cursor-pointer rounded-full">Builds</Badge></Link>
+            <Link to="/admin/billing"><Badge variant="outline" className="cursor-pointer rounded-full">Billing</Badge></Link>
+            <Link to="/admin/agent"><Badge variant="outline" className="cursor-pointer rounded-full">Local Agent</Badge></Link>
+            <Link to="/admin/ios-build"><Badge variant="outline" className="cursor-pointer rounded-full">iOS build</Badge></Link>
 
-            <Link to="/admin/skills"><Badge variant="outline" className="cursor-pointer">Skills</Badge></Link>
-            <Link to="/agents"><Badge variant="outline" className="cursor-pointer">Agents Hub</Badge></Link>
-          </div>
+            <Link to="/admin/skills"><Badge variant="outline" className="cursor-pointer rounded-full">Skills</Badge></Link>
+            <Link to="/agents"><Badge variant="outline" className="cursor-pointer rounded-full">Agents hub</Badge></Link>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <StatCard label="Agentes" value={agents.length} sub={`${agents.filter(a => a.status === "active").length} ativos`} icon={<Bot />} />
-          <StatCard label="Jobs (200 últimos)" value={totalJobs} sub={`${succeeded} ok · ${failed} falhas`} icon={<FileText />} />
-          <StatCard label="Créditos gastos" value={totalCredits} sub="amostra recente" icon={<Users />} />
-          <StatCard label="Audit logs" value={audits.length} sub="200 últimos" icon={<ScrollText />} />
+          <StatCard label="Agents" value={agents.length} sub={`${agents.filter(a => a.status === "active").length} active`} icon={<Bot />} />
+          <StatCard label="Jobs (last 200)" value={totalJobs} sub={`${succeeded} ok · ${failed} failed`} icon={<FileText />} />
+          <StatCard label="Credits spent" value={totalCredits} sub="recent sample" icon={<Users />} />
+          <StatCard label="Audit logs" value={audits.length} sub="last 200" icon={<ScrollText />} />
         </div>
 
         <div className="mb-4">
-          <Input placeholder="Filtrar por slug, user_id, action…" value={search} onChange={e => setSearch(e.target.value)} className="max-w-md" />
+          <Input placeholder="Filter by slug, user_id or action..." value={search} onChange={e => setSearch(e.target.value)} className="max-w-md" />
         </div>
 
         <Tabs defaultValue="jobs">
           <TabsList>
             <TabsTrigger value="jobs">Jobs ({filteredJobs.length})</TabsTrigger>
-            <TabsTrigger value="agents">Agentes ({agents.length})</TabsTrigger>
+            <TabsTrigger value="agents">Agents ({agents.length})</TabsTrigger>
             <TabsTrigger value="teams">Teams</TabsTrigger>
-            <TabsTrigger value="audits">Auditoria ({filteredAudits.length})</TabsTrigger>
-            <TabsTrigger value="rewards">Recompensas</TabsTrigger>
+            <TabsTrigger value="audits">Audit log ({filteredAudits.length})</TabsTrigger>
+            <TabsTrigger value="rewards">Rewards</TabsTrigger>
           </TabsList>
 
           <TabsContent value="rewards">
@@ -108,12 +104,12 @@ export default function AdminPage() {
           </TabsContent>
 
           <TabsContent value="jobs">
-            <Card>
+            <Card className="rounded-xl border-white/[0.06] bg-card/50">
               <CardContent className="p-0 max-h-[600px] overflow-auto">
-                {busy && <div className="p-6 text-center text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Carregando…</div>}
+                {busy && <div className="p-6 text-center text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Loading...</div>}
                 <table className="w-full text-xs">
                   <thead className="bg-muted/40 sticky top-0">
-                    <tr><th className="text-left p-2">Quando</th><th className="text-left p-2">Agente</th><th className="text-left p-2">User</th><th className="text-left p-2">Status</th><th className="text-right p-2">Créditos</th><th className="text-right p-2">Duração</th></tr>
+                    <tr><th className="text-left p-2">When</th><th className="text-left p-2">Agent</th><th className="text-left p-2">User</th><th className="text-left p-2">Status</th><th className="text-right p-2">Credits</th><th className="text-right p-2">Duration</th></tr>
                   </thead>
                   <tbody>
                     {filteredJobs.map(j => (
@@ -123,7 +119,7 @@ export default function AdminPage() {
                         <td className="p-2 font-mono opacity-70">{j.user_id.slice(0, 8)}…</td>
                         <td className="p-2"><Badge variant={j.status === "succeeded" ? "default" : j.status === "queued" || j.status === "running" ? "outline" : "destructive"} className="text-[10px]">{j.status}</Badge></td>
                         <td className="p-2 text-right">{j.credits_charged}</td>
-                        <td className="p-2 text-right">{j.duration_ms ?? "–"}ms</td>
+                        <td className="p-2 text-right">{j.duration_ms != null ? `${j.duration_ms}ms` : "-"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -136,7 +132,7 @@ export default function AdminPage() {
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {agents.map(a => (
                 <Link key={a.slug} to={`/agents/${a.slug}`}>
-                  <Card className="hover:border-primary/50 transition-colors h-full">
+                  <Card className="h-full rounded-xl border-white/[0.06] bg-card/50 transition-colors hover:border-white/[0.14]">
                     <CardHeader>
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-sm">{a.name}</CardTitle>
@@ -159,11 +155,11 @@ export default function AdminPage() {
           </TabsContent>
 
           <TabsContent value="audits">
-            <Card>
+            <Card className="rounded-xl border-white/[0.06] bg-card/50">
               <CardContent className="p-0 max-h-[600px] overflow-auto">
                 <table className="w-full text-xs">
                   <thead className="bg-muted/40 sticky top-0">
-                    <tr><th className="text-left p-2">Quando</th><th className="text-left p-2">Action</th><th className="text-left p-2">Recurso</th><th className="text-left p-2">Actor</th><th className="text-left p-2">OK</th><th className="text-left p-2">Erro</th></tr>
+                    <tr><th className="text-left p-2">When</th><th className="text-left p-2">Action</th><th className="text-left p-2">Resource</th><th className="text-left p-2">Actor</th><th className="text-left p-2">OK</th><th className="text-left p-2">Error</th></tr>
                   </thead>
                   <tbody>
                     {filteredAudits.map(a => (
@@ -172,7 +168,7 @@ export default function AdminPage() {
                         <td className="p-2 font-mono">{a.action}</td>
                         <td className="p-2"><span className="opacity-70">{a.resource_type}</span> {a.resource_id && <span className="font-mono">/ {a.resource_id}</span>}</td>
                         <td className="p-2 font-mono opacity-70">{a.actor_role}{a.actor_user_id ? ` · ${a.actor_user_id.slice(0, 8)}…` : ""}</td>
-                        <td className="p-2">{a.success ? "✓" : "✗"}</td>
+                        <td className="p-2">{a.success ? "Yes" : "No"}</td>
                         <td className="p-2 text-destructive truncate max-w-xs">{a.error_message}</td>
                       </tr>
                     ))}
@@ -183,13 +179,13 @@ export default function AdminPage() {
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </AppShell>
   );
 }
 
 function StatCard({ label, value, sub, icon }: { label: string; value: number | string; sub: string; icon: React.ReactNode }) {
   return (
-    <Card>
+    <Card className="rounded-xl border-white/[0.06] bg-card/50">
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs text-muted-foreground">{label}</span>

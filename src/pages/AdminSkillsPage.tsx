@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import AppShell, { AppTopBar, PanelHeader } from "@/components/site/AppShell";
 
 
 const BUCKET = "skill-uploads";
@@ -91,29 +92,29 @@ const STEP_ORDER: StepKey[] = [
 ];
 
 const STEP_LABEL: Record<StepKey, string> = {
-  queued: "Na fila",
-  uploading: "Enviando ZIP",
-  recording: "Registrando upload",
-  validating: "Validando (sem .git/)",
-  extracting: "Extraindo conteúdo",
-  registering: "Aplicando skill",
-  done: "Pronto",
+  queued: "Queued",
+  uploading: "Uploading ZIP",
+  recording: "Saving upload",
+  validating: "Checking (no .git/)",
+  extracting: "Extracting files",
+  registering: "Installing skill",
+  done: "Done",
 };
 
 const statusMeta = {
   pending: {
     icon: Clock,
-    label: "Pendente",
+    label: "Pending",
     className: "bg-amber-500/10 text-amber-400 border-amber-500/30",
   },
   registered: {
     icon: CheckCircle2,
-    label: "Registrada",
+    label: "Registered",
     className: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
   },
   failed: {
     icon: XCircle,
-    label: "Falhou",
+    label: "Failed",
     className: "bg-rose-500/10 text-rose-400 border-rose-500/30",
   },
 } as const;
@@ -175,7 +176,7 @@ export default function AdminSkillsPage() {
       .select("*")
       .order("created_at", { ascending: false });
     if (error) {
-      toast.error("Falha ao carregar histórico");
+      toast.error("Could not load history");
       return;
     }
     setItems((data ?? []).map((r) => normalize(r as Record<string, unknown>)));
@@ -245,11 +246,11 @@ export default function AdminSkillsPage() {
         storagePath = target?.storagePath;
         return prev.map((l) =>
           l.tempId === tempId
-            ? { ...l, aborted: true, error: "Cancelado pelo usuário" }
+            ? { ...l, aborted: true, error: "Cancelled by user" }
             : l
         );
       });
-      toast.message("Upload cancelado");
+      toast.message("Upload cancelled");
 
       // Best-effort cleanup of any half-uploaded object
       if (storagePath) {
@@ -345,8 +346,8 @@ export default function AdminSkillsPage() {
             status: "pending",
             notes:
               attempt > 1
-                ? `Enviado após ${attempt} tentativas. Diga 'registre o ZIP que acabei de enviar'.`
-                : "Aguardando o agente. Diga 'registre o ZIP que acabei de enviar' no chat.",
+                ? `Uploaded after ${attempt} attempts. Say 'register the ZIP I just uploaded' in the chat.`
+                : "Waiting for the agent. Say 'register the ZIP I just uploaded' in the chat.",
             progress: { step: "queued", percent: 0 },
             logs: [],
             cancel_requested: false,
@@ -354,8 +355,8 @@ export default function AdminSkillsPage() {
           if (insErr) throw insErr;
           toast.success(
             attempt > 1
-              ? `${file.name} enviado (tentativa ${attempt})`
-              : `${file.name} enviado`
+              ? `${file.name} uploaded (attempt ${attempt})`
+              : `${file.name} uploaded`
           );
           setTimeout(() => removeLocal(tempId), 1200);
           return;
@@ -366,13 +367,13 @@ export default function AdminSkillsPage() {
           if (!canRetry) {
             patchLocal(tempId, { error: msg, step: "uploading" });
             toast.error(
-              `Falha em ${file.name} após ${attempt} tentativas: ${msg}`
+              `${file.name} failed after ${attempt} attempts: ${msg}`
             );
             return;
           }
           const wait = backoffMs(attempt);
           patchLocal(tempId, {
-            error: `Tentativa ${attempt} falhou (${msg}). Retentando em ${Math.round(
+            error: `Attempt ${attempt} failed (${msg}). Trying again in ${Math.round(
               wait / 1000
             )}s…`,
             percent: 0,
@@ -405,7 +406,7 @@ export default function AdminSkillsPage() {
         f.name.toLowerCase().endsWith(".zip")
       );
       if (list.length === 0) {
-        toast.error("Apenas arquivos .zip são aceitos");
+        toast.error("Only .zip files are accepted");
         return;
       }
       await Promise.all(list.map(uploadOne));
@@ -424,10 +425,10 @@ export default function AdminSkillsPage() {
       body: { action: "cancel-import", importId: id },
     });
     if (error) {
-      toast.error("Não foi possível cancelar");
+      toast.error("Could not cancel");
       return;
     }
-    toast.message("Cancelamento confirmado pelo endpoint");
+    toast.message("Cancel confirmed by the server");
   };
 
   const retry = async (id: string) => {
@@ -440,14 +441,14 @@ export default function AdminSkillsPage() {
         logs: [],
         validation: null,
         notes:
-          "Retentativa solicitada. Diga 'tente registrar de novo' no chat.",
+          "Retry requested. Say 'try to register it again' in the chat.",
       })
       .eq("id", id);
     if (error) {
-      toast.error("Falha ao reenfileirar");
+      toast.error("Could not queue it again");
       return;
     }
-    toast.success("Reenfileirado para nova tentativa");
+    toast.success("Queued for another attempt");
   };
 
   const filtered = useMemo(() => {
@@ -484,17 +485,12 @@ export default function AdminSkillsPage() {
   if (!isAdmin) return <Navigate to="/dashboard" replace />;
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-6 md:p-10">
-      <div className="max-w-4xl mx-auto space-y-8">
-        <header className="space-y-2">
-          <h1 className="text-3xl md:text-4xl font-bold font-orbitron tracking-tight">
-            Skills · Upload &amp; Registro
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Arraste o ZIP. Progresso ao vivo, logs por etapa, cancelamento e
-            retentativa.
-          </p>
-        </header>
+    <AppShell width="narrow" topBar={<AppTopBar back={{ to: "/admin", label: "Admin" }} title="Skills" />}>
+      <div className="space-y-8">
+        <PanelHeader
+          title="Skills: upload and register"
+          description="Drop a ZIP file. You can follow each step, read the logs, cancel and try again."
+        />
 
         <Card
           onDragOver={(e) => {
@@ -503,8 +499,8 @@ export default function AdminSkillsPage() {
           }}
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
-          className={`p-10 border-2 border-dashed transition-colors text-center ${
-            dragOver ? "border-primary bg-primary/5" : "border-border bg-card/40"
+          className={`rounded-2xl p-10 border-2 border-dashed transition-colors text-center ${
+            dragOver ? "border-primary bg-primary/5" : "border-white/[0.12] bg-card/40"
           }`}
         >
           <div className="flex flex-col items-center gap-4">
@@ -512,10 +508,9 @@ export default function AdminSkillsPage() {
               <Upload className="w-7 h-7 text-primary" />
             </div>
             <div>
-              <p className="font-medium">Arraste o .zip aqui</p>
+              <p className="font-medium">Drop the .zip file here</p>
               <p className="text-xs text-muted-foreground mt-1">
-                ou selecione manualmente · máx 20 MB · sem <code>.git/</code>{" "}
-                interno
+                or choose a file · max 20 MB · no <code>.git/</code> folder inside
               </p>
             </div>
             <label className="cursor-pointer">
@@ -526,8 +521,8 @@ export default function AdminSkillsPage() {
                 className="hidden"
                 onChange={(e) => e.target.files && handleFiles(e.target.files)}
               />
-              <Button asChild variant="default">
-                <span>Selecionar ZIP</span>
+              <Button asChild variant="default" className="rounded-full">
+                <span>Choose ZIP</span>
               </Button>
             </label>
           </div>
@@ -535,19 +530,19 @@ export default function AdminSkillsPage() {
 
         {locals.length > 0 && (
           <section className="space-y-3">
-            <h2 className="text-lg font-semibold">Enviando agora</h2>
+            <h2 className="text-lg font-semibold">Uploading now</h2>
             <div className="space-y-2">
               {locals.map((u) => (
-                <Card key={u.tempId} className="p-4 space-y-3">
+                <Card key={u.tempId} className="rounded-xl border-white/[0.06] bg-card/50 p-4 space-y-3">
                   <div className="flex items-center gap-3">
                     <FileArchive className="w-5 h-5 text-primary shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">{u.fileName}</p>
                       <p className="text-xs text-muted-foreground">
                         {(u.size / 1024).toFixed(1)} KB ·{" "}
-                        {u.aborted ? "Cancelado" : STEP_LABEL[u.step]}
+                        {u.aborted ? "Cancelled" : STEP_LABEL[u.step]}
                         {u.attempt && u.attempt > 1 && !u.aborted
-                          ? ` · tentativa ${u.attempt}/${4}`
+                          ? ` · attempt ${u.attempt}/${4}`
                           : ""}
                       </p>
                     </div>
@@ -567,7 +562,7 @@ export default function AdminSkillsPage() {
                   </div>
                   <Progress value={u.percent} className="h-2" />
                   {u.error && (
-                    <p className="text-xs text-rose-400">Erro: {u.error}</p>
+                    <p className="text-xs text-rose-400">Error: {u.error}</p>
                   )}
                 </Card>
               ))}
@@ -582,7 +577,7 @@ export default function AdminSkillsPage() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por arquivo, skill ou notas..."
+              placeholder="Search by file, skill or notes..."
               className="pl-9"
             />
           </div>
@@ -596,27 +591,27 @@ export default function AdminSkillsPage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos ({counts.all})</SelectItem>
+              <SelectItem value="all">All ({counts.all})</SelectItem>
               <SelectItem value="pending">
-                Pendentes ({counts.pending})
+                Pending ({counts.pending})
               </SelectItem>
               <SelectItem value="registered">
-                Registradas ({counts.registered})
+                Registered ({counts.registered})
               </SelectItem>
-              <SelectItem value="failed">Falhas ({counts.failed})</SelectItem>
+              <SelectItem value="failed">Failed ({counts.failed})</SelectItem>
             </SelectContent>
           </Select>
         </section>
 
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">
-            Histórico &amp; progresso ao vivo
+            History and progress
           </h2>
           {filtered.length === 0 ? (
-            <Card className="p-6 text-sm text-muted-foreground text-center">
+            <Card className="rounded-xl border-white/[0.06] bg-card/50 p-6 text-sm text-muted-foreground text-center">
               {items.length === 0
-                ? "Nenhum ZIP enviado ainda."
-                : "Nenhum resultado para os filtros atuais."}
+                ? "No ZIP files uploaded yet."
+                : "No results for these filters."}
             </Card>
           ) : (
             <div className="space-y-3">
@@ -629,7 +624,7 @@ export default function AdminSkillsPage() {
                 const v = it.validation;
 
                 return (
-                  <Card key={it.id} className="p-4 space-y-4">
+                  <Card key={it.id} className="rounded-xl border-white/[0.06] bg-card/50 p-4 space-y-4">
                     <div className="flex items-center gap-4 flex-wrap">
                       <FileArchive className="w-5 h-5 text-primary shrink-0" />
                       <div className="flex-1 min-w-0">
@@ -637,7 +632,7 @@ export default function AdminSkillsPage() {
                         <p className="text-xs text-muted-foreground">
                           {(it.size_bytes ?? 0) > 0 &&
                             `${((it.size_bytes ?? 0) / 1024).toFixed(1)} KB · `}
-                          {new Date(it.created_at).toLocaleString("pt-BR")}
+                          {new Date(it.created_at).toLocaleString()}
                         </p>
                       </div>
                       <Badge variant="outline" className={meta.className}>
@@ -649,7 +644,7 @@ export default function AdminSkillsPage() {
                           variant="outline"
                           className="bg-orange-500/10 text-orange-400 border-orange-500/30"
                         >
-                          Cancelando...
+                          Cancelling...
                         </Badge>
                       )}
                     </div>
@@ -723,7 +718,7 @@ export default function AdminSkillsPage() {
                           ) : (
                             <ShieldAlert className="w-4 h-4 text-amber-400" />
                           )}
-                          <span>Resumo de validação</span>
+                          <span>Check summary</span>
                         </div>
                         <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-muted-foreground">
                           {v.skill_name && (
@@ -736,7 +731,7 @@ export default function AdminSkillsPage() {
                           )}
                           {typeof v.files_count === "number" && (
                             <span>
-                              Arquivos:{" "}
+                              Files:{" "}
                               <span className="text-foreground">
                                 {v.files_count}
                               </span>
@@ -744,7 +739,7 @@ export default function AdminSkillsPage() {
                           )}
                           {typeof v.total_bytes === "number" && (
                             <span>
-                              Tamanho:{" "}
+                              Size:{" "}
                               <span className="text-foreground">
                                 {(v.total_bytes / 1024).toFixed(1)} KB
                               </span>
@@ -753,7 +748,7 @@ export default function AdminSkillsPage() {
                           <span>
                             SKILL.md:{" "}
                             <span className="text-foreground">
-                              {v.has_skill_md ? "sim" : "não"}
+                              {v.has_skill_md ? "yes" : "no"}
                             </span>
                           </span>
                           <span>
@@ -763,7 +758,7 @@ export default function AdminSkillsPage() {
                                 v.has_git ? "text-rose-400" : "text-foreground"
                               }
                             >
-                              {v.has_git ? "presente (bloqueado)" : "ausente"}
+                              {v.has_git ? "found (blocked)" : "not found"}
                             </span>
                           </span>
                         </div>
@@ -804,7 +799,7 @@ export default function AdminSkillsPage() {
                           ) : (
                             <ChevronRight className="w-3.5 h-3.5" />
                           )}
-                          Logs por etapa ({it.logs.length})
+                          Logs by step ({it.logs.length})
                         </button>
                         {logsOpen && (
                           <ol className="px-3 py-2 space-y-1 border-t border-border max-h-64 overflow-y-auto">
@@ -815,9 +810,7 @@ export default function AdminSkillsPage() {
                               >
                                 <span className="text-muted-foreground shrink-0">
                                   {log.at
-                                    ? new Date(log.at).toLocaleTimeString(
-                                        "pt-BR"
-                                      )
+                                    ? new Date(log.at).toLocaleTimeString()
                                     : "--:--:--"}
                                 </span>
                                 {log.step && (
@@ -859,7 +852,7 @@ export default function AdminSkillsPage() {
                           className="text-rose-400 border-rose-500/30 hover:bg-rose-500/10"
                         >
                           <StopCircle className="w-4 h-4 mr-1.5" />
-                          Interromper registro
+                          Stop registration
                         </Button>
                       )}
                       {it.status === "failed" && (
@@ -869,7 +862,7 @@ export default function AdminSkillsPage() {
                           onClick={() => retry(it.id)}
                         >
                           <RotateCw className="w-4 h-4 mr-1.5" />
-                          Tentar novamente
+                          Try again
                         </Button>
                       )}
                     </div>
@@ -880,14 +873,14 @@ export default function AdminSkillsPage() {
           )}
         </section>
 
-        <Card className="p-4 text-xs text-muted-foreground bg-muted/30">
-          <strong className="text-foreground">Fluxo:</strong> upload XHR com
-          progresso real → cancelável a qualquer momento. Após inserir,{" "}
-          <code>cancel_requested</code> avisa o agente para abortar o registro
-          em andamento. Falhas exibem botão de retentativa que reenfileira o
-          mesmo ZIP no Storage sem reupload.
+        <Card className="rounded-xl border-white/[0.06] p-4 text-xs text-muted-foreground bg-muted/30">
+          <strong className="text-foreground">How it works:</strong> the upload
+          shows real progress and you can cancel it at any time. After the upload,{" "}
+          <code>cancel_requested</code> tells the agent to stop the registration.
+          If a step fails, Try again queues the same ZIP from Storage without a new
+          upload.
         </Card>
       </div>
-    </div>
+    </AppShell>
   );
 }

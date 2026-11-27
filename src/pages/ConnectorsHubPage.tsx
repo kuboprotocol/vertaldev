@@ -4,9 +4,12 @@ import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { connectors, categories, type ConnectorConfig } from '@/lib/connectorsConfig'
+import { connectors as catalogConnectors, categories, type ConnectorConfig } from '@/lib/connectorsConfig'
+import { CATEGORY_LABELS_EN, localizeConnector } from '@/lib/connectorsCopyEn'
+import AppShell, { AppTopBar, PanelHeader } from '@/components/site/AppShell'
+import { surface } from '@/components/site/siteUi'
 import { ConnectorIcon } from '@/components/connectors/ConnectorIcon'
-import { ArrowLeft, Check, Search, Zap, ExternalLink, X } from 'lucide-react'
+import { Check, Search, ExternalLink, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { GlobalActivityPanel } from '@/components/connectors/GlobalActivityPanel'
 import { EcosystemActions, ProductLogo, useEcosystemDialogs } from '@/components/ecosystem/EcosystemShowcase'
@@ -18,10 +21,14 @@ import { useVertalPageTitle, vertalConnectorsTitle } from '@/lib/vertalCrm/pageT
 
 type Availability = 'all' | 'available' | 'coming_soon'
 
+// English copy for the cards (the catalog itself stays pt-BR for /integracoes).
+const connectors = catalogConnectors.map(localizeConnector)
+const CRM_CONNECTOR = localizeConnector(VERTAL_CRM_CONNECTOR)
+
 const AVAILABILITY_OPTIONS: { id: Availability; label: string }[] = [
-  { id: 'all', label: 'Todos' },
-  { id: 'available', label: 'Disponíveis' },
-  { id: 'coming_soon', label: 'Em breve' },
+  { id: 'all', label: 'All' },
+  { id: 'available', label: 'Available' },
+  { id: 'coming_soon', label: 'Coming soon' },
 ]
 
 const STATUS_RANK: Record<ConnectorConfig['status'], number> = {
@@ -35,7 +42,7 @@ export default function ConnectorsHubPage() {
   const { openEmbed, openMcp, dialogs } = useEcosystemDialogs()
   const vertalCrmAccess = useVertalCrmAccess()
   const allConnectors = useMemo(
-    () => (vertalCrmAccess === 'allowed' ? [VERTAL_CRM_CONNECTOR, ...connectors] : connectors),
+    () => (vertalCrmAccess === 'allowed' ? [CRM_CONNECTOR, ...connectors] : connectors),
     [vertalCrmAccess],
   )
   // Vertal CRM: título da aba "Conectores" (só para quem tem o CRM liberado; os demais ficam como estão).
@@ -104,62 +111,47 @@ export default function ConnectorsHubPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <AppShell topBar={<AppTopBar back={{ to: '/dashboard', label: 'Dashboard' }} />}>
       {connectedProduct && (
-        <div role="status" className="border-b border-border bg-primary/10">
-          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3 text-sm">
+        <div role="status" className="mt-6 rounded-xl border border-primary/20 bg-primary/10">
+          <div className="px-4 py-3 flex items-center gap-3 text-sm">
             <Check className="h-4 w-4 text-primary shrink-0" />
             <span className="flex-1">
-              <strong>{connectedProduct.name} conectado ao Vertal Dev.</strong>
+              <strong>{connectedProduct.name} is now connected to Vertal Dev.</strong>
             </span>
-            <Button size="sm" variant="ghost" onClick={dismissConnected} aria-label="Fechar aviso">
-              Fechar
+            <Button size="sm" variant="ghost" onClick={dismissConnected} aria-label="Close notice">
+              Close
             </Button>
           </div>
         </div>
       )}
-      {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur-xl sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold font-display flex items-center gap-2">
-              <Zap className="h-5 w-5 text-primary" />
-              Conectores
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Integre serviços externos à sua plataforma
-            </p>
-          </div>
-        </div>
-      </div>
+      <PanelHeader
+        title="Connectors"
+        description="Connect outside services to your Vertal Dev account."
+      />
 
-      <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
-        {/* Ecossistema Vertal: integrações nativas com iframe + MCP */}
+      <div className="space-y-6">
+        {/* Vertal ecosystem: built-in products, opened in an iframe or through MCP */}
         <section
           data-testid="ecosystem-connectors-banner"
-          className="relative overflow-hidden rounded-3xl border border-primary/30 bg-card p-6 md:p-8 shadow-gold"
+          className={cn("relative overflow-hidden p-6 md:p-8", surface.card)}
         >
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent" />
-          <div className="relative flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                    <div className="relative flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
-              <span className="text-[11px] font-semibold uppercase tracking-widest text-primary">Ecossistema Vertal</span>
-              <h2 className="mt-1 font-display text-2xl font-bold md:text-3xl">Crie aqui. Execute no Vertal Run. Publique no Vertal.app.</h2>
+              <span className="text-[13px] font-medium text-primary">Vertal ecosystem</span>
+              <h2 className="mt-1 text-2xl font-semibold tracking-[-0.02em] md:text-3xl">Build here. Run code in Vertal Run. Deploy with Vertal.app.</h2>
               <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-                Integrações nativas da KUBO Protocol: abra as outras plataformas dentro do Vertal Dev ou conecte-as ao seu agente via MCP.
-                Um fluxo só, sem juntar Lovable + E2B + Vercel.
+                Products from KUBO Protocol that work with Vertal Dev. Open them inside Vertal Dev, or connect them to your agent with MCP.
               </p>
             </div>
             <Button variant="ghost" size="sm" className="w-fit gap-1.5" onClick={() => navigate('/ecossistema')}>
-              Por que Vertal? <ExternalLink className="h-3.5 w-3.5" />
+              Why Vertal? <ExternalLink className="h-3.5 w-3.5" />
             </Button>
           </div>
           <div className="relative mt-6 grid gap-4 md:grid-cols-2">
             {siblingsOf('vertal-dev').map(product => {
               return (
-                <div key={product.id} className="rounded-2xl border border-border bg-background/60 p-5 backdrop-blur">
+                <div key={product.id} className="rounded-xl border border-white/[0.06] bg-background/60 p-5">
                   <div className="mb-3 flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ backgroundColor: `${product.color}1f` }}>
                       <ProductLogo product={product} className="h-5 w-5" />
@@ -190,7 +182,7 @@ export default function ConnectorsHubPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar conectores..."
+                placeholder="Search connectors"
                 value={search}
                 onChange={e => updateParam('q', e.target.value, '')}
                 className="pl-10 pr-9"
@@ -199,7 +191,7 @@ export default function ConnectorsHubPage() {
                 <button
                   onClick={() => updateParam('q', '', '')}
                   className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                  aria-label="Limpar busca"
+                  aria-label="Clear search"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -235,7 +227,7 @@ export default function ConnectorsHubPage() {
                     : 'bg-secondary text-secondary-foreground hover:bg-accent'
                 )}
               >
-                {cat.label}
+                {CATEGORY_LABELS_EN[cat.id] ?? cat.label}
               </button>
             ))}
             {hasActiveFilters && (
@@ -244,14 +236,14 @@ export default function ConnectorsHubPage() {
                 className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
               >
                 <X className="h-3.5 w-3.5" />
-                Limpar filtros
+                Clear filters
               </button>
             )}
           </div>
 
           <p className="text-xs text-muted-foreground">
-            {filtered.length} de {allConnectors.length} conectores
-            {hasActiveFilters && ' · filtros ativos compartilháveis via URL'}
+            {filtered.length} of {allConnectors.length} connectors
+            {hasActiveFilters && ' · you can share these filters with the page link'}
           </p>
         </div>
 
@@ -273,12 +265,12 @@ export default function ConnectorsHubPage() {
                 hidden: { opacity: 0, y: 16 },
                 show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: 'easeOut' } },
               }}
-              whileHover={{ y: -4, scale: 1.02 }}
+              whileHover={{ y: -2 }}
               whileTap={{ scale: 0.98 }}
               transition={{ type: 'spring', stiffness: 320, damping: 22 }}
               className={cn(
-                'group relative text-left p-5 rounded-2xl border border-border bg-card',
-                'hover:border-primary/40 hover:shadow-glow transition-colors duration-300',
+                'group relative text-left p-5',
+                surface.cardInteractive,
                 connector.status === 'coming_soon' && 'opacity-70'
               )}
             >
@@ -293,14 +285,14 @@ export default function ConnectorsHubPage() {
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className="font-semibold text-foreground">{connector.name}</h3>
                     {connector.featured && (
-                      <Badge className="text-[10px] px-1.5 py-0">Ecossistema</Badge>
+                      <Badge className="text-[10px] px-1.5 py-0">Ecosystem</Badge>
                     )}
                     {connector.badge && (
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{connector.badge}</Badge>
                     )}
                     {connector.status === 'coming_soon' && (
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                        Em breve
+                        Coming soon
                       </Badge>
                     )}
                   </div>
@@ -311,8 +303,8 @@ export default function ConnectorsHubPage() {
               </div>
 
               <div className="mt-3 flex items-center justify-between">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
-                  {categories.find(c => c.id === connector.category)?.label ?? connector.category}
+                <span className="text-[11px] font-medium text-muted-foreground/70">
+                  {CATEGORY_LABELS_EN[connector.category] ?? connector.category}
                 </span>
                 <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-primary transition-colors" />
               </div>
@@ -322,18 +314,18 @@ export default function ConnectorsHubPage() {
 
         {filtered.length === 0 && (
           <div className="text-center py-16 text-muted-foreground space-y-3">
-            <p className="text-lg">Nenhum conector encontrado</p>
-            <p className="text-sm">Tente ajustar seus filtros de busca</p>
+            <p className="text-lg">No connectors found</p>
+            <p className="text-sm">Try other filters or another search.</p>
             {hasActiveFilters && (
               <Button variant="outline" size="sm" onClick={clearFilters}>
                 <X className="h-4 w-4" />
-                Limpar filtros
+                Clear filters
               </Button>
             )}
           </div>
         )}
       </div>
       {dialogs}
-    </div>
+    </AppShell>
   )
 }

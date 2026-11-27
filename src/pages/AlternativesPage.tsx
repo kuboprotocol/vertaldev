@@ -1,6 +1,6 @@
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { ArrowRight, Check } from 'lucide-react'
-import Navbar from '@/components/landing/Navbar'
+import SitePage from '@/components/site/SitePage'
 import { Button } from '@/components/ui/button'
 import { APP_NAME } from '@/config/brand'
 import { ALTERNATIVES_INDEX_SEO, alternativeSeo } from '@/config/seo'
@@ -27,7 +27,7 @@ function TrademarkNotice() {
 function StartCta() {
   const navigate = useNavigate()
   return (
-    <Button size="lg" className="rounded-xl h-auto whitespace-normal py-3 text-center" onClick={() => navigate('/auth')}>
+    <Button size="lg" className="rounded-full h-auto whitespace-normal py-3 px-6 text-center" onClick={() => navigate('/auth')}>
       Começar grátis no {APP_NAME} <ArrowRight className="ml-2 h-4 w-4" />
     </Button>
   )
@@ -44,7 +44,7 @@ function AlternativesIndex() {
   return (
     <>
       <header className="mb-10">
-        <h1 className="text-3xl md:text-5xl font-display font-bold tracking-tight">
+        <h1 className="text-3xl md:text-5xl font-semibold tracking-[-0.025em]">
           {APP_NAME} e as outras ferramentas
         </h1>
         <p className="mt-4 text-lg text-muted-foreground max-w-2xl">
@@ -66,7 +66,7 @@ function AlternativesIndex() {
                 <Link
                   key={a.slug}
                   to={`/alternativas/${a.slug}`}
-                  className="group rounded-2xl border border-border bg-card/50 p-5 transition-colors hover:border-primary/60"
+                  className="group rounded-2xl border border-white/[0.06] bg-card/50 p-5 transition-colors hover:border-white/[0.14]"
                 >
                   <p className="font-semibold group-hover:text-primary">
                     {a.category === 'concept' ? `${a.name} com o ${APP_NAME}` : `${APP_NAME} vs ${a.name}`}
@@ -97,7 +97,7 @@ function AlternativeDetail({ alt }: { alt: Alternative }) {
       <Link to="/alternativas" className="text-sm text-muted-foreground hover:text-foreground">
         ← Todas as comparações
       </Link>
-      <h1 className="mt-4 text-3xl md:text-5xl font-display font-bold tracking-tight">{title}</h1>
+      <h1 className="mt-4 text-3xl md:text-5xl font-semibold tracking-[-0.025em]">{title}</h1>
       {alt.aliases?.length ? (
         <p className="mt-3 text-sm text-muted-foreground">
           Também pesquisado como: {alt.aliases.join(', ')}
@@ -128,7 +128,7 @@ function AlternativeDetail({ alt }: { alt: Alternative }) {
         </section>
       )}
 
-      <section className="mt-8 rounded-2xl border border-border bg-card/50 p-6">
+      <section className="mt-8 rounded-2xl border border-white/[0.06] bg-card/50 p-6">
         <h2 className="text-xl font-semibold">O que vem no {APP_NAME}</h2>
         <ul className="mt-3 space-y-2">
           {VERTAL_FEATURES.map((f) => (
@@ -166,11 +166,11 @@ export default function AlternativesPage() {
   if (slug && !alt) return <Navigate to="/alternativas" replace />
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <Navbar />
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-12 md:py-16">
+    <SitePage>
+      {/* Conteúdo em pt-BR: raiz de um conjunto multilíngue com hreflang (não traduzir aqui). */}
+      <div lang="pt-BR" className="mx-auto max-w-4xl px-6 py-12 md:py-16">
         {alt ? <AlternativeDetail alt={alt} /> : <AlternativesIndex />}
-      </main>
-    </div>
+      </div>
+    </SitePage>
   )
 }

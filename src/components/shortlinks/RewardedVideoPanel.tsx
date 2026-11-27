@@ -119,7 +119,7 @@ export default function RewardedVideoPanel({
   const handleWatch = async () => {
     if (busy) return;
     if (!provider) {
-      toast.info("Os vídeos premiados ainda não estão disponíveis. Volte em breve!");
+      toast.info("Reward videos are not available yet. Please check back soon.");
       return;
     }
     setBusy(true);
@@ -128,7 +128,7 @@ export default function RewardedVideoPanel({
       try {
         started = await callRewardedVideo("start", { provider });
       } catch {
-        toast.error("Não foi possível iniciar o vídeo agora. Tente de novo em instantes.");
+        toast.error("We could not start the video. Please try again in a moment.");
         return;
       }
       setStatus(started);
@@ -136,8 +136,8 @@ export default function RewardedVideoPanel({
       if (!started.nonce) {
         toast.info(
           started.reason === "daily_cap_reached"
-            ? "Você já assistiu todos os vídeos de hoje. Volte amanhã!"
-            : "Aguarde um pouco antes do próximo vídeo.",
+            ? "You watched all of today's videos. Come back tomorrow."
+            : "Please wait a little before the next video.",
         );
         return;
       }
@@ -152,15 +152,15 @@ export default function RewardedVideoPanel({
             const n = claimed.credits_earned ?? 1;
             toast.success(
               claimed.pending
-                ? `Vídeo concluído! +${n} crédito${n === 1 ? "" : "s"} pendente${n === 1 ? "" : "s"}: complete as atividades do dia para liberar.`
-                : `+${n} crédito${n === 1 ? "" : "s"} pelo vídeo!`,
+                ? `Video done. +${n} pending credit${n === 1 ? "" : "s"}: finish today's activities to release ${n === 1 ? "it" : "them"}.`
+                : `+${n} credit${n === 1 ? "" : "s"} for the video.`,
             );
             onCredited?.();
           } else {
-            toast.info("Esse vídeo não pôde ser creditado.");
+            toast.info("We could not give credit for this video.");
           }
         } catch {
-          toast.error("Não foi possível creditar o vídeo agora.");
+          toast.error("We could not add the credit for this video right now.");
         }
       };
 
@@ -170,16 +170,16 @@ export default function RewardedVideoPanel({
           : await showRewardedAd({ adUnit: adUnit as string, onGranted });
 
       if (outcome.kind === "no_fill") {
-        toast.info("Nenhum vídeo disponível agora. Tente de novo em alguns minutos.");
+        toast.info("No video is available right now. Please try again in a few minutes.");
       } else if (outcome.kind === "unsupported") {
-        toast.info("Seu navegador não suporta vídeos premiados. Tente pelo celular ou outro navegador.");
+        toast.info("Your browser does not support reward videos. Try your phone or another browser.");
       } else if (outcome.kind === "closed_without_reward") {
-        toast.info("Assista o vídeo até o fim para ganhar o crédito.");
+        toast.info("Watch the video to the end to earn the credit.");
       } else if (outcome.kind === "error") {
-        toast.error("Não foi possível carregar o vídeo. Se usa bloqueador de anúncios, libere o vertal.dev e tente de novo.");
+        toast.error("We could not load the video. If you use an ad blocker, allow vertal.dev and try again.");
       }
     } catch {
-      toast.error("Não foi possível iniciar o vídeo agora.");
+      toast.error("We could not start the video right now.");
     } finally {
       setBusy(false);
     }
@@ -189,29 +189,29 @@ export default function RewardedVideoPanel({
   const coolingDown = waitMs > 0;
   const disabled = busy || capReached || coolingDown;
 
-  let label = "Assistir vídeo e ganhar créditos";
-  if (busy) label = "Carregando vídeo…";
-  else if (status?.remaining_today === 0) label = "Limite de hoje atingido";
-  else if (waitMs > 0) label = `Próximo vídeo em ${countdown(waitMs)}`;
+  let label = "Watch a video and earn credits";
+  if (busy) label = "Loading video…";
+  else if (status?.remaining_today === 0) label = "Daily limit reached";
+  else if (waitMs > 0) label = `Next video in ${countdown(waitMs)}`;
 
   return (
-    <Card className="glass glass-border" data-testid="rewarded-video-panel">
+    <Card className="rounded-2xl border-white/[0.06] bg-card/50" data-testid="rewarded-video-panel">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <PlayCircle className="h-5 w-5 text-primary" />
-          Vídeo premiado
+          Reward video
         </CardTitle>
         <CardDescription>
           {provider
-            ? `Assista um vídeo curto até o fim e ganhe ${status?.amount ?? 1} crédito${(status?.amount ?? 1) === 1 ? "" : "s"}. Até ${status?.daily_cap ?? 10} por dia.`
-            : "Em breve: assista vídeos curtos e ganhe créditos."}
+            ? `Watch a short video to the end and earn ${status?.amount ?? 1} credit${(status?.amount ?? 1) === 1 ? "" : "s"}. Up to ${status?.daily_cap ?? 10} per day.`
+            : "Coming soon: watch short videos and earn credits."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {/* O player da AppLixir se injeta aqui; precisa ficar montado. */}
         {provider === "applixir" && <div id={APPLIXIR_CONTAINER_ID} data-testid="applixir-ad-container" />}
         <Button
-          className="w-full"
+          className="w-full rounded-full"
           onClick={handleWatch}
           disabled={disabled}
           data-testid="rewarded-video-button"
@@ -225,7 +225,7 @@ export default function RewardedVideoPanel({
         </Button>
         {provider && status && (
           <p className="text-xs text-muted-foreground" data-testid="rewarded-video-progress">
-            Hoje: {status.claimed_today}/{status.daily_cap} vídeos
+            Today: {status.claimed_today}/{status.daily_cap} videos
           </p>
         )}
       </CardContent>

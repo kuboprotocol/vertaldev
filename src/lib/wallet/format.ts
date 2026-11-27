@@ -1,10 +1,10 @@
 export type CardFunding = 'credit' | 'debit' | 'prepaid' | 'unknown'
 
 export const FUNDING_LABEL: Record<CardFunding, string> = {
-  credit: 'Crédito',
-  debit: 'Débito',
-  prepaid: 'Pré-pago',
-  unknown: 'Cartão',
+  credit: 'Credit',
+  debit: 'Debit',
+  prepaid: 'Prepaid',
+  unknown: 'Card',
 }
 
 export function brandLabel(brand: string): string {
@@ -12,7 +12,7 @@ export function brandLabel(brand: string): string {
     visa: 'Visa', mastercard: 'Mastercard', amex: 'American Express', elo: 'Elo',
     hipercard: 'Hipercard', discover: 'Discover', diners: 'Diners', jcb: 'JCB', unionpay: 'UnionPay',
   }
-  return map[brand?.toLowerCase()] ?? (brand ? brand[0].toUpperCase() + brand.slice(1) : 'Cartão')
+  return map[brand?.toLowerCase()] ?? (brand ? brand[0].toUpperCase() + brand.slice(1) : 'Card')
 }
 
 export function isExpired(card: { expMonth: number; expYear: number }, now = new Date()): boolean {

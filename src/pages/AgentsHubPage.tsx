@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { Loader2, Sparkles, Zap, ArrowLeft } from "lucide-react";
 import { HuginnAgentsCard } from "@/components/huginn/HuginnAgentsCard";
+import { SITE_FONT, siteRoot } from "@/components/site/siteUi";
 
 interface Agent {
   slug: string;
@@ -70,11 +71,11 @@ export default function AgentsHubPage() {
       });
       if (error) throw error;
       setResult(data);
-      toast({ title: `${selected.name} executed`, description: `${selected.credit_cost} credits consumed.` });
+      toast({ title: `${selected.name} finished`, description: `${selected.credit_cost} credits used.` });
       void refreshJobs();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      toast({ title: "Failed", description: msg, variant: "destructive" });
+      toast({ title: "The run failed", description: msg, variant: "destructive" });
     } finally {
       setRunning(false);
     }
@@ -83,18 +84,18 @@ export default function AgentsHubPage() {
   const categories = Array.from(new Set(agents.map(a => a.category)));
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className={`min-h-screen ${siteRoot}`} style={SITE_FONT}>
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         <div className="flex items-center justify-between mb-8">
           <div>
             <Link to="/dashboard" className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-2 mb-2">
               <ArrowLeft className="w-4 h-4" /> Dashboard
             </Link>
-            <h1 className="text-4xl font-bold tracking-tight" style={{ fontFamily: "Orbitron, sans-serif" }}>
+            <h1 className="text-4xl font-semibold tracking-[-0.02em]">
               Vertal Agents
             </h1>
             <p className="text-muted-foreground mt-1">
-              Vertal creative microservices — each agent is an edge function with atomic credit debit.
+              Creative agents you run with your credits. Each agent does one task.
             </p>
           </div>
           <Badge variant="secondary" className="text-sm">
@@ -158,7 +159,7 @@ export default function AgentsHubPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <Textarea
-                  placeholder="Write the prompt/instruction…"
+                  placeholder="Write what the agent should do…"
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   rows={5}
@@ -170,7 +171,7 @@ export default function AgentsHubPage() {
                   disabled={!selected || running || !prompt.trim()}
                 >
                   {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                  {running ? "Executando…" : selected ? `Rodar (${selected.credit_cost} créditos)` : "Selecione"}
+                  {running ? "Running…" : selected ? `Run (${selected.credit_cost} credits)` : "Choose an agent"}
                 </Button>
                 {result != null && (
                   <pre className="text-xs bg-muted/40 rounded p-3 overflow-auto max-h-80">
@@ -182,7 +183,7 @@ export default function AgentsHubPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Latest executions</CardTitle>
+                <CardTitle className="text-base">Latest runs</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 max-h-80 overflow-auto">
                 {jobs.length === 0 && (

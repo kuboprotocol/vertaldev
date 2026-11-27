@@ -23,8 +23,8 @@ export default function ConnectorSpotifyPage() {
   // Resultado do callback OAuth (?spotify=connected ou ?error=...).
   useEffect(() => {
     const err = params.get('error')
-    if (err) toast.error(`Falha ao conectar o Spotify: ${err}`)
-    if (params.get('spotify') === 'connected') { toast.success('Spotify conectado'); void syncFluxosConnection('spotify') }
+    if (err) toast.error(`We could not connect Spotify: ${err}`)
+    if (params.get('spotify') === 'connected') { toast.success('Spotify is connected'); void syncFluxosConnection('spotify') }
     if (err || params.get('spotify')) {
       const next = new URLSearchParams(params)
       next.delete('error'); next.delete('spotify')
@@ -43,7 +43,7 @@ export default function ConnectorSpotifyPage() {
     const url = await startSpotifyConnect('/connectors/spotify', window.location.origin)
     setBusy(false)
     if (!url) {
-      toast.error('Não foi possível iniciar a conexão com o Spotify. Tente de novo em instantes.')
+      toast.error('We could not start the Spotify connection. Please try again in a moment.')
       return
     }
     window.location.href = url
@@ -55,7 +55,7 @@ export default function ConnectorSpotifyPage() {
     setBusy(false)
     setTracks([])
     await refresh()
-    toast.success('Spotify desconectado')
+    toast.success('Spotify is disconnected')
   }
 
   const search = async (e: FormEvent) => {
@@ -83,7 +83,7 @@ export default function ConnectorSpotifyPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-8">
       <button type="button" onClick={() => navigate('/connectors')} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="h-4 w-4" /> Conectores
+        <ArrowLeft className="h-4 w-4" /> Connectors
       </button>
 
       <Card>
@@ -93,26 +93,26 @@ export default function ConnectorSpotifyPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {status === null ? (
-            <p className="text-sm text-muted-foreground">Verificando conexão…</p>
+            <p className="text-sm text-muted-foreground">Checking the connection…</p>
           ) : status.connected ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm">Conectado{status.display_name ? ` como ${status.display_name}` : ''}. No chat, peça uma música e ela toca aqui mesmo.</p>
+              <p className="text-sm">Connected{status.display_name ? ` as ${status.display_name}` : ''}. Ask for a song in the chat and it plays right here.</p>
               <Button variant="outline" size="sm" onClick={disconnect} disabled={busy}>
-                <Unplug className="mr-2 h-4 w-4" /> Desconectar
+                <Unplug className="mr-2 h-4 w-4" /> Disconnect
               </Button>
             </div>
           ) : (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                Conecte sua conta para pedir músicas no chat. A busca e o player funcionam sem Premium; tocar no seu aparelho exige Premium.
+                Connect your account to ask for songs in the chat. Search and the player work without Premium. Playing on your own device needs Premium.
               </p>
-              <Button onClick={connect} disabled={busy}>Conectar Spotify</Button>
+              <Button onClick={connect} disabled={busy}>Connect Spotify</Button>
             </div>
           )}
 
           {status?.connected && (
             <form onSubmit={search} className="flex gap-2">
-              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Música, artista ou álbum" aria-label="Buscar no Spotify" />
+              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Song, artist or album" aria-label="Search Spotify" />
               <Button type="submit" disabled={busy || !query.trim()}><Search className="h-4 w-4" /></Button>
             </form>
           )}
@@ -125,7 +125,7 @@ export default function ConnectorSpotifyPage() {
             <li key={t.id} className="space-y-2 rounded-xl border border-border/60 bg-card p-4">
               <div className="flex items-center justify-between gap-3">
                 <p className="truncate text-sm font-semibold">{t.title} <span className="font-normal text-muted-foreground">— {t.artist}</span></p>
-                <Button size="sm" variant="ghost" onClick={() => play(t)} disabled={playingId === t.id}>Tocar no aparelho</Button>
+                <Button size="sm" variant="ghost" onClick={() => play(t)} disabled={playingId === t.id}>Play on my device</Button>
               </div>
               <iframe
                 title={`Spotify: ${t.title}`}

@@ -48,16 +48,16 @@ export default function AdminRewardsActivity() {
     <Card>
       <CardContent className="space-y-3 p-4">
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-muted-foreground">Checklist diário (vídeo + 5 músicas do Kubo + 1 vídeo extra). A coluna TERRA mostra só o histórico: o anúncio saiu do site.</span>
+          <span className="text-muted-foreground">Daily checklist (video, 5 Kubo songs and 1 extra video). The TERRA column shows history only: that ad is no longer on the site.</span>
           <span className="ml-auto text-xs text-muted-foreground">
-            {completedCount}/{rows.length} usuário-dia completos
+            {completedCount}/{rows.length} user-days complete
           </span>
           {[1, 7, 30].map((d) => (
             <Button key={d} size="sm" variant={d === days ? "default" : "outline"} onClick={() => setDays(d)}>
-              {d === 1 ? "Hoje" : `${d} dias`}
+              {d === 1 ? "Today" : `${d} days`}
             </Button>
           ))}
-          <Button size="sm" variant="ghost" onClick={() => void load()} aria-label="Atualizar">
+          <Button size="sm" variant="ghost" onClick={() => void load()} aria-label="Refresh">
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
@@ -65,21 +65,21 @@ export default function AdminRewardsActivity() {
         <div className="max-h-[600px] overflow-auto">
           {busy && (
             <div className="p-6 text-center text-sm text-muted-foreground">
-              <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> Carregando…
+              <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> Loading...
             </div>
           )}
           <table className="w-full text-xs" data-testid="admin-rewards-activity">
             <thead className="sticky top-0 bg-muted/40">
               <tr>
-                <th className="p-2 text-left">Dia</th>
-                <th className="p-2 text-left">Usuário</th>
-                <th className="p-2 text-right">Vídeos</th>
-                <th className="p-2 text-right">Músicas</th>
+                <th className="p-2 text-left">Day</th>
+                <th className="p-2 text-left">User</th>
+                <th className="p-2 text-right">Videos</th>
+                <th className="p-2 text-right">Songs</th>
                 <th className="p-2 text-right">TERRA</th>
                 <th className="p-2 text-left">Checklist</th>
-                <th className="p-2 text-right">Pendente</th>
-                <th className="p-2 text-right">Liberado</th>
-                <th className="p-2 text-right">Expirado</th>
+                <th className="p-2 text-right">Pending</th>
+                <th className="p-2 text-right">Released</th>
+                <th className="p-2 text-right">Expired</th>
               </tr>
             </thead>
             <tbody>
@@ -94,7 +94,7 @@ export default function AdminRewardsActivity() {
                   <td className="p-2 text-right">{r.terra_ads}</td>
                   <td className="p-2">
                     <Badge variant={r.completed ? "default" : "outline"} className="text-[10px]">
-                      {r.completed ? "completo" : "incompleto"}
+                      {r.completed ? "complete" : "incomplete"}
                     </Badge>
                   </td>
                   <td className="p-2 text-right">{r.pending_credits}</td>
@@ -105,7 +105,7 @@ export default function AdminRewardsActivity() {
               {!busy && rows.length === 0 && (
                 <tr>
                   <td colSpan={9} className="p-6 text-center text-muted-foreground">
-                    Nenhuma atividade no período.
+                    No activity in this period.
                   </td>
                 </tr>
               )}

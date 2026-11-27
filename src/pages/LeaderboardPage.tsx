@@ -1,9 +1,9 @@
 import { APP_NAME } from '@/config/brand'
-import AnimatedLogo from '@/components/branding/AnimatedLogo'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Button } from '@/components/ui/button'
-import { ArrowLeft, Trophy, Flame, Crown, Medal } from 'lucide-react'
+import { Trophy, Flame, Crown, Medal } from 'lucide-react'
+import AppShell, { AppTopBar, PanelHeader } from '@/components/site/AppShell'
+import { Brand, primaryButton, secondaryButton, surface } from '@/components/site/siteUi'
 import { motion } from 'framer-motion'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/integrations/supabase/client'
@@ -17,9 +17,9 @@ interface LeaderboardEntry {
 }
 
 const RANK_STYLES = [
-  { bg: 'from-yellow-500/20 to-amber-500/20', border: 'border-yellow-500/40', icon: Crown, color: 'text-yellow-500' },
-  { bg: 'from-slate-300/20 to-slate-400/20', border: 'border-slate-400/40', icon: Medal, color: 'text-slate-400' },
-  { bg: 'from-amber-700/20 to-orange-600/20', border: 'border-amber-700/40', icon: Medal, color: 'text-amber-700' },
+  { icon: Crown, color: 'text-yellow-500' },
+  { icon: Medal, color: 'text-slate-400' },
+  { icon: Medal, color: 'text-amber-600' },
 ]
 
 export default function LeaderboardPage() {
@@ -78,122 +78,78 @@ export default function LeaderboardPage() {
   if (!user) { navigate('/auth'); return null }
 
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
-      <div className="absolute inset-0 gradient-mesh pointer-events-none" />
+    <AppShell width="narrow" topBar={<AppTopBar back={{ to: '/recompensas', label: 'Rewards' }} title="Leaderboard" />}>
+      <PanelHeader
+        icon={<Trophy className="h-7 w-7" aria-hidden />}
+        title="Streak leaderboard"
+        description={<>The longest daily streaks in the <Brand>{APP_NAME}</Brand> community.</>}
+        actions={userRank ? <span className="text-[15px] font-medium text-primary">Your rank: #{userRank}</span> : undefined}
+      />
 
-      <header className="sticky top-0 z-50 glass glass-border">
-        <div className="max-w-lg mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/recompensas')} className="rounded-xl">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <AnimatedLogo size={20} />
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <Trophy className="h-4 w-4 text-primary" />
-            <span className="text-primary font-bold">Leaderboard</span>
-          </div>
+      {loading ? (
+        <div className="py-12 text-center">
+          <Flame className="mx-auto mb-3 h-7 w-7 animate-pulse text-primary" aria-hidden />
+          <p className="text-[15px] text-muted-foreground">Loading leaderboard...</p>
         </div>
-      </header>
-
-      <main className="max-w-lg mx-auto px-4 sm:px-6 py-8 relative z-10">
-        {/* Header */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-yellow-500/20 flex items-center justify-center mx-auto mb-4">
-            <Trophy className="h-8 w-8 text-primary" />
-          </div>
-          <h1 className="font-display font-bold text-2xl text-foreground">🏆 Streak Leaderboard</h1>
-          <p className="text-muted-foreground text-sm mt-1">The longest streaks in the {APP_NAME} community</p>
-          {userRank && (
-            <p className="text-primary text-sm font-bold mt-2">
-              Your rank: #{userRank}
-            </p>
-          )}
+      ) : entries.length === 0 ? (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`${surface.panel} px-6 py-12 text-center`}>
+          <p className="text-[15px] text-muted-foreground">No streaks yet.</p>
+          <button type="button" className={`${primaryButton} mt-5`} onClick={() => navigate('/recompensas')}>
+            Start my streak
+          </button>
         </motion.div>
+      ) : (
+        <ol className={`${surface.panel} divide-y divide-white/[0.06]`}>
+          {entries.map((entry, i) => {
+            const isCurrentUser = entry.user_id === user?.id
+            const rankStyle = i < 3 ? RANK_STYLES[i] : null
+            const RankIcon = rankStyle?.icon || null
 
-        {loading ? (
-          <div className="text-center py-12">
-            <Flame className="h-8 w-8 text-primary mx-auto animate-pulse mb-3" />
-            <p className="text-muted-foreground">Loading leaderboard...</p>
-          </div>
-        ) : entries.length === 0 ? (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12">
-            <p className="text-muted-foreground">No streaks registered yet.</p>
-            <Button variant="hero" className="mt-4" onClick={() => navigate('/recompensas')}>
-              🔥 Start my streak
-            </Button>
-          </motion.div>
-        ) : (
-          <div className="space-y-3">
-            {entries.map((entry, i) => {
-              const isCurrentUser = entry.user_id === user?.id
-              const rankStyle = i < 3 ? RANK_STYLES[i] : null
-              const RankIcon = rankStyle?.icon || null
+            return (
+              <li
+                key={entry.user_id}
+                className={`flex items-center gap-4 px-4 py-3.5 ${isCurrentUser ? 'bg-primary/[0.06]' : ''}`}
+              >
+                <div className={`flex h-9 w-9 shrink-0 items-center justify-center text-[15px] font-semibold tabular-nums ${rankStyle ? rankStyle.color : 'text-muted-foreground'}`}>
+                  {RankIcon ? <RankIcon className="h-5 w-5" aria-label={`Rank ${i + 1}`} /> : i + 1}
+                </div>
 
-              return (
-                <motion.div
-                  key={entry.user_id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.05 }}
-                  className={`glass glass-border rounded-2xl p-4 flex items-center gap-4 ${
-                    isCurrentUser ? 'ring-2 ring-primary/40 border-primary/30' : ''
-                  } ${rankStyle ? `bg-gradient-to-r ${rankStyle.bg} ${rankStyle.border}` : ''}`}
-                >
-                  {/* Rank number */}
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-display font-bold text-lg ${
-                    rankStyle ? rankStyle.color : 'text-muted-foreground'
-                  } ${i < 3 ? 'bg-background/50' : 'bg-muted/30'}`}>
-                    {RankIcon ? <RankIcon className="h-5 w-5" /> : i + 1}
-                  </div>
-
-                  {/* Avatar */}
-                  <div className="w-10 h-10 rounded-full bg-muted overflow-hidden flex-shrink-0">
-                    {entry.avatar_url ? (
-                      <img src={entry.avatar_url} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm font-bold">
-                        {(entry.display_name || '?')[0].toUpperCase()}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Name & streak */}
-                  <div className="flex-1 min-w-0">
-                    <p className={`font-bold truncate ${isCurrentUser ? 'text-primary' : 'text-foreground'}`}>
-                      {entry.display_name || 'Anonymous'}
-                      {isCurrentUser && <span className="text-xs ml-1 opacity-70">(you)</span>}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Current streak: {entry.current_streak} days
-                    </p>
-                  </div>
-
-                  {/* Longest streak */}
-                  <div className="text-right flex-shrink-0">
-                    <div className={`text-xl font-display font-bold ${rankStyle ? rankStyle.color : 'text-primary'}`}>
-                      {entry.longest_streak}
+                <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-muted">
+                  {entry.avatar_url ? (
+                    <img src={entry.avatar_url} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-muted-foreground">
+                      {(entry.display_name || '?')[0].toUpperCase()}
                     </div>
-                    <span className="text-xs text-muted-foreground">record</span>
-                  </div>
-                </motion.div>
-              )
-            })}
-          </div>
-        )}
+                  )}
+                </div>
 
-        {/* CTA */}
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="mt-8 text-center">
-          <Button
-            variant="outline"
-            className="rounded-full gap-2 px-6"
-            onClick={() => navigate('/recompensas')}
-          >
-            <Flame className="h-4 w-4" />
-            🔥 Back to earn credits
-          </Button>
-        </motion.div>
-      </main>
-    </div>
+                <div className="min-w-0 flex-1">
+                  <p className={`truncate text-[15px] font-medium ${isCurrentUser ? 'text-primary' : 'text-foreground'}`}>
+                    {entry.display_name || 'Anonymous'}
+                    {isCurrentUser && <span className="ml-1 text-xs opacity-70">(you)</span>}
+                  </p>
+                  <p className="text-[13px] text-muted-foreground">Current streak: {entry.current_streak} days</p>
+                </div>
+
+                <div className="shrink-0 text-right">
+                  <div className={`text-lg font-semibold tabular-nums ${rankStyle ? rankStyle.color : 'text-foreground'}`}>
+                    {entry.longest_streak}
+                  </div>
+                  <span className="text-[12px] text-muted-foreground">Best</span>
+                </div>
+              </li>
+            )
+          })}
+        </ol>
+      )}
+
+      <div className="mt-8 text-center">
+        <button type="button" className={secondaryButton} onClick={() => navigate('/recompensas')}>
+          <Flame className="h-4 w-4" aria-hidden />
+          Back to rewards
+        </button>
+      </div>
+    </AppShell>
   )
 }

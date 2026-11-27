@@ -35,6 +35,8 @@ import {
   type RouteSeo,
 } from "../src/config/seo";
 import { hreflangLinks, localizedUrls, renderLocalizedPages } from "./seoLocales";
+import { ROOT_LOCALE } from "../src/config/locales";
+import { isEnglishRoute } from "../src/config/siteLanguage";
 import { renderVibePayPages, vibePayUrls } from "./vibePay";
 import { VIBE_PAY, VIBE_PAY_COPY } from "../src/config/vibePay";
 // Vertal CRM grátis (landing + docs em vários idiomas). Interruptor: VERTAL_FREE_CRM_SEO=false.
@@ -237,10 +239,17 @@ function withBody(html: string, body: string): string {
   return html.replace(/<div id="root">[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/, `<div id="root">${body}</div>`);
 }
 
-/** HTML de cada página pública em pt-BR (raiz), indexado pelo arquivo de saída. */
+/** HTML de cada página pública (inglês ou pt-BR, conforme siteLanguage), indexado pelo arquivo de saída. */
 export function prerenderPages(html: string, origin: string = SITE_ORIGIN): Map<string, string> {
   // O index.html traz o hreflang da home; cada página põe o seu.
-  const indexHtml = html.replace(/\s*<link rel="alternate" hreflang="[^"]*" href="[^"]*" \/>/g, "");
+  // A home ("/") é em inglês; as páginas pré-renderizadas aqui são em pt-BR.
+  // Páginas já convertidas para inglês (src/config/siteLanguage.ts) mantêm lang="en".
+  const englishHtml = html.replace(/\s*<link rel="alternate" hreflang="[^"]*" href="[^"]*" \/>/g, "");
+  const indexHtml = html
+    .replace(/\s*<link rel="alternate" hreflang="[^"]*" href="[^"]*" \/>/g, "")
+    .replace('<html lang="en">', `<html lang="${ROOT_LOCALE}">`)
+    .replace('<meta property="og:locale" content="en_US" />', '<meta property="og:locale" content="pt_BR" />')
+    .replace(/\s*<meta property="og:locale:alternate" content="pt_BR" \/>/, "");
   const pages = new Map<string, string>();
   const home = [APP_NAME, "/"] as [string, string];
 
@@ -248,7 +257,8 @@ export function prerenderPages(html: string, origin: string = SITE_ORIGIN): Map<
     if (path === "/") continue;
     const extra = [jsonLd(breadcrumb(origin, [home, [seo.title, path]]))];
     if (path === "/alternativas") extra.push(hreflangLinks(origin, path));
-    let html = applyHead(indexHtml, seo, `${origin}${path}`, extra.join("\n    "));
+    const base = isEnglishRoute(path) ? englishHtml : indexHtml;
+    let html = applyHead(base, seo, `${origin}${path}`, extra.join("\n    "));
     if (path === "/alternativas") html = withBody(html, renderAlternativesIndexBody());
     pages.set(`${path.slice(1)}.html`, html);
   }

@@ -1,4 +1,4 @@
-// VERTAL Code AI · progresso da Equipe Vertal por núcleo (Pensa / Constrói / Entrega) e por papel.
+// VERTAL Code AI · Vertal Team progress by group (Think / Build / Deliver) and by role.
 import { Check, Loader2, MinusCircle, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TEAM_CORES, TEAM_STATE_LABEL, TIER_LABEL, type TeamRoleState, type TeamState } from '@/lib/vertalCodeAi/team';
@@ -13,7 +13,7 @@ function StateIcon({ state, live }: { state: TeamRoleState; live: boolean }) {
 
 export function VertalTeamProgress({ team, live }: { team: TeamState; live: boolean }) {
   return (
-    <div className="space-y-2 rounded-xl border border-border/60 p-2 text-xs" aria-label="Progresso da Equipe Vertal">
+    <div className="space-y-2 rounded-xl border border-border/60 p-2 text-xs" aria-label="Vertal Team progress">
       <div className="grid grid-cols-3 gap-1">
         {TEAM_CORES.map((c) => (
           <div
@@ -45,7 +45,7 @@ export function VertalTeamProgress({ team, live }: { team: TeamState; live: bool
       </ul>
       {team.decisions.length > 0 && (
         <details>
-          <summary className="cursor-pointer text-muted-foreground">Vertal Decide · {team.decisions.length} decisão(ões) rápidas</summary>
+          <summary className="cursor-pointer text-muted-foreground">Vertal Decide · {team.decisions.length} quick {team.decisions.length === 1 ? 'decision' : 'decisions'}</summary>
           <ul className="mt-1 space-y-0.5">
             {team.decisions.map((d, i) => (
               <li key={i}>
@@ -57,18 +57,18 @@ export function VertalTeamProgress({ team, live }: { team: TeamState; live: bool
       )}
       {(team.memory || team.budget) && (
         <p className="text-[11px] text-muted-foreground">
-          {team.memory?.available ? `Memória: usou ${team.memory.used}${team.memory.saved ? ` · guardou ${team.memory.saved}` : ''}` : team.memory ? 'Memória indisponível' : ''}
+          {team.memory?.available ? `Memory: used ${team.memory.used}${team.memory.saved ? ` · saved ${team.memory.saved}` : ''}` : team.memory ? 'Memory not available' : ''}
           {team.memory && team.budget ? ' · ' : ''}
-          {team.budget ? `Orçamento: ${team.budget.calls}/${team.budget.maxCalls} chamadas${team.budget.stopped ? ' (limite atingido)' : ''}` : ''}
+          {team.budget ? `Budget: ${team.budget.calls}/${team.budget.maxCalls} calls${team.budget.stopped ? ' (limit reached)' : ''}` : ''}
         </p>
       )}
       {team.pkg && (
         <div className="space-y-1 rounded-lg bg-secondary/40 p-2">
           <p className={cn('font-medium', team.pkg.verified ? 'text-emerald-300' : 'text-amber-300')}>
-            Pacote: {team.pkg.files.length} arquivo(s) · {team.pkg.verified ? 'verificado' : 'não totalmente verificado'}
-            {team.pkg.readyToShip === true && ' · pronto para entregar'}
+            Package: {team.pkg.files.length} {team.pkg.files.length === 1 ? 'file' : 'files'} · {team.pkg.verified ? 'verified' : 'not fully verified'}
+            {team.pkg.readyToShip === true && ' · ready to deliver'}
           </p>
-          {team.pkg.humanReview && <p className="text-amber-300">Recomendo revisão humana antes de publicar.</p>}
+          {team.pkg.humanReview && <p className="text-amber-300">A person should review this before you publish.</p>}
           {team.pkg.questions.length > 0 && (
             <ul className="list-disc pl-4">
               {team.pkg.questions.map((q, i) => (

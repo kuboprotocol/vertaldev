@@ -104,7 +104,7 @@ export default function KuboMusicPanel({
       if (started.ok && started.nonce && currentRef.current === trackId) {
         nonceRef.current = started.nonce;
       } else if (!started.ok && started.error === "rate_limited") {
-        toast.info("Muitas trocas de música. Aguarde um pouco.");
+        toast.info("Too many track changes. Please wait a little.");
       }
     } catch {
       /* sem sessão o progresso desta faixa não conta; a próxima troca tenta de novo */
@@ -202,27 +202,27 @@ export default function KuboMusicPanel({
   const counted = tracks.filter((t) => t.counted).length;
 
   return (
-    <Card className="glass glass-border" data-testid="kubo-music-panel">
+    <Card className="rounded-2xl border-white/[0.06] bg-card/50" data-testid="kubo-music-panel">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Music2 className="h-5 w-5 text-primary" />
-            Músicas do Kubo
+            Kubo music
           </CardTitle>
           <span className="text-xs text-muted-foreground" data-testid="kubo-music-count">
-            {counted}/{tracks.length} ouvidas hoje
+            {counted}/{tracks.length} played today
           </span>
         </div>
         <CardDescription>
-          Ouça as 5 músicas do Kubo. Cada uma conta depois de {minSeconds} segundos tocando de verdade
-          (pausar ou pular para frente não conta).
+          Listen to the 5 Kubo songs. Each song counts after {minSeconds} seconds of real playback
+          (pausing or skipping ahead does not count).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <div ref={hostRef} className="min-h-[152px] overflow-hidden rounded-xl" data-testid="kubo-spotify-embed" />
         {playerError && (
           <p className="text-xs text-destructive">
-            Não foi possível carregar o player do Spotify. Se usa bloqueador, libere open.spotify.com e recarregue.
+            We could not load the Spotify player. If you use a blocker, allow open.spotify.com and reload the page.
           </p>
         )}
         <ul className="space-y-2">
@@ -245,14 +245,14 @@ export default function KuboMusicPanel({
                   <div className="flex items-center justify-between gap-2 text-sm">
                     <span className="flex items-center gap-2">
                       {t.counted ? (
-                        <CheckCircle2 className="h-4 w-4 text-green-500" aria-label="Contada" />
+                        <CheckCircle2 className="h-4 w-4 text-green-500" aria-label="Counted" />
                       ) : (
                         <PlayCircle className={`h-4 w-4 ${isCurrent && playing ? "text-primary" : "text-muted-foreground"}`} />
                       )}
                       {i + 1}. {t.title}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {t.counted ? "ouvida" : `${Math.floor(shown)}/${minSeconds}s`} · {fmt(t.duration_seconds)}
+                      {t.counted ? "played" : `${Math.floor(shown)}/${minSeconds}s`} · {fmt(t.duration_seconds)}
                     </span>
                   </div>
                   {!t.counted && <Progress value={(shown / minSeconds) * 100} className="mt-2 h-1" />}
@@ -262,9 +262,9 @@ export default function KuboMusicPanel({
           })}
         </ul>
         <p className="text-[11px] text-muted-foreground">
-          Sem login no Spotify o player toca prévias de 30 s, que já contam.{" "}
+          Without a Spotify login, the player plays 30-second previews. Previews count too.{" "}
           <a href={KUBO_SPOTIFY_ARTIST_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 underline">
-            Kubo no Spotify <ExternalLink className="h-3 w-3" />
+            Kubo on Spotify <ExternalLink className="h-3 w-3" />
           </a>
         </p>
       </CardContent>

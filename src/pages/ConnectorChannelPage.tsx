@@ -11,6 +11,7 @@ import { ArrowLeft, ChevronDown, Copy, Inbox, RefreshCw, Send, Settings2 } from 
 import { functionErrorCode } from '@/lib/functionError'
 import { WhatsAppConnectPanel } from '@/components/connectors/WhatsAppConnectPanel'
 import { FluxosConnectPanel } from '@/components/connectors/FluxosConnectPanel'
+import { SITE_FONT, siteRoot } from '@/components/site/siteUi'
 
 export type ChannelId = 'instagram' | 'whatsapp'
 
@@ -26,19 +27,19 @@ interface ChannelSpec {
 const SPEC: Record<ChannelId, ChannelSpec> = {
   instagram: {
     label: 'Instagram',
-    subtitle: 'Sua conta profissional do Instagram, pela API oficial da Meta',
+    subtitle: 'Your Instagram professional account, through the official Meta API',
     webhookFn: 'virtual-chat-instagram-webhook',
-    subscribeHint: 'No app da Meta, em Instagram → Webhooks, assine o campo "messages".',
+    subscribeHint: 'In the Meta app, go to Instagram → Webhooks and subscribe to the "messages" field.',
     secrets: ['INSTAGRAM_VERIFY_TOKEN', 'INSTAGRAM_APP_SECRET', 'INSTAGRAM_ACCESS_TOKEN', 'INSTAGRAM_ACCOUNT_ID', 'INSTAGRAM_ALLOWED_IG_IDS'],
-    rule: 'Respostas automáticas só para os IDs em INSTAGRAM_ALLOWED_IG_IDS. Texto livre só até 24 h depois da última mensagem do contato.',
+    rule: 'Automatic replies only go to the IDs in INSTAGRAM_ALLOWED_IG_IDS. Free-form text is only allowed up to 24 hours after the contact\'s last message.',
   },
   whatsapp: {
     label: 'WhatsApp',
-    subtitle: 'WhatsApp Business Cloud API (conta de negócio)',
+    subtitle: 'WhatsApp Business Cloud API (business account)',
     webhookFn: 'virtual-chat-webhook',
-    subscribeHint: 'No app da Meta, em WhatsApp → Configuração, assine o campo "messages".',
+    subscribeHint: 'In the Meta app, go to WhatsApp → Configuration and subscribe to the "messages" field.',
     secrets: ['WHATSAPP_VERIFY_TOKEN', 'WHATSAPP_APP_SECRET', 'WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_ALLOWED_WA_IDS'],
-    rule: 'Respostas automáticas só para os números em WHATSAPP_ALLOWED_WA_IDS. Texto livre só até 24 h depois da última mensagem do cliente.',
+    rule: 'Automatic replies only go to the numbers in WHATSAPP_ALLOWED_WA_IDS. Free-form text is only allowed up to 24 hours after the customer\'s last message.',
   },
 }
 
@@ -53,10 +54,10 @@ interface InboxRow {
 }
 
 const SEND_ERRORS: Record<string, string> = {
-  outside_window: 'Fora da janela de 24 h: só dá para responder quem escreveu nas últimas 24 horas.',
-  channel_not_configured: 'Este canal ainda não está configurado no servidor.',
-  forbidden: 'Só o dono da conta pode enviar pelos canais.',
-  invalid_input: 'Confira o destinatário (id numérico) e o texto.',
+  outside_window: 'Outside the 24-hour window: you can only reply to people who wrote in the last 24 hours.',
+  channel_not_configured: 'This channel is not set up on the server yet.',
+  forbidden: 'Only the account owner can send through the channels.',
+  invalid_input: 'Check the recipient (numeric ID) and the text.',
 }
 
 export default function ConnectorChannelPage({ channel }: { channel: ChannelId }) {
@@ -82,7 +83,7 @@ export default function ConnectorChannelPage({ channel }: { channel: ChannelId }
     const { data, error } = await supabase.functions.invoke('channel-inbox', { body: { channel, limit: 30 } })
     if (error) {
       const code = await functionErrorCode(error)
-      setLoadError(code === 'forbidden' ? 'Só o dono da conta pode ver esta caixa de entrada.' : 'Não foi possível carregar a caixa de entrada agora.')
+      setLoadError(code === 'forbidden' ? 'Only the account owner can see this inbox.' : 'We could not load the inbox right now.')
       setMessages([])
     } else {
       setConfigured(!!data?.configured?.[channel])
@@ -95,7 +96,7 @@ export default function ConnectorChannelPage({ channel }: { channel: ChannelId }
 
   const send = async () => {
     if (!to.trim() || !text.trim()) {
-      toast.error('Informe o destinatário e a mensagem')
+      toast.error('Enter the recipient and the message')
       return
     }
     setSending(true)
@@ -105,10 +106,10 @@ export default function ConnectorChannelPage({ channel }: { channel: ChannelId }
     setSending(false)
     if (error) {
       const code = await functionErrorCode(error)
-      toast.error(SEND_ERRORS[code ?? ''] ?? 'Não foi possível enviar a mensagem.')
+      toast.error(SEND_ERRORS[code ?? ''] ?? 'We could not send the message.')
       return
     }
-    toast.success('Mensagem enviada')
+    toast.success('Message sent')
     setText('')
     load()
   }
@@ -116,19 +117,19 @@ export default function ConnectorChannelPage({ channel }: { channel: ChannelId }
   const copyWebhook = async () => {
     try {
       await navigator.clipboard.writeText(webhookUrl)
-      toast.success('URL copiada')
+      toast.success('URL copied')
     } catch {
-      toast.error('Não foi possível copiar. Selecione a URL e copie manualmente.')
+      toast.error('We could not copy. Select the URL and copy it by hand.')
     }
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className={`min-h-screen ${siteRoot}`} style={SITE_FONT}>
       <div className="border-b border-border bg-card/50 backdrop-blur-xl sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => navigate('/connectors')}>
-              <ArrowLeft className="w-4 h-4 mr-1" /> Voltar
+              <ArrowLeft className="w-4 h-4 mr-1" /> Back
             </Button>
             <div>
               <h1 className="text-lg font-bold font-orbitron">{spec.label}</h1>
@@ -136,11 +137,11 @@ export default function ConnectorChannelPage({ channel }: { channel: ChannelId }
             </div>
           </div>
           {operatorVisible && <div className="flex items-center gap-2">
-            {configured === null && <Badge variant="outline">Verificando…</Badge>}
-            {configured === true && <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30" variant="outline">Conectado</Badge>}
-            {configured === false && <Badge variant="outline" className="border-amber-500/40 text-amber-400">Falta configurar</Badge>}
+            {configured === null && <Badge variant="outline">Checking…</Badge>}
+            {configured === true && <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30" variant="outline">Connected</Badge>}
+            {configured === false && <Badge variant="outline" className="border-amber-500/40 text-amber-400">Not set up</Badge>}
             <Button size="sm" variant="outline" onClick={load} disabled={loading}>
-              <RefreshCw className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Atualizar
+              <RefreshCw className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
             </Button>
           </div>}
         </div>
@@ -150,7 +151,7 @@ export default function ConnectorChannelPage({ channel }: { channel: ChannelId }
         <div className="max-w-5xl mx-auto px-4 pt-6">
           {/* Conexão do próprio cliente (token da Cloud API); a caixa abaixo é a do número do operador. */}
           <WhatsAppConnectPanel />
-          <h2 className="mt-8 text-sm font-semibold text-muted-foreground">Caixa de entrada do número do Vertal (operador)</h2>
+          <h2 className="mt-8 text-sm font-semibold text-muted-foreground">Inbox of the Vertal number (operator)</h2>
         </div>
       )}
 
@@ -161,7 +162,7 @@ export default function ConnectorChannelPage({ channel }: { channel: ChannelId }
             app="instagram"
             name="Instagram"
             returnPath="/connectors/instagram"
-            intro="Use uma conta profissional do Instagram (Empresa ou Criador de conteúdo). O login é feito na tela da Meta, com Instagram ou Facebook, e você escolhe quais contas liberar. Depois, peça no Vertal Chat para publicar fotos e Reels, ver métricas ou ler e responder DMs (sempre com a sua confirmação)."
+            intro="Use an Instagram professional account (Business or Creator). You sign in on the Meta screen, with Instagram or Facebook, and choose which accounts to allow. Then ask Vertal Chat to post photos and Reels, see insights, or read and answer DMs (always after you confirm)."
           />
           <Button
             variant="ghost"
@@ -171,12 +172,12 @@ export default function ConnectorChannelPage({ channel }: { channel: ChannelId }
             data-testid="instagram-advanced-toggle"
           >
             <Settings2 className="w-4 h-4 mr-1" />
-            {showOperator ? 'Ocultar avançado' : 'Avançado: canal do operador (webhook e segredos do servidor)'}
+            {showOperator ? 'Hide advanced' : 'Advanced: operator channel (webhook and server secrets)'}
             <ChevronDown className={`w-4 h-4 ml-1 transition ${showOperator ? 'rotate-180' : ''}`} />
           </Button>
           {showOperator && (
             <p className="text-xs text-muted-foreground">
-              Só para o dono do Vertal: a conta do Instagram do próprio Vertal, configurada por segredos do servidor, com respostas automáticas por IA.
+              Only for the Vertal owner: Vertal's own Instagram account, set up with server secrets, with automatic AI replies.
             </p>
           )}
         </div>
@@ -184,47 +185,47 @@ export default function ConnectorChannelPage({ channel }: { channel: ChannelId }
 
       {operatorVisible && <div className="max-w-5xl mx-auto px-4 py-6 grid gap-4 lg:grid-cols-[1fr_1fr]">
         <Card className="bg-card/30">
-          <CardHeader><CardTitle className="text-base">Conexão com a Meta</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">Meta connection</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
             <p className="text-muted-foreground">{spec.subscribeHint}</p>
             <div>
-              <p className="text-xs text-muted-foreground mb-1">URL de callback (Callback URL)</p>
+              <p className="text-xs text-muted-foreground mb-1">Callback URL</p>
               <div className="flex gap-2">
                 <code className="flex-1 truncate rounded-md border border-border bg-background px-3 py-2 text-xs">{webhookUrl}</code>
                 <Button size="sm" variant="outline" onClick={copyWebhook}><Copy className="w-4 h-4" /></Button>
               </div>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground mb-1">Segredos que o operador define no Supabase (Edge Functions → Secrets)</p>
+              <p className="text-xs text-muted-foreground mb-1">Secrets the operator sets in Supabase (Edge Functions → Secrets)</p>
               <ul className="list-disc pl-5 space-y-0.5">
                 {spec.secrets.map((s) => <li key={s}><code className="text-xs">{s}</code></li>)}
               </ul>
-              <p className="text-xs text-muted-foreground mt-2">Os valores nunca aparecem aqui nem no chat.</p>
+              <p className="text-xs text-muted-foreground mt-2">The values never show here or in the chat.</p>
             </div>
             <p className="text-xs text-muted-foreground border-t border-border pt-3">{spec.rule}</p>
           </CardContent>
         </Card>
 
         <Card className="bg-card/30">
-          <CardHeader><CardTitle className="text-base flex items-center gap-2"><Send className="w-4 h-4" /> Responder</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base flex items-center gap-2"><Send className="w-4 h-4" /> Reply</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <Input value={to} onChange={(e) => setTo(e.target.value)} placeholder="ID do contato (número)" inputMode="numeric" />
-            <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Escreva a mensagem" rows={4} maxLength={4000} />
+            <Input value={to} onChange={(e) => setTo(e.target.value)} placeholder="Contact ID (number)" inputMode="numeric" />
+            <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Write your message" rows={4} maxLength={4000} />
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">Toque em um contato na caixa para preencher o destinatário.</p>
+              <p className="text-xs text-muted-foreground">Tap a contact in the inbox to fill in the recipient.</p>
               <Button onClick={send} disabled={sending || configured === false}>
-                <Send className="w-4 h-4 mr-1" /> {sending ? 'Enviando…' : 'Enviar'}
+                <Send className="w-4 h-4 mr-1" /> {sending ? 'Sending…' : 'Send'}
               </Button>
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-card/30 lg:col-span-2">
-          <CardHeader><CardTitle className="text-base flex items-center gap-2"><Inbox className="w-4 h-4" /> Caixa de entrada</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base flex items-center gap-2"><Inbox className="w-4 h-4" /> Inbox</CardTitle></CardHeader>
           <CardContent>
             {loadError && <p className="text-sm text-amber-400 mb-3">{loadError}</p>}
             {!loadError && messages.length === 0 && !loading && (
-              <p className="text-sm text-muted-foreground">Nenhuma mensagem ainda. Elas aparecem aqui assim que chegarem pelo webhook.</p>
+              <p className="text-sm text-muted-foreground">No messages yet. They show here as soon as they arrive through the webhook.</p>
             )}
             <ul className="divide-y divide-border">
               {messages.map((m, i) => (

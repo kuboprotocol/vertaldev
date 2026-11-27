@@ -27,9 +27,9 @@ describe('banner Vertal Office no dashboard', () => {
         </Routes>
       </MemoryRouter>,
     )
-    const banner = screen.getByRole('link', { name: 'Abrir o Vertal Office grátis' })
-    expect(banner.textContent).toContain('GRÁTIS')
-    expect(banner.textContent).toContain('sem pagar nada')
+    const banner = screen.getByRole('link', { name: 'Open the free Vertal Office' })
+    expect(banner.textContent).toContain('FREE')
+    expect(banner.textContent).toContain('free of charge')
     fireEvent.click(banner)
     expect(screen.getByText('office aberto')).toBeTruthy()
   })

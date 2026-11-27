@@ -27,13 +27,13 @@ export const BILLING_MODELS: Record<ExecutionModel, BillingModel> = {
     model: "cloud",
     label: "Per container minute",
     description:
-      "The device only drives a remote session. Every active minute of the ephemeral Vertal Cloud container is charged to the same credit ledger.",
+      "The device only controls a remote session. Each active minute of the temporary Vertal Cloud container uses credits from the same balance.",
   },
   local: {
     model: "local",
     label: "Per AI action",
     description:
-      "Execution happens on your own machine, so there is no container to host. You are only charged for AI actions — identical to Vibe Code on the web.",
+      "Code runs on your own computer, so there is no container to host. You pay only for AI actions, the same as Vibe Code on the web.",
   },
 };
 
@@ -77,13 +77,13 @@ export const PLATFORMS: PlatformSpec[] = [
     client: "Vertal Local Agent + VS Code / Cursor extension",
     status: "beta",
     capabilities: [
-      "Background Rust daemon watching your workspace",
-      "Real PowerShell terminal — no remote container",
-      "Real local git binary, syncing with GitMoom",
+      "Background agent that watches your workspace",
+      "Your own PowerShell terminal, no remote container",
+      "Your local git, synced with GitHub",
       "Standalone app and VS Code / Cursor extension share the same daemon",
     ],
     limitations: [
-      "Signed installer required — SmartScreen blocks unsigned builds",
+      "The installer is not signed yet, so SmartScreen shows a warning",
       "Folder access is granted per project, never filesystem-wide",
     ],
     download: { label: "Download for Windows", href: "/downloads/kubo-local-agent-setup.exe" },
@@ -96,12 +96,12 @@ export const PLATFORMS: PlatformSpec[] = [
     client: "Vertal Local Agent + Xcode integration",
     status: "beta",
     capabilities: [
-      "Same daemon as Windows/Linux, notarized for macOS",
+      "Same agent as on Windows and Linux",
       "Xcode, Swift toolchain and Simulator integration",
-      "Real zsh terminal and local git",
+      "Your own zsh terminal and local git",
       "One-click bridge into VS Code or Cursor",
     ],
-    limitations: ["Apple notarization required for distribution outside the store"],
+    limitations: ["Not notarized yet, so Gatekeeper shows a warning"],
     download: { label: "Download for macOS", href: "/downloads/kubo-local-agent.dmg" },
   },
   {
@@ -113,10 +113,10 @@ export const PLATFORMS: PlatformSpec[] = [
     status: "beta",
     capabilities: [
       "Same daemon binary, installed as a systemd user service",
-      "Real shell and local git",
+      "Your own shell and local git",
       "Headless-friendly: works over SSH sessions",
     ],
-    limitations: ["No GUI installer — distributed as .deb / .rpm / tarball"],
+    limitations: ["No graphical installer"],
     download: { label: "Download for Linux", href: "/downloads/kubo-local-agent.tar.gz" },
   },
   {
@@ -127,14 +127,14 @@ export const PLATFORMS: PlatformSpec[] = [
     client: "Native shell around the Vertal Mobile Agent client",
     status: "available",
     capabilities: [
-      "Native code editor over a local copy — edits work offline",
+      "Native code editor over a local copy, so edits work offline",
       "Terminal client streaming a remote container session",
       "Git through the API, never a local git binary",
       "Live preview rendered from the cloud build",
       "Push notification when a build or deploy finishes",
     ],
     limitations: [
-      "The device never executes code — no local shell, no local build",
+      "The device never runs code: no local shell and no local build",
       "No Xcode / Simulator on the device: that stays a Mac job",
     ],
   },

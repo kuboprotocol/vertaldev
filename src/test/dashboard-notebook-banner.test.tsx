@@ -31,16 +31,16 @@ function renderDashboard() {
 describe('banner Vertal Notebook no dashboard', () => {
   it('mostra o lançamento e abre o Notebook ao clicar', () => {
     renderDashboard()
-    const banner = screen.getByRole('link', { name: 'Abrir o Vertal Notebook' })
-    expect(banner.textContent).toContain('LANÇAMENTO')
-    expect(banner.textContent).toContain('conversam com você')
+    const banner = screen.getByRole('link', { name: 'Open Vertal Notebook' })
+    expect(banner.textContent).toContain('NEW')
+    expect(banner.textContent).toContain('talk with your PDFs')
     fireEvent.click(banner)
     expect(screen.getByText('notebook aberto')).toBeTruthy()
   })
 
   it('abre pelo teclado', () => {
     renderDashboard()
-    fireEvent.keyDown(screen.getByRole('link', { name: 'Abrir o Vertal Notebook' }), { key: 'Enter' })
+    fireEvent.keyDown(screen.getByRole('link', { name: 'Open Vertal Notebook' }), { key: 'Enter' })
     expect(screen.getByText('notebook aberto')).toBeTruthy()
   })
 })

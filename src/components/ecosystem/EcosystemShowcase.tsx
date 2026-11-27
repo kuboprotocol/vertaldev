@@ -5,6 +5,7 @@ import { ArrowRight, Check, Code2, ExternalLink, Layers, Plug, Rocket, ShieldChe
 import type { LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { PageHeader, Reveal, SectionHeading, focusRing, surface } from '@/components/site/siteUi'
 import { cn } from '@/lib/utils'
 import { connectors } from '@/lib/connectorsConfig'
 import {
@@ -62,17 +63,17 @@ export function EcosystemActions({
 }) {
   return (
     <div className={cn('flex flex-wrap gap-2', className)}>
-      <Button size="sm" variant="hero" className="gap-1.5 rounded-xl" onClick={() => onEmbed(product)}>
+      <Button size="sm" className="gap-1.5 rounded-full" onClick={() => onEmbed(product)}>
         <MonitorPlay className="h-4 w-4" />
-        Abrir aqui
+        Open
       </Button>
-      <Button size="sm" variant="secondary" className="gap-1.5 rounded-xl" onClick={() => onMcp(product)}>
+      <Button size="sm" variant="secondary" className="gap-1.5 rounded-full" onClick={() => onMcp(product)}>
         <Plug className="h-4 w-4" />
-        Conectar MCP
+        Connect MCP
       </Button>
-      <Button asChild size="sm" variant="ghost" className="gap-1.5 rounded-xl">
+      <Button asChild size="sm" variant="ghost" className="gap-1.5 rounded-full">
         <a href={ecosystemLink(product)} target="_blank" rel="noopener noreferrer">
-          Ir para {product.domain}
+          Go to {product.domain}
           <ExternalLink className="h-3.5 w-3.5" />
         </a>
       </Button>
@@ -89,22 +90,14 @@ function ProductCard({
   onEmbed: (p: EcosystemProduct) => void
   onMcp: (p: EcosystemProduct) => void
 }) {
-  const Icon = PRODUCT_ICONS[product.id]
   const isCurrent = product.id === CURRENT
   return (
     <motion.div
-      variants={{ hidden: { opacity: 0, y: 18 }, show: { opacity: 1, y: 0 } }}
+      variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
       data-testid={`ecosystem-card-${product.id}`}
-      className={cn(
-        'relative flex flex-col gap-4 rounded-3xl border bg-card p-6 transition-colors',
-        isCurrent ? 'border-primary/50 shadow-gold' : 'border-border hover:border-primary/40',
-      )}
+      className={cn(surface.card, 'relative flex flex-col gap-4 p-6', isCurrent && 'border-primary/40')}
     >
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-24 rounded-t-3xl opacity-60"
-        style={{ background: `radial-gradient(60% 100% at 50% 0%, ${product.color}22, transparent)` }}
-      />
-      <div className="relative flex items-center gap-3">
+      <div className="flex items-center gap-3">
         <div
           className="flex h-12 w-12 items-center justify-center rounded-2xl"
           style={{ backgroundColor: `${product.color}1f` }}
@@ -112,92 +105,100 @@ function ProductCard({
           <ProductLogo product={product} className="h-6 w-6" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: product.color }}>
+          <p className="text-[13px] font-medium" style={{ color: product.color }}>
             {product.role}
           </p>
-          <h3 className="font-display text-xl font-bold text-foreground">{product.name}</h3>
+          <h3 className="text-xl font-semibold tracking-[-0.01em] text-foreground">
+            <span translate="no">{product.name}</span>
+          </h3>
         </div>
-        {isCurrent && <Badge className="shrink-0">Você está aqui</Badge>}
+        {isCurrent && (
+          <Badge variant="secondary" className="shrink-0 rounded-full font-medium">
+            You are here
+          </Badge>
+        )}
       </div>
-      <p className="relative text-sm font-medium text-foreground">{product.tagline}</p>
-      <p className="relative text-sm text-muted-foreground">{product.description}</p>
-      <ul className="relative space-y-2">
+      <p className="text-[17px] font-medium leading-snug text-foreground">{product.tagline}</p>
+      <p className="text-[15px] leading-relaxed text-muted-foreground">{product.description}</p>
+      <ul className="space-y-2">
         {product.strengths.map(s => (
-          <li key={s} className="flex gap-2 text-sm text-muted-foreground">
-            <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          <li key={s} className="flex gap-2 text-[15px] text-muted-foreground">
+            <Check className="mt-1 h-4 w-4 shrink-0 text-primary" aria-hidden />
             <span>{s}</span>
           </li>
         ))}
       </ul>
-      <p className="relative mt-auto text-xs text-muted-foreground/80">
-        Alternativa a {product.replaces.join(', ')}
+      <p className="mt-auto text-[13px] text-muted-foreground/80">
+        An alternative to {product.replaces.join(', ')}
       </p>
       {isCurrent ? (
-        <Button asChild size="sm" variant="secondary" className="relative rounded-xl gap-1.5 w-fit">
+        <Button asChild size="sm" variant="secondary" className="w-fit gap-1.5 rounded-full">
           <Link to="/builder">
-            Começar a criar <ArrowRight className="h-4 w-4" />
+            Start building <ArrowRight className="h-4 w-4" />
           </Link>
         </Button>
       ) : (
-        <EcosystemActions product={product} onEmbed={onEmbed} onMcp={onMcp} className="relative" />
+        <EcosystemActions product={product} onEmbed={onEmbed} onMcp={onMcp} />
       )}
     </motion.div>
   )
 }
 
 /**
- * Seção de marketing do Ecossistema Vertal: os três produtos, botões de
- * integração (iframe + MCP), diferenciais e comparação com concorrentes.
+ * Marketing block of the Vertal ecosystem: the three products, connect
+ * buttons (new tab + MCP), reasons to choose it and a comparison table.
+ * With `asPage`, the title is the page h1.
  */
-export default function EcosystemShowcase({ compact = false }: { compact?: boolean }) {
+export default function EcosystemShowcase({ compact = false, asPage = false }: { compact?: boolean; asPage?: boolean }) {
   const { openEmbed, openMcp, dialogs } = useEcosystemDialogs()
   const allMcp: EcosystemProduct = {
     ...ECOSYSTEM[0],
-    name: 'Ecossistema Vertal',
+    name: 'Vertal ecosystem',
     mcp: {
       ...ECOSYSTEM[0].mcp,
       url: undefined,
       cli: undefined,
       config: combinedMcpConfig(),
       tools: ECOSYSTEM.flatMap(p => p.mcp.tools.map(t => `${p.id}:${t}`)),
-      auth: 'Vertal Dev e Vertal.app: OAuth com a sua conta. Vertal Run: chave de API kubo_sk_….',
+      auth: 'Vertal Dev and Vertal.app: OAuth with your account. Vertal Run: a kubo_sk_… API key.',
       docsUrl: 'https://vertal.dev/docs/mcp',
     },
   }
 
+  const intro =
+    'KUBO Protocol connects the whole cycle. Vertal Dev builds with AI, Vertal Run runs code safely and Vertal.app puts it online. Open any of them, or connect all three to your agent with MCP.'
+
   return (
-    <section id="ecossistema" className="relative overflow-hidden px-6 py-24" data-testid="ecosystem-showcase">
-      <div className="pointer-events-none absolute inset-0 dot-pattern opacity-20" />
-      <div className="relative z-10 mx-auto max-w-6xl space-y-16">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="mx-auto max-w-3xl text-center"
-        >
-          <span className="mb-3 block text-xs font-medium uppercase tracking-widest text-primary">Ecossistema Vertal</span>
-          <h2 className="font-display text-3xl font-bold text-foreground md:text-5xl">
-            Crie, execute e publique.
-            <br />
-            <span className="hero-highlight">Tudo conectado.</span>
-          </h2>
-          <p className="mt-5 text-muted-foreground md:text-lg">
-            Enquanto os concorrentes resolvem uma etapa cada, a KUBO Protocol integrou o ciclo inteiro:
-            o Vertal Dev cria com IA, o Vertal Run executa código com segurança e o Vertal.app coloca no ar.
-            Abra qualquer um aqui dentro ou conecte os três ao seu agente via MCP.
-          </p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-2 text-sm font-medium">
-            {ECOSYSTEM.map((p, i) => (
-              <span key={p.id} className="flex items-center gap-2">
-                <span className="rounded-full border border-border bg-card px-4 py-1.5">
-                  <span style={{ color: p.color }}>{p.role}</span>
-                  <span className="text-muted-foreground"> · {p.name}</span>
-                </span>
-                {i < ECOSYSTEM.length - 1 && <ArrowRight className="h-4 w-4 text-muted-foreground" />}
+    <section
+      id="ecossistema"
+      aria-labelledby={asPage ? 'page-title' : 'ecosystem-title'}
+      className="relative"
+      data-testid="ecosystem-showcase"
+    >
+      {asPage ? (
+        <PageHeader eyebrow="Vertal ecosystem" title="Build, run and publish. All connected.">
+          {intro}
+        </PageHeader>
+      ) : (
+        <div className="px-6 pt-24">
+          <SectionHeading id="ecosystem-title" eyebrow="Vertal ecosystem" title="Build, run and publish. All connected.">
+            {intro}
+          </SectionHeading>
+        </div>
+      )}
+
+      <div className="mx-auto max-w-6xl space-y-20 px-6 pb-24">
+        <div className="flex flex-wrap items-center justify-center gap-2 text-[13px] font-medium">
+          {ECOSYSTEM.map((p, i) => (
+            <span key={p.id} className="flex items-center gap-2">
+              <span className="rounded-full border border-white/[0.08] bg-card/50 px-4 py-1.5">
+                <span style={{ color: p.color }}>{p.role}</span>
+                <span className="text-muted-foreground"> · {p.name}</span>
               </span>
-            ))}
-          </div>
-        </motion.div>
+              {i < ECOSYSTEM.length - 1 && <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden />}
+            </span>
+          ))}
+        </div>
 
         <motion.div
           className="grid gap-5 md:grid-cols-3"
@@ -213,91 +214,75 @@ export default function EcosystemShowcase({ compact = false }: { compact?: boole
 
         {!compact && (
           <>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {ECOSYSTEM_PILLARS.map((pillar, i) => {
                 const Icon = PILLAR_ICONS[i % PILLAR_ICONS.length]
                 return (
-                  <motion.div
-                    key={pillar.title}
-                    initial={{ opacity: 0, y: 16 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: i * 0.05 }}
-                    className="rounded-2xl border border-border bg-card/60 p-5"
-                  >
-                    <Icon className="mb-3 h-5 w-5 text-primary" />
-                    <h3 className="mb-1.5 font-semibold text-foreground">{pillar.title}</h3>
-                    <p className="text-sm text-muted-foreground">{pillar.description}</p>
-                  </motion.div>
+                  <Reveal key={pillar.title} delay={i * 0.05} className={cn(surface.card, 'p-6')}>
+                    <Icon className="mb-4 h-6 w-6 text-primary" aria-hidden />
+                    <h3 className="mb-2 text-[17px] font-semibold text-foreground">{pillar.title}</h3>
+                    <p className="text-[15px] leading-relaxed text-muted-foreground">{pillar.description}</p>
+                  </Reveal>
                 )
               })}
             </div>
 
-            <div className="space-y-4">
-              <div className="text-center">
-                <h3 className="font-display text-2xl font-bold text-foreground md:text-3xl">
-                  Por que Vertal e não uma colcha de fornecedores?
+            <div className="space-y-6">
+              <Reveal className="text-center">
+                <h3 className="text-2xl font-semibold tracking-[-0.015em] text-foreground md:text-4xl">
+                  Why one ecosystem and not many vendors?
                 </h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Uma etapa por fornecedor significa três contas, três faturas e integrações que você mesmo mantém.
+                <p className="mx-auto mt-3 max-w-2xl text-[17px] text-muted-foreground">
+                  One vendor per step means three accounts, three invoices and integrations that you keep running yourself.
                 </p>
-              </div>
-              <div className="overflow-x-auto rounded-2xl border border-border">
-                <table className="w-full min-w-[560px] text-sm">
-                  <thead className="bg-card">
+              </Reveal>
+              <Reveal className={cn(surface.card, 'overflow-x-auto p-0')}>
+                <table className="w-full min-w-[560px] text-[15px]">
+                  <thead className="border-b border-white/[0.06]">
                     <tr className="text-left">
-                      <th className="px-4 py-3 font-medium text-muted-foreground">Etapa</th>
-                      <th className="px-4 py-3 font-semibold text-primary">Ecossistema Vertal</th>
-                      <th className="px-4 py-3 font-medium text-muted-foreground">Ferramentas avulsas</th>
+                      <th scope="col" className="px-5 py-4 font-medium text-muted-foreground">Step</th>
+                      <th scope="col" className="px-5 py-4 font-semibold text-foreground">Vertal ecosystem</th>
+                      <th scope="col" className="px-5 py-4 font-medium text-muted-foreground">Separate tools</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-white/[0.06]">
                     {ECOSYSTEM_COMPARISON.map(row => (
-                      <tr key={row.feature} className="border-t border-border">
-                        <td className="px-4 py-3 text-foreground">{row.feature}</td>
-                        <td className="px-4 py-3">
+                      <tr key={row.feature}>
+                        <th scope="row" className="px-5 py-4 text-left font-normal text-foreground">{row.feature}</th>
+                        <td className="px-5 py-4">
                           <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
-                            <Check className="h-4 w-4 text-primary" />
+                            <Check className="h-4 w-4 text-primary" aria-hidden />
                             {row.vertal}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground">{row.others}</td>
+                        <td className="px-5 py-4 text-muted-foreground">{row.others}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
-              <p className="text-center text-xs text-muted-foreground">
-                Quer a comparação detalhada?{' '}
-                <Link to="/alternativas" className="text-primary underline-offset-4 hover:underline">
-                  Veja Vertal × Lovable, Bolt, Replit, Vercel e outros
+              </Reveal>
+              <p className="text-center text-[15px] text-muted-foreground">
+                Want a detailed comparison?{' '}
+                <Link to="/alternativas" className={cn('rounded-sm text-primary underline-offset-4 hover:underline', focusRing)}>
+                  See Vertal compared with Lovable, Bolt, Replit, Vercel and others
                 </Link>
               </p>
             </div>
           </>
         )}
 
-        <div className="relative overflow-hidden rounded-3xl gradient-primary p-8 shadow-gold md:p-12">
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/10 to-transparent" />
-          <div className="relative z-10 flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
-            <div className="max-w-xl">
-              <h3 className="font-display text-2xl font-bold text-primary-foreground md:text-3xl">
-                Um agente. Três superpoderes.
-              </h3>
-              <p className="mt-2 text-primary-foreground/80">
-                Cole uma única configuração MCP e seu agente passa a criar apps, rodar código em sandbox e fazer deploy.
-              </p>
-            </div>
-            <Button
-              size="lg"
-              onClick={() => openMcp(allMcp)}
-              className="gap-2 rounded-xl bg-background px-8 font-semibold text-foreground hover:bg-background/90"
-            >
-              <Plug className="h-4 w-4" />
-              Conectar os três via MCP
-            </Button>
-          </div>
-        </div>
+        <Reveal className={cn(surface.card, 'p-8 text-center md:p-12')}>
+          <h3 className="text-2xl font-semibold tracking-[-0.015em] text-foreground md:text-4xl">
+            One agent. Three products.
+          </h3>
+          <p className="mx-auto mt-3 max-w-xl text-[17px] text-muted-foreground">
+            Paste one MCP config and your agent can build apps, run code in a sandbox and deploy.
+          </p>
+          <Button size="lg" onClick={() => openMcp(allMcp)} className="mt-8 gap-2 rounded-full px-8">
+            <Plug className="h-4 w-4" aria-hidden />
+            Connect all three with MCP
+          </Button>
+        </Reveal>
       </div>
       {dialogs}
     </section>

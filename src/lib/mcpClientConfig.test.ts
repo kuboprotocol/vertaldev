@@ -57,8 +57,8 @@ describe('níveis de acesso', () => {
   })
 
   it('rótulo reflete os escopos da chave', () => {
-    expect(accessLevelLabel(['read'])).toBe('Somente leitura')
-    expect(accessLevelLabel(['read', 'write'])).toBe('Leitura e escrita')
+    expect(accessLevelLabel(['read'])).toBe('Read only')
+    expect(accessLevelLabel(['read', 'write'])).toBe('Read and write')
   })
 
   it('só leitura não lista ferramentas de escrita', () => {
