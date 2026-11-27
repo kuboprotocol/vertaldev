@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { PENDING_IMAGE_KEY } from "./toolRequests";
 import { setPendingOfficeFile } from "@/lib/office/pendingFile";
 
-/** Arquivos que o botão "Arquivo" aceita: imagens vão ao Editor; o resto abre no Vertal Office. */
+/** Files the "File" button accepts: images go to the Image Editor; the rest opens in Vertal Office. */
 const FILE_ACCEPT =
   "image/*,.pdf,.doc,.docx,.odt,.rtf,.txt,.md,.html,.htm,.xlsx,.xlsm,.xls,.ods,.csv,.tsv,.pptx,.odp,.json,.xml";
 
@@ -27,27 +27,27 @@ interface Props {
 }
 
 const ITEMS: Item[] = [
-  { key: "computer", label: "Conectar Meu Computador", icon: Monitor, onSelect: ({ navigate }) => navigate("/connectors") },
-  { key: "skills", label: "Adicionar Habilidades", icon: Puzzle, onSelect: ({ navigate }) => navigate("/agents"), divider: true },
-  { key: "site", label: "Criar website", icon: Code2, onSelect: ({ navigate }) => navigate("/builder") },
-  { key: "apps", label: "Desenvolver aplicativos", icon: Smartphone, onSelect: ({ navigate }) => navigate("/builder?mode=app") },
-  // Criar imagem, editar imagem e criar slides ficam só no Design Premium (e no Canvas).
+  { key: "computer", label: "Connect my computer", icon: Monitor, onSelect: ({ navigate }) => navigate("/connectors") },
+  { key: "skills", label: "Add skills", icon: Puzzle, onSelect: ({ navigate }) => navigate("/agents"), divider: true },
+  { key: "site", label: "Create a website", icon: Code2, onSelect: ({ navigate }) => navigate("/builder") },
+  { key: "apps", label: "Build apps", icon: Smartphone, onSelect: ({ navigate }) => navigate("/builder?mode=app") },
+  // Create image, edit image and create slides live only in Design Premium (and Canvas).
   { key: "design", label: "Design Premium", icon: Palette, badge: "AI", onSelect: ({ setActive }) => setActive("design") },
   { key: "research", label: "Wide Research", icon: Search, onSelect: ({ setActive }) => setActive("chat") },
-  { key: "chat_mode", label: "Modo de conversa", icon: MessageSquare, onSelect: ({ setActive }) => setActive("chat") },
-  { key: "schedule", label: "Tarefas agendadas", icon: Calendar, onSelect: ({ navigate }) => navigate("/creative/investigation") },
-  { key: "sheet", label: "Criar planilha", icon: Table2, onSelect: ({ setActive }) => setActive("sheet") },
-  { key: "clock", label: "Vertal Clock — relógio e despertador", icon: AlarmClock, badge: "NOVO", onSelect: ({ setActive }) => setActive("clock") },
-  { key: "notebook", label: "Vertal Notebook", icon: NotebookPen, badge: "NOVO", onSelect: ({ setActive }) => setActive("notebook") },
-  { key: "office", label: "Vertal Office", icon: FileText, badge: "NOVO", onSelect: ({ setActive }) => setActive("office") },
-  { key: "music", label: "Música IA", icon: Music, onSelect: ({ setActive }) => setActive("music") },
-  { key: "video_studio", label: "Criar vídeo com fotos", icon: Clapperboard, badge: "NOVO", onSelect: ({ setActive }) => setActive("video_studio") },
-  { key: "shorts", label: "Shorts/Vídeo IA", icon: Video, onSelect: ({ setActive }) => setActive("shorts") },
-  { key: "clips", label: "Cortes virais", icon: Scissors, onSelect: ({ setActive }) => setActive("clips") },
-  { key: "avatar", label: "Avatar IA", icon: User2, onSelect: ({ setActive }) => setActive("avatar") },
-  { key: "ebook", label: "Ebook IA", icon: BookOpen, onSelect: ({ setActive }) => setActive("ebook") },
-  { key: "emo", label: "EMO — Animar foto", icon: Sparkles, onSelect: ({ setActive }) => setActive("emo") },
-  { key: "downloader", label: "Downloader Universal", icon: Download, onSelect: ({ setActive }) => setActive("downloader") },
+  { key: "chat_mode", label: "Chat mode", icon: MessageSquare, onSelect: ({ setActive }) => setActive("chat") },
+  { key: "schedule", label: "Scheduled tasks", icon: Calendar, onSelect: ({ navigate }) => navigate("/creative/investigation") },
+  { key: "sheet", label: "Create a spreadsheet", icon: Table2, onSelect: ({ setActive }) => setActive("sheet") },
+  { key: "clock", label: "Vertal Clock: clock and alarm", icon: AlarmClock, badge: "New", onSelect: ({ setActive }) => setActive("clock") },
+  { key: "notebook", label: "Vertal Notebook", icon: NotebookPen, badge: "New", onSelect: ({ setActive }) => setActive("notebook") },
+  { key: "office", label: "Vertal Office", icon: FileText, badge: "New", onSelect: ({ setActive }) => setActive("office") },
+  { key: "music", label: "AI music", icon: Music, onSelect: ({ setActive }) => setActive("music") },
+  { key: "video_studio", label: "Create a video from photos", icon: Clapperboard, badge: "New", onSelect: ({ setActive }) => setActive("video_studio") },
+  { key: "shorts", label: "AI shorts and video", icon: Video, onSelect: ({ setActive }) => setActive("shorts") },
+  { key: "clips", label: "Short clips", icon: Scissors, onSelect: ({ setActive }) => setActive("clips") },
+  { key: "avatar", label: "AI avatar", icon: User2, onSelect: ({ setActive }) => setActive("avatar") },
+  { key: "ebook", label: "AI eBook", icon: BookOpen, onSelect: ({ setActive }) => setActive("ebook") },
+  { key: "emo", label: "EMO: animate a photo", icon: Sparkles, onSelect: ({ setActive }) => setActive("emo") },
+  { key: "downloader", label: "Universal Downloader", icon: Download, onSelect: ({ setActive }) => setActive("downloader") },
 ];
 
 export function ManusLauncher({ setActive }: Props) {
@@ -57,45 +57,45 @@ export function ManusLauncher({ setActive }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const tiles = [
-    { key: "camera", label: "Câmera", icon: Camera, onClick: () => cameraRef.current?.click() },
-    { key: "image", label: "Imagem", icon: ImageIcon, onClick: () => imageRef.current?.click() },
-    { key: "file", label: "Arquivo", icon: Paperclip, onClick: () => fileRef.current?.click() },
+    { key: "camera", label: "Camera", icon: Camera, onClick: () => cameraRef.current?.click() },
+    { key: "image", label: "Image", icon: ImageIcon, onClick: () => imageRef.current?.click() },
+    { key: "file", label: "File", icon: Paperclip, onClick: () => fileRef.current?.click() },
   ];
 
-  // Foto/imagem enviada no painel vai para o Editor de Imagens já carregada
+  // A photo or image sent from the panel opens in the Image Editor, already loaded
   const handleFile = (kind: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f) return;
-    // Planilhas, PDFs, documentos e slides abrem no Vertal Office.
+    // Spreadsheets, PDFs, documents and slides open in Vertal Office.
     if (!f.type.startsWith("image/")) {
       setPendingOfficeFile(f);
-      toast.success(`${kind}: ${f.name}`, { description: "Abrindo no Vertal Office..." });
+      toast.success(`${kind}: ${f.name}`, { description: "Opening in Vertal Office…" });
       setActive("office");
       return;
     }
     try {
       sessionStorage.setItem(PENDING_IMAGE_KEY, URL.createObjectURL(f));
     } catch {
-      toast.error("Não foi possível abrir a imagem no editor");
+      toast.error("Could not open the image in the editor");
       return;
     }
-    toast.success(`${kind} pronto: ${f.name}`, { description: "Abrindo no Editor de Imagens do Design Premium..." });
+    toast.success(`${kind} ready: ${f.name}`, { description: "Opening in the Design Premium Image Editor…" });
     setActive("image_editor");
   };
 
   return (
     <div className="space-y-4">
-      <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={handleFile("Foto capturada")} />
-      <input ref={imageRef} type="file" accept="image/*" hidden onChange={handleFile("Imagem selecionada")} />
-      <input ref={fileRef} type="file" accept={FILE_ACCEPT} hidden onChange={handleFile("Arquivo carregado")} />
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={handleFile("Photo taken")} />
+      <input ref={imageRef} type="file" accept="image/*" hidden onChange={handleFile("Image selected")} />
+      <input ref={fileRef} type="file" accept={FILE_ACCEPT} hidden onChange={handleFile("File uploaded")} />
 
       <div className="grid grid-cols-3 gap-3">
         {tiles.map((t) => (
           <button
             key={t.key}
             onClick={t.onClick}
-            className="group flex flex-col items-center justify-center gap-2 rounded-2xl border border-border/40 bg-card/60 backdrop-blur p-5 transition hover:bg-card hover:border-primary/40 active:scale-[0.98]"
+            className="group flex flex-col items-center justify-center gap-2 rounded-2xl border border-white/[0.06] bg-card/50 p-5 transition-colors hover:border-white/[0.14] hover:bg-card/70 active:scale-[0.98]"
           >
             <t.icon className="h-7 w-7 text-foreground/80 group-hover:text-primary" />
             <span className="text-sm text-foreground/90">{t.label}</span>
@@ -103,19 +103,19 @@ export function ManusLauncher({ setActive }: Props) {
         ))}
       </div>
 
-      <Card className="overflow-hidden bg-card/40 backdrop-blur border-border/40">
-        <ul className="divide-y divide-border/30">
+      <Card className="overflow-hidden rounded-2xl border-white/[0.06] bg-card/50">
+        <ul className="divide-y divide-white/[0.06]">
           {ITEMS.map((it) => (
             <Fragment key={it.key}>
-              <li className={it.divider ? "border-b border-border/40" : ""}>
+              <li className={it.divider ? "border-b border-white/[0.06]" : ""}>
                 <button
                   onClick={() => it.onSelect({ navigate, setActive })}
-                  className="w-full flex items-center gap-4 px-4 py-3.5 text-left transition hover:bg-muted/40 active:bg-muted/60"
+                  className="w-full flex items-center gap-4 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.03] active:bg-white/[0.06]"
                 >
                   <it.icon className="h-5 w-5 text-foreground/70 shrink-0" />
                   <span className="flex-1 text-[15px] text-foreground/90">{it.label}</span>
                   {it.badge && (
-                    <span className="text-[10px] font-semibold rounded-md bg-primary/15 text-primary px-1.5 py-0.5">
+                    <span className="text-[11px] font-medium rounded-full bg-primary/15 text-primary px-2 py-0.5">
                       {it.badge}
                     </span>
                   )}
@@ -126,15 +126,15 @@ export function ManusLauncher({ setActive }: Props) {
                   <button
                     type="button"
                     onClick={() => setActive("office")}
-                    aria-label="Abrir Vertal Office"
-                    className="w-full flex items-center gap-4 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 p-4 text-left text-white shadow-lg transition hover:brightness-110 active:scale-[0.99]"
+                    aria-label="Open Vertal Office"
+                    className="w-full flex items-center gap-4 rounded-xl border border-primary/30 bg-primary/10 p-4 text-left transition-colors hover:bg-primary/15 active:scale-[0.99]"
                   >
-                    <FileText className="h-8 w-8 shrink-0" />
+                    <FileText className="h-8 w-8 shrink-0 text-primary" />
                     <span className="flex-1">
-                      <span className="block text-base font-bold">Vertal Office</span>
-                      <span className="block text-sm text-white/90">Documentos e planilhas totalmente grátis. Só a IA é paga.</span>
+                      <span className="block text-[15px] font-semibold" translate="no">Vertal Office</span>
+                      <span className="block text-sm text-muted-foreground">Documents and spreadsheets, completely free. Only the AI is paid.</span>
                     </span>
-                    <span className="text-xs font-semibold rounded-md bg-white/20 px-2 py-1">Abrir</span>
+                    <span className="text-xs font-medium rounded-full bg-primary px-3 py-1 text-primary-foreground">Open</span>
                   </button>
                 </li>
               )}

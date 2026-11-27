@@ -28,7 +28,7 @@ test.describe("Creative investigation UI states", () => {
     await ensureAuthed(page, "/creative/investigation");
     await page.getByTestId("filter-search").fill("to-be-cleared");
     await page.getByTestId("filter-status").click();
-    await page.getByRole("option", { name: "Cancelado" }).click();
+    await page.getByRole("option", { name: "Canceled" }).click();
     
     // Wait for debounce/URL update
     await page.waitForTimeout(1000);
@@ -37,7 +37,7 @@ test.describe("Creative investigation UI states", () => {
     
     await page.getByTestId("btn-clear-filters").click();
     
-    await expect(page.getByText(/filtros limpos/i)).toBeVisible();
+    await expect(page.getByText(/filters cleared/i)).toBeVisible();
     await expect(page.getByTestId("filter-search")).toHaveValue("");
     await expect(page).not.toHaveURL(/q=/);
     await expect(page).not.toHaveURL(/status=cancelled/);
@@ -52,7 +52,7 @@ test.describe("Creative investigation UI states", () => {
     await page.reload();
     await expect(page.getByTestId("filter-search")).toHaveValue("persistent-query");
     // Should still have data or loading state then data
-    await expect(page.getByTestId("investigation-row").first().or(page.getByText(/Nenhuma execução/))).toBeVisible();
+    await expect(page.getByTestId("investigation-row").first().or(page.getByText(/No runs/))).toBeVisible();
   });
 
   test("investigate query param opens detail on load and persists on reload", async ({ page }) => {
@@ -63,12 +63,12 @@ test.describe("Creative investigation UI states", () => {
     await expect(page).toHaveURL(new RegExp(`investigate=${mockId}`));
     
     // Should attempt to load and likely show "not found" or details
-    await expect(page.getByTestId("investigation-detail").or(page.getByText(/não encontrada/i))).toBeVisible();
+    await expect(page.getByTestId("investigation-detail").or(page.getByText(/not found/i))).toBeVisible();
     
     // Reload and verify persistence
     await page.reload();
     await expect(page).toHaveURL(new RegExp(`investigate=${mockId}`));
-    await expect(page.getByTestId("investigation-detail").or(page.getByText(/não encontrada/i))).toBeVisible();
+    await expect(page.getByTestId("investigation-detail").or(page.getByText(/not found/i))).toBeVisible();
   });
 });
 
@@ -127,10 +127,10 @@ test.describe("Creative investigation", () => {
 
     // Verify UI components reflect the URL state
     await expect(page.getByTestId("filter-search")).toHaveValue("direct-load");
-    await expect(page.getByTestId("filter-status")).toContainText(/Falha/i);
+    await expect(page.getByTestId("filter-status")).toContainText(/Failed/i);
     
     // Table should attempt to load data with these filters
-    await expect(page.getByTestId("investigation-row").first().or(page.getByText(/Nenhuma execução/))).toBeVisible();
+    await expect(page.getByTestId("investigation-row").first().or(page.getByText(/No runs/))).toBeVisible();
   });
 
 
@@ -139,7 +139,7 @@ test.describe("Creative investigation", () => {
     await ensureAuthed(page, "/creative/investigation");
     
     // Sort by tool
-    const toolHeader = page.getByRole("columnheader", { name: /ferramenta/i });
+    const toolHeader = page.getByRole("columnheader", { name: /tool/i });
     if (await toolHeader.isVisible()) {
       await toolHeader.click();
       await page.waitForTimeout(500);
@@ -147,7 +147,7 @@ test.describe("Creative investigation", () => {
     }
     
     // Go to next page if possible
-    const nextBtn = page.getByRole("button", { name: /próxima/i });
+    const nextBtn = page.getByRole("button", { name: /next/i });
     if (await nextBtn.isEnabled()) {
       await nextBtn.click();
       await expect(page).toHaveURL(/page=2/);
@@ -187,7 +187,7 @@ test.describe("Creative investigation", () => {
 
     // Change another filter
     await page.getByTestId("filter-status").click();
-    await page.getByRole("option", { name: "Cancelado" }).click();
+    await page.getByRole("option", { name: "Canceled" }).click();
     await page.waitForTimeout(1000);
     await expect(page).toHaveURL(/status=cancelled/);
 
@@ -232,10 +232,10 @@ test.describe("Error and Retry Flows with investigation context", () => {
     const investId = "some-investigate-id";
     await ensureAuthed(page, `/creative/export/non-existent-id?investigate=${investId}`);
     
-    await expect(page.getByText(/não encontrada/i).or(page.getByText(/erro/i))).toBeVisible();
+    await expect(page.getByText(/not found/i).or(page.getByText(/error/i))).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`investigate=${investId}`));
     
-    const retryBtn = page.getByRole("button", { name: /tentar novamente/i });
+    const retryBtn = page.getByRole("button", { name: /try again/i });
     await expect(retryBtn).toBeVisible();
     
     await retryBtn.click();
@@ -250,7 +250,7 @@ test.describe("Error and Retry Flows with investigation context", () => {
     // Filter for something that returns nothing
     await page.getByTestId("filter-search").fill("non-existent-search-term-12345");
     await page.waitForTimeout(1000);
-    await expect(page.getByText(/Nenhuma execução encontrada/i)).toBeVisible();
+    await expect(page.getByText(/No runs match/i)).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`investigate=${investId}`));
     
     // Verify "Clear filters" button works from empty state and keeps investigation context
@@ -271,13 +271,13 @@ test.describe("Error and Retry Flows with investigation context", () => {
     await page.waitForTimeout(1000);
 
     // Should show error message
-    await expect(page.getByText(/Erro ao carregar/i).or(page.getByText(/timedout/i))).toBeVisible();
+    await expect(page.getByText(/Could not load|Connection failed/i).or(page.getByText(/timedout/i))).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`investigate=${investId}`));
 
     // Remove route interception to allow retry to succeed
     await page.unroute("**/rest/v1/creative_assets*");
 
-    const retryBtn = page.getByRole("button", { name: /tentar novamente/i });
+    const retryBtn = page.getByRole("button", { name: /try again/i });
     await retryBtn.click();
 
     // Should return to loading or data state
@@ -291,7 +291,7 @@ test.describe("Creative exports navigation", () => {
   test("investigate button in export details navigates with query param", async ({ page }) => {
     await ensureAuthed(page, "/creative");
     // This assumes there's an "Investigar" link somewhere in the creative module
-    const investigateBtn = page.getByRole("button", { name: /investigar/i }).first();
+    const investigateBtn = page.getByRole("button", { name: /investigate/i }).first();
     if (await investigateBtn.count() > 0) {
       await investigateBtn.click();
       await expect(page).toHaveURL(/\/creative\/investigation\?investigate=/);
@@ -317,7 +317,7 @@ test.describe("Notification preferences", () => {
     await expect(page.getByTestId("switch-notify_cancel")).toBeVisible();
     await page.getByTestId("switch-notify_cancel").click();
     await page.getByTestId("save-prefs").click();
-    await expect(page.getByText(/preferências salvas/i)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/preferences saved/i)).toBeVisible({ timeout: 5000 });
   });
 
   test("debounce: search and filters update URL only after typing stops", async ({ page }) => {
@@ -343,7 +343,7 @@ test.describe("Notification preferences", () => {
     
     // Set a sort and page
     await page.locator("button:has-text('Ferramenta')").first().click(); // toggle sort
-    await page.getByRole("button", { name: "Próxima" }).click();
+    await page.getByRole("button", { name: "Next" }).click();
     await expect(page).toHaveURL(/page=2/);
     
     const searchInput = page.getByTestId("filter-search");
