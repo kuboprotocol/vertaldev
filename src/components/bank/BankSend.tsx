@@ -14,6 +14,7 @@ import { walletApi, type WalletPix } from '@/lib/wallet/api'
 import { formatMinor, findCurrency } from '@/lib/wallet/currency'
 import { PIX_KEY_TYPES, validatePixKey, type PixKeyType } from '@/lib/wallet/pix'
 import { bankApi, type BankOverview } from '@/lib/bank/api'
+import { PIX_KEY_LABEL_EN, PIX_KEY_PLACEHOLDER_EN, pixKeyErrorEn } from './payCopyEn'
 
 export function BankSend({ overview, onSent }: { overview: BankOverview | null; onSent: () => void }) {
   const [savedPix, setSavedPix] = useState<WalletPix[]>([])
@@ -37,7 +38,7 @@ export function BankSend({ overview, onSent }: { overview: BankOverview | null; 
 
   const pixAmountNum = Number(pixAmount.replace(',', '.'))
   const poAmountNum = Number(poAmount.replace(',', '.'))
-  const keyError = pixSource === 'new' && key ? validatePixKey(keyType, key) : null
+  const keyError = pixSource === 'new' && key ? pixKeyErrorEn(validatePixKey(keyType, key)) : null
 
   const doSend = async () => {
     setBusy(true)
@@ -47,11 +48,11 @@ export function BankSend({ overview, onSent }: { overview: BankOverview | null; 
         const r = pixSource === 'new'
           ? await bankApi.sendPix({ ...base, pixKeyType: keyType, pixKey: key })
           : await bankApi.sendPix({ ...base, pixId: pixSource })
-        toast.success(r.authorized ? 'Pix enviado' : 'Pix criado, aguardando autorização no ASAAS')
+        toast.success(r.authorized ? 'Pix sent' : 'Pix created. Waiting for approval in ASAAS')
         setPixAmount(''); setKey(''); setPixDesc('')
       } else if (confirm === 'payout') {
         await bankApi.payout({ amount: poAmountNum, currency: poCurrency, idempotencyKey: crypto.randomUUID() })
-        toast.success('Saque solicitado')
+        toast.success('Payout requested')
         setPoAmount('')
       }
       onSent()
@@ -69,57 +70,57 @@ export function BankSend({ overview, onSent }: { overview: BankOverview | null; 
     <Tabs defaultValue="pix">
       <TabsList className="grid h-10 w-full grid-cols-2 rounded-xl">
         <TabsTrigger value="pix" className="gap-2 rounded-lg"><Send className="h-4 w-4" />Pix (BRL)</TabsTrigger>
-        <TabsTrigger value="payout" className="gap-2 rounded-lg"><Landmark className="h-4 w-4" />Saque global</TabsTrigger>
+        <TabsTrigger value="payout" className="gap-2 rounded-lg"><Landmark className="h-4 w-4" />Global payout</TabsTrigger>
       </TabsList>
 
       <TabsContent value="pix" className="space-y-3 pt-4">
         <p className="text-xs text-muted-foreground">
-          Sai do saldo da sua conta ASAAS{asaasBalance !== null ? ` · disponível ${formatMinor(asaasBalance, 'BRL')}` : ''}
-          {overview ? ` · até ${formatMinor(overview.flags.pixOutMaxBrl * 100, 'BRL')} por Pix` : ''}
+          Paid from your ASAAS account balance{asaasBalance !== null ? ` · available ${formatMinor(asaasBalance, 'BRL')}` : ''}
+          {overview ? ` · up to ${formatMinor(overview.flags.pixOutMaxBrl * 100, 'BRL')} per Pix` : ''}
         </p>
         <Select value={pixSource} onValueChange={setPixSource}>
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="new">Digitar chave Pix</SelectItem>
-            {savedPix.map((p) => <SelectItem key={p.id} value={p.id}>{p.label || p.keyType.toUpperCase()} · {p.maskedKey}</SelectItem>)}
+            <SelectItem value="new">Enter a Pix key</SelectItem>
+            {savedPix.map((p) => <SelectItem key={p.id} value={p.id}>{p.label || PIX_KEY_LABEL_EN[p.keyType]} · {p.maskedKey}</SelectItem>)}
           </SelectContent>
         </Select>
         {pixSource === 'new' && (
           <div className="grid grid-cols-[130px_1fr] gap-2">
             <Select value={keyType} onValueChange={(v) => setKeyType(v as PixKeyType)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{PIX_KEY_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+              <SelectContent>{PIX_KEY_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{PIX_KEY_LABEL_EN[t.value]}</SelectItem>)}</SelectContent>
             </Select>
-            <Input placeholder={PIX_KEY_TYPES.find((t) => t.value === keyType)?.placeholder} value={key} onChange={(e) => setKey(e.target.value)} aria-invalid={!!keyError} />
+            <Input placeholder={PIX_KEY_PLACEHOLDER_EN[keyType]} value={key} onChange={(e) => setKey(e.target.value)} aria-invalid={!!keyError} />
           </div>
         )}
         {keyError && <p className="text-xs text-destructive">{keyError}</p>}
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Valor (R$)</Label>
+            <Label className="text-xs text-muted-foreground">Amount (R$)</Label>
             <Input inputMode="decimal" placeholder="0,00" value={pixAmount} onChange={(e) => setPixAmount(e.target.value)} className="font-mono" />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Mensagem (opcional)</Label>
+            <Label className="text-xs text-muted-foreground">Message (optional)</Label>
             <Input maxLength={140} value={pixDesc} onChange={(e) => setPixDesc(e.target.value)} />
           </div>
         </div>
         <Button
-          className="h-11 w-full gradient-primary text-primary-foreground"
+          className="h-11 w-full rounded-full"
           disabled={!asaasApproved || !(pixAmountNum > 0) || (pixSource === 'new' && (!key || !!keyError))}
           onClick={() => setConfirm('pix')}
         >
-          Revisar Pix
+          Review Pix
         </Button>
-        {!asaasApproved && <p className="text-xs text-muted-foreground">Disponível quando sua conta ASAAS estiver aprovada (aba Contas).</p>}
+        {!asaasApproved && <p className="text-xs text-muted-foreground">Available when your ASAAS account is approved (Accounts tab).</p>}
       </TabsContent>
 
       <TabsContent value="payout" className="space-y-3 pt-4">
         <p className="text-xs text-muted-foreground">
-          Transfere o saldo da conta global (Stripe) para a conta bancária cadastrada nela, na moeda do saldo.
+          Moves the global account (Stripe) balance to the bank account saved there, in the currency of the balance.
         </p>
         {stripeBalances.length === 0 ? (
-          <p className="rounded-xl bg-secondary/40 p-3 text-sm text-muted-foreground">Sem saldo disponível na conta global.</p>
+          <p className="rounded-xl border border-white/[0.06] p-3 text-sm text-muted-foreground">No available balance in the global account.</p>
         ) : (
           <>
             <div className="grid grid-cols-[120px_1fr] gap-2">
@@ -129,11 +130,11 @@ export function BankSend({ overview, onSent }: { overview: BankOverview | null; 
               </Select>
               <Input inputMode="decimal" placeholder="0,00" value={poAmount} onChange={(e) => setPoAmount(e.target.value)} className="font-mono" />
             </div>
-            {poBalance && <p className="text-xs text-muted-foreground">Disponível: {formatMinor(poBalance.availableMinor, poBalance.currency)}</p>}
-            <Button className="h-11 w-full" variant="outline" disabled={!payoutsEnabled || !(poAmountNum > 0)} onClick={() => setConfirm('payout')}>
-              Revisar saque
+            {poBalance && <p className="text-xs text-muted-foreground">Available: {formatMinor(poBalance.availableMinor, poBalance.currency)}</p>}
+            <Button className="h-11 w-full rounded-full" variant="outline" disabled={!payoutsEnabled || !(poAmountNum > 0)} onClick={() => setConfirm('payout')}>
+              Review payout
             </Button>
-            {!payoutsEnabled && <p className="text-xs text-muted-foreground">O Stripe ainda não liberou saques nesta conta.</p>}
+            {!payoutsEnabled && <p className="text-xs text-muted-foreground">Stripe has not turned on payouts for this account yet.</p>}
           </>
         )}
       </TabsContent>
@@ -141,17 +142,17 @@ export function BankSend({ overview, onSent }: { overview: BankOverview | null; 
       <AlertDialog open={!!confirm} onOpenChange={(o) => { if (!o) setConfirm(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{confirm === 'pix' ? 'Confirmar Pix' : 'Confirmar saque'}</AlertDialogTitle>
+            <AlertDialogTitle>{confirm === 'pix' ? 'Confirm Pix' : 'Confirm payout'}</AlertDialogTitle>
             <AlertDialogDescription>
               {confirm === 'pix'
-                ? `Enviar ${pixAmountNum > 0 ? formatMinor(Math.round(pixAmountNum * 100), 'BRL') : ''} para ${pixSource === 'new' ? key : savedPix.find((p) => p.id === pixSource)?.maskedKey}. Pix não pode ser desfeito.`
-                : `Sacar ${poAmountNum > 0 && poCurrency ? formatMinor(Math.round(poAmountNum * 10 ** (findCurrency(poCurrency)?.decimals ?? 2)), poCurrency) : ''} para a conta bancária da conta global.`}
+                ? `Send ${pixAmountNum > 0 ? formatMinor(Math.round(pixAmountNum * 100), 'BRL') : ''} to ${pixSource === 'new' ? key : savedPix.find((p) => p.id === pixSource)?.maskedKey}. A Pix cannot be undone.`
+                : `Pay out ${poAmountNum > 0 && poCurrency ? formatMinor(Math.round(poAmountNum * 10 ** (findCurrency(poCurrency)?.decimals ?? 2)), poCurrency) : ''} to the bank account of the global account.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={(e) => { e.preventDefault(); doSend() }} disabled={busy}>
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirmar'}
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
