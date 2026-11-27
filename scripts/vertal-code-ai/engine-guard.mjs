@@ -72,7 +72,8 @@ export const FLAGGED = ['src/App.tsx', 'src/components/vertal-chat/VertalChat.ts
 // Vertal Prospector (módulo do VERTAL Code AI) também pode entrar nos FLAGGED, só atrás do próprio interruptor.
 // Vertal Growth Team (equipe de crescimento do VERTAL Code AI) idem, atrás do próprio interruptor.
 // Vertal CRM (conector próprio do Vertal) idem, atrás de VITE_VERTAL_CRM / VERTAL_CRM_ENABLED.
-export const VCA_LINE = /VertalCodeAi|VertalCodeAI|VERTAL_CODE_AI|VERTAL Code AI|VertalProspector|vertalProspector|VERTAL_PROSPECTOR|VertalGrowth|vertalGrowth|VERTAL_GROWTH|VertalCrm|vertalCrm|VERTAL_CRM/;
+// VertalWallet (conector MetaMask + Trader testnet) idem, atrás de VITE_VERTAL_METAMASK / VERTAL_METAMASK_ENABLED.
+export const VCA_LINE = /VertalCodeAi|VertalCodeAI|VERTAL_CODE_AI|VERTAL Code AI|VertalProspector|vertalProspector|VERTAL_PROSPECTOR|VertalGrowth|vertalGrowth|VERTAL_GROWTH|VertalCrm|vertalCrm|VERTAL_CRM|VertalWallet|vertalWallet|VERTAL_METAMASK/;
 
 const git = (args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 
