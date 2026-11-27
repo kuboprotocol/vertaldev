@@ -12,6 +12,8 @@ export type MusicProvider = "muskai" | "vertal";
 export type LyricsMode = "auto" | "assist" | "paste";
 
 export const MUSIC_COST_CREDITS = 1; // preço atual (creative-router estima música em 1 crédito)
+import { MUSIC_LYRIC_LANGUAGES, genreHint } from "./worldGenres.ts";
+
 export const SUNO_BASE = "https://api.sunoapi.org/api/v1";
 export const SUNO_DEFAULT_MODEL = "V4_5";
 export const MUSIC_JOB_MAX_MS = 15 * 60_000; // depois disso a geração é dada como falha e o crédito volta
@@ -86,7 +88,21 @@ const LANG_CODES: Record<string, string> = {
   "日本語": "ja", ja: "ja", japanese: "ja",
 };
 export function languageCode(language: string): string {
-  return LANG_CODES[language.trim().toLowerCase()] ?? "pt";
+  const raw = language.trim().toLowerCase();
+  if (LANG_CODES[raw]) return LANG_CODES[raw];
+  // Qualquer um dos 50 idiomas do ACE-Step 1.5: código ("ko", "pt-BR", "zh-Hant") ou nome nativo ("한국어", "Kiswahili").
+  const base = raw.split(/[-_ (]/)[0];
+  if (base === "nb" || base === "nn") return "no";
+  if (base === "fil") return "tl";
+  if (MUSIC_LYRIC_LANGUAGES[base]) return base;
+  const plain = raw.replace(/\s*\(.*\)\s*$/, "");
+  const byName = Object.entries(MUSIC_LYRIC_LANGUAGES).find(([, n]) => {
+    const name = n.toLowerCase();
+    return name === raw || name === plain || name.replace(/\s*\(.*\)\s*$/, "") === plain;
+  });
+  if (byName) return byName[0];
+  // Idioma fora da lista: o motor aceita "unknown" (antes caía em "pt").
+  return raw ? "unknown" : "pt";
 }
 
 export function normalizeMusicRequest(body: MusicRequest): NormalizedMusicRequest {
@@ -144,6 +160,8 @@ export function buildMusicTags(r: NormalizedMusicRequest): string {
   const vocals = r.instrumental ? "instrumental, no vocals" : `${r.vocalType} vocals (${r.vocalTone})`;
   const parts = [
     r.style || null,
+    // Ritmo do catálogo do mundo (forró, amapiano, qawwali…): instrumentos/levada típicos. Estilos antigos: nada muda.
+    genreHint(r.style) || null,
     r.mood || null,
     vocals,
     r.primary || null,

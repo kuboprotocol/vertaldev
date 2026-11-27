@@ -16,6 +16,7 @@ import { conversationService } from '@/services/conversationService';
 import { functionErrorCode } from '@/lib/functionError';
 import type { ConversationListItem } from '@/types/conversation';
 import type { AgentAction, PanelKey, ToolResult } from '@/lib/chatAgent/contract';
+import { rememberRequestLang } from '@/lib/voiceClone/i18n';
 import {
   EMPTY_EXTRAS,
   decodeMessage,
@@ -322,6 +323,7 @@ export function useVertalChat(options: {
   const send = useCallback(async (raw: string) => {
     const text = raw.trim();
     if (!text || busy || !user?.id) return;
+    rememberRequestLang(text); // idioma do pedido: painéis sem i18n próprio (Clonador de voz) seguem a língua da conversa
     setBusy(true);
     setError(null);
 

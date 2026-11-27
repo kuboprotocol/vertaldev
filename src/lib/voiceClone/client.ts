@@ -4,6 +4,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { functionErrorCode } from '@/lib/functionError';
 import { VOICE_LIMITS, type VoiceLang } from '../../../supabase/functions/_shared/voiceClone';
+import { voiceServerLang } from './i18n';
 
 export interface VoiceCloneConfig {
   enabled: boolean;
@@ -12,6 +13,8 @@ export interface VoiceCloneConfig {
   consent_version: string;
   consent_text: string;
   limits: { max_voices: number; min_seconds: number; max_seconds: number; max_bytes: number; max_text: number };
+  /** Idiomas da fala (código → nome nativo). Ausente em servidores antigos. */
+  speech_languages?: Record<string, string>;
 }
 
 export interface SavedVoice {
@@ -33,6 +36,8 @@ export interface VoiceJob {
   title?: string | null;
   text?: string | null;
   message?: string;
+  speech_language?: string;
+  language_fallback?: boolean;
 }
 
 export class VoiceCloneError extends Error {
@@ -50,9 +55,12 @@ function withTimeout<T>(work: Promise<T>, ms: number, code = 'timeout'): Promise
   });
 }
 
+/**
+ * Idioma das mensagens do Clonador (pt/en/es), a partir do idioma do APP (Ajustes → último pedido no chat →
+ * navegador → perfil → pt-BR). O nome ficou por compatibilidade; antes lia só o navegador.
+ */
 export function browserVoiceLang(): VoiceLang {
-  const l = (typeof navigator !== 'undefined' ? navigator.language : 'pt-BR').toLowerCase();
-  return l.startsWith('en') ? 'en' : l.startsWith('es') ? 'es' : 'pt';
+  return voiceServerLang();
 }
 
 export async function callVoice<T>(body: Record<string, unknown>, opts: { idem?: string; timeoutMs?: number } = {}): Promise<T> {
@@ -90,6 +98,8 @@ export async function createVoice(input: {
   sample: Blob;
   seconds: number;
   consentVersion: string;
+  /** Idioma falado na amostra (um dos idiomas da fala); opcional. */
+  voiceLanguage?: string;
 }): Promise<SavedVoice> {
   if (input.sample.size > VOICE_LIMITS.maxSampleBytes) throw new VoiceCloneError('A amostra passou de 12 MB.', 'sample_invalid');
   const mime = (input.sample.type || 'audio/webm').split(';')[0];
@@ -103,14 +113,22 @@ export async function createVoice(input: {
   const r = await callVoice<{ voice: SavedVoice }>({
     action: 'voice_create', name: input.name, sample_path: path, sample_mime: mime, sample_seconds: input.seconds,
     consent: { accepted: true, owner_confirmed: true, version: input.consentVersion },
+    ...(input.voiceLanguage ? { voice_language: input.voiceLanguage } : {}),
   }, { idem: crypto.randomUUID() });
   return r.voice;
 }
 
-export interface StartedJob { job_id: string; kind: 'speak' | 'sing'; eta_seconds?: number; voice?: { id: string; name: string } }
+export interface StartedJob {
+  job_id: string; kind: 'speak' | 'sing'; eta_seconds?: number; voice?: { id: string; name: string };
+  speech_language?: string; language_fallback?: boolean;
+}
 
-export const startSpeak = (text: string, voiceId?: string) =>
-  callVoice<StartedJob>({ action: 'voice_speak', text, ...(voiceId ? { voice_id: voiceId } : {}) }, { idem: crypto.randomUUID() });
+/** speechLanguage: código de um dos idiomas da fala; vazio/"auto" = o servidor detecta pelo texto. */
+export const startSpeak = (text: string, voiceId?: string, speechLanguage?: string) =>
+  callVoice<StartedJob>({
+    action: 'voice_speak', text, ...(voiceId ? { voice_id: voiceId } : {}),
+    ...(speechLanguage && speechLanguage !== 'auto' ? { speech_language: speechLanguage } : {}),
+  }, { idem: crypto.randomUUID() });
 
 export const startSing = (sourceUrl: string, voiceId?: string, title?: string) =>
   callVoice<StartedJob>({ action: 'voice_sing', source_url: sourceUrl, ...(voiceId ? { voice_id: voiceId } : {}), ...(title ? { title } : {}) }, { idem: crypto.randomUUID() });

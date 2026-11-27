@@ -237,6 +237,7 @@ export const VOICE_MESSAGES: Record<VoiceLang, Record<string, string>> = {
     insufficient_credits: "Créditos insuficientes para usar a sua voz.",
     timeout: "Está demorando mais que o normal. A versão continua sendo feita e aparece no Clonador de voz quando terminar; se falhar, o crédito volta.",
     failed: "Não consegui gerar o áudio com a sua voz. O crédito foi devolvido.",
+    language_unsupported: "A fala com voz clonada ainda não lê este idioma. Idiomas da fala: {langs}. Cantar com a sua voz funciona em qualquer idioma. Nada foi cobrado.",
   },
   en: {
     disabled: "The voice cloner isn't enabled for your account yet.",
@@ -249,6 +250,7 @@ export const VOICE_MESSAGES: Record<VoiceLang, Record<string, string>> = {
     insufficient_credits: "Not enough credits to use your voice.",
     timeout: "This is taking longer than usual. It keeps going and shows up in the voice cloner when done; if it fails, the credit comes back.",
     failed: "I couldn't generate the audio with your voice. The credit was refunded.",
+    language_unsupported: "Cloned-voice speech can't read this language yet. Speech languages: {langs}. Singing with your voice works in any language. Nothing was charged.",
   },
   es: {
     disabled: "El clonador de voz aún no está habilitado para tu cuenta.",
@@ -261,9 +263,153 @@ export const VOICE_MESSAGES: Record<VoiceLang, Record<string, string>> = {
     insufficient_credits: "Créditos insuficientes para usar tu voz.",
     timeout: "Está tardando más de lo normal. Sigue en proceso y aparecerá en el clonador al terminar; si falla, el crédito vuelve.",
     failed: "No pude generar el audio con tu voz. El crédito fue devuelto.",
+    language_unsupported: "El habla con voz clonada aún no lee este idioma. Idiomas del habla: {langs}. Cantar con tu voz funciona en cualquier idioma. No se cobró nada.",
   },
 };
 
 export function voiceMessage(code: string, lang: VoiceLang = "pt"): string {
-  return VOICE_MESSAGES[lang][code] ?? VOICE_MESSAGES.pt[code] ?? VOICE_MESSAGES[lang].failed;
+  const m = VOICE_MESSAGES[lang][code] ?? VOICE_MESSAGES.pt[code] ?? VOICE_MESSAGES[lang].failed;
+  return m.replace("{langs}", Object.values(TTS_LANGUAGES).join(", "));
+}
+
+// ─── Idiomas da fala (TTS) ───────────────────────────────────────────────
+//
+// Motor de fala: Chatterbox Multilingual (chatterbox-tts 0.1.6, MIT, Resemble AI). SUPPORTED_LANGUAGES do
+// pacote (chatterbox/mtl_tts.py) = 23 idiomas abaixo. O canto (Demucs + Seed-VC) converte o timbre e não
+// depende do idioma: serve para qualquer língua.
+// Fora dos 23: texto em alfabeto latino cai no idioma da voz (ou inglês) e o resultado avisa
+// language_fallback=true; escrita sem suporte (ex.: tailandês, bengali, tâmil) responde
+// language_unsupported ANTES de cobrar. Nunca quebra.
+
+export const TTS_LANGUAGES = {
+  ar: "العربية", da: "Dansk", de: "Deutsch", el: "Ελληνικά", en: "English", es: "Español", fi: "Suomi", fr: "Français",
+  he: "עברית", hi: "हिन्दी", it: "Italiano", ja: "日本語", ko: "한국어", ms: "Bahasa Melayu", nl: "Nederlands", no: "Norsk",
+  pl: "Polski", pt: "Português", ru: "Русский", sv: "Svenska", sw: "Kiswahili", tr: "Türkçe", zh: "中文",
+} as const;
+export type TtsLang = keyof typeof TTS_LANGUAGES;
+export const TTS_LANG_CODES = Object.keys(TTS_LANGUAGES) as TtsLang[];
+
+/** "pt-BR", "zh-Hans", "nb", "Português"… → código do TTS, ou null se não houver. */
+export function ttsLangCode(v: unknown): TtsLang | null {
+  if (typeof v !== "string") return null;
+  const s = v.trim().toLowerCase();
+  if (!s || s === "auto") return null;
+  const base = s.split(/[-_]/)[0];
+  if (base === "nb" || base === "nn") return "no";
+  if ((TTS_LANG_CODES as string[]).includes(base)) return base as TtsLang;
+  const byName = (Object.entries(TTS_LANGUAGES) as Array<[TtsLang, string]>).find(([, n]) => n.toLowerCase() === s);
+  return byName ? byName[0] : null;
+}
+
+const SCRIPT_RE: Array<[string, RegExp]> = [
+  ["kana", /[\u3040-\u30ff]/g], ["han", /[\u4e00-\u9fff]/g], ["hangul", /[\uac00-\ud7af\u1100-\u11ff]/g],
+  ["arabic", /[\u0600-\u06ff]/g], ["hebrew", /[\u0590-\u05ff]/g], ["greek", /[\u0370-\u03ff]/g],
+  ["cyrillic", /[\u0400-\u04ff]/g], ["devanagari", /[\u0900-\u097f]/g], ["thai", /[\u0e00-\u0e7f]/g],
+  ["bengali", /[\u0980-\u09ff]/g], ["tamil", /[\u0b80-\u0bff]/g], ["telugu", /[\u0c00-\u0c7f]/g],
+  ["georgian", /[\u10a0-\u10ff]/g], ["armenian", /[\u0530-\u058f]/g], ["ethiopic", /[\u1200-\u137f]/g],
+  ["khmer", /[\u1780-\u17ff]/g], ["lao", /[\u0e80-\u0eff]/g], ["myanmar", /[\u1000-\u109f]/g], ["gujarati", /[\u0a80-\u0aff]/g],
+  ["gurmukhi", /[\u0a00-\u0a7f]/g], ["sinhala", /[\u0d80-\u0dff]/g], ["malayalam", /[\u0d00-\u0d7f]/g], ["kannada", /[\u0c80-\u0cff]/g],
+];
+const SCRIPT_LANG: Record<string, string> = {
+  kana: "ja", han: "zh", hangul: "ko", arabic: "ar", hebrew: "he", greek: "el", cyrillic: "ru", devanagari: "hi",
+  thai: "th", bengali: "bn", tamil: "ta", telugu: "te", georgian: "ka", armenian: "hy", ethiopic: "am", khmer: "km",
+  lao: "lo", myanmar: "my", gujarati: "gu", gurmukhi: "pa", sinhala: "si", malayalam: "ml", kannada: "kn",
+};
+
+// Palavras funcionais frequentes (artigos, preposições, pronomes) por idioma latino do TTS.
+const LATIN_STOP: Record<string, string> = {
+  pt: "o a os as um uma de do da dos das em no na nos nas que não é eu você ele ela com para por mas como mais muito isso esse essa também meu minha seu sua então está são foi tem vamos",
+  es: "el la los las un una de del en que no es yo tú usted él ella con para por pero como más muy eso este esta también mi su entonces está son fue tiene vamos y",
+  en: "the a an of to in on at and is are was were it this that you he she we they with for but not be have has do does my your our their from by as or so will would can",
+  fr: "le la les un une des de du en et est que qui ne pas je tu il elle nous vous ils avec pour mais comme plus très ce cette mon ma mes son sa dans sur au aux",
+  de: "der die das ein eine einen und ist nicht ich du er sie wir ihr mit für aber wie mehr sehr auch mein meine dein sein in auf zu den dem des von im es",
+  it: "il lo la gli le un una di del della che non è io tu lui lei noi voi con per ma come più molto anche mio mia suo sua nel nella sono questo questa",
+  nl: "de het een en is niet ik jij je hij zij wij we met voor maar zoals meer zeer ook mijn zijn haar in op van te dat dit er",
+  pl: "i w na z że nie jest to się jak ale do co ja ty on ona my wy dla tak bardzo też mój moja jego jej od po przez",
+  tr: "ve bir bu da de ne için ile ama çok gibi ben sen o biz siz onlar değil var yok daha mı mi şey olan",
+  sv: "och att det som en ett är inte jag du han hon vi ni de med för men hur mer mycket också min mitt på av till i",
+  da: "og at det som en et er ikke jeg du han hun vi de med for men hvordan mere meget også min mit på af til i",
+  no: "og at det som en et er ikke jeg du han hun vi dere de med for men hvordan mer veldig også min mitt på av til i meg deg",
+  fi: "ja on ei se että minä sinä hän me te he kanssa mutta kuin myös minun sinun tämä tuo oli ovat joka",
+  ms: "dan yang di ke dari ini itu tidak saya awak anda dia kami kita mereka dengan untuk tetapi seperti lebih sangat juga ada akan",
+  sw: "na ya wa kwa ni la za katika hii hiyo si mimi wewe yeye sisi ninyi wao lakini kama zaidi sana pia yangu",
+};
+const LATIN_STOP_SETS = Object.fromEntries(Object.entries(LATIN_STOP).map(([k, v]) => [k, new Set(v.split(" "))]));
+const LATIN_HINT: Record<string, RegExp> = {
+  pt: /[ãõç]|ção\b/, es: /[ñ¿¡]|ción\b/, de: /ß|[äöü]/, fr: /[œèêàù]|\bj'|\bc'|\bd'/, pl: /[ąęłńśźż]/, tr: /[ığş]/,
+  sv: /å|ä/, da: /[æø]/, no: /[æø]/, fi: /ää|öö|yy/, it: /\bè\b|zione\b/, nl: /ij\b|\bhet\b/,
+};
+
+/**
+ * Idioma provável do texto para a fala. Devolve um código ISO (pode estar fora do TTS, ex. "th")
+ * ou null quando não dá para dizer (texto curto ou ambíguo).
+ */
+export function detectSpeechLanguage(text: string): string | null {
+  const t = (text ?? "").toLowerCase();
+  const letters = (t.match(/\p{L}/gu) ?? []).length;
+  if (!letters) return null;
+  const scores = SCRIPT_RE.map(([name, re]) => [name, (t.match(re) ?? []).length] as const).filter(([, n]) => n > 0);
+  if (scores.length) {
+    const kana = scores.find(([n]) => n === "kana")?.[1] ?? 0;
+    const han = scores.find(([n]) => n === "han")?.[1] ?? 0;
+    if ((kana + han) / letters >= 0.3) return kana > 0 ? "ja" : "zh";
+    const [top, n] = [...scores].sort((a, b) => b[1] - a[1])[0];
+    if (n / letters >= 0.4) {
+      if (top === "cyrillic" && /[іїєґ]/.test(t)) return "uk";
+      if (top === "cyrillic" && /[ђћџљњј]/.test(t)) return "sr";
+      if (top === "arabic" && /[پچژگ]/.test(t)) return "fa";
+      if (top === "arabic" && /[ٹڈڑںے]/.test(t)) return "ur";
+      return SCRIPT_LANG[top] ?? null;
+    }
+  }
+  const words = t.split(/[^\p{L}']+/u).filter(Boolean);
+  let best: { lang: string; score: number } | null = null;
+  let second = 0;
+  for (const [lang, set] of Object.entries(LATIN_STOP_SETS)) {
+    let score = LATIN_HINT[lang]?.test(t) ? 2 : 0;
+    for (const w of words) if (set.has(w)) score += 1;
+    if (!best || score > best.score) {
+      second = best?.score ?? 0;
+      best = { lang, score };
+    } else if (score > second) second = score;
+  }
+  if (!best || best.score < 2 || best.score === second) return null;
+  return best.lang;
+}
+
+export interface SpeechLanguageChoice {
+  /** Código enviado ao motor (sempre um dos 23). */
+  language: TtsLang;
+  /** Como foi escolhido. */
+  source: "requested" | "detected" | "voice" | "default";
+  /** O idioma do texto não está entre os 23 (ou não foi reconhecido): falou com o mais próximo possível. */
+  fallback: boolean;
+  /** Idioma detectado no texto (pode estar fora do TTS). */
+  detected: string | null;
+}
+
+/**
+ * Idioma da fala: pedido explícito (seletor) → detectado no texto → idioma da voz → inglês.
+ * Escrita que o TTS não sabe ler (ex.: tailandês, bengali) → { unsupported } para recusar sem cobrar.
+ */
+export function resolveSpeechLanguage(
+  i: { requested?: unknown; text: string; voiceLanguage?: unknown },
+): SpeechLanguageChoice | { unsupported: string } {
+  const detected = detectSpeechLanguage(i.text);
+  const req = ttsLangCode(i.requested);
+  if (req) return { language: req, source: "requested", fallback: false, detected };
+  const det = ttsLangCode(detected);
+  if (det) return { language: det, source: "detected", fallback: false, detected };
+  // Escrita própria fora do TTS: falar com outro idioma sairia ininteligível.
+  if (detected && !/^(uk|sr|fa|ur)$/.test(detected) && SCRIPT_LANG_VALUES.has(detected)) return { unsupported: detected };
+  if (detected === "uk" || detected === "sr") return { language: "ru", source: "detected", fallback: true, detected };
+  if (detected === "fa" || detected === "ur") return { language: "ar", source: "detected", fallback: true, detected };
+  const voice = ttsLangCode(i.voiceLanguage);
+  if (voice) return { language: voice, source: "voice", fallback: detected !== null, detected };
+  return { language: "en", source: "default", fallback: true, detected };
+}
+const SCRIPT_LANG_VALUES = new Set(Object.values(SCRIPT_LANG).filter((c) => !(TTS_LANG_CODES as string[]).includes(c)));
+
+export function isUnsupportedSpeech(r: SpeechLanguageChoice | { unsupported: string }): r is { unsupported: string } {
+  return "unsupported" in r;
 }

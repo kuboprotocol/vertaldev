@@ -11,6 +11,7 @@ import {
   type SavedVoice, type VoiceCloneConfig,
 } from '@/lib/voiceClone/client';
 import { voiceMessage } from '../../../supabase/functions/_shared/voiceClone';
+import { MUSIC_VOICE_TEXT, voiceUiDict } from '@/lib/voiceClone/i18n';
 
 const AUTO_KEY = 'vertal-music-voice-auto';
 
@@ -18,15 +19,11 @@ const AUTO_KEY = 'vertal-music-voice-auto';
 let configOnce: Promise<VoiceCloneConfig | null> | null = null;
 const loadConfig = () => (configOnce ??= getVoiceConfig().catch(() => null));
 
-const T = {
-  pt: { use: 'Usar minha voz', sing: 'Cantar com minha voz', clone: 'Clonar minha voz', auto: 'Cantar com minha voz automaticamente nas próximas músicas', working: 'Cantando com a sua voz… ({s}s)', done: 'Versão com a sua voz', credits: 'crédito(s)' },
-  en: { use: 'Use my voice', sing: 'Sing with my voice', clone: 'Clone my voice', auto: 'Sing new songs with my voice automatically', working: 'Singing with your voice… ({s}s)', done: 'Version with your voice', credits: 'credit(s)' },
-  es: { use: 'Usar mi voz', sing: 'Cantar con mi voz', clone: 'Clonar mi voz', auto: 'Cantar automáticamente las próximas canciones con mi voz', working: 'Cantando con tu voz… ({s}s)', done: 'Versión con tu voz', credits: 'crédito(s)' },
-} as const;
 
 export function MusicVoiceClone({ audioUrl, title, autoId }: { audioUrl: string; title: string; autoId?: string }) {
   const lang = browserVoiceLang();
-  const t = T[lang];
+  // Textos no idioma do app (antes: só o navegador → inglês dentro do Studio em português).
+  const t = MUSIC_VOICE_TEXT[voiceUiDict()];
   const [config, setConfig] = useState<VoiceCloneConfig | null>(null);
   const [voices, setVoices] = useState<SavedVoice[]>([]);
   const [voiceId, setVoiceId] = useState('');

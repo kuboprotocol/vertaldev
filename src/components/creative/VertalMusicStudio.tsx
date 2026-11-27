@@ -18,12 +18,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { functionErrorCode } from "@/lib/functionError";
 import {
-  MUSIC_STUDIO_COST, MUSIC_STUDIO_KEYS, MUSIC_STUDIO_LANGUAGES, MUSIC_STUDIO_MOODS, MUSIC_STUDIO_STYLES,
+  MUSIC_STUDIO_COST, MUSIC_STUDIO_KEYS, MUSIC_STUDIO_LANGUAGES, MUSIC_STUDIO_MOODS,
   MUSIC_STUDIO_VOCAL_TONES, MUSIC_STUDIO_VOCAL_TYPES, musicErrorMessage, musicStage, type MusicJobView, type StudioLyricsMode,
 } from "./vertalMusicStudio";
 import {
   buildSuperPrompt, normalizeMusicRequest, type MusicRequest,
 } from "../../../supabase/functions/_shared/music/vertalMusicCore";
+import { musicStyleOptions } from "../../../supabase/functions/_shared/music/worldGenres";
+
+const MUSIC_STYLE_OPTIONS = musicStyleOptions();
 // "Usar minha voz" (Clonador de voz): não renderiza nada para contas fora da flag.
 import { MusicVoiceClone } from "./MusicVoiceClone";
 
@@ -113,8 +116,14 @@ export function VertalMusicStudio() {
   useEffect(() => { void loadHistory(); }, [loadHistory]);
 
   // Retoma uma geração em andamento (ex.: recarregou a página).
+  // Isto NÃO inicia música nova: só volta a acompanhar uma que já estava em andamento (pedida antes no Studio
+  // ou pelo Vertal Chat). O aviso abaixo deixa isso claro, para não parecer que abrir o painel gerou uma música.
+  const [resumed, setResumed] = useState(false);
   useEffect(() => {
-    if (!job && history[0]?.status === "processing") setJob(history[0]);
+    if (!job && history[0]?.status === "processing") {
+      setJob(history[0]);
+      setResumed(true);
+    }
   }, [history, job]);
 
   useEffect(() => {
@@ -154,6 +163,7 @@ export function VertalMusicStudio() {
       toast.error("Cole a letra completa ou troque o modo da letra."); return;
     }
     setSubmitting(true);
+    setResumed(false);
     setJob(null);
     startedAt.current = Date.now();
     toast.loading("Compondo no Vertal Music Engine…", { id: "music-gen", description: "Leva de 1 a 3 minutos." });
@@ -203,10 +213,19 @@ export function VertalMusicStudio() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase tracking-wider opacity-60">Estilo</Label>
-              <Select value={style} onValueChange={setStyle}>
-                <SelectTrigger aria-label="Estilo"><SelectValue /></SelectTrigger>
-                <SelectContent>{MUSIC_STUDIO_STYLES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-              </Select>
+              {/* Ritmo/gênero: busca no catálogo do mundo (samba, forró, amapiano, k-pop, qawwali…) ou texto livre. */}
+              <Input
+                aria-label="Estilo"
+                list="vertal-music-styles"
+                value={style}
+                maxLength={80}
+                onChange={(e) => setStyle(e.target.value)}
+                placeholder="Busque ou escreva: samba, forró, amapiano, k-pop, fado…"
+              />
+              <datalist id="vertal-music-styles">
+                {MUSIC_STYLE_OPTIONS.map((o) => <option key={o.name} value={o.name}>{o.region}</option>)}
+              </datalist>
+              <p className="text-[11px] text-muted-foreground">{MUSIC_STYLE_OPTIONS.length}+ ritmos do Brasil e do mundo, ou escreva o seu.</p>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-bold uppercase tracking-wider opacity-60">Mood</Label>
@@ -261,7 +280,7 @@ export function VertalMusicStudio() {
               <Label className="text-xs font-bold uppercase tracking-wider opacity-60">Idioma</Label>
               <Select value={language} onValueChange={setLanguage}>
                 <SelectTrigger aria-label="Idioma"><SelectValue /></SelectTrigger>
-                <SelectContent>{MUSIC_STUDIO_LANGUAGES.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}</SelectContent>
+                <SelectContent className="max-h-72">{MUSIC_STUDIO_LANGUAGES.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
@@ -333,6 +352,11 @@ export function VertalMusicStudio() {
 
             {generating && (
               <div className="flex flex-col items-center py-6 gap-4" data-testid="vertal-music-progress">
+                {resumed && !submitting && (
+                  <p className="text-xs text-muted-foreground text-center" data-testid="vertal-music-resumed">
+                    Acompanhando uma música que já estava sendo gerada{job?.title ? ` ("${job.title}")` : ""}. Abrir o painel não cria nem cobra música nova.
+                  </p>
+                )}
                 <div className="w-12 h-12 rounded-full bg-primary/15 flex items-center justify-center animate-pulse">
                   <Loader2 className="w-5 h-5 animate-spin text-primary" />
                 </div>
