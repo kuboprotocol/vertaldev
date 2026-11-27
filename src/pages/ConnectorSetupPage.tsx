@@ -19,6 +19,8 @@ import { FluxosConnectPanel } from '@/components/connectors/FluxosConnectPanel'
 import { WhatsAppConnectPanel } from '@/components/connectors/WhatsAppConnectPanel'
 import { MobileStudioSetupPage } from '@/components/connectors/MobileStudioSetup'
 import { isMobileStudioSlug } from '@/lib/mobileStudio/connectors'
+import { MetaMaskSetupPage } from '@/components/connectors/MetaMaskSetup'
+import { isMetaMaskSlug } from '@/lib/vertalWallet/config'
 import { cn } from '@/lib/utils'
 import { getGitHubOAuthUrl, GITHUB_TOKEN_STEPS } from '@/lib/github/oauth'
 
@@ -83,6 +85,8 @@ export default function ConnectorSetupPage() {
 
   // Android Studio, iOS / Xcode e Google Play Console: página própria (abre mesmo com o flag do catálogo desligado).
   if (isMobileStudioSlug(slug)) return <MobileStudioSetupPage slug={slug} />
+  // MetaMask: página própria (o servidor só responde para quem está liberado em VERTAL_METAMASK_USER_IDS).
+  if (isMetaMaskSlug(slug)) return <MetaMaskSetupPage />
 
   if (!connector) {
     return (

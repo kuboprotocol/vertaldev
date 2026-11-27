@@ -3,6 +3,8 @@ import type { LucideIcon } from 'lucide-react'
 import { fluxosConnectors, FLUXOS_SHARED_APPS } from './fluxosConnectors'
 // Android Studio, iOS / Xcode e Google Play Console (flag VITE_VERTAL_MOBILE_STUDIO, padrão desligado).
 import { mobileStudioCatalog } from './mobileStudio/connectors'
+// MetaMask (Sign-In with Ethereum; flag VITE_VERTAL_METAMASK, padrão desligado).
+import { metamaskCatalog } from './vertalWallet/config'
 
 export interface ConnectorSetupStep {
   title: string
@@ -627,6 +629,7 @@ export const connectors: ConnectorConfig[] = [
   }),
   ...fluxosConnectors,
   ...mobileStudioCatalog(),
+  ...metamaskCatalog(),
 ]
 
 export function getConnectorBySlug(slug: string): ConnectorConfig | undefined {
