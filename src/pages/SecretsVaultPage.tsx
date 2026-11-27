@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -17,24 +17,25 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { toast } from '@/hooks/use-toast'
-import { Copy, Eye, EyeOff, KeyRound, Loader2, Lock, Pencil, Plus, Trash2, Users, ArrowLeft } from 'lucide-react'
+import { Copy, Eye, EyeOff, KeyRound, Loader2, Lock, Pencil, Plus, Trash2, Users } from 'lucide-react'
 import { useKuboSecrets, type AuditEntry, type VaultSecret } from '@/hooks/useKuboSecrets'
 import { SecretFormDialog } from '@/components/secrets/SecretFormDialog'
 import { SecretAccessDialog } from '@/components/secrets/SecretAccessDialog'
 import { OrchestratorPanel } from '@/components/secrets/OrchestratorPanel'
+import AppShell, { AppTopBar, PanelHeader } from '@/components/site/AppShell'
 
 /** Quanto tempo um valor revelado fica na tela antes de sumir sozinho. */
 const REVEAL_SECONDS = 20
 
 const ACTION_LABEL: Record<AuditEntry['action'], string> = {
-  create: 'Criado',
-  rotate: 'Valor trocado',
-  update: 'Editado',
-  delete: 'Excluído',
-  reveal: 'Valor revelado',
-  grant: 'Acesso concedido',
-  revoke: 'Acesso revogado',
-  inject: 'Usado na orquestração',
+  create: 'Created',
+  rotate: 'Value changed',
+  update: 'Edited',
+  delete: 'Deleted',
+  reveal: 'Value revealed',
+  grant: 'Access granted',
+  revoke: 'Access revoked',
+  inject: 'Used in orchestration',
 }
 
 interface Revealed {
@@ -81,7 +82,7 @@ export default function SecretsVaultPage() {
     meta.name = 'robots'
     meta.content = 'noindex,nofollow'
     document.head.appendChild(meta)
-    document.title = 'Cofre · KUBO'
+    document.title = 'Secrets vault · KUBO'
     return () => {
       meta.remove()
     }
@@ -139,7 +140,7 @@ export default function SecretsVaultPage() {
       const value = await vault.reveal(s.id)
       setRevealed((prev) => ({ ...prev, [s.id]: { value, until: Date.now() + REVEAL_SECONDS * 1000 } }))
     } catch (e) {
-      toast({ title: 'Não foi possível revelar', description: e instanceof Error ? e.message : undefined, variant: 'destructive' })
+      toast({ title: 'Could not reveal', description: e instanceof Error ? e.message : undefined, variant: 'destructive' })
     } finally {
       setBusyReveal(null)
     }
@@ -151,15 +152,15 @@ export default function SecretsVaultPage() {
       try {
         value = await vault.reveal(s.id)
       } catch (e) {
-        toast({ title: 'Não foi possível copiar', description: e instanceof Error ? e.message : undefined, variant: 'destructive' })
+        toast({ title: 'Could not copy', description: e instanceof Error ? e.message : undefined, variant: 'destructive' })
         return
       }
     }
     try {
       await navigator.clipboard.writeText(value)
-      toast({ title: 'Copiado', description: `${s.env_key} está na área de transferência` })
+      toast({ title: 'Copied', description: `${s.env_key} is on your clipboard` })
     } catch {
-      toast({ title: 'O navegador bloqueou a cópia', variant: 'destructive' })
+      toast({ title: 'The browser blocked copying', variant: 'destructive' })
     }
   }
 
@@ -168,38 +169,38 @@ export default function SecretsVaultPage() {
     try {
       setAudit(await vault.loadAudit())
     } catch (e) {
-      toast({ title: 'Auditoria indisponível', description: e instanceof Error ? e.message : undefined, variant: 'destructive' })
+      toast({ title: 'Audit log is not available', description: e instanceof Error ? e.message : undefined, variant: 'destructive' })
     } finally {
       setAuditLoading(false)
     }
   }
 
-  const secretName = (id: string | null) => vault.secrets.find((s) => s.id === id)?.name ?? '—'
+  const secretName = (id: string | null) => vault.secrets.find((s) => s.id === id)?.name ?? '-'
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto w-full max-w-5xl px-4 pb-16 pt-6 sm:px-6">
-        <div className="mb-6 flex items-center justify-between gap-3">
-          <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="h-4 w-4" /> Início
-          </Link>
-          <Badge variant="outline" className="gap-1">
-            <Lock className="h-3 w-3" /> Visível só para você e quem você autorizar
-          </Badge>
-        </div>
-
-        <header className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight">Cofre de segredos</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Chaves de API, tokens e senhas. Separado dos conectores: aqui fica o valor, lá fica a integração.
-          </p>
-        </header>
+    <AppShell
+      topBar={
+        <AppTopBar
+          back={{ to: '/', label: 'Home' }}
+          actions={
+            <Badge variant="outline" className="hidden gap-1 rounded-full sm:inline-flex">
+              <Lock className="h-3 w-3" /> Visible only to you and people you allow
+            </Badge>
+          }
+        />
+      }
+    >
+      <div>
+        <PanelHeader
+          title="Secrets vault"
+          description="API keys, tokens and passwords. The vault keeps the values. Connectors keep the integrations."
+        />
 
         <Tabs defaultValue="secrets" onValueChange={(v) => v === 'audit' && audit === null && void loadAudit()}>
           <TabsList>
-            <TabsTrigger value="secrets">Segredos</TabsTrigger>
-            <TabsTrigger value="orchestrator">Orquestrador</TabsTrigger>
-            <TabsTrigger value="audit">Auditoria</TabsTrigger>
+            <TabsTrigger value="secrets">Secrets</TabsTrigger>
+            <TabsTrigger value="orchestrator">Orchestrator</TabsTrigger>
+            <TabsTrigger value="audit">Audit log</TabsTrigger>
           </TabsList>
 
           <TabsContent value="secrets" className="mt-5 grid gap-5">
@@ -207,9 +208,9 @@ export default function SecretsVaultPage() {
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar por nome, variável ou grupo"
+                placeholder="Search by name, variable or group"
                 className="max-w-xs"
-                aria-label="Buscar segredos"
+                aria-label="Search secrets"
               />
               <div className="ml-auto">
                 <Button
@@ -217,15 +218,16 @@ export default function SecretsVaultPage() {
                     setEditing(null)
                     setFormOpen(true)
                   }}
+                  className="rounded-full"
                 >
-                  <Plus className="mr-1.5 h-4 w-4" /> Novo segredo
+                  <Plus className="mr-1.5 h-4 w-4" /> New secret
                 </Button>
               </div>
             </div>
 
             {vault.loading && vault.secrets.length === 0 && (
               <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> Abrindo o cofre…
+                <Loader2 className="h-4 w-4 animate-spin" /> Opening the vault...
               </div>
             )}
 
@@ -239,9 +241,9 @@ export default function SecretsVaultPage() {
               <Card>
                 <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
                   <KeyRound className="h-8 w-8 text-muted-foreground" />
-                  <p className="font-medium">O cofre está vazio</p>
+                  <p className="font-medium">The vault is empty</p>
                   <p className="max-w-sm text-sm text-muted-foreground">
-                    Guarde aqui a primeira chave. Ela fica cifrada e só você decide quem pode usá-la.
+                    Add your first key. It is stored encrypted, and only you decide who can use it.
                   </p>
                 </CardContent>
               </Card>
@@ -256,20 +258,20 @@ export default function SecretsVaultPage() {
                     const secondsLeft = r ? Math.max(0, Math.ceil((r.until - now) / 1000)) : 0
                     const isOwner = s.role === 'owner'
                     return (
-                      <Card key={s.id}>
+                      <Card key={s.id} className="rounded-xl border-white/[0.06] bg-card/50">
                         <CardContent className="grid gap-3 p-4">
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
                                 <p className="font-medium">{s.name}</p>
                                 {isOwner ? (
-                                  <Badge variant="secondary">Seu</Badge>
+                                  <Badge variant="secondary">Yours</Badge>
                                 ) : (
                                   <Badge variant="outline" className="gap-1">
-                                    <Users className="h-3 w-3" /> Compartilhado
+                                    <Users className="h-3 w-3" /> Shared
                                   </Badge>
                                 )}
-                                {!isOwner && s.can_reveal && <Badge variant="outline">Pode ver</Badge>}
+                                {!isOwner && s.can_reveal && <Badge variant="outline">Can see</Badge>}
                               </div>
                               <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">{s.env_key}</p>
                               {s.description && <p className="mt-1 text-sm text-muted-foreground">{s.description}</p>}
@@ -282,7 +284,7 @@ export default function SecretsVaultPage() {
                                   size="sm"
                                   disabled={busyReveal === s.id}
                                   onClick={() => void toggleReveal(s)}
-                                  aria-label={r ? 'Ocultar valor' : 'Revelar valor'}
+                                  aria-label={r ? 'Hide value' : 'Reveal value'}
                                 >
                                   {busyReveal === s.id ? (
                                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -291,17 +293,17 @@ export default function SecretsVaultPage() {
                                   ) : (
                                     <Eye className="mr-1.5 h-3.5 w-3.5" />
                                   )}
-                                  {r ? 'Ocultar' : 'Revelar'}
+                                  {r ? 'Hide' : 'Reveal'}
                                 </Button>
                               )}
                               {(isOwner || s.can_reveal) && (
-                                <Button variant="ghost" size="sm" onClick={() => void copy(s)} aria-label="Copiar valor">
+                                <Button variant="ghost" size="sm" onClick={() => void copy(s)} aria-label="Copy value">
                                   <Copy className="h-3.5 w-3.5" />
                                 </Button>
                               )}
                               {isOwner && (
                                 <>
-                                  <Button variant="ghost" size="sm" onClick={() => setAccessFor(s)} aria-label="Gerenciar acessos">
+                                  <Button variant="ghost" size="sm" onClick={() => setAccessFor(s)} aria-label="Manage access">
                                     <Users className="h-3.5 w-3.5" />
                                   </Button>
                                   <Button
@@ -311,11 +313,11 @@ export default function SecretsVaultPage() {
                                       setEditing(s)
                                       setFormOpen(true)
                                     }}
-                                    aria-label="Editar segredo"
+                                    aria-label="Edit secret"
                                   >
                                     <Pencil className="h-3.5 w-3.5" />
                                   </Button>
-                                  <Button variant="ghost" size="sm" onClick={() => setDeleting(s)} aria-label="Excluir segredo">
+                                  <Button variant="ghost" size="sm" onClick={() => setDeleting(s)} aria-label="Delete secret">
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </Button>
                                 </>
@@ -327,8 +329,8 @@ export default function SecretsVaultPage() {
                             <span className="font-mono">{r ? r.value : s.masked_hint ?? '••••••'}</span>
                             <span>
                               {r
-                                ? `Some em ${secondsLeft}s`
-                                : `Trocado em ${new Date(s.rotated_at).toLocaleDateString('pt-BR')}`}
+                                ? `Hidden in ${secondsLeft}s`
+                                : `Changed on ${new Date(s.rotated_at).toLocaleDateString()}`}
                             </span>
                           </div>
                         </CardContent>
@@ -347,27 +349,27 @@ export default function SecretsVaultPage() {
           <TabsContent value="audit" className="mt-5">
             {auditLoading && (
               <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> Carregando…
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading...
               </div>
             )}
             {!auditLoading && audit && audit.length === 0 && (
-              <p className="py-10 text-sm text-muted-foreground">Nenhum registro ainda.</p>
+              <p className="py-10 text-sm text-muted-foreground">No entries yet.</p>
             )}
             {!auditLoading && audit && audit.length > 0 && (
-              <div className="overflow-x-auto rounded-md border">
+              <div className="overflow-x-auto rounded-xl border border-white/[0.06]">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Quando</TableHead>
-                      <TableHead>Ação</TableHead>
-                      <TableHead>Segredo</TableHead>
+                      <TableHead>When</TableHead>
+                      <TableHead>Action</TableHead>
+                      <TableHead>Secret</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {audit.map((a) => (
                       <TableRow key={a.id}>
                         <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                          {new Date(a.created_at).toLocaleString('pt-BR')}
+                          {new Date(a.created_at).toLocaleString()}
                         </TableCell>
                         <TableCell>{ACTION_LABEL[a.action]}</TableCell>
                         <TableCell className="font-mono text-xs">{a.env_key ?? secretName(a.secret_id)}</TableCell>
@@ -378,7 +380,7 @@ export default function SecretsVaultPage() {
               </div>
             )}
             <p className="mt-3 text-xs text-muted-foreground">
-              A auditoria só cresce: nenhum registro pode ser editado ou apagado. Valores nunca entram nela.
+              Entries in the audit log cannot be edited or deleted. Secret values are never logged.
             </p>
           </TabsContent>
         </Tabs>
@@ -407,32 +409,32 @@ export default function SecretsVaultPage() {
       <AlertDialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir {deleting?.name}?</AlertDialogTitle>
+            <AlertDialogTitle>Delete {deleting?.name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              O valor some do cofre e quem tinha acesso perde o acesso. A auditoria continua registrando a exclusão.
+              The value is removed from the vault and everyone loses access to it. The audit log keeps a record of the deletion.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={async () => {
                 if (!deleting) return
                 try {
                   await vault.remove(deleting.id)
-                  toast({ title: 'Segredo excluído' })
+                  toast({ title: 'Secret deleted' })
                 } catch (e) {
-                  toast({ title: 'Não foi possível excluir', description: e instanceof Error ? e.message : undefined, variant: 'destructive' })
+                  toast({ title: 'Could not delete', description: e instanceof Error ? e.message : undefined, variant: 'destructive' })
                 } finally {
                   setDeleting(null)
                 }
               }}
             >
-              Excluir
+              Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </AppShell>
   )
 }

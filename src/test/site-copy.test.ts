@@ -70,6 +70,17 @@ const FILES = [
   'pages/VibeAgentsPage.tsx',
   'components/huginn/HuginnAgentsCard.tsx',
   'components/huginn/FluxosAgentBuilder.tsx',
+  // Loose logged-in pages
+  'pages/DomainsPage.tsx',
+  'pages/SecretsVaultPage.tsx',
+  'components/secrets/OrchestratorPanel.tsx',
+  'components/secrets/SecretAccessDialog.tsx',
+  'components/secrets/SecretFormDialog.tsx',
+  'pages/McpAccessPage.tsx',
+  'lib/mcpClientConfig.ts',
+  'pages/LeaderboardPage.tsx',
+  'pages/EmailDashboardPage.tsx',
+  'pages/PlanPage.tsx',
 ]
 
 function visibleText(file: string): string {

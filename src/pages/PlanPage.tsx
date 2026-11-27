@@ -1,4 +1,4 @@
-// Página /plan/:id — preview por camadas, gerenciamento de status,
+// Página /plan/:id: preview por camadas, gerenciamento de status,
 // geração de ERC-20 customizado, deploy automático na Sepolia,
 // persistência de contratos/deploys e tratamento de erros.
 import { useEffect, useMemo, useState } from 'react'
@@ -11,8 +11,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import { ArrowLeft, Download, Wallet, Cpu, Layers, FileCode, CheckCircle2, Circle, Loader2, Rocket, ExternalLink, Copy } from 'lucide-react'
+import { Download, Wallet, Cpu, Layers, FileCode, CheckCircle2, Circle, Loader2, Rocket, ExternalLink, Copy } from 'lucide-react'
 import { useDemoWallet } from '@/hooks/useDemoWallet'
+import AppShell, { AppTopBar, PanelHeader } from '@/components/site/AppShell'
+import { siteRoot } from '@/components/site/siteUi'
 
 type TaskStatus = 'todo' | 'in_progress' | 'done'
 type Task = { id: string; layer: 1 | 2 | 3; title: string; depends_on: string[] }
@@ -45,9 +47,9 @@ type Deployment = {
 }
 
 const LAYER_META = {
-  1: { label: 'Camada 1 — Interface', icon: Layers, color: 'text-blue-400' },
-  2: { label: 'Camada 2 — Orquestrador', icon: Cpu, color: 'text-amber-400' },
-  3: { label: 'Camada 3 — Motores', icon: FileCode, color: 'text-emerald-400' },
+  1: { label: 'Layer 1: Interface', icon: Layers, color: 'text-blue-400' },
+  2: { label: 'Layer 2: Orchestrator', icon: Cpu, color: 'text-amber-400' },
+  3: { label: 'Layer 3: Engines', icon: FileCode, color: 'text-emerald-400' },
 } as const
 
 function downloadFile(filename: string, content: string, mime = 'text/plain') {
@@ -62,7 +64,7 @@ function downloadFile(filename: string, content: string, mime = 'text/plain') {
   URL.revokeObjectURL(url)
 }
 
-function copy(text: string, label = 'Copiado') {
+function copy(text: string, label = 'Copied') {
   navigator.clipboard.writeText(text).then(() => toast.success(label))
 }
 
@@ -106,7 +108,7 @@ export default function PlanPage() {
         .eq('id', id).maybeSingle()
       if (cancelled) return
       if (error || !data) {
-        toast.error('Plano não encontrado')
+        toast.error('Plan not found')
         navigate('/dashboard', { replace: true })
         return
       }
@@ -173,17 +175,17 @@ export default function PlanPage() {
     setPlan({ ...plan, task_states: next })
     const { error } = await supabase.from('orchestration_plans').update({ task_states: next }).eq('id', plan.id)
     if (error) {
-      toast.error('Falha ao salvar status')
+      toast.error('Could not save the status')
       setPlan(prev)
     }
   }
 
   function validateForm(): string | null {
-    if (!/^[A-Z][A-Za-z0-9_]{1,40}$/.test(form.name)) return 'Nome deve começar com maiúscula (PascalCase, sem espaços)'
-    if (!/^[A-Z0-9]{2,11}$/.test(form.symbol)) return 'Símbolo: 2-11 caracteres (A-Z, 0-9)'
+    if (!/^[A-Z][A-Za-z0-9_]{1,40}$/.test(form.name)) return 'Name must start with a capital letter (PascalCase, no spaces)'
+    if (!/^[A-Z0-9]{2,11}$/.test(form.symbol)) return 'Symbol: 2 to 11 characters (A-Z, 0-9)'
     const d = Number(form.decimals)
-    if (!Number.isInteger(d) || d < 0 || d > 36) return 'Decimals: inteiro 0..36'
-    if (!/^\d{1,30}$/.test(form.initial_supply)) return 'Supply: inteiro positivo'
+    if (!Number.isInteger(d) || d < 0 || d > 36) return 'Decimals: a whole number from 0 to 36'
+    if (!/^\d{1,30}$/.test(form.initial_supply)) return 'Supply: a positive whole number'
     return null
   }
 
@@ -203,7 +205,7 @@ export default function PlanPage() {
           initial_supply: form.initial_supply,
         },
       })
-      if (error) throw new Error(error.message || 'Falha na geração')
+      if (error) throw new Error(error.message || 'Generation failed')
       if (data?.error) throw new Error(data.error)
       setContract({
         id: data.contract_id,
@@ -213,9 +215,9 @@ export default function PlanPage() {
         initial_supply: String(data.initial_supply),
       })
       setDeployment(null)
-      toast.success(`Contrato ${data.name} gerado!`)
+      toast.success(`Contract ${data.name} created`)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Falha ao gerar contrato')
+      toast.error(e instanceof Error ? e.message : 'Could not create the contract')
     } finally {
       setGeneratingContract(false)
     }
@@ -255,14 +257,14 @@ export default function PlanPage() {
     if (!contract) return
     setDeploying(true)
     setDeployError(null)
-    const toastId = toast.loading(deployment ? 'Re-implantando contrato na Sepolia…' : 'Implantando contrato na Sepolia…')
+    const toastId = toast.loading(deployment ? 'Deploying the contract to Sepolia again...' : 'Deploying the contract to Sepolia...')
     try {
       const { data, error } = await supabase.functions.invoke('web3-contract-deploy', {
         body: { contract_id: contract.id },
       })
-      if (error) throw new Error(error.message || 'Falha no deploy')
+      if (error) throw new Error(error.message || 'Deploy failed')
       if (data?.error) {
-        if (data.error === 'deployer_not_configured') throw new Error('Deployer indisponível no momento. Tente novamente em instantes.')
+        if (data.error === 'deployer_not_configured') throw new Error('The deployer is not available right now. Try again in a moment.')
         throw new Error(data.error)
       }
       const newDep: Deployment = {
@@ -277,10 +279,10 @@ export default function PlanPage() {
       }
       setDeployment(newDep)
       setHistory((h) => [newDep, ...h.filter((x) => x.id !== newDep.id)].slice(0, 20))
-      toast.success('Deploy concluído na Sepolia!', { id: toastId, description: `Tx ${String(data.tx_hash).slice(0, 10)}…` })
+      toast.success('Deployed to Sepolia', { id: toastId, description: `Tx ${String(data.tx_hash).slice(0, 10)}…` })
       void refreshHistory()
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Falha no deploy'
+      const msg = e instanceof Error ? e.message : 'Deploy failed'
       setDeployError(msg)
       toast.error(msg, { id: toastId })
     } finally {
@@ -322,7 +324,7 @@ export default function PlanPage() {
   }
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+    return <div className={`min-h-screen flex items-center justify-center ${siteRoot}`}><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
   }
   if (!plan) return null
 
@@ -330,42 +332,38 @@ export default function PlanPage() {
     ['wallet', 'smart_contract', 'token_mint', 'nft', 'on_chain_tx'].includes(c))
 
   return (
-    <div className="min-h-screen px-6 py-10 max-w-5xl mx-auto">
-      <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard')} className="mb-6 gap-2">
-        <ArrowLeft className="h-4 w-4" /> Voltar
-      </Button>
-
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-display font-bold mb-2">Plano de execução</h1>
-            <p className="text-muted-foreground italic">"{plan.prompt}"</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="capitalize">{plan.intent.replace('_', ' ')}</Badge>
-            <Badge>{progress}% concluído</Badge>
-          </div>
-        </div>
+    <AppShell width="narrow" topBar={<AppTopBar back={{ to: '/dashboard', label: 'Dashboard' }} title="Plan" />}>
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <PanelHeader
+          title="Build plan"
+          description={<span className="italic">"{plan.prompt}"</span>}
+          actions={
+            <>
+              <Badge variant="outline" className="rounded-full capitalize">{plan.intent.replace('_', ' ')}</Badge>
+              <Badge className="rounded-full">{progress}% done</Badge>
+            </>
+          }
+        />
       </motion.div>
 
       {showWeb3 && (
-        <Card className="mb-6 border-primary/30">
+        <Card className="mb-6 rounded-xl border-primary/30 bg-card/50">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
-              <Wallet className="h-4 w-4 text-primary" /> Sua carteira Vertal
+              <Wallet className="h-4 w-4 text-primary" /> Your Vertal wallet
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-xs text-muted-foreground mb-2">
-              Carteira demo determinística (MVP). O deploy on-chain usa a carteira deployer custodial da plataforma.
+              Demo wallet (test version). On-chain deploys use the platform's own deployer wallet.
             </p>
-            <code className="text-sm font-mono bg-muted px-3 py-2 rounded-md inline-block">{wallet.short ?? '—'}</code>
+            <code className="text-sm font-mono bg-muted px-3 py-2 rounded-md inline-block">{wallet.short ?? '-'}</code>
           </CardContent>
         </Card>
       )}
 
-      <Card className="mb-6">
-        <CardHeader className="pb-3"><CardTitle className="text-base">Capacidades detectadas</CardTitle></CardHeader>
+      <Card className="mb-6 rounded-xl border-white/[0.06] bg-card/50">
+        <CardHeader className="pb-3"><CardTitle className="text-base">Detected capabilities</CardTitle></CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-2 mb-4">
             {plan.capabilities.map((c) => <Badge key={c} variant="secondary">{c}</Badge>)}
@@ -388,7 +386,7 @@ export default function PlanPage() {
           const tasks = tasksByLayer[layer]
           if (!tasks.length) return null
           return (
-            <Card key={layer}>
+            <Card key={layer} className="rounded-xl border-white/[0.06] bg-card/50">
               <CardHeader className="pb-3">
                 <CardTitle className={`flex items-center gap-2 text-base ${meta.color}`}>
                   <Icon className="h-4 w-4" /> {meta.label}
@@ -410,7 +408,7 @@ export default function PlanPage() {
                           {(['todo', 'in_progress', 'done'] as TaskStatus[]).map((s) => (
                             <Button key={s} variant={status === s ? 'default' : 'ghost'} size="sm"
                               className="h-7 text-xs px-2" onClick={() => setStatus(t.id, s)}>
-                              {s === 'todo' ? 'Pendente' : s === 'in_progress' ? 'Em andamento' : 'Pronto'}
+                              {s === 'todo' ? 'To do' : s === 'in_progress' ? 'In progress' : 'Done'}
                             </Button>
                           ))}
                         </div>
@@ -425,20 +423,20 @@ export default function PlanPage() {
       </div>
 
       {showWeb3 && (
-        <Card className="mb-6 border-emerald-500/30">
+        <Card className="mb-6 rounded-xl border-emerald-500/30 bg-card/50">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
-              <FileCode className="h-4 w-4 text-emerald-400" /> Smart contract (ERC-20 customizado)
+              <FileCode className="h-4 w-4 text-emerald-400" /> Smart contract (custom ERC-20)
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div>
-                <Label htmlFor="c-name" className="text-xs">Nome</Label>
+                <Label htmlFor="c-name" className="text-xs">Name</Label>
                 <Input id="c-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </div>
               <div>
-                <Label htmlFor="c-sym" className="text-xs">Símbolo</Label>
+                <Label htmlFor="c-sym" className="text-xs">Symbol</Label>
                 <Input id="c-sym" value={form.symbol} onChange={(e) => setForm({ ...form, symbol: e.target.value.toUpperCase() })} />
               </div>
               <div>
@@ -446,22 +444,22 @@ export default function PlanPage() {
                 <Input id="c-dec" type="number" min={0} max={36} value={form.decimals} onChange={(e) => setForm({ ...form, decimals: e.target.value })} />
               </div>
               <div>
-                <Label htmlFor="c-sup" className="text-xs">Supply inicial</Label>
+                <Label htmlFor="c-sup" className="text-xs">Initial supply</Label>
                 <Input id="c-sup" value={form.initial_supply} onChange={(e) => setForm({ ...form, initial_supply: e.target.value })} />
               </div>
             </div>
 
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <p className="text-xs text-muted-foreground">
-                Baseado em OpenZeppelin v5. Após gerar, faça o deploy automático na testnet Sepolia.
+                Based on OpenZeppelin v5. After you create it, deploy it to the Sepolia testnet.
               </p>
               <div className="flex gap-2">
                 <Button onClick={generateContract} disabled={generatingContract || deploying} className="gap-2">
-                  {generatingContract ? <><Loader2 className="h-4 w-4 animate-spin" /> Gerando…</> : 'Gerar contrato'}
+                  {generatingContract ? <><Loader2 className="h-4 w-4 animate-spin" /> Creating...</> : 'Create contract'}
                 </Button>
                 {contract && (
                   <Button onClick={deployContract} disabled={deploying || generatingContract} variant="default" className="gap-2 bg-emerald-600 hover:bg-emerald-700">
-                    {deploying ? <><Loader2 className="h-4 w-4 animate-spin" /> Implantando…</> : <><Rocket className="h-4 w-4" /> Deploy Sepolia</>}
+                    {deploying ? <><Loader2 className="h-4 w-4 animate-spin" /> Deploying...</> : <><Rocket className="h-4 w-4" /> Deploy Sepolia</>}
                   </Button>
                 )}
               </div>
@@ -475,7 +473,7 @@ export default function PlanPage() {
                     <span className="text-muted-foreground">({contract.symbol}, {contract.decimals} decimals, supply {contract.initial_supply})</span>
                   </div>
                   <Button variant="outline" size="sm" onClick={() => downloadFile(`${contract.name}.sol`, contract.source_code, 'text/plain')} className="gap-2">
-                    <Download className="h-4 w-4" /> Baixar .sol
+                    <Download className="h-4 w-4" /> Download .sol
                   </Button>
                 </div>
                 <pre className="text-xs bg-muted p-4 rounded-md overflow-x-auto max-h-80 font-mono">{contract.source_code}</pre>
@@ -486,13 +484,13 @@ export default function PlanPage() {
               <div className="border border-emerald-500/30 rounded-md p-4 bg-emerald-500/5 space-y-3">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2 font-medium text-emerald-400 text-sm">
-                    <CheckCircle2 className="h-4 w-4" /> Deploy concluído
+                    <CheckCircle2 className="h-4 w-4" /> Deployed
                   </div>
                   <div className="flex gap-2 items-center">
                     <Badge variant="outline" className="border-emerald-500/40 text-emerald-300">Sepolia · success</Badge>
                     <Button size="sm" variant="ghost" onClick={deployContract} disabled={deploying} className="h-7 text-xs gap-1">
                       {deploying
-                        ? <><Loader2 className="h-3 w-3 animate-spin" /> Enviando…</>
+                        ? <><Loader2 className="h-3 w-3 animate-spin" /> Sending...</>
                         : <><Rocket className="h-3 w-3" /> Re-deploy</>}
                     </Button>
                   </div>
@@ -510,39 +508,39 @@ export default function PlanPage() {
                 </div>
                 <div className="flex flex-wrap gap-2 pt-1">
                   <a href={`https://sepolia.etherscan.io/address/${deployment.contract_address}`} target="_blank" rel="noreferrer">
-                    <Button size="sm" variant="outline" className="gap-1 h-7 text-xs"><ExternalLink className="h-3 w-3" /> Contrato no Etherscan</Button>
+                    <Button size="sm" variant="outline" className="gap-1 h-7 text-xs"><ExternalLink className="h-3 w-3" /> Contract on Etherscan</Button>
                   </a>
                   <a href={`https://sepolia.etherscan.io/tx/${deployment.tx_hash}`} target="_blank" rel="noreferrer">
-                    <Button size="sm" variant="outline" className="gap-1 h-7 text-xs"><ExternalLink className="h-3 w-3" /> Transação no Etherscan</Button>
+                    <Button size="sm" variant="outline" className="gap-1 h-7 text-xs"><ExternalLink className="h-3 w-3" /> Transaction on Etherscan</Button>
                   </a>
-                  <Button size="sm" variant="outline" className="gap-1 h-7 text-xs" onClick={() => copy(deployment.contract_address, 'Endereço copiado')}>
-                    <Copy className="h-3 w-3" /> Copiar endereço
+                  <Button size="sm" variant="outline" className="gap-1 h-7 text-xs" onClick={() => copy(deployment.contract_address, 'Address copied')}>
+                    <Copy className="h-3 w-3" /> Copy address
                   </Button>
-                  <Button size="sm" variant="outline" className="gap-1 h-7 text-xs" onClick={() => copy(deployment.tx_hash, 'Hash copiado')}>
-                    <Copy className="h-3 w-3" /> Copiar tx hash
+                  <Button size="sm" variant="outline" className="gap-1 h-7 text-xs" onClick={() => copy(deployment.tx_hash, 'Hash copied')}>
+                    <Copy className="h-3 w-3" /> Copy tx hash
                   </Button>
                   {deployment.events.length > 0 && (
                     <>
                       <Button size="sm" variant="outline" className="gap-1 h-7 text-xs"
                         onClick={() => downloadFile(`events-${deployment.tx_hash.slice(0, 10)}.json`, JSON.stringify(deployment.events, null, 2), 'application/json')}>
-                        <Download className="h-3 w-3" /> Eventos (JSON)
+                        <Download className="h-3 w-3" /> Events (JSON)
                       </Button>
                       <Button size="sm" variant="outline" className="gap-1 h-7 text-xs" onClick={exportEventsCSV}>
-                        <Download className="h-3 w-3" /> Eventos (CSV)
+                        <Download className="h-3 w-3" /> Events (CSV)
                       </Button>
                     </>
                   )}
                   <Button size="sm" variant="outline" className="gap-1 h-7 text-xs"
                     onClick={() => copy(
                       `Contract: https://sepolia.etherscan.io/address/${deployment.contract_address}\nTx: https://sepolia.etherscan.io/tx/${deployment.tx_hash}${deployment.block_number ? `\nBlock: https://sepolia.etherscan.io/block/${deployment.block_number}` : ''}`,
-                      'Links Etherscan copiados',
+                      'Etherscan links copied',
                     )}>
-                    <Copy className="h-3 w-3" /> Copiar links Etherscan
+                    <Copy className="h-3 w-3" /> Copy Etherscan links
                   </Button>
                 </div>
                 {deployment.events.length > 0 && (
                   <div className="pt-1">
-                    <div className="text-xs text-muted-foreground mb-2">Eventos emitidos ({deployment.events.length})</div>
+                    <div className="text-xs text-muted-foreground mb-2">Emitted events ({deployment.events.length})</div>
                     <ul className="space-y-1.5">
                       {deployment.events.map((ev, i) => (
                         <li key={i} className="text-[11px] bg-muted/60 p-2 rounded font-mono">
@@ -565,9 +563,9 @@ export default function PlanPage() {
             ) : contract ? (
               <div className="space-y-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant="outline" className="text-xs">Status: <span className="ml-1 text-amber-400">aguardando deploy</span></Badge>
+                  <Badge variant="outline" className="text-xs">Status: <span className="ml-1 text-amber-400">waiting for deploy</span></Badge>
                   <Button size="sm" variant="ghost" onClick={deployContract} disabled={deploying} className="h-7 text-xs gap-1">
-                    {deploying ? <><Loader2 className="h-3 w-3 animate-spin" /> Enviando…</> : <><Rocket className="h-3 w-3" /> Tentar novamente</>}
+                    {deploying ? <><Loader2 className="h-3 w-3 animate-spin" /> Sending...</> : <><Rocket className="h-3 w-3" /> Try again</>}
                   </Button>
                 </div>
                 {deployError && (
@@ -581,8 +579,8 @@ export default function PlanPage() {
             {history.length > 1 && (
               <div className="pt-2 border-t border-border/40">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="text-xs text-muted-foreground">Histórico de deploys ({history.length})</div>
-                  <Button size="sm" variant="ghost" onClick={refreshHistory} className="h-7 text-xs">Atualizar</Button>
+                  <div className="text-xs text-muted-foreground">Deploy history ({history.length})</div>
+                  <Button size="sm" variant="ghost" onClick={refreshHistory} className="h-7 text-xs">Refresh</Button>
                 </div>
                 <ul className="space-y-1.5 max-h-64 overflow-y-auto">
                   {history.map((d) => {
@@ -594,8 +592,8 @@ export default function PlanPage() {
                           <span className="text-muted-foreground ml-2">{d.created_at ? new Date(d.created_at).toLocaleString() : ''}</span>
                         </button>
                         <div className="flex gap-1 shrink-0">
-                          <button onClick={() => copy(d.tx_hash, 'Hash copiado')} className="text-muted-foreground hover:text-foreground" title="Copiar tx"><Copy className="h-3 w-3" /></button>
-                          <a href={`https://sepolia.etherscan.io/tx/${d.tx_hash}`} target="_blank" rel="noreferrer" className="text-primary" title="Abrir tx"><ExternalLink className="h-3 w-3" /></a>
+                          <button onClick={() => copy(d.tx_hash, 'Hash copied')} className="text-muted-foreground hover:text-foreground" title="Copy tx"><Copy className="h-3 w-3" /></button>
+                          <a href={`https://sepolia.etherscan.io/tx/${d.tx_hash}`} target="_blank" rel="noreferrer" className="text-primary" title="Open tx"><ExternalLink className="h-3 w-3" /></a>
                         </div>
                       </li>
                     )
@@ -609,10 +607,10 @@ export default function PlanPage() {
 
       <div className="flex justify-end">
         <Button variant="outline" onClick={exportPlan} className="gap-2">
-          <Download className="h-4 w-4" /> Exportar tudo (JSON)
+          <Download className="h-4 w-4" /> Export all (JSON)
         </Button>
       </div>
-    </div>
+    </AppShell>
   )
 }
 
@@ -621,11 +619,11 @@ function Field({ label, value, href }: { label: string; value: string; href?: st
     <div className="flex items-start gap-2 min-w-0">
       <span className="text-muted-foreground shrink-0">{label}:</span>
       <code className="font-mono truncate">{value}</code>
-      <button onClick={() => copy(value)} className="text-muted-foreground hover:text-foreground shrink-0" title="Copiar">
+      <button onClick={() => copy(value)} className="text-muted-foreground hover:text-foreground shrink-0" title="Copy">
         <Copy className="h-3 w-3" />
       </button>
       {href && (
-        <a href={href} target="_blank" rel="noreferrer" className="text-primary shrink-0" title="Abrir no Etherscan">
+        <a href={href} target="_blank" rel="noreferrer" className="text-primary shrink-0" title="Open on Etherscan">
           <ExternalLink className="h-3 w-3" />
         </a>
       )}

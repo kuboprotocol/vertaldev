@@ -14,10 +14,10 @@ import {
 import type { PlanStatus } from '../../../supabase/functions/_shared/kuboSecretsCore'
 
 const STATUS_LABEL: Record<PlanStatus, string> = {
-  ready: 'Pronto',
-  partial: 'Parcial',
-  missing: 'Faltando',
-  empty: 'Vazio',
+  ready: 'Ready',
+  partial: 'Partial',
+  missing: 'Missing',
+  empty: 'Empty',
 }
 
 function StatusBadge({ status }: { status: PlanStatus }) {
@@ -42,7 +42,7 @@ export function OrchestratorPanel() {
     try {
       setOverview(await fetchOverview())
     } catch (e) {
-      toast({ title: 'Orquestrador indisponível', description: e instanceof Error ? e.message : undefined, variant: 'destructive' })
+      toast({ title: 'Orchestrator is not available', description: e instanceof Error ? e.message : undefined, variant: 'destructive' })
     } finally {
       setLoading(false)
     }
@@ -64,7 +64,7 @@ export function OrchestratorPanel() {
     try {
       setPlan(await fetchPlan(t.slug))
     } catch (e) {
-      toast({ title: 'Não foi possível montar o plano', description: e instanceof Error ? e.message : undefined, variant: 'destructive' })
+      toast({ title: 'Could not build the plan', description: e instanceof Error ? e.message : undefined, variant: 'destructive' })
     } finally {
       setPlanLoading(false)
     }
@@ -73,7 +73,7 @@ export function OrchestratorPanel() {
   if (loading && !overview) {
     return (
       <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" /> Montando o panorama…
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading overview...
       </div>
     )
   }
@@ -83,22 +83,22 @@ export function OrchestratorPanel() {
     <div className="grid gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm text-muted-foreground">
-          {overview.secrets_total} segredo(s) visíveis · {overview.owned} seu(s) · {overview.shared_with_me} compartilhado(s) com você
+          {overview.secrets_total} visible secrets · {overview.owned} yours · {overview.shared_with_me} shared with you
         </div>
         <div className="flex items-center gap-3">
           <span className="text-sm">
             {overview.needs_attention === 0 ? (
               <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                <ShieldCheck className="h-4 w-4" /> Tudo pronto
+                <ShieldCheck className="h-4 w-4" /> All set
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
-                <ShieldAlert className="h-4 w-4" /> {overview.needs_attention} destino(s) pedem atenção
+                <ShieldAlert className="h-4 w-4" /> {overview.needs_attention} targets need attention
               </span>
             )}
           </span>
           <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-            <RefreshCcw className="mr-1.5 h-3.5 w-3.5" /> Atualizar
+            <RefreshCcw className="mr-1.5 h-3.5 w-3.5" /> Refresh
           </Button>
         </div>
       </div>
@@ -107,7 +107,7 @@ export function OrchestratorPanel() {
         {overview.targets.map((t) => (
           <Card
             key={t.slug}
-            className={openTarget === t.slug ? 'ring-1 ring-primary' : undefined}
+            className={`rounded-xl border-white/[0.06] bg-card/50 ${openTarget === t.slug ? 'ring-1 ring-primary' : ''}`}
           >
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between gap-3">
@@ -120,7 +120,7 @@ export function OrchestratorPanel() {
             </CardHeader>
             <CardContent className="grid gap-3">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Chaves no cofre</span>
+                <span className="text-muted-foreground">Keys in the vault</span>
                 <span className="font-medium tabular-nums">
                   {t.ready_count}/{t.total}
                 </span>
@@ -128,15 +128,15 @@ export function OrchestratorPanel() {
 
               {t.connector && (
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Conector {t.connector.slug}</span>
+                  <span className="text-muted-foreground">Connector {t.connector.slug}</span>
                   <span className="inline-flex items-center gap-1">
                     {t.connector.connected ? (
                       <>
-                        <PlugZap className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> conectado
+                        <PlugZap className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> connected
                       </>
                     ) : (
                       <>
-                        <Plug className="h-3.5 w-3.5 text-muted-foreground" /> não conectado
+                        <Plug className="h-3.5 w-3.5 text-muted-foreground" /> not connected
                       </>
                     )}
                   </span>
@@ -146,20 +146,20 @@ export function OrchestratorPanel() {
               {t.warnings.length > 0 && (
                 <ul className="grid gap-1 text-xs text-amber-700 dark:text-amber-400">
                   {t.warnings.slice(0, 3).map((w) => (
-                    <li key={w}>• {w}</li>
+                    <li key={w}>{w}</li>
                   ))}
                 </ul>
               )}
 
               <Button variant="ghost" size="sm" className="justify-self-start px-0" onClick={() => void togglePlan(t)}>
-                {openTarget === t.slug ? 'Fechar plano' : 'Ver plano'}
+                {openTarget === t.slug ? 'Hide plan' : 'Show plan'}
               </Button>
 
               {openTarget === t.slug && (
                 <div className="grid gap-2 border-t pt-3">
                   {planLoading && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Loader2 className="h-4 w-4 animate-spin" /> Conferindo…
+                      <Loader2 className="h-4 w-4 animate-spin" /> Checking...
                     </div>
                   )}
                   {plan && plan.target === t.slug &&
@@ -169,11 +169,11 @@ export function OrchestratorPanel() {
                           <p className="truncate font-mono text-xs">{e.env_key}</p>
                           {e.warning && <p className="text-xs text-amber-700 dark:text-amber-400">{e.warning}</p>}
                           {e.status === 'ready' && e.source === 'grant' && (
-                            <p className="text-xs text-muted-foreground">Compartilhado com você</p>
+                            <p className="text-xs text-muted-foreground">Shared with you</p>
                           )}
                         </div>
                         <Badge variant={e.status === 'ready' ? 'default' : 'destructive'}>
-                          {e.status === 'ready' ? 'Pronto' : 'Faltando'}
+                          {e.status === 'ready' ? 'Ready' : 'Missing'}
                         </Badge>
                       </div>
                     ))}

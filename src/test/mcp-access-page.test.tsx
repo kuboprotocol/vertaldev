@@ -71,25 +71,25 @@ describe('página /mcp', () => {
 
   it('antes de gerar uma chave, a configuração usa o placeholder', () => {
     renderPage()
-    expect(document.body.textContent).toContain('SUA_CHAVE_AQUI')
+    expect(document.body.textContent).toContain('YOUR_KEY_HERE')
   })
 
   it('exige nome antes de gerar', async () => {
     renderPage()
-    fireEvent.click(screen.getByRole('button', { name: /gerar chave/i }))
-    expect(await screen.findByText(/Dê um nome/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /create key/i }))
+    expect(await screen.findByText(/Give the key a name/)).toBeTruthy()
     expect(create).not.toHaveBeenCalled()
   })
 
   it('gera a chave, mostra uma única vez e a põe na configuração', async () => {
     renderPage()
-    fireEvent.change(screen.getByLabelText('Nome'), { target: { value: 'Cursor do trabalho' } })
-    fireEvent.click(screen.getByRole('button', { name: /gerar chave/i }))
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Cursor do trabalho' } })
+    fireEvent.click(screen.getByRole('button', { name: /create key/i }))
 
     await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ name: 'Cursor do trabalho', level: 'read' }))
     expect(await screen.findByText(FRESH_KEY)).toBeTruthy()
     expect(document.body.textContent).toContain(`Bearer ${FRESH_KEY}`)
-    expect(document.body.textContent).not.toContain('SUA_CHAVE_AQUI')
+    expect(document.body.textContent).not.toContain('YOUR_KEY_HERE')
   })
 })

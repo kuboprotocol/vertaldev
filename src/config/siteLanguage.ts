@@ -28,6 +28,11 @@ export const ENGLISH_ROUTES: readonly string[] = [
   '/profile',
   '/recompensas',
   '/affiliate-program',
+  '/domains',
+  '/secrets',
+  '/mcp',
+  '/leaderboard',
+  '/emails',
   // Connectors
   '/connect',
   // Agents
@@ -42,6 +47,7 @@ export const ENGLISH_PREFIXES: readonly string[] = [
   '/connectors',
   '/fluxos/oauth',
   '/agents',
+  '/plan',
 ]
 
 /** True when the route (without query or hash) is written in English. */
