@@ -34,6 +34,13 @@ export const SITE_FONT: CSSProperties = {
     '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
 }
 
+/**
+ * Root classes of every page in the design system. Headings inherit the system
+ * font (the app default for h1-h6 is Orbitron).
+ */
+export const siteRoot =
+  'bg-background text-foreground antialiased [&_:is(h1,h2,h3,h4,h5,h6)]:[font-family:inherit]'
+
 /** Type scale. Use these class strings instead of ad-hoc sizes. */
 export const type = {
   /** Page title on public pages. */

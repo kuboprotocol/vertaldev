@@ -10,7 +10,7 @@ const NotFound = () => {
   }, [location.pathname]);
 
   return (
-    <div style={SITE_FONT} className="flex min-h-screen items-center justify-center bg-background px-6 antialiased">
+    <div style={SITE_FONT} className="flex min-h-screen items-center justify-center bg-background px-6 antialiased [&_:is(h1,h2,h3,h4,h5,h6)]:[font-family:inherit]">
       <div className="text-center">
         <p className="text-sm font-medium text-primary">Error 404</p>
         <h1 className="mt-3 text-4xl font-semibold tracking-[-0.025em] text-foreground md:text-5xl">Page not found.</h1>

@@ -57,7 +57,7 @@ export default function ResetPasswordPage() {
 
   if (!ready) {
     return (
-      <div style={SITE_FONT} className="min-h-screen bg-background antialiased flex items-center justify-center p-4">
+      <div style={SITE_FONT} className="min-h-screen bg-background antialiased [&_:is(h1,h2,h3,h4,h5,h6)]:[font-family:inherit] flex items-center justify-center p-4">
         <div className="w-full max-w-sm text-center">
           <div className="h-12 w-12 rounded-2xl bg-primary/15 flex items-center justify-center mx-auto mb-4">
             <KeyRound className="h-6 w-6 text-primary" aria-hidden />
@@ -71,7 +71,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div style={SITE_FONT} className="min-h-screen bg-background antialiased flex items-center justify-center p-4">
+    <div style={SITE_FONT} className="min-h-screen bg-background antialiased [&_:is(h1,h2,h3,h4,h5,h6)]:[font-family:inherit] flex items-center justify-center p-4">
       <div className="w-full max-w-sm rounded-3xl border border-white/[0.06] bg-card/50 p-8">
         <div className="text-center mb-8">
           <div className="h-12 w-12 rounded-2xl bg-primary/15 flex items-center justify-center mx-auto mb-4">

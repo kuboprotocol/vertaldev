@@ -9,7 +9,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { SITE_FONT, focusRing, surface } from './siteUi'
+import { SITE_FONT, focusRing, siteRoot, surface } from './siteUi'
 
 export function AppTopBar({
   back,
@@ -83,7 +83,7 @@ export default function AppShell({
 }) {
   const w = width === 'narrow' ? 'max-w-3xl' : width === 'wide' ? 'max-w-7xl' : 'max-w-6xl'
   return (
-    <div className="min-h-screen bg-background text-foreground antialiased" style={SITE_FONT}>
+    <div className={`min-h-screen ${siteRoot}`} style={SITE_FONT}>
       {topBar}
       <main id="main" className={cn('mx-auto px-4 pb-24 sm:px-6', w, className)}>
         {children}

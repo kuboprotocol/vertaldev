@@ -271,7 +271,7 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
   const inputClasses = "h-12 pl-11 rounded-xl bg-white/[0.04] border-white/[0.08] text-[15px] text-foreground placeholder:text-muted-foreground focus-visible:ring-primary/30 focus-visible:border-primary/50 transition-all duration-200"
 
   return (
-    <div ref={ref} style={SITE_FONT} className="min-h-screen bg-background antialiased flex items-center justify-center p-4 relative overflow-hidden">
+    <div ref={ref} style={SITE_FONT} className="min-h-screen bg-background antialiased [&_:is(h1,h2,h3,h4,h5,h6)]:[font-family:inherit] flex items-center justify-center p-4 relative overflow-hidden">
 
       <AnimatePresence mode="wait">
         {forgotPassword ? (
