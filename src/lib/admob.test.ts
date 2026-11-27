@@ -30,14 +30,13 @@ describe('readAdMobConfig (IDs do AdMob no app nativo)', () => {
     expect(c.bannerUnit).toBe(ADMOB_TEST_IDS.android.banner)
   })
 
-  it('produção sem ID real: sem anúncio (nunca bloco de teste para usuário real)', () => {
-    // Nenhum app/bloco do Vertal Dev existe ainda no AdMob: os IDs reais ficam vazios.
-    expect(ADMOB_PRODUCTION_IDS.android.banner).toBe('')
-    expect(ADMOB_PRODUCTION_IDS.ios.banner).toBe('')
+  it('produção usa os IDs reais do Vertal Dev (nunca bloco de teste para usuário real)', () => {
+    expect(ADMOB_PRODUCTION_IDS.android.banner).toBe('ca-app-pub-6320473908706491/2119909527')
+    expect(ADMOB_PRODUCTION_IDS.ios.banner).toBe('ca-app-pub-6320473908706491/3451117154')
     const c = readAdMobConfig('android', PROD)
     expect(c.testing).toBe(false)
-    expect(c.bannerUnit).toBeNull()
-    expect(c.rewardedUnit).toBeNull()
+    expect(c.bannerUnit).toBe('ca-app-pub-6320473908706491/2119909527')
+    expect(c.rewardedUnit).toBe('ca-app-pub-6320473908706491/2573149758')
     const t = readAdMobConfig('ios', { ...PROD, VITE_ADMOB_IOS_BANNER_ID: ADMOB_TEST_IDS.ios.banner })
     expect(t.bannerUnit).toBeNull()
   })

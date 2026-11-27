@@ -92,8 +92,11 @@ export function patchInfoPlist(plist, appId, attText = ATT_TEXT) {
 
 function main() {
   const root = process.cwd()
-  const androidId = process.env.ADMOB_ANDROID_APP_ID?.trim() || ADMOB_TEST_APP_IDS.android
-  const iosId = process.env.ADMOB_IOS_APP_ID?.trim() || ADMOB_TEST_APP_IDS.ios
+  // Release (ADMOB_RELEASE=1) usa os App IDs reais do Vertal Dev; debug usa os de teste do Google.
+  const release = process.env.ADMOB_RELEASE === '1' || process.env.ADMOB_RELEASE === 'true'
+  const prodIds = { android: 'ca-app-pub-6320473908706491~9745062762', ios: 'ca-app-pub-6320473908706491~9996344205' }
+  const androidId = process.env.ADMOB_ANDROID_APP_ID?.trim() || (release ? prodIds.android : ADMOB_TEST_APP_IDS.android)
+  const iosId = process.env.ADMOB_IOS_APP_ID?.trim() || (release ? prodIds.ios : ADMOB_TEST_APP_IDS.ios)
   let touched = 0
 
   const manifest = resolve(root, 'android/app/src/main/AndroidManifest.xml')
