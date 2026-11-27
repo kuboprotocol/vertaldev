@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
+import { SITE_FONT, siteRoot } from "@/components/site/siteUi";
 import { Loader2, Zap, ArrowLeft, Clock, CheckCircle2, XCircle } from "lucide-react";
 
 interface Agent {
@@ -78,7 +79,7 @@ export default function AgentDetailPage() {
     const promptField = PROMPT_KEY[agent.slug] ?? "prompt";
     const body = { agent: agent.slug, input: { [promptField]: prompt, ...extras } };
 
-    console.log(`[AgentDetailPage] Invocando agente: ${agent.slug}`, {
+    console.log(`[AgentDetailPage] Running agent: ${agent.slug}`, {
       endpoint: "agent-route",
       requestId,
       payload: body
@@ -91,21 +92,21 @@ export default function AgentDetailPage() {
       });
 
       if (error) {
-        console.error(`[AgentDetailPage] Erro na Edge Function (${agent.slug}):`, error);
+        console.error(`[AgentDetailPage] Edge function error (${agent.slug}):`, error);
         throw error;
       }
 
-      console.log(`[AgentDetailPage] Resposta recebida (${agent.slug}):`, data);
+      console.log(`[AgentDetailPage] Response (${agent.slug}):`, data);
       setResult(data);
       toast({ title: `${agent.name} ok`, description: `${agent.credit_cost} credits.` });
       void refreshJobs();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      console.error(`[AgentDetailPage] Falha crítica ao executar agente (${agent.slug}):`, e);
+      console.error(`[AgentDetailPage] Agent run failed (${agent.slug}):`, e);
       toast({ 
-        title: "Erro de Conexão", 
+        title: "Connection error", 
         description: msg === "Failed to fetch" 
-          ? "Could not connect to the server. Check your internet connection or try again." 
+          ? "We could not reach the server. Check your internet connection and try again." 
           : msg, 
         variant: "destructive" 
       });
@@ -118,7 +119,7 @@ export default function AgentDetailPage() {
   const fields = EXTRA_FIELDS[agent.slug] ?? [];
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className={`min-h-screen ${siteRoot}`} style={SITE_FONT}>
       <div className="container mx-auto px-4 py-8 max-w-5xl">
         <Link to="/agents" className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-2 mb-4">
           <ArrowLeft className="w-4 h-4" /> All agents
@@ -126,7 +127,7 @@ export default function AgentDetailPage() {
 
         <div className="flex items-start justify-between mb-8 flex-wrap gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: "Orbitron, sans-serif" }}>{agent.name}</h1>
+            <h1 className="text-3xl font-semibold tracking-[-0.02em]">{agent.name}</h1>
             <p className="text-muted-foreground mt-1 max-w-2xl">{agent.description}</p>
             <div className="flex items-center gap-2 mt-3">
               <Badge variant={agent.status === "active" ? "default" : "outline"}>{agent.status}</Badge>
@@ -157,7 +158,7 @@ export default function AgentDetailPage() {
               ))}
               <Button className="w-full" onClick={run} disabled={running || !prompt.trim()}>
                 {running ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Zap className="w-4 h-4 mr-2" />}
-                {running ? "Executando…" : `Rodar (${agent.credit_cost}c)`}
+                {running ? "Running…" : `Run (${agent.credit_cost} credits)`}
               </Button>
               {result != null && (
                 <pre className="text-xs bg-muted/40 rounded p-3 overflow-auto max-h-96">{JSON.stringify(result, null, 2)}</pre>

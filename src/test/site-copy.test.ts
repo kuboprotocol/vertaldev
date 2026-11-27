@@ -64,6 +64,12 @@ const FILES = [
   'components/connectors/Web3ConnectionList.tsx',
   'components/connectors/GitHubReposList.tsx',
   'components/connectors/GlobalActivityPanel.tsx',
+  // Agents (batch 4)
+  'pages/AgentsHubPage.tsx',
+  'pages/AgentDetailPage.tsx',
+  'pages/VibeAgentsPage.tsx',
+  'components/huginn/HuginnAgentsCard.tsx',
+  'components/huginn/FluxosAgentBuilder.tsx',
 ]
 
 function visibleText(file: string): string {

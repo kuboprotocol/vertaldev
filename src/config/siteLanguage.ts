@@ -30,6 +30,8 @@ export const ENGLISH_ROUTES: readonly string[] = [
   '/affiliate-program',
   // Connectors
   '/connect',
+  // Agents
+  '/vibe-agents',
 ]
 
 /**
@@ -39,6 +41,7 @@ export const ENGLISH_ROUTES: readonly string[] = [
 export const ENGLISH_PREFIXES: readonly string[] = [
   '/connectors',
   '/fluxos/oauth',
+  '/agents',
 ]
 
 /** True when the route (without query or hash) is written in English. */

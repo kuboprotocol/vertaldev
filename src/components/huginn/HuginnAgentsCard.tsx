@@ -31,9 +31,9 @@ type State =
 export const HUGINN_SETUP_ROUTE = '/secrets?env_key=HUGINN_URL&name=Vertal%20Agentes%20URL'
 
 const fmt = (iso?: string) => {
-  if (!iso) return 'nunca'
+  if (!iso) return 'never'
   const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? 'nunca' : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+  return Number.isNaN(d.getTime()) ? 'never' : d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
 }
 
 export function HuginnAgentsCard() {
@@ -67,7 +67,7 @@ export function HuginnAgentsCard() {
   }
 
   const run = async (a: HuginnAgentRow) => {
-    if (!window.confirm(`Rodar agora o agente "${a.name}" no Vertal Agentes? Ele executa de verdade.`)) return
+    if (!window.confirm(`Run the agent "${a.name}" in Vertal Agentes now? It really runs.`)) return
     setBusy(a.id)
     const r = await callHuginnOp({ op: 'run_agent', agent_id: a.id })
     setBusy(null)
@@ -75,50 +75,50 @@ export function HuginnAgentsCard() {
   }
 
   return (
-    <section className="rounded-2xl border border-border bg-card/60 p-4 space-y-3" data-testid="huginn-card">
+    <section className="rounded-2xl border border-white/[0.06] bg-card/50 p-4 space-y-3" data-testid="huginn-card">
       <div className="flex items-start gap-3">
         <Radar className="h-5 w-5 text-primary mt-0.5" />
         <div className="flex-1 min-w-0">
           <h2 className="font-semibold flex items-center gap-2">
             Vertal Agentes
-            {state.kind === 'ready' && <Badge variant="default" className="text-[10px]">conectado</Badge>}
-            {state.kind === 'setup' && <Badge variant="outline" className="text-[10px]">não configurado</Badge>}
+            {state.kind === 'ready' && <Badge variant="default" className="text-[10px]">connected</Badge>}
+            {state.kind === 'setup' && <Badge variant="outline" className="text-[10px]">not set up</Badge>}
           </h2>
           <p className="text-xs text-muted-foreground">
-            Agentes que vigiam sites, feeds e APIs, reagem a eventos e agem nos apps que você conectou no
-            Vertal Fluxos. No Vertal Chat, peça por exemplo “quando o Vertal Agentes detectar X, crie uma tarefa
-            no Todoist” ou “rode o fluxo Y do Vertal Fluxos”.
+            Agents that watch websites, feeds and APIs, react to events and act in the apps you connected in
+            Vertal Fluxos. In Vertal Chat, ask for example "when Vertal Agentes detects X, create a task
+            in Todoist" or "run the Vertal Fluxos flow Y".
           </p>
         </div>
         {state.kind === 'ready' && state.url && (
           <a href={state.url} target="_blank" rel="noopener noreferrer">
-            <Button size="sm" variant="outline" className="gap-1"><ExternalLink className="h-3.5 w-3.5" /> Abrir Vertal Agentes</Button>
+            <Button size="sm" variant="outline" className="gap-1"><ExternalLink className="h-3.5 w-3.5" /> Open Vertal Agentes</Button>
           </a>
         )}
         <Button size="sm" variant="secondary" className="gap-1" onClick={load} disabled={state.kind === 'loading'}>
           {state.kind === 'loading' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-          {state.kind === 'ready' ? 'Atualizar' : 'Ver meus agentes'}
+          {state.kind === 'ready' ? 'Refresh' : 'Show my agents'}
         </Button>
       </div>
 
       {state.kind === 'idle' && (
-        <p className="text-xs text-muted-foreground">O Vertal só fala com o seu Vertal Agentes quando você clica.</p>
+        <p className="text-xs text-muted-foreground">Vertal only contacts your Vertal Agentes when you click.</p>
       )}
       {(state.kind === 'setup' || state.kind === 'error') && (
         <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary/60 px-3 py-2 text-sm">
           <span>{state.message}</span>
           {state.kind === 'setup' && (
-            <Link to={HUGINN_SETUP_ROUTE}><Button size="sm" variant="outline" className="gap-1"><KeyRound className="h-3.5 w-3.5" /> Configurar no Cofre</Button></Link>
+            <Link to={HUGINN_SETUP_ROUTE}><Button size="sm" variant="outline" className="gap-1"><KeyRound className="h-3.5 w-3.5" /> Set up in the vault</Button></Link>
           )}
         </div>
       )}
       {state.kind === 'ready' && (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">
-            {state.agents.length} agente(s) nesta página · fila: {state.pending ?? 0} pendente(s)
-            {state.failures ? ` · ${state.failures} falha(s) recente(s)` : ''}
+            {state.agents.length} agent(s) on this page · queue: {state.pending ?? 0} pending
+            {state.failures ? ` · ${state.failures} recent failure(s)` : ''}
           </p>
-          {state.agents.length === 0 && <p className="text-sm text-muted-foreground">Nenhum agente no Vertal Agentes ainda.</p>}
+          {state.agents.length === 0 && <p className="text-sm text-muted-foreground">No agents in Vertal Agentes yet.</p>}
           {state.agents.map((a) => (
             <div key={a.id} className="flex items-center gap-3 rounded-xl bg-secondary/50 px-3 py-2 text-sm" data-testid="huginn-agent">
               <div className="flex-1 min-w-0">
@@ -126,12 +126,12 @@ export function HuginnAgentsCard() {
                   {state.url ? <a className="hover:underline" href={`${state.url}/agents/${a.id}`} target="_blank" rel="noopener noreferrer">{a.name}</a> : a.name}
                 </p>
                 <p className="text-xs text-muted-foreground truncate">
-                  {a.name.startsWith('Vertal Fluxos ·') ? 'usa Vertal Fluxos' : a.type ?? 'Agente'} · {a.events ?? 0} evento(s) · último: {fmt(a.lastEventAt)}{a.lastErrorAt ? ' · teve erro' : ''}
+                  {a.name.startsWith('Vertal Fluxos ·') ? 'uses Vertal Fluxos' : a.type ?? 'Agent'} · {a.events ?? 0} event(s) · last: {fmt(a.lastEventAt)}{a.lastErrorAt ? ' · had an error' : ''}
                 </p>
               </div>
-              <Switch checked={a.enabled !== false} disabled={busy === a.id} onCheckedChange={(v) => toggle(a, v)} aria-label={`Ativar ${a.name}`} />
+              <Switch checked={a.enabled !== false} disabled={busy === a.id} onCheckedChange={(v) => toggle(a, v)} aria-label={`Turn on ${a.name}`} />
               <Button size="sm" variant="outline" className="gap-1" disabled={busy === a.id} onClick={() => run(a)}>
-                {busy === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />} Rodar
+                {busy === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />} Run
               </Button>
             </div>
           ))}

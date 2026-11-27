@@ -15,30 +15,30 @@ describe('HuginnAgentsCard', () => {
   it('não chama o Huginn sozinho', () => {
     renderCard();
     expect(call).not.toHaveBeenCalled();
-    expect(screen.getByText(/só fala com o seu Vertal Agentes quando você clica/)).toBeTruthy();
+    expect(screen.getByText(/only contacts your Vertal Agentes when you click/)).toBeTruthy();
   });
 
   it('ao clicar mostra status, agentes e o link da instância', async () => {
     call.mockResolvedValueOnce({ ok: true, message: 'ok', data: { instance_url: 'https://h.up.railway.app', pending: 2, recent_failures: 0 } });
     call.mockResolvedValueOnce({ ok: true, message: 'ok', data: { instance_url: 'https://h.up.railway.app', agents: [{ id: 3, name: 'XKCD Source', type: 'WebsiteAgent', enabled: true, events: 4 }] } });
     renderCard();
-    fireEvent.click(screen.getByRole('button', { name: /Ver meus agentes/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Show my agents/ }));
     await waitFor(() => expect(screen.getByText('XKCD Source')).toBeTruthy());
     expect(call).toHaveBeenNthCalledWith(1, { op: 'status' });
     expect(call).toHaveBeenNthCalledWith(2, { op: 'list_agents' });
-    expect(screen.getByText('conectado')).toBeTruthy();
+    expect(screen.getByText('connected')).toBeTruthy();
     expect(screen.getByText('XKCD Source').closest('a')?.getAttribute('href')).toBe('https://h.up.railway.app/agents/3');
-    expect(screen.getByText(/2 pendente/)).toBeTruthy();
+    expect(screen.getByText(/2 pending/)).toBeTruthy();
     // Marca branca: botão com rótulo genérico, sem o endereço da instância nem nomes de fornecedores.
-    expect(screen.getByRole('button', { name: /Abrir Vertal Agentes/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Open Vertal Agentes/ })).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/railway|Huginn|Automatisch/i);
   });
 
   it('sem segredos leva ao Cofre', async () => {
     call.mockResolvedValueOnce({ ok: false, code: 'missing_secrets', message: 'Falta salvar no Cofre de segredos: HUGINN_URL.' });
     renderCard();
-    fireEvent.click(screen.getByRole('button', { name: /Ver meus agentes/ }));
-    await waitFor(() => expect(screen.getByText(/Configurar no Cofre/)).toBeTruthy());
-    expect(screen.getByText('não configurado')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Show my agents/ }));
+    await waitFor(() => expect(screen.getByText(/Set up in the vault/)).toBeTruthy());
+    expect(screen.getByText('not set up')).toBeTruthy();
   });
 });
