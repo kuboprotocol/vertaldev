@@ -4,7 +4,7 @@
 //   até 10 designs → 1 crédito/dia · acima de 10 → 2 · acima de 100 → 3 · acima de 1000 → 4 · e assim por diante.
 // Reuso: quando outra pessoa usa um design publicado, o autor ganha crédito (uma vez por quem reutiliza).
 //
-// O servidor é quem cobra e paga (supabase/migrations/20261024120000_design_library.sql).
+// O servidor é quem cobra e paga (supabase/migrations_archive/20261024120000_design_library.sql).
 // Ao mudar uma regra aqui, mude também na função SQL design_storage_credits_per_day.
 
 export const DESIGN_LIBRARY_FREE_SLOTS = 10;
@@ -12,7 +12,7 @@ export const DESIGN_LIBRARY_FREE_SLOTS = 10;
 export const DESIGN_REUSE_REWARD_CREDITS = 1;
 
 // Indicados que já fizeram o primeiro pagamento ganham este crédito por dia. O armazenamento é descontado
-// desse saldo; o que faltar fica como saldo devedor (supabase/migrations/20261024140000_design_storage_debt.sql).
+// desse saldo; o que faltar fica como saldo devedor (supabase/migrations_archive/20261024140000_design_storage_debt.sql).
 export const DESIGN_REFERRAL_DAILY_CREDITS = 5;
 
 export function designStorageCreditsPerDay(savedCount: number): number {
