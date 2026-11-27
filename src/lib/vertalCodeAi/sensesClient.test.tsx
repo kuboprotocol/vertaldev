@@ -55,10 +55,10 @@ describe('VertalSensesPanel · privacidade da câmera/microfone', () => {
     expect(screen.getByText('Vertal Novela')).toBeTruthy();
     expect(getUserMedia).not.toHaveBeenCalled();
     await act(async () => {
-      fireEvent.click(screen.getByText('Usar câmera'));
+      fireEvent.click(screen.getByText('Use camera'));
     });
     expect(getUserMedia).toHaveBeenCalledWith({ video: { facingMode: 'environment' }, audio: false });
-    expect(screen.getByText('Câmera ligada')).toBeTruthy();
+    expect(screen.getByText('Camera on')).toBeTruthy();
     unmount();
     expect(stop).toHaveBeenCalled();
   });

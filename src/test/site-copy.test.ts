@@ -70,6 +70,13 @@ const FILES = [
   'pages/VibeAgentsPage.tsx',
   'components/huginn/HuginnAgentsCard.tsx',
   'components/huginn/FluxosAgentBuilder.tsx',
+  // VERTAL Code AI and game screens (presentational pass)
+  'components/vertal-code-ai/VertalCodeAiMemoryPanel.tsx',
+  'components/vertal-code-ai/VertalTeamProgress.tsx',
+  'components/canvas/CanvasInfoPanel.tsx',
+  'components/WGSLSandbox.tsx',
+  'pages/GameBuilderPage.tsx',
+  'pages/GameMetaversePage.tsx',
 ]
 
 function visibleText(file: string): string {

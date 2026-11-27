@@ -15,6 +15,7 @@ import { fetchTeamStatus, type TeamStatus } from '@/lib/vertalCodeAi/team';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { SITE_FONT, siteRoot, surface } from '@/components/site/siteUi';
 import {
   errorText,
   functionUrl,
@@ -150,7 +151,7 @@ function VertalCodeAIScreen() {
       if (!text || running) return;
       const t = await token();
       if (!t) {
-        setNotice('Entre na sua conta para usar o VERTAL Code AI.');
+        setNotice('Sign in to use VERTAL Code AI.');
         return;
       }
       const runId = `r${Date.now()}`;
@@ -159,7 +160,7 @@ function VertalCodeAIScreen() {
       setItems((prev) => [
         ...prev,
         { type: 'user', id: `u${runId}`, text, mode: 'build', images: images.length, files: [] },
-        { type: 'agent', id: runId, steps: [{ text: kind === 'imagem' ? 'Gerando imagem' : 'Gerando vídeo (pode levar alguns minutos)' }], diffs: [], done: false, prompt: text },
+        { type: 'agent', id: runId, steps: [{ text: kind === 'imagem' ? 'Creating image' : 'Creating video (this can take a few minutes)' }], diffs: [], done: false, prompt: text },
       ]);
       setInput('');
       setRunning(true);
@@ -167,10 +168,10 @@ function VertalCodeAIScreen() {
       try {
         if (kind === 'imagem') {
           const res = await postAction<{ images: string[]; text?: string; model: { label: string; cost?: string } }>(t, { action: 'image', prompt: text, images });
-          patch({ media: { kind: 'image', urls: res.images }, reply: res.text || undefined, steps: [{ text: `Modelo: ${res.model.label} (${res.model.cost === 'self_hosted' ? 'própria' : 'pago'})` }] });
+          patch({ media: { kind: 'image', urls: res.images }, reply: res.text || undefined, steps: [{ text: `Model: ${res.model.label} (${res.model.cost === 'self_hosted' ? 'own' : 'paid'})` }] });
         } else {
           const sub = await postAction<{ job: string; model: { label: string; cost?: string } }>(t, { action: 'video', prompt: text });
-          patch({ steps: [{ text: `Modelo: ${sub.model.label} (${sub.model.cost === 'self_hosted' ? 'própria' : 'pago'})` }, { text: 'Na fila…' }] });
+          patch({ steps: [{ text: `Model: ${sub.model.label} (${sub.model.cost === 'self_hosted' ? 'own' : 'paid'})` }, { text: 'In the queue…' }] });
           for (let i = 0; i < 60; i++) {
             await new Promise((r) => setTimeout(r, 10_000));
             const st = await postAction<{ status: string; url: string | null; needsProxy?: boolean; error?: string }>(t, { action: 'video_status', job: sub.job });
@@ -204,7 +205,7 @@ function VertalCodeAIScreen() {
       if (!text || running) return;
       const t = await token();
       if (!t) {
-        setNotice('Entre na sua conta para usar o VERTAL Code AI.');
+        setNotice('Sign in to use VERTAL Code AI.');
         return;
       }
       const runId = `r${Date.now()}`;
@@ -279,9 +280,9 @@ function VertalCodeAIScreen() {
             : it,
         ),
       );
-      const parts = [`${res.applied.length} arquivo(s) aplicados no projeto`];
-      if (res.conflicts.length) parts.push(`${res.conflicts.length} mudaram enquanto você revisava (peça de novo)`);
-      if (res.skipped.length) parts.push(`${res.skipped.length} não aplicados (apagar arquivos se faz no Vibe Code)`);
+      const parts = [`${res.applied.length} ${res.applied.length === 1 ? 'file' : 'files'} applied to the project`];
+      if (res.conflicts.length) parts.push(`${res.conflicts.length} changed while you were reviewing (ask again)`);
+      if (res.skipped.length) parts.push(`${res.skipped.length} not applied (delete files in Vibe Code)`);
       setNotice(parts.join(' · '));
     } catch (err) {
       setNotice(errorText(err instanceof Error ? err.message : ''));
@@ -291,7 +292,7 @@ function VertalCodeAIScreen() {
   const onFiles = async (files: FileList | null) => {
     for (const f of Array.from(files ?? []).slice(0, 5)) {
       if (f.size > MAX_TEXT_BYTES) {
-        setNotice(`${f.name} é grande demais (máx. 200 KB).`);
+        setNotice(`${f.name} is too large (200 KB max.).`);
         continue;
       }
       const content = await readAs(f, 'text');
@@ -301,7 +302,7 @@ function VertalCodeAIScreen() {
   const onImages = async (files: FileList | null) => {
     for (const f of Array.from(files ?? []).slice(0, 4)) {
       if (!f.type.startsWith('image/') || f.size > MAX_IMAGE_BYTES) {
-        setNotice(`${f.name}: só imagens até 4 MB.`);
+        setNotice(`${f.name}: images only, up to 4 MB.`);
         continue;
       }
       const url = await readAs(f, 'dataUrl');
@@ -310,25 +311,25 @@ function VertalCodeAIScreen() {
   };
 
   return (
-    <div className="flex h-[100dvh] flex-col bg-background text-foreground">
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/50 px-3">
-        <button type="button" onClick={() => navigate(-1)} aria-label="Voltar" className="rounded-lg p-2 text-muted-foreground hover:bg-secondary">
+    <div className={cn('flex h-[100dvh] flex-col', siteRoot)} style={SITE_FONT}>
+      <header className={cn('flex h-14 shrink-0 items-center gap-2 border-b px-3', surface.bar)}>
+        <button type="button" onClick={() => navigate(-1)} aria-label="Back" className="rounded-lg p-2 text-muted-foreground hover:bg-secondary">
           <ArrowLeft className="h-5 w-5" />
         </button>
         <Sparkles className="h-5 w-5 text-primary" aria-hidden />
         <h1 className="flex-1 truncate text-sm font-semibold">{VERTAL_CODE_AI_NAME}</h1>
         <VertalProspectorEntryButton from="code" />
         <VertalGrowthEntryButton from="code" projectId={projectId || null} />
-        <button type="button" aria-label="Visão, Ouvir e Novela" onClick={() => setSensesOpen(true)} className="rounded-lg p-2 text-muted-foreground hover:bg-secondary">
+        <button type="button" aria-label="Vision, Listen and Story" onClick={() => setSensesOpen(true)} className="rounded-lg p-2 text-muted-foreground hover:bg-secondary">
           <Eye className="h-4 w-4" />
         </button>
         <select
-          aria-label="Projeto"
+          aria-label="Project"
           value={projectId}
           onChange={(e) => setProjectId(e.target.value)}
           className="max-w-[40vw] truncate rounded-md border border-border/60 bg-background px-2 py-1 text-xs"
         >
-          <option value="">Cofre pessoal</option>
+          <option value="">Personal vault</option>
           {projects.map((p) => (
             <option key={p.id} value={p.id}>
               {p.title}
@@ -336,12 +337,12 @@ function VertalCodeAIScreen() {
           ))}
         </select>
         {teamStatus?.memory && (
-          <button type="button" aria-label="Memória da Equipe" onClick={() => setMemoryOpen(true)} className="rounded-lg p-2 text-muted-foreground hover:bg-secondary">
+          <button type="button" aria-label="Team memory" onClick={() => setMemoryOpen(true)} className="rounded-lg p-2 text-muted-foreground hover:bg-secondary">
             <Brain className="h-4 w-4" />
           </button>
         )}
         {items.length > 0 && (
-          <button type="button" aria-label="Limpar conversa" onClick={() => setItems([])} className="rounded-lg p-2 text-muted-foreground hover:bg-secondary">
+          <button type="button" aria-label="Clear conversation" onClick={() => setItems([])} className="rounded-lg p-2 text-muted-foreground hover:bg-secondary">
             <Trash2 className="h-4 w-4" />
           </button>
         )}
@@ -350,23 +351,23 @@ function VertalCodeAIScreen() {
       <main className="flex-1 space-y-3 overflow-y-auto px-3 py-4">
         {items.length === 0 && (
           <div className="mx-auto mt-10 max-w-md space-y-2 text-center text-sm text-muted-foreground">
-            <p className="text-base font-medium text-foreground">O que vamos construir?</p>
+            <p className="text-xl font-semibold tracking-[-0.01em] text-foreground">What do you want to build?</p>
             <p>
-              <b>Planejar</b> monta o passo a passo sem mexer em nada. <b>Construir</b> edita vários arquivos, roda a verificação e
-              corrige sozinho antes de te mostrar as mudanças para aprovar.
+              <b>Plan</b> writes the steps without changing anything. <b>Build</b> edits several files, runs the checks and
+              fixes problems before it shows you the changes to approve.
             </p>
-            {handoff.from === 'chat' && <p className="text-primary">Pedido vindo do Vertal Chat.</p>}
+            {handoff.from === 'chat' && <p className="text-primary">Request sent from Vertal Chat.</p>}
           </div>
         )}
 
         {items.map((it) =>
           it.type === 'user' ? (
             <div key={it.id} className="ml-auto max-w-[90%] rounded-2xl bg-primary/15 px-3 py-2 text-sm">
-              <div className="mb-1 text-[10px] uppercase tracking-wide text-primary">{it.mode === 'plan' ? 'Planejar' : 'Construir'}</div>
+              <div className="mb-1 text-[10px] uppercase tracking-wide text-primary">{it.mode === 'plan' ? 'Plan' : 'Build'}</div>
               <div className="whitespace-pre-wrap">{it.text}</div>
               {(it.images > 0 || it.files.length > 0) && (
                 <div className="mt-1 text-[11px] text-muted-foreground">
-                  {it.images > 0 && `${it.images} imagem(ns) `}
+                  {it.images > 0 && `${it.images} ${it.images === 1 ? 'image' : 'images'} `}
                   {it.files.length > 0 && `· ${it.files.join(', ')}`}
                 </div>
               )}
@@ -381,14 +382,14 @@ function VertalCodeAIScreen() {
                 ))}
                 {!it.done && (
                   <li className="flex items-center gap-1">
-                    <Loader2 className="h-3 w-3 animate-spin" /> trabalhando…
+                    <Loader2 className="h-3 w-3 animate-spin" /> working…
                   </li>
                 )}
               </ul>
               {it.team && <VertalTeamProgress team={it.team} live={!it.done} />}
               {it.reply && <p className="whitespace-pre-wrap">{it.reply}</p>}
               {it.media?.kind === 'image' &&
-                it.media.urls.map((u, i) => <img key={i} src={u} alt="Imagem gerada" className="max-h-96 w-full rounded-xl object-contain" />)}
+                it.media.urls.map((u, i) => <img key={i} src={u} alt="Generated image" className="max-h-96 w-full rounded-xl object-contain" />)}
               {it.media?.kind === 'video' && it.media.urls[0] && (
                 <video src={it.media.urls[0]} controls playsInline className="max-h-96 w-full rounded-xl" />
               )}
@@ -405,11 +406,11 @@ function VertalCodeAIScreen() {
                       </li>
                     ))}
                   </ol>
-                  {it.plan.risks.length > 0 && <p className="text-xs text-amber-400">Riscos: {it.plan.risks.join(' · ')}</p>}
-                  {it.plan.questions.length > 0 && <p className="text-xs">Perguntas: {it.plan.questions.join(' · ')}</p>}
+                  {it.plan.risks.length > 0 && <p className="text-xs text-amber-400">Risks: {it.plan.risks.join(' · ')}</p>}
+                  {it.plan.questions.length > 0 && <p className="text-xs">Questions: {it.plan.questions.join(' · ')}</p>}
                   {it.done && (
                     <Button size="sm" className="w-full gap-2" disabled={running} onClick={() => run(it.prompt ?? 'Implemente o plano aprovado.', 'build', it.plan)}>
-                      <Hammer className="h-4 w-4" /> Construir este plano
+                      <Hammer className="h-4 w-4" /> Build this plan
                     </Button>
                   )}
                 </div>
@@ -422,7 +423,7 @@ function VertalCodeAIScreen() {
                       <summary className="flex cursor-pointer items-center gap-2 px-2 py-2 text-xs">
                         <input
                           type="checkbox"
-                          aria-label={`Incluir ${d.path}`}
+                          aria-label={`Include ${d.path}`}
                           checked={d.selected}
                           disabled={d.status !== 'pending'}
                           onChange={() => toggleDiff(it.id, d.path)}
@@ -432,15 +433,15 @@ function VertalCodeAIScreen() {
                         <span className="min-w-0 flex-1 truncate font-mono">{d.path}</span>
                         <span className="text-emerald-400">+{d.added}</span>
                         <span className="text-rose-400">-{d.removed}</span>
-                        {d.status === 'applied' && <Check className="h-3.5 w-3.5 text-emerald-400" aria-label="aplicado" />}
-                        {d.status === 'conflict' && <X className="h-3.5 w-3.5 text-amber-400" aria-label="conflito" />}
+                        {d.status === 'applied' && <Check className="h-3.5 w-3.5 text-emerald-400" aria-label="applied" />}
+                        {d.status === 'conflict' && <X className="h-3.5 w-3.5 text-amber-400" aria-label="conflict" />}
                       </summary>
                       <DiffView diff={d.diff} />
                     </details>
                   ))}
                   {it.done && it.diffs.some((d) => d.status === 'pending') && (
                     <Button size="sm" className="w-full gap-2" onClick={() => apply(it.id, it.diffs)}>
-                      <Check className="h-4 w-4" /> Aplicar selecionados no projeto
+                      <Check className="h-4 w-4" /> Apply selected to the project
                     </Button>
                   )}
                 </div>
@@ -457,9 +458,9 @@ function VertalCodeAIScreen() {
         </div>
       )}
 
-      <footer className="shrink-0 space-y-2 border-t border-border/50 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <footer className={cn('shrink-0 space-y-2 border-t p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]', surface.bar)}>
         <div className="flex items-center gap-2">
-          <div className="flex rounded-full border border-border/60 p-0.5" role="group" aria-label="Modo">
+          <div className="flex rounded-full border border-border/60 p-0.5" role="group" aria-label="Mode">
             {(['plan', 'build'] as VcaUiMode[]).map((m) => (
               <button
                 key={m}
@@ -469,7 +470,7 @@ function VertalCodeAIScreen() {
                 className={cn('flex items-center gap-1 rounded-full px-3 py-1 text-xs', mode === m ? 'bg-primary text-primary-foreground' : 'text-muted-foreground')}
               >
                 {m === 'plan' ? <ListChecks className="h-3.5 w-3.5" /> : <Hammer className="h-3.5 w-3.5" />}
-                {m === 'plan' ? 'Planejar' : 'Construir'}
+                {m === 'plan' ? 'Plan' : 'Build'}
               </button>
             ))}
           </div>
@@ -477,16 +478,16 @@ function VertalCodeAIScreen() {
             <button
               type="button"
               aria-pressed={teamOn}
-              aria-label="Equipe Vertal"
-              title="Equipe Vertal: Gerente, Encarregado, Engenheiros, Revisor e Entregador"
+              aria-label="Vertal Team"
+              title="Vertal Team: manager, lead, engineers, reviewer and delivery"
               onClick={() => setTeamOn((v) => !v)}
               className={cn('flex items-center gap-1 rounded-full border px-2 py-1 text-xs', teamOn ? 'border-primary bg-primary text-primary-foreground' : 'border-border/60 text-muted-foreground')}
             >
-              <Users className="h-3.5 w-3.5" /> Equipe
+              <Users className="h-3.5 w-3.5" /> Team
             </button>
           )}
           <select
-            aria-label="Modelo Vertal"
+            aria-label="Vertal model"
             value={option}
             onChange={(e) => setOption(e.target.value as VcaUiOption)}
             className="max-w-[34vw] rounded-full border border-border/60 bg-background px-2 py-1 text-xs"
@@ -498,7 +499,7 @@ function VertalCodeAIScreen() {
             ))}
           </select>
           <select
-            aria-label="Esforço de raciocínio"
+            aria-label="Reasoning effort"
             value={effort}
             onChange={(e) => setEffort(e.target.value as VcaUiEffort)}
             className="rounded-full border border-border/60 bg-background px-2 py-1 text-xs"
@@ -510,10 +511,10 @@ function VertalCodeAIScreen() {
             ))}
           </select>
           <div className="ml-auto flex gap-1">
-            <button type="button" aria-label="Anexar arquivo" onClick={() => fileRef.current?.click()} className="rounded-lg p-2 text-muted-foreground hover:bg-secondary">
+            <button type="button" aria-label="Attach file" onClick={() => fileRef.current?.click()} className="rounded-lg p-2 text-muted-foreground hover:bg-secondary">
               <Paperclip className="h-4 w-4" />
             </button>
-            <button type="button" aria-label="Anexar imagem" onClick={() => imageRef.current?.click()} className="rounded-lg p-2 text-muted-foreground hover:bg-secondary">
+            <button type="button" aria-label="Attach image" onClick={() => imageRef.current?.click()} className="rounded-lg p-2 text-muted-foreground hover:bg-secondary">
               <ImagePlus className="h-4 w-4" />
             </button>
           </div>
@@ -527,14 +528,14 @@ function VertalCodeAIScreen() {
                 {a.path}
               </span>
             ))}
-            {images.length > 0 && <span className="rounded-full bg-secondary px-2 py-0.5">{images.length} imagem(ns)</span>}
+            {images.length > 0 && <span className="rounded-full bg-secondary px-2 py-0.5">{images.length} {images.length === 1 ? 'image' : 'images'}</span>}
           </div>
         )}
         <div className="flex items-end gap-2">
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={mode === 'plan' ? 'Descreva o que quer planejar…' : 'Descreva o que quer construir ou corrigir…'}
+            placeholder={mode === 'plan' ? 'Describe what you want to plan…' : 'Describe what you want to build or fix…'}
             rows={2}
             className="min-h-[44px] flex-1 resize-none text-base sm:text-sm"
             onKeyDown={(e) => {
@@ -544,11 +545,11 @@ function VertalCodeAIScreen() {
             }}
           />
           {running ? (
-            <Button size="icon" variant="outline" aria-label="Parar" onClick={() => abortRef.current?.abort()}>
+            <Button size="icon" variant="outline" aria-label="Stop" onClick={() => abortRef.current?.abort()}>
               <Square className="h-4 w-4" />
             </Button>
           ) : (
-            <Button size="icon" aria-label="Enviar" disabled={!input.trim()} onClick={() => {
+            <Button size="icon" aria-label="Send" disabled={!input.trim()} onClick={() => {
                 if (isMediaOption(option)) runMedia(input, option as 'imagem' | 'video');
                 else run(input, mode);
               }}>
