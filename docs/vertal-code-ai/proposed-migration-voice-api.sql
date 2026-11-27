@@ -64,3 +64,6 @@ begin
       check (kind in ('chat','code','image','video','clone','scrape','voice','singing'));
   end if;
 end $$;
+
+-- APLICADA em 2026-11-27 como supabase/migrations/20261127220200_vertal_api_voices.sql (que também libera
+-- 'voice'/'singing' em vertal_ai_usage.kind). Este arquivo fica só como referência.
