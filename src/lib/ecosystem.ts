@@ -55,6 +55,11 @@ export const VERTAL_RUN_REFERRAL_URL = 'https://vertalrun.com/entrar/?ref=c6104d
 // O vertal.dev só lê o ?ref= na página /auth (não guarda para depois), então o link aponta para lá.
 export const VERTAL_DEV_REFERRAL_URL = 'https://vertal.dev/auth?ref=5fe61d6f'
 
+// Embed do Vertal Dev: /embed é a única página do vertal.dev que qualquer site pode
+// emoldurar (worker/embedPolicy.ts). O login abre em popup; o ?ref= segue para o /auth.
+export const VERTAL_DEV_EMBED_URL = 'https://vertal.dev/embed?ref=5fe61d6f'
+export const VERTAL_DEV_EMBED_SNIPPET = `<iframe src="${VERTAL_DEV_EMBED_URL}" width="100%" height="700" style="border:0" allow="clipboard-write" loading="lazy" title="Vertal Dev"></iframe>`
+
 /** Servidor MCP do Vertal Dev (Supabase Edge Function `mcp`). */
 export const VERTAL_DEV_MCP_URL = `${
   (import.meta.env.VITE_SUPABASE_URL as string | undefined) || 'https://sccizjlpwezsgaxkclot.supabase.co'
@@ -67,19 +72,19 @@ export const ECOSYSTEM: EcosystemProduct[] = [
   {
     id: 'vertal-dev',
     name: 'Vertal Dev',
-    role: 'Criar',
+    role: 'Build',
     domain: 'vertal.dev',
     url: VERTAL_DEV_REFERRAL_URL,
     embedUrl: VERTAL_DEV_REFERRAL_URL,
-    tagline: 'Descreva a ideia. A IA entrega o produto.',
+    tagline: 'Describe your idea. AI builds the product.',
     description:
-      'Plataforma de criação com IA: SaaS, sites, jogos, apps Web3 e conteúdo criativo a partir de um prompt, com conectores, créditos e publicação em 1 clique.',
+      'An AI platform to build SaaS apps, websites, games, Web3 apps and creative content from a prompt, with connectors, credits and one-click publishing.',
     color: '#D4AF37',
     strengths: [
-      'Agentes de IA que planejam, codam e narram cada passo',
-      'Web3 nativo: carteiras, RPCs (Alchemy, Infura) e contratos',
-      'Conectores prontos: GitHub, Stripe, Supabase, Slack, Gmail',
-      'Publicação em 1 clique na Cloudflare ou na Vertal Cloud',
+      'AI agents that plan, write code and explain each step',
+      'Web3 built in: wallets, RPCs (Alchemy, Infura) and contracts',
+      'Ready connectors: GitHub, Stripe, Supabase, Slack, Gmail',
+      'One-click publishing to Cloudflare or Vertal Cloud',
     ],
     replaces: ['Lovable', 'Bolt', 'Replit', 'v0'],
     mcp: {
@@ -88,26 +93,26 @@ export const ECOSYSTEM: EcosystemProduct[] = [
       config: mcpHttpConfig('vertal-dev', VERTAL_DEV_MCP_URL),
       cli: `claude mcp add --transport http vertal-dev ${VERTAL_DEV_MCP_URL}`,
       tools: ['list_projects', 'get_project', 'create_project', 'list_agent_jobs', 'credit_summary'],
-      auth: 'OAuth com a sua conta Vertal Dev (o cliente abre o login sozinho).',
+      auth: 'OAuth with your Vertal Dev account (the client opens the login for you).',
       docsUrl: 'https://vertal.dev/docs/mcp',
     },
   },
   {
     id: 'vertal-run',
     name: 'Vertal Run',
-    role: 'Executar',
+    role: 'Run',
     domain: 'vertalrun.com',
     url: VERTAL_RUN_REFERRAL_URL,
     embedUrl: VERTAL_RUN_REFERRAL_URL,
-    tagline: 'Código de IA rodando com segurança, fora dos seus servidores.',
+    tagline: 'Run AI code safely, away from your servers.',
     description:
-      'Sandboxes isoladas para agentes de IA executarem código: sem rede, sistema de arquivos somente leitura, limites de recursos e medição por execução.',
+      'Isolated sandboxes where AI agents run code: no network, a read-only file system, resource limits and usage measured per run.',
     color: '#22D3EE',
     strengths: [
-      'Sandbox limpa a cada execução: código não confiável nunca toca seu servidor',
-      'Python, JavaScript e Bash, com timeout e cota por plano',
-      'API key, rate limit e trilha de auditoria por execução',
-      'Plataforma própria da KUBO, sem depender de terceiros',
+      'A clean sandbox for every run, so untrusted code never touches your server',
+      'Python, JavaScript and Bash, with a timeout and a quota per plan',
+      'API key, rate limit and an audit log for every run',
+      'Built and run by KUBO, with no third-party sandbox provider',
     ],
     replaces: ['E2B', 'Modal', 'Daytona'],
     mcp: {
@@ -126,26 +131,26 @@ export const ECOSYSTEM: EcosystemProduct[] = [
         2,
       ),
       tools: ['run_code', 'get_usage'],
-      auth: 'Chave de API kubo_sk_… criada no painel do Vertal Run.',
+      auth: 'A kubo_sk_… API key that you create in the Vertal Run dashboard.',
       docsUrl: 'https://vertalrun.com/blog/como-conectar-agentes-de-ia-ao-vertal-run-com-mcp/',
     },
   },
   {
     id: 'vertal-app',
     name: 'Vertal.app',
-    role: 'Publicar',
+    role: 'Publish',
     domain: 'vertal.app',
     url: VERTAL_APP_REFERRAL_URL,
     embedUrl: 'https://vertal.app/',
-    tagline: 'Do repositório ao ar, com a IA cuidando do deploy.',
+    tagline: 'From repository to live app. AI handles the deploy.',
     description:
-      'Deploy orquestrado: conecte um repositório GitHub, a IA detecta stack, build e variáveis de ambiente e sobe a aplicação real, com logs e status ao vivo.',
+      'Managed deploys: connect a GitHub repository, AI detects the stack, build and environment variables, and puts the app online with live logs and status.',
     color: '#8B5CF6',
     strengths: [
-      'IA detecta framework, comandos de build/start e env vars',
-      'Variáveis de ambiente cifradas com AES-256-GCM',
-      'Dashboard em tempo real com status e logs de build',
-      'Multi-projeto e multi-usuário com isolamento por conta',
+      'AI detects the framework, build and start commands, and env vars',
+      'Environment variables encrypted with AES-256-GCM',
+      'Live dashboard with status and build logs',
+      'Many projects and users, isolated per account',
     ],
     replaces: ['Vercel', 'Railway', 'Render', 'Netlify'],
     mcp: {
@@ -154,7 +159,7 @@ export const ECOSYSTEM: EcosystemProduct[] = [
       config: mcpHttpConfig('vertal-app', 'https://vertal.app/mcp'),
       cli: 'claude mcp add --transport http vertal-app https://vertal.app/mcp',
       tools: ['list_projects', 'get_project', 'create_project', 'create_deployment', 'get_deployment', 'get_logs'],
-      auth: 'OAuth com a sua conta Vertal.app (o cliente abre o login sozinho).',
+      auth: 'OAuth with your Vertal.app account (the client opens the login for you).',
       docsUrl: 'https://vertal.app/connect',
     },
   },
@@ -179,33 +184,33 @@ export function combinedMcpConfig(): string {
 /** Por que escolher o ecossistema em vez de juntar ferramentas de concorrentes. */
 export const ECOSYSTEM_PILLARS = [
   {
-    title: 'Um fluxo, não três contas',
+    title: 'One flow, not three accounts',
     description:
-      'Crie no Vertal Dev, teste o código com segurança no Vertal Run e publique no Vertal.app. Sem colar tokens entre fornecedores diferentes.',
+      'Build in Vertal Dev, test code safely in Vertal Run and publish with Vertal.app. No copying tokens between different vendors.',
   },
   {
-    title: 'Pronto para agentes de IA',
+    title: 'Ready for AI agents',
     description:
-      'Os três produtos falam MCP. Claude, ChatGPT, Cursor ou a KUBO IA operam o ciclo inteiro: criar, executar e publicar.',
+      'All three products support MCP. Claude, ChatGPT, Cursor or KUBO AI can run the whole cycle: build, run and publish.',
   },
   {
-    title: 'Segurança por padrão',
+    title: 'Secure by default',
     description:
-      'Código gerado por IA roda em sandbox isolada, segredos ficam cifrados e cada conta só enxerga os próprios dados.',
+      'AI-generated code runs in an isolated sandbox, secrets are encrypted, and each account sees only its own data.',
   },
   {
-    title: 'Tecnologia própria, foco no Brasil e no mundo',
+    title: 'Our own technology',
     description:
-      'Infraestrutura construída pela KUBO Protocol, interface e suporte em português, Web3 nativo e pronta para escalar globalmente.',
+      'Infrastructure built by KUBO Protocol in Brazil, with Web3 built in.',
   },
 ]
 
 /** Linhas da comparação "Ecossistema Vertal" × "juntar ferramentas avulsas". */
 export const ECOSYSTEM_COMPARISON: { feature: string; vertal: string; others: string }[] = [
-  { feature: 'Criar app com IA', vertal: 'Vertal Dev', others: 'Lovable, Bolt ou Replit' },
-  { feature: 'Executar código de agentes em sandbox', vertal: 'Vertal Run', others: 'E2B, Modal ou Daytona' },
-  { feature: 'Deploy orquestrado com IA', vertal: 'Vertal.app', others: 'Vercel, Railway ou Render' },
-  { feature: 'MCP em todas as etapas', vertal: 'Nos três produtos', others: 'Depende de cada fornecedor' },
-  { feature: 'Contas e faturas', vertal: 'Um ecossistema KUBO', others: 'Uma por fornecedor' },
-  { feature: 'Web3 e interface em português', vertal: 'Nativos', others: 'Raramente juntos' },
+  { feature: 'Build an app with AI', vertal: 'Vertal Dev', others: 'Lovable, Bolt or Replit' },
+  { feature: 'Run agent code in a sandbox', vertal: 'Vertal Run', others: 'E2B, Modal or Daytona' },
+  { feature: 'Managed deploys with AI', vertal: 'Vertal.app', others: 'Vercel, Railway or Render' },
+  { feature: 'MCP at every step', vertal: 'In all three products', others: 'Depends on each vendor' },
+  { feature: 'Accounts and invoices', vertal: 'One KUBO ecosystem', others: 'One per vendor' },
+  { feature: 'Web3', vertal: 'Built in', others: 'Usually a separate tool' },
 ]

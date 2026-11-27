@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { ArrowLeft, RefreshCw, Send, Hash, Lock, Users, Search, Download } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { SITE_FONT, siteRoot } from '@/components/site/siteUi'
 
 type Channel = { id: string; name: string; is_private: boolean; is_member?: boolean; num_members?: number; topic?: string; purpose?: string }
 type SlackMsg = { ts: string; thread_ts?: string; user?: string; author: string; avatar?: string; text: string; reply_count: number; reactions: { name: string; count: number }[] }
@@ -39,7 +40,7 @@ export default function ConnectorSlackPage() {
       if (error) throw error
       setChannels(data?.channels ?? [])
     } catch (e: any) {
-      toast.error('Failed to load channels', { description: e.message })
+      toast.error('We could not load the channels', { description: e.message })
     } finally { setLoadingChannels(false) }
   }, [])
 
@@ -51,7 +52,7 @@ export default function ConnectorSlackPage() {
       setMembers(data?.members ?? [])
       setTeam(data?.team ?? null)
     } catch (e: any) {
-      toast.error('Failed to load users', { description: e.message })
+      toast.error('We could not load the users', { description: e.message })
     } finally { setLoadingUsers(false) }
   }, [])
 
@@ -64,10 +65,10 @@ export default function ConnectorSlackPage() {
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/slack-list-messages?channel=${encodeURIComponent(ch.id)}&limit=50`
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? 'erro')
+      if (!res.ok) throw new Error(json.error ?? 'error')
       setMessages(json.messages ?? [])
     } catch (e: any) {
-      toast.error('Failed to load messages', { description: e.message })
+      toast.error('We could not load the messages', { description: e.message })
       setMessages([])
     } finally { setLoadingMessages(false) }
   }, [])
@@ -91,7 +92,7 @@ export default function ConnectorSlackPage() {
       toast.success('Message sent')
       setComposeText('')
     } catch (e: any) {
-      toast.error('Failed to send', { description: e.message })
+      toast.error('We could not send the message', { description: e.message })
     } finally { setSending(false) }
   }
 
@@ -115,7 +116,7 @@ export default function ConnectorSlackPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className={`min-h-screen ${siteRoot}`} style={SITE_FONT}>
       <div className="border-b border-border bg-card/50 backdrop-blur-xl sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -126,9 +127,9 @@ export default function ConnectorSlackPage() {
               <img src="/connectors/slack.png" alt="Slack" className="w-6 h-6 object-contain" draggable={false} />
             </div>
             <div>
-              <h1 className="text-lg font-bold font-orbitron">Slack Connector</h1>
+              <h1 className="text-lg font-bold font-orbitron">Slack connector</h1>
               <p className="text-xs text-muted-foreground">
-                {team ? `${team.name} · ${team.domain}.slack.com` : 'Workspace conectado ao Vertal'}
+                {team ? `${team.name} · ${team.domain}.slack.com` : 'Workspace connected to Vertal'}
               </p>
             </div>
           </div>
@@ -158,7 +159,7 @@ export default function ConnectorSlackPage() {
               <div className="p-3 border-b border-border">
                 <div className="relative">
                   <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <Input value={q} onChange={e => setQ(e.target.value)} placeholder="Search channel..." className="pl-9" />
+                  <Input value={q} onChange={e => setQ(e.target.value)} placeholder="Search channels" className="pl-9" />
                 </div>
               </div>
               <div className="max-h-[70vh] overflow-y-auto">

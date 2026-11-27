@@ -46,7 +46,7 @@ describe('Instagram por OAuth', () => {
     const page = read('src/pages/ConnectorChannelPage.tsx')
     expect(page).toMatch(/<FluxosConnectPanel\s+app="instagram"/)
     expect(page).toMatch(/returnPath="\/connectors\/instagram"/)
-    expect(page).toMatch(/Avançado: canal do operador/)
+    expect(page).toMatch(/Advanced: operator channel/)
   })
 
   it('não mostra nomes do motor na tela', () => {

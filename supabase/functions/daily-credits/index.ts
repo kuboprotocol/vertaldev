@@ -8,6 +8,35 @@ const corsHeaders = {
 // Quem entrou por um link de indicação (plano free) recebe este valor por dia.
 const REFERRED_DAILY_CREDITS = 5;
 
+// Grava o crédito no extrato (credit_transactions). Best-effort: o crédito já foi aplicado
+// na assinatura; uma falha aqui só deixa de mostrar a linha, nunca credita duas vezes
+// (chave de idempotência única por usuário).
+// deno-lint-ignore no-explicit-any
+async function logLedger(supabase: any, userId: string, amount: number, reason: string, category: string, key: string, metadata: Record<string, unknown>) {
+  if (!(amount > 0)) return;
+  try {
+    const { data: s } = await supabase
+      .from("subscriptions")
+      .select("edits_limit, edits_used")
+      .eq("user_id", userId)
+      .eq("is_active", true)
+      .maybeSingle();
+    const balanceAfter = s ? (s.edits_limit ?? 0) - (s.edits_used ?? 0) : amount;
+    const { error } = await supabase.from("credit_transactions").insert({
+      user_id: userId,
+      delta: amount,
+      balance_after: balanceAfter,
+      reason,
+      category,
+      metadata: { source: "daily-credits", ...metadata },
+      idempotency_key: key,
+    });
+    if (error && error.code !== "23505") console.error("[daily-credits] ledger:", error.message);
+  } catch (e) {
+    console.error("[daily-credits] ledger:", e instanceof Error ? e.message : e);
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
@@ -71,6 +100,8 @@ Deno.serve(async (req: Request) => {
           signup_credits_granted: true,
         });
       }
+      await logLedger(supabase, user.id, signupCredits, "Créditos de boas-vindas", "signup",
+        `signup_credits:${user.id}`, { plan });
       return new Response(
         JSON.stringify({
           success: true,
@@ -125,6 +156,8 @@ Deno.serve(async (req: Request) => {
         last_daily_credit_at: new Date().toISOString(),
       });
     }
+    await logLedger(supabase, user.id, dailyCredits, "Créditos diários do plano", "daily_plan",
+      `daily_plan_app:${user.id}:${today}`, { plan });
     return new Response(
       JSON.stringify({
         success: true,

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Globe, Search, ArrowLeftRight, Link2, ServerCog, Loader2, Check, X, Sparkles, Plus, Trash2, Shield, Zap, ArrowLeft, RefreshCw, Terminal, KeyRound, Rocket, Info, Ban, Download, Mail } from "lucide-react";
+import { Globe, Search, ArrowLeftRight, Link2, ServerCog, Loader2, Check, X, Plus, Trash2, Shield, Zap, RefreshCw, Terminal, KeyRound, Rocket, Info, Ban, Download, Mail } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import AppShell, { AppTopBar, PanelHeader } from "@/components/site/AppShell";
+import { Brand } from "@/components/site/siteUi";
 
 type Domain = {
   id: string; domain_name: string; tld: string; source: string;
@@ -37,7 +38,6 @@ type DebugLog = {
 const RECORD_TYPES = ["A", "AAAA", "CNAME", "TXT", "MX", "SRV", "NS"] as const;
 
 export default function DomainsPage() {
-  const navigate = useNavigate();
   const [domains, setDomains] = useState<Domain[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,29 +58,18 @@ export default function DomainsPage() {
   const showOnboarding = !loading && domains.length === 0 && transfers.length === 0;
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className="border-b border-border/40 bg-gradient-to-b from-primary/5 via-background to-background">
-        <div className="container mx-auto px-4 py-8">
-          <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")} className="mb-4">
-            <ArrowLeft className="w-4 h-4 mr-1" /> Dashboard
-          </Button>
-          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg shadow-primary/30">
-              <Globe className="w-7 h-7 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="font-orbitron text-3xl font-bold tracking-tight">Vertal Domains</h1>
-              <p className="text-muted-foreground">Buy, transfer, and publish with professional infrastructure.</p>
-            </div>
-          </motion.div>
-        </div>
-      </div>
+    <AppShell width="wide" topBar={<AppTopBar back={{ to: "/dashboard", label: "Dashboard" }} title="Domains" />}>
+      <PanelHeader
+        icon={<Globe className="h-7 w-7" aria-hidden />}
+        title={<Brand>Vertal Domains</Brand>}
+        description="Buy a domain, transfer one you own, or connect it to your app."
+      />
 
-      <div className="container mx-auto px-4 py-8 space-y-6">
+      <div className="space-y-6">
         {showOnboarding && <OnboardingBanner />}
 
         <Tabs defaultValue={showOnboarding ? "buy" : "mine"} className="space-y-6">
-          <TabsList className="grid grid-cols-6 w-full max-w-4xl bg-card/60 backdrop-blur border border-border/40">
+          <TabsList className="flex h-auto w-full max-w-4xl flex-wrap justify-start gap-1 rounded-xl border border-white/[0.06] bg-card/50 p-1">
             <TabsTrigger value="mine"><Globe className="w-4 h-4 mr-2" />Mine</TabsTrigger>
             <TabsTrigger value="buy"><Search className="w-4 h-4 mr-2" />Buy</TabsTrigger>
             <TabsTrigger value="transfer"><ArrowLeftRight className="w-4 h-4 mr-2" />Transfer</TabsTrigger>
@@ -97,22 +86,22 @@ export default function DomainsPage() {
           <TabsContent value="debug"><DebugTab /></TabsContent>
         </Tabs>
       </div>
-    </div>
+    </AppShell>
   );
 }
 
 function OnboardingBanner() {
   return (
     <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}>
-      <Card className="border-primary/30 bg-gradient-to-br from-primary/10 via-card/60 to-card/40 backdrop-blur">
+      <Card className="rounded-2xl border-white/[0.06] bg-card/50">
         <CardHeader>
-          <CardTitle className="font-orbitron flex items-center gap-2"><Rocket className="w-5 h-5 text-primary" /> Welcome to Vertal Domains</CardTitle>
-          <CardDescription>Everything you need to get your brand online — using Vertal credits.</CardDescription>
+          <CardTitle className="flex items-center gap-2"><Rocket className="w-5 h-5 text-primary" /> Welcome to Vertal Domains</CardTitle>
+          <CardDescription>Put your brand online and pay with Vertal credits.</CardDescription>
         </CardHeader>
         <CardContent className="grid md:grid-cols-3 gap-4">
-          <Step icon={<Search className="w-5 h-5" />} title="1. Search" body="Find names via AI + real-time IONOS verification." />
-          <Step icon={<Zap className="w-5 h-5" />} title="2. Pay with credits" body="Atomic debit — if anything fails, your credits are preserved." />
-          <Step icon={<Shield className="w-5 h-5" />} title="3. SSL + Auto DNS" body="Certificate provisioned and DNS editor ready to use." />
+          <Step icon={<Search className="w-5 h-5" />} title="1. Search" body="Get name ideas from AI. Availability is checked with IONOS." />
+          <Step icon={<Zap className="w-5 h-5" />} title="2. Pay with credits" body="Credits are taken once per order. If something fails after payment, open a support ticket." />
+          <Step icon={<Shield className="w-5 h-5" />} title="3. SSL and DNS" body="Your domain gets an SSL certificate and a DNS editor." />
         </CardContent>
       </Card>
     </motion.div>
@@ -121,7 +110,7 @@ function OnboardingBanner() {
 
 function Step({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
   return (
-    <div className="flex gap-3 p-3 rounded-lg bg-background/40 border border-border/30">
+    <div className="flex gap-3 p-3 rounded-xl bg-background/40 border border-white/[0.06]">
       <div className="w-9 h-9 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">{icon}</div>
       <div>
         <div className="font-semibold text-sm">{title}</div>
@@ -173,11 +162,11 @@ function MineTab({ domains, loading, onChange }: { domains: Domain[]; loading: b
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {domains.map((d) => (
           <motion.div key={d.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-            <Card className="group bg-card/60 backdrop-blur border-border/40 hover:border-primary/50 transition-all hover:shadow-lg hover:shadow-primary/10">
+            <Card className="group rounded-xl border-white/[0.06] bg-card/50 transition-colors hover:border-white/[0.14]">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div>
-                    <CardTitle className="font-orbitron text-lg break-all">{d.domain_name}</CardTitle>
+                    <CardTitle className="text-lg break-all">{d.domain_name}</CardTitle>
                     <CardDescription className="text-xs mt-1 uppercase tracking-wide">{d.source} · .{d.tld}</CardDescription>
                   </div>
                   <StatusBadge status={d.status} />
@@ -225,7 +214,7 @@ function BuyTab({ onPurchased }: { onPurchased: () => void }) {
     setSearching(false);
     if (error) { toast.error(error.message); return; }
     setResults(data?.results ?? []);
-    if (!data?.has_ionos) toast.warning("IONOS not configured — availability is indicative.");
+    if (!data?.has_ionos) toast.warning("IONOS is not set up. Availability may not be accurate.");
   };
 
   const doBuy = async () => {
@@ -237,7 +226,7 @@ function BuyTab({ onPurchased }: { onPurchased: () => void }) {
     setBuying(null);
     if (error) { toast.error(error.message); return; }
     if (data?.error) { toast.error(data.error); return; }
-    toast.success(`✓ ${r.domain} registered · balance: ${data?.balance_after ?? "?"}`);
+    toast.success(`${r.domain} registered · balance: ${data?.balance_after ?? "?"}`);
     onPurchased();
   };
 
@@ -245,19 +234,19 @@ function BuyTab({ onPurchased }: { onPurchased: () => void }) {
     <>
       <Card className="bg-card/60 backdrop-blur border-border/40">
         <CardHeader>
-          <CardTitle className="font-orbitron flex items-center gap-2"><Sparkles className="w-5 h-5 text-primary" /> Search Domain</CardTitle>
-          <CardDescription>AI-generated suggestions + real-time verification via IONOS.</CardDescription>
+          <CardTitle className="flex items-center gap-2"><Search className="w-5 h-5 text-primary" /> Search for a domain</CardTitle>
+          <CardDescription>Name ideas from AI. Availability is checked with IONOS.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-2">
             <Input placeholder="mybrand or mybrand.com" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && search()} className="bg-background/60" />
-            <Button onClick={search} disabled={searching} className="bg-gradient-to-r from-primary to-purple-600">
+            <Button onClick={search} disabled={searching} className="rounded-full">
               {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />} Search
             </Button>
           </div>
           <div className="grid gap-2">
             {results.map((r) => (
-              <motion.div key={r.domain} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} className="flex items-center justify-between p-3 rounded-lg bg-background/40 border border-border/30 hover:border-primary/40 transition">
+              <motion.div key={r.domain} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} className="flex items-center justify-between p-3 rounded-xl bg-background/40 border border-white/[0.06] hover:border-primary/40 transition">
                 <div className="flex items-center gap-3 min-w-0">
                   {r.available === true && <Check className="w-5 h-5 text-emerald-400 shrink-0" />}
                   {r.available === false && <X className="w-5 h-5 text-red-400 shrink-0" />}
@@ -279,7 +268,7 @@ function BuyTab({ onPurchased }: { onPurchased: () => void }) {
       <AlertDialog open={!!confirmBuy} onOpenChange={(o) => !o && setConfirmBuy(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="font-orbitron">Confirm registration</AlertDialogTitle>
+            <AlertDialogTitle>Confirm registration</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3">
                 <p>You are about to register:</p>
@@ -287,13 +276,13 @@ function BuyTab({ onPurchased }: { onPurchased: () => void }) {
                   <div className="font-mono text-lg text-foreground">{confirmBuy?.domain}</div>
                   <div className="text-sm text-muted-foreground mt-1">.{confirmBuy?.tld} · <span className="text-primary font-semibold">{confirmBuy?.price_credits} credits</span></div>
                 </div>
-                <p className="text-xs">The debit is atomic and idempotent. In case of post-debit failure, open a ticket for a refund.</p>
+                <p className="text-xs">Credits are taken once for this order. If something fails after payment, open a support ticket for a refund.</p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={doBuy} className="bg-gradient-to-r from-primary to-purple-600">Confirm and pay</AlertDialogAction>
+            <AlertDialogAction onClick={doBuy} className="rounded-full">Confirm and pay</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -405,11 +394,11 @@ function TransferTab({ transfers, onTransferred }: { transfers: Transfer[]; onTr
     const t = cancelling;
     setCancelling(null);
     const { data, error } = await supabase.functions.invoke("domain-transfer", {
-      body: { action: "cancel", transfer_id: t.id, reason: cancelReason || "Cancelado pelo usuário" },
+      body: { action: "cancel", transfer_id: t.id, reason: cancelReason || "Cancelled by user" },
     });
     setCancelReason("");
     if (error || data?.error) { toast.error(error?.message ?? data.error); return; }
-    toast.success(`Transferência de ${t.domain_name} cancelada`);
+    toast.success(`Transfer of ${t.domain_name} cancelled`);
     onTransferred();
   };
 
@@ -438,8 +427,8 @@ function TransferTab({ transfers, onTransferred }: { transfers: Transfer[]; onTr
     <div className="space-y-6">
       <Card className="bg-card/60 backdrop-blur border-border/40 max-w-2xl">
         <CardHeader>
-          <CardTitle className="font-orbitron flex items-center gap-2"><ArrowLeftRight className="w-5 h-5 text-primary" /> Transfer Domain</CardTitle>
-          <CardDescription>Average time: 5–7 days. You need the AUTH/EPP code from the current registrar.</CardDescription>
+          <CardTitle className="flex items-center gap-2"><ArrowLeftRight className="w-5 h-5 text-primary" /> Transfer a domain</CardTitle>
+          <CardDescription>A transfer usually takes 5 to 7 days. You need the AUTH/EPP code from your current registrar.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div><Label>Domain</Label><Input placeholder="mycompany.com" value={domain} onChange={(e) => setDomain(e.target.value.toLowerCase())} /></div>
@@ -447,14 +436,14 @@ function TransferTab({ transfers, onTransferred }: { transfers: Transfer[]; onTr
           <div><Label>Current registrar (optional)</Label><Input placeholder="GoDaddy, Namecheap…" value={registrar} onChange={(e) => setRegistrar(e.target.value)} /></div>
           <div>
             <Label className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" /> Notification email (optional)</Label>
-            <Input type="email" placeholder="you@company.com — uses your email if blank" value={notifyEmail} onChange={(e) => setNotifyEmail(e.target.value)} />
+            <Input type="email" placeholder="you@company.com (your account email if empty)" value={notifyEmail} onChange={(e) => setNotifyEmail(e.target.value)} />
           </div>
           {tld && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground p-2 rounded bg-background/40 border border-border/30">
-              <Info className="w-4 h-4 text-primary" /> Estimated cost: <span className="text-primary font-semibold">{price} créditos</span>
+              <Info className="w-4 h-4 text-primary" /> Estimated cost: <span className="text-primary font-semibold">{price} credits</span>
             </div>
           )}
-          <Button onClick={() => setConfirm(true)} disabled={busy || !canSubmit} className="w-full bg-gradient-to-r from-primary to-purple-600">
+          <Button onClick={() => setConfirm(true)} disabled={busy || !canSubmit} className="w-full rounded-full">
             {busy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ArrowLeftRight className="w-4 h-4 mr-2" />} Start transfer
           </Button>
         </CardContent>
@@ -465,8 +454,8 @@ function TransferTab({ transfers, onTransferred }: { transfers: Transfer[]; onTr
           <CardHeader>
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div>
-                <CardTitle className="font-orbitron text-lg">Transfers</CardTitle>
-                <CardDescription>Automatic update every 5 minutes. You can refresh manually or cancel at any time.</CardDescription>
+                <CardTitle className="text-lg">Transfers</CardTitle>
+                <CardDescription>Status updates every 5 minutes. You can refresh or cancel at any time.</CardDescription>
               </div>
               <Button size="sm" variant="outline" onClick={exportCsv} title="Export audit as CSV">
                 <Download className="w-3.5 h-3.5 mr-1.5" /> CSV
@@ -497,7 +486,7 @@ function TransferTab({ transfers, onTransferred }: { transfers: Transfer[]; onTr
               const inProgress = ["pending", "validating", "transferring"].includes(t.status);
               const cdLeft = cooldownLeft(t);
               return (
-                <div key={t.id} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-background/40 border border-border/30">
+                <div key={t.id} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-background/40 border border-white/[0.06]">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-sm">{t.domain_name}</span>
@@ -507,20 +496,20 @@ function TransferTab({ transfers, onTransferred }: { transfers: Transfer[]; onTr
                     </div>
                     {t.status_message && <div className="text-xs text-muted-foreground mt-1 truncate">{t.status_message}</div>}
                     <div className="text-xs text-muted-foreground/70 mt-0.5 flex gap-3 flex-wrap">
-                      <span>Iniciado {new Date(t.started_at).toLocaleString("pt-BR")}</span>
-                      {t.next_retry_at && inProgress && <span>Próximo check: {new Date(t.next_retry_at).toLocaleTimeString("pt-BR")}</span>}
+                      <span>Started {new Date(t.started_at).toLocaleString()}</span>
+                      {t.next_retry_at && inProgress && <span>Next check: {new Date(t.next_retry_at).toLocaleTimeString()}</span>}
                       {t.notify_email && <span className="flex items-center gap-1"><Mail className="w-3 h-3" />{t.notify_email}</span>}
                     </div>
                   </div>
                   <div className="flex gap-1.5 shrink-0">
-                    <Button size="sm" variant="outline" onClick={() => openConfirmResend(t)} disabled={resendingEmail === t.id || cdLeft > 0} title={cdLeft > 0 ? `Aguarde ${cdLeft}s para reenviar` : (t.last_notified_at ? `Último e-mail: ${new Date(t.last_notified_at).toLocaleString("pt-BR")}` : "Resend status email")}>
+                    <Button size="sm" variant="outline" onClick={() => openConfirmResend(t)} disabled={resendingEmail === t.id || cdLeft > 0} title={cdLeft > 0 ? `Wait ${cdLeft}s to resend` : (t.last_notified_at ? `Last email: ${new Date(t.last_notified_at).toLocaleString()}` : "Resend status email")}>
                       {resendingEmail === t.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => refresh(t.id)} disabled={refreshing === t.id} title="Atualizar status">
+                    <Button size="sm" variant="outline" onClick={() => refresh(t.id)} disabled={refreshing === t.id} title="Refresh status">
                       {refreshing === t.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                     </Button>
                     {inProgress && (
-                      <Button size="sm" variant="outline" onClick={() => setCancelling(t)} className="text-red-400 hover:bg-red-500/10 border-red-500/30" title="Cancel Transfer">
+                      <Button size="sm" variant="outline" onClick={() => setCancelling(t)} className="text-red-400 hover:bg-red-500/10 border-red-500/30" title="Cancel transfer">
                         <Ban className="w-3.5 h-3.5" />
                       </Button>
                     )}
@@ -536,7 +525,7 @@ function TransferTab({ transfers, onTransferred }: { transfers: Transfer[]; onTr
       <AlertDialog open={confirm} onOpenChange={setConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="font-orbitron">Confirm Transfer</AlertDialogTitle>
+            <AlertDialogTitle>Confirm transfer</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3">
                 <p>You are about to start the transfer of:</p>
@@ -544,13 +533,13 @@ function TransferTab({ transfers, onTransferred }: { transfers: Transfer[]; onTr
                   <div className="font-mono text-lg text-foreground">{domain}</div>
                   <div className="text-sm text-muted-foreground mt-1">Cost: <span className="text-primary font-semibold">{price} credits</span></div>
                 </div>
-                <p className="text-xs">Credits are debited now. Tracking and email notification are automatic.</p>
+                <p className="text-xs">Credits are taken now. We track the transfer and email you about status changes.</p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={start} className="bg-gradient-to-r from-primary to-purple-600">Confirm and start</AlertDialogAction>
+            <AlertDialogAction onClick={start} className="rounded-full">Confirm and start</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -558,15 +547,15 @@ function TransferTab({ transfers, onTransferred }: { transfers: Transfer[]; onTr
       <AlertDialog open={!!cancelling} onOpenChange={(o) => !o && setCancelling(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="font-orbitron">Cancel Transfer</AlertDialogTitle>
+            <AlertDialogTitle>Cancel transfer</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3">
-                <p>You are about to cancel the transfer of <strong className="font-mono">{cancelling?.domain_name}</strong>. The request will be cancelled at IONOS and the status saved with an audit trail.</p>
+                <p>You are about to cancel the transfer of <strong className="font-mono">{cancelling?.domain_name}</strong>. The request is cancelled at IONOS and the change is saved in the audit log.</p>
                 <div>
                   <Label className="text-xs">Reason (optional)</Label>
                   <Input value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="e.g., wrong domain" />
                 </div>
-                <p className="text-xs text-amber-500">⚠ Credits are not automatically refunded. Open a ticket if needed.</p>
+                <p className="text-xs text-amber-500">Credits are not refunded automatically. Open a support ticket if needed.</p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -580,7 +569,7 @@ function TransferTab({ transfers, onTransferred }: { transfers: Transfer[]; onTr
       <AlertDialog open={!!confirmResend} onOpenChange={(o) => !o && setConfirmResend(null)}>
         <AlertDialogContent className="max-w-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle className="font-orbitron">Resend status email</AlertDialogTitle>
+            <AlertDialogTitle>Resend status email</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3">
                 <p>You are about to resend the status email for the transfer:</p>
@@ -589,40 +578,40 @@ function TransferTab({ transfers, onTransferred }: { transfers: Transfer[]; onTr
                   <div className="text-sm text-muted-foreground mt-1">Current status: <span className="text-primary font-semibold">{confirmResend?.status}</span></div>
                   <div className="text-sm text-muted-foreground mt-1">Recipient: {confirmResend?.notify_email || "logged-in user's email"}</div>
                   {confirmResend?.last_notified_at && (
-                    <div className="text-xs text-muted-foreground mt-1">Last email sent: {new Date(confirmResend.last_notified_at).toLocaleString("pt-BR")}</div>
+                    <div className="text-xs text-muted-foreground mt-1">Last email sent: {new Date(confirmResend.last_notified_at).toLocaleString()}</div>
                   )}
                   {confirmResend && cooldownLeft(confirmResend) > 0 && (
-                    <div className="text-xs text-amber-500 mt-1">⏳ Cooldown: wait {cooldownLeft(confirmResend)}s to resend.</div>
+                    <div className="text-xs text-amber-500 mt-1">Wait {cooldownLeft(confirmResend)}s to resend.</div>
                   )}
                 </div>
 
                 <div>
-                  <div className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 flex items-center gap-1.5"><Mail className="w-3 h-3" /> Email History</div>
+                  <div className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 flex items-center gap-1.5"><Mail className="w-3 h-3" /> Email history</div>
                   <div className="max-h-32 overflow-y-auto rounded border border-border/40 bg-background/40 text-xs divide-y divide-border/30">
-                    {modalLoading && <div className="p-2 text-muted-foreground">Loading…</div>}
+                    {modalLoading && <div className="p-2 text-muted-foreground">Loading...</div>}
                     {!modalLoading && modalEmails.length === 0 && <div className="p-2 text-muted-foreground">No emails recorded yet.</div>}
                     {modalEmails.map((m) => (
                       <div key={m.id} className="p-2 flex justify-between gap-2">
                         <span className="font-mono">{m.status}</span>
-                        <span className="text-muted-foreground">{new Date(m.created_at).toLocaleString("pt-BR")}</span>
+                        <span className="text-muted-foreground">{new Date(m.created_at).toLocaleString()}</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 <div>
-                  <div className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 flex items-center gap-1.5"><Terminal className="w-3 h-3" /> Audit Logs</div>
+                  <div className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 flex items-center gap-1.5"><Terminal className="w-3 h-3" /> Audit log</div>
                   <div className="max-h-40 overflow-y-auto rounded border border-border/40 bg-background/40 text-xs divide-y divide-border/30">
-                    {modalLoading && <div className="p-2 text-muted-foreground">Loading…</div>}
+                    {modalLoading && <div className="p-2 text-muted-foreground">Loading...</div>}
                     {!modalLoading && modalEvents.length === 0 && <div className="p-2 text-muted-foreground">No events recorded.</div>}
                     {modalEvents.map((e) => (
                       <div key={e.id} className="p-2">
                         <div className="flex justify-between gap-2">
                           <span className="font-mono text-primary">{e.event_type}</span>
-                          <span className="text-muted-foreground">{new Date(e.created_at).toLocaleString("pt-BR")}</span>
+                          <span className="text-muted-foreground">{new Date(e.created_at).toLocaleString()}</span>
                         </div>
                         {(e.from_status || e.to_status) && (
-                          <div className="text-muted-foreground/80 mt-0.5">{e.from_status ?? "—"} → {e.to_status ?? "—"}</div>
+                          <div className="text-muted-foreground/80 mt-0.5">{e.from_status ?? "-"} → {e.to_status ?? "-"}</div>
                         )}
                         {e.message && <div className="text-muted-foreground/70 mt-0.5 truncate">{e.message}</div>}
                       </div>
@@ -633,13 +622,13 @@ function TransferTab({ transfers, onTransferred }: { transfers: Transfer[]; onTr
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setConfirmResend(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setConfirmResend(null)}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => { if (confirmResend) resendEmail(confirmResend); setConfirmResend(null); }}
               disabled={!!confirmResend && cooldownLeft(confirmResend) > 0}
-              className="bg-gradient-to-r from-primary to-purple-600"
+              className="rounded-full"
             >
-              Confirmar reenvio
+              Resend email
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -660,7 +649,7 @@ function ConnectTab({ onConnected }: { onConnected: () => void }) {
     const { data, error } = await supabase.functions.invoke("domain-connect", { body: { domain, nameservers } });
     setBusy(false);
     if (error || data?.error) { toast.error(error?.message ?? data.error); return; }
-    toast.success("Domínio conectado");
+    toast.success("Domain connected");
     setDomain(""); setNs("");
     onConnected();
   };
@@ -668,14 +657,14 @@ function ConnectTab({ onConnected }: { onConnected: () => void }) {
   return (
     <Card className="bg-card/60 backdrop-blur border-border/40 max-w-2xl">
       <CardHeader>
-        <CardTitle className="font-orbitron flex items-center gap-2"><Link2 className="w-5 h-5 text-primary" /> Conectar domínio existente</CardTitle>
-        <CardDescription>Aponte os nameservers no seu registrar para usar o painel Vertal.</CardDescription>
+        <CardTitle className="flex items-center gap-2"><Link2 className="w-5 h-5 text-primary" /> Connect a domain you own</CardTitle>
+        <CardDescription>Point the nameservers at your registrar to manage the domain in Vertal.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div><Label>Domínio</Label><Input placeholder="meudominio.com" value={domain} onChange={(e) => setDomain(e.target.value)} /></div>
-        <div><Label>Nameservers (opcional)</Label><Input placeholder="ns1.kubo.dev, ns2.kubo.dev" value={ns} onChange={(e) => setNs(e.target.value)} /></div>
-        <Button onClick={connect} disabled={busy || !domain} className="w-full bg-gradient-to-r from-primary to-purple-600">
-          {busy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Link2 className="w-4 h-4 mr-2" />} Conectar
+        <div><Label>Domain</Label><Input placeholder="mydomain.com" value={domain} onChange={(e) => setDomain(e.target.value)} /></div>
+        <div><Label>Nameservers (optional)</Label><Input placeholder="ns1.kubo.dev, ns2.kubo.dev" value={ns} onChange={(e) => setNs(e.target.value)} /></div>
+        <Button onClick={connect} disabled={busy || !domain} className="w-full rounded-full">
+          {busy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Link2 className="w-4 h-4 mr-2" />} Connect
         </Button>
       </CardContent>
     </Card>
@@ -702,14 +691,14 @@ function DnsTab({ domains }: { domains: Domain[] }) {
   useEffect(() => { if (selected) load(selected); }, [selected]);
 
   const create = async () => {
-    if (!form.value) { toast.error("Valor obrigatório"); return; }
+    if (!form.value) { toast.error("Value is required"); return; }
     setCreating(true);
     const { data, error } = await supabase.functions.invoke("domain-dns", {
       body: { action: "create", domain_id: selected, record: { ...form, priority: form.priority ? Number(form.priority) : null } },
     });
     setCreating(false);
     if (error || data?.error) { toast.error(error?.message ?? data.error); return; }
-    toast.success(data?.synced ? "Registro criado e sincronizado" : "Registro salvo (IONOS sem sync)");
+    toast.success(data?.synced ? "Record created and synced" : "Record saved (not synced with IONOS)");
     setForm({ type: "A", name: "@", value: "", ttl: 3600, priority: "" });
     load(selected);
   };
@@ -721,34 +710,34 @@ function DnsTab({ domains }: { domains: Domain[] }) {
     load(selected);
   };
 
-  if (!domains.length) return <Card className="bg-card/60 border-border/40"><CardContent className="py-12 text-center text-muted-foreground">Você precisa de pelo menos um domínio para gerenciar DNS.</CardContent></Card>;
+  if (!domains.length) return <Card className="bg-card/60 border-border/40"><CardContent className="py-12 text-center text-muted-foreground">You need at least one domain to manage DNS.</CardContent></Card>;
 
   return (
     <div className="space-y-4">
       <Card className="bg-card/60 backdrop-blur border-border/40">
         <CardHeader>
-          <CardTitle className="font-orbitron text-lg">Editor DNS</CardTitle>
-          <CardDescription>Gerencie registros A / AAAA / CNAME / TXT / MX / SRV / NS.</CardDescription>
+          <CardTitle className="text-lg">DNS editor</CardTitle>
+          <CardDescription>Manage A, AAAA, CNAME, TXT, MX, SRV and NS records.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label>Domínio</Label>
+            <Label>Domain</Label>
             <Select value={selected} onValueChange={setSelected}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{domains.map((d) => <SelectItem key={d.id} value={d.id}>{d.domain_name}</SelectItem>)}</SelectContent>
             </Select>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-2 p-3 rounded-lg bg-background/40 border border-border/30">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-2 p-3 rounded-xl bg-background/40 border border-white/[0.06]">
             <div>
-              <Label className="text-xs">Tipo</Label>
+              <Label className="text-xs">Type</Label>
               <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
                 <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>{RECORD_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div><Label className="text-xs">Nome</Label><Input className="h-9" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-            <div className="md:col-span-2"><Label className="text-xs">Valor</Label><Input className="h-9" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} placeholder={form.type === "A" ? "192.0.2.1" : form.type === "CNAME" ? "target.example.com" : ""} /></div>
+            <div><Label className="text-xs">Name</Label><Input className="h-9" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+            <div className="md:col-span-2"><Label className="text-xs">Value</Label><Input className="h-9" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} placeholder={form.type === "A" ? "192.0.2.1" : form.type === "CNAME" ? "target.example.com" : ""} /></div>
             <div><Label className="text-xs">TTL</Label><Input className="h-9" type="number" value={form.ttl} onChange={(e) => setForm({ ...form, ttl: Number(e.target.value) })} /></div>
             <div className="flex items-end"><Button onClick={create} disabled={creating} className="w-full h-9">{creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Plus className="w-4 h-4 mr-1" />Add</>}</Button></div>
           </div>
@@ -756,7 +745,7 @@ function DnsTab({ domains }: { domains: Domain[] }) {
           {loading ? <div className="py-8 text-center"><Loader2 className="w-5 h-5 animate-spin mx-auto text-primary" /></div> : (
             <div className="overflow-hidden rounded-lg border border-border/30">
               <table className="w-full text-sm">
-                <thead className="bg-background/60"><tr className="text-left text-xs text-muted-foreground"><th className="px-3 py-2">Tipo</th><th className="px-3 py-2">Nome</th><th className="px-3 py-2">Valor</th><th className="px-3 py-2">TTL</th><th></th></tr></thead>
+                <thead className="bg-background/60"><tr className="text-left text-xs text-muted-foreground"><th className="px-3 py-2">Type</th><th className="px-3 py-2">Name</th><th className="px-3 py-2">Value</th><th className="px-3 py-2">TTL</th><th></th></tr></thead>
                 <tbody>{records.length ? records.map((r) => (
                   <tr key={r.id} className="border-t border-border/20 hover:bg-background/30">
                     <td className="px-3 py-2 font-mono text-xs"><Badge variant="outline">{r.record_type}</Badge></td>
@@ -765,7 +754,7 @@ function DnsTab({ domains }: { domains: Domain[] }) {
                     <td className="px-3 py-2 text-muted-foreground">{r.ttl}s</td>
                     <td className="px-3 py-2 text-right"><Button size="sm" variant="ghost" onClick={() => del(r.id)} className="text-red-400 hover:bg-red-500/10"><Trash2 className="w-3.5 h-3.5" /></Button></td>
                   </tr>
-                )) : <tr><td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">Sem registros para {selectedDomain?.domain_name}.</td></tr>}</tbody>
+                )) : <tr><td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">No records for {selectedDomain?.domain_name}.</td></tr>}</tbody>
               </table>
             </div>
           )}
@@ -811,7 +800,7 @@ function DebugTab() {
     a.download = `ionos-logs-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success(`${logs.length} log(s) exportados`);
+    toast.success(`${logs.length} logs exported`);
   };
 
   return (
@@ -819,12 +808,12 @@ function DebugTab() {
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle className="font-orbitron flex items-center gap-2"><Terminal className="w-5 h-5 text-primary" /> Debug logs IONOS</CardTitle>
-            <CardDescription>Últimos 100 eventos: busca, compra, transferência, status, retry, cancelamento.</CardDescription>
+            <CardTitle className="flex items-center gap-2"><Terminal className="w-5 h-5 text-primary" /> IONOS debug logs</CardTitle>
+            <CardDescription>Last 100 events: search, purchase, transfer, status, retry and cancel.</CardDescription>
           </div>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={exportCSV} disabled={!logs.length}>
-              <Download className="w-4 h-4 mr-1" /> Exportar CSV
+              <Download className="w-4 h-4 mr-1" /> Export CSV
             </Button>
             <Button size="sm" variant="outline" onClick={load} disabled={loading}>
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
@@ -838,14 +827,14 @@ function DebugTab() {
         ) : !logs.length ? (
           <div className="py-12 text-center text-muted-foreground">
             <KeyRound className="w-10 h-10 mx-auto mb-3 opacity-50" />
-            Sem eventos ainda. Tente uma busca ou compra para gerar logs.
+            No events yet. Search for or buy a domain to create logs.
           </div>
         ) : (
           <div className="space-y-1.5 font-mono text-xs">
             {logs.map((l) => (
               <div key={l.id} className="border border-border/30 rounded bg-background/30">
                 <button onClick={() => setExpanded(expanded === l.id ? null : l.id)} className="w-full text-left p-2 flex items-center gap-2 hover:bg-background/50 transition">
-                  <span className="text-muted-foreground shrink-0">{new Date(l.created_at).toLocaleTimeString("pt-BR")}</span>
+                  <span className="text-muted-foreground shrink-0">{new Date(l.created_at).toLocaleTimeString()}</span>
                   <StatusBadge status={l.status} />
                   <span className="text-muted-foreground shrink-0">[{l.event_type}]</span>
                   <span className="text-foreground truncate flex-1">{l.message}</span>

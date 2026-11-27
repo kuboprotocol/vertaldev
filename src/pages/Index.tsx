@@ -1,22 +1,20 @@
-import { APP_NAME } from '@/config/brand'
-import { lazy, Suspense } from "react";
-import Navbar from "@/components/landing/Navbar";
-import { Button } from "@/components/ui/button";
-import { ArrowRight } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { lazy, Suspense, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { MotionConfig } from "framer-motion";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import LandingSkeleton from "@/components/landing/LandingSkeleton";
-import { VibePayPromo } from "@/components/vibepay/VibePayPromo";
+import LandingNav from "@/components/landing/LandingNav";
+import LandingFooter from "@/components/landing/LandingFooter";
+import { LANDING_FONT, Reveal, Section, SectionHeading, primaryButton } from "@/components/landing/landingUi";
 
 const HeroSection = lazy(() => import("@/components/landing/HeroSection"));
-const CreditsPromoSection = lazy(() => import("@/components/landing/CreditsPromoSection"));
-const CommunitySection = lazy(() => import("@/components/landing/CommunitySection"));
 const HowItWorksSection = lazy(() => import("@/components/landing/HowItWorksSection"));
-const FAQSection = lazy(() => import("@/components/landing/FAQSection"));
-const DomainSection = lazy(() => import("@/components/landing/DomainSection"));
+const CreditsPromoSection = lazy(() => import("@/components/landing/CreditsPromoSection"));
 const ConnectorSection = lazy(() => import("@/components/landing/ConnectorSection"));
-const EcosystemShowcase = lazy(() => import("@/components/ecosystem/EcosystemShowcase"));
+const DomainSection = lazy(() => import("@/components/landing/DomainSection"));
+const EcosystemSection = lazy(() => import("@/components/landing/EcosystemSection"));
+const VibePaySection = lazy(() => import("@/components/landing/VibePaySection"));
+const FAQSection = lazy(() => import("@/components/landing/FAQSection"));
 
 const SectionFallback = () => <div className="py-12 px-6"><div className="max-w-3xl mx-auto h-24 rounded-xl bg-muted/30 animate-pulse" /></div>;
 
@@ -26,116 +24,69 @@ const SafeSection = ({ name, children }: { name: string; children: React.ReactNo
   </ErrorBoundary>
 );
 
+/**
+ * The landing page is written in English so browsers can offer automatic
+ * translation. index.html sets lang="en" only for "/" (inline script); this
+ * effect covers client-side navigation to and from "/".
+ */
+function useDocumentLang(lang: string) {
+  useEffect(() => {
+    const root = document.documentElement;
+    const previous = root.lang;
+    root.lang = lang;
+    return () => {
+      root.lang = previous && previous !== lang ? previous : "pt-BR";
+    };
+  }, [lang]);
+}
+
 const Index = () => {
-  const navigate = useNavigate();
+  useDocumentLang("en");
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
+    <MotionConfig reducedMotion="user">
+      {/* Headings inherit the system font (the app default for h1-h6 is Orbitron). */}
+      <div
+        className="min-h-screen bg-background text-foreground antialiased [&_:is(h1,h2,h3,h4,h5,h6)]:[font-family:inherit]"
+        style={LANDING_FONT}
+      >
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-full focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground"
+        >
+          Skip to content
+        </a>
+        <LandingNav />
 
-      <Suspense fallback={<LandingSkeleton />}>
-        <main>
-          <SafeSection name="HeroSection"><HeroSection /></SafeSection>
+        <Suspense fallback={<LandingSkeleton />}>
+          <main id="main">
+            <SafeSection name="HeroSection"><HeroSection /></SafeSection>
+            <SafeSection name="HowItWorksSection"><HowItWorksSection /></SafeSection>
+            <SafeSection name="ConnectorSection"><ConnectorSection /></SafeSection>
+            <SafeSection name="DomainSection"><DomainSection /></SafeSection>
+            <SafeSection name="EcosystemSection"><EcosystemSection /></SafeSection>
+            <SafeSection name="VibePaySection"><VibePaySection /></SafeSection>
+            <SafeSection name="CreditsPromoSection"><CreditsPromoSection /></SafeSection>
+            <SafeSection name="FAQSection"><FAQSection /></SafeSection>
 
-          {/* Divulgação: Vertal Vibe Pay (landing pública /vibe-pay) */}
-          <ErrorBoundary resourceName="VibePayPromo" fallback={null}>
-            <div className="px-6 py-10">
-              <VibePayPromo to="/vibe-pay" className="max-w-6xl mx-auto" />
-            </div>
-          </ErrorBoundary>
-
-          <div className="max-w-xl mx-auto gold-line" aria-hidden="true" />
-
-          <SafeSection name="CreditsPromoSection"><CreditsPromoSection /></SafeSection>
-
-          <div className="max-w-xl mx-auto gold-line" aria-hidden="true" />
-
-          <SafeSection name="CommunitySection"><CommunitySection /></SafeSection>
-          <SafeSection name="HowItWorksSection"><HowItWorksSection /></SafeSection>
-          <SafeSection name="DomainSection"><DomainSection /></SafeSection>
-
-          <div className="max-w-xl mx-auto gold-line" aria-hidden="true" />
-
-          <SafeSection name="ConnectorSection"><ConnectorSection /></SafeSection>
-
-          <div className="max-w-xl mx-auto gold-line" aria-hidden="true" />
-
-          <SafeSection name="EcosystemShowcase"><EcosystemShowcase /></SafeSection>
-
-          <div className="max-w-xl mx-auto gold-line" aria-hidden="true" />
-
-          <ErrorBoundary resourceName="CTA" fallback={<SectionFallback />}>
-            <motion.section
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              viewport={{ once: true }}
-              className="py-24 px-6"
-            >
-              <div className="max-w-3xl mx-auto text-center">
-                <div className="p-12 rounded-3xl gradient-primary shadow-gold relative overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
-                  <h2 className="text-3xl md:text-4xl font-display font-bold text-primary-foreground mb-4 relative z-10">
-                    Ready to build something amazing?
-                  </h2>
-                  <p className="text-primary-foreground/70 mb-8 max-w-md mx-auto relative z-10">
-                    Join thousands of creators launching apps every day with {APP_NAME}.
-                  </p>
-                  <Button
-                    size="lg"
-                    onClick={() => navigate("/builder")}
-                    className="bg-background text-foreground hover:bg-background/90 rounded-xl px-8 font-semibold gap-2 relative z-10"
-                  >
+            <ErrorBoundary resourceName="CTA" fallback={<SectionFallback />}>
+              <Section labelledBy="cta-title" className="border-t border-white/[0.06]">
+                <SectionHeading id="cta-title" title="Start with your idea.">
+                  Create a free account and build your first app today.
+                </SectionHeading>
+                <Reveal className="mt-10 flex justify-center">
+                  <Link to="/builder" className={primaryButton}>
                     Start building for free
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </motion.section>
-          </ErrorBoundary>
+                  </Link>
+                </Reveal>
+              </Section>
+            </ErrorBoundary>
+          </main>
+        </Suspense>
 
-          <SafeSection name="FAQSection"><FAQSection /></SafeSection>
-        </main>
-      </Suspense>
-
-      <footer className="py-16 px-6 border-t border-border">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col md:flex-row items-start justify-between gap-10 mb-10">
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <img
-                  src="/vertal-dev-logo.webp"
-                  alt={APP_NAME}
-                  className="h-8 w-auto object-contain"
-                />
-                <p className="text-sm font-semibold text-foreground tracking-wide">{APP_NAME}</p>
-              </div>
-              <p className="text-xs text-muted-foreground leading-relaxed max-w-xs">
-                A product by KUBO PROTOCOL
-                <br />
-                CNPJ: 65.822.139/0001-66
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-              <a href="/docs" className="hover:text-foreground transition-colors">Documentation</a>
-              <a href="/pricing" className="hover:text-foreground transition-colors">Pricing</a>
-              <a href="/alternativas" className="hover:text-foreground transition-colors">Alternativas</a>
-              <a href="/vibe-pay" className="hover:text-foreground transition-colors">Vertal Vibe Pay</a>
-              <a href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</a>
-              <a href="/terms" className="hover:text-foreground transition-colors">Terms of Service</a>
-              <a href="https://x.com/KUBOPROTOCOL" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Twitter</a>
-              <a href="https://t.me/+WoYG4tMTuJY5ZjNh" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Telegram</a>
-              <a href="https://github.com/kuboprotocol/kubovibe" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">GitHub</a>
-              <a href="https://open.spotify.com/intl-pt/track/4T0fiAFOJU8d7fGC0DcMH0?si=ac6a7ed6a30a4c90" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Spotify</a>
-            </div>
-          </div>
-          <div className="border-t border-border pt-6">
-            <p className="text-xs text-muted-foreground text-center">
-              © {new Date().getFullYear()} KUBO PROTOCOL. All rights reserved.
-            </p>
-          </div>
-        </div>
-      </footer>
-    </div>
+        <LandingFooter />
+      </div>
+    </MotionConfig>
   );
 };
 

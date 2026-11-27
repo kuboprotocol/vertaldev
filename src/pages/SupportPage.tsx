@@ -1,5 +1,4 @@
 import { APP_NAME } from '@/config/brand'
-import AnimatedLogo from '@/components/branding/AnimatedLogo'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -9,7 +8,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import {
   ChevronDown,
-  ArrowLeft,
   Send,
   MessageSquare,
   Clock,
@@ -19,82 +17,85 @@ import {
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/integrations/supabase/client'
 import { toast } from 'sonner'
+import SitePage from '@/components/site/SitePage'
+import { PageHeader, SectionHeading, focusRing, surface } from '@/components/site/siteUi'
+import { cn } from '@/lib/utils'
 
-/* ───────── Expanded FAQ ───────── */
+/* ───────── FAQ ───────── */
 const faqCategories = [
   {
     category: 'General',
     items: [
       {
         q: `What is ${APP_NAME}?`,
-        a: `${APP_NAME} is an AI-powered application builder that lets you create professional apps, websites, games, and tools — no coding required. Just describe what you want in plain language.`,
+        a: `${APP_NAME} builds apps with AI. You describe what you want in plain words, and it creates apps, websites, games and tools. You do not need to write code.`,
       },
       {
-        q: 'Does it work for any type of business?',
-        a: `Yes! Whether you run a restaurant, consulting firm, e-commerce store, or anything else, ${APP_NAME} adapts to your needs and generates tailored solutions.`,
+        q: 'Does it work for my type of business?',
+        a: `${APP_NAME} is not made for one type of business. Restaurants, consultants, online stores and others can describe what they need and get an app made for them.`,
       },
       {
-        q: "What if I don't know exactly what I want?",
-        a: 'No problem! Just describe your idea in a few words and our AI will suggest designs, layouts, and features to get you started.',
+        q: 'What if I do not know exactly what I want?',
+        a: 'Describe your idea in a few words. The AI suggests designs, layouts and features to help you start.',
       },
     ],
   },
   {
-    category: 'Account & Billing',
+    category: 'Account and billing',
     items: [
       {
         q: 'How do I create an account?',
-        a: 'Click "Get started" on the homepage, enter your email and a password, then verify your email address. You\'ll be ready to build in seconds.',
+        a: 'Click "Get started" on the home page. Enter your email and a password, or sign in with Google or GitHub. Then confirm your email address.',
       },
       {
         q: 'What does the free plan include?',
-        a: 'The free plan includes credits to generate and iterate on your projects, access to templates, and community sharing. Upgrade anytime for more edits and premium features.',
+        a: 'The free plan gives you credits to create and change your projects. You can earn more credits in Rewards. Upgrade at any time for more credits.',
       },
       {
         q: 'How do I upgrade my plan?',
-        a: 'Go to the Pricing page and choose the plan that fits your needs. Payment is processed securely and your credits are available instantly.',
+        a: 'Open the Pricing page and choose a plan. Stripe handles the payment, and your credits are added to your balance.',
       },
       {
         q: 'Can I cancel my subscription?',
-        a: 'Yes, you can cancel at any time from your profile settings. You\'ll keep access until the end of your billing period.',
+        a: 'Yes, at any time. You keep access until the end of the period you already paid for.',
       },
     ],
   },
   {
-    category: 'Building & Editing',
+    category: 'Building and editing',
     items: [
       {
         q: 'Do I need technical knowledge?',
-        a: `Not at all. ${APP_NAME} is designed to be used by anyone. Just describe what you want in plain language and the AI handles the rest.`,
+        a: `No. You can use ${APP_NAME} by describing what you want in plain words. The AI writes the code.`,
       },
       {
-        q: 'Can I edit what is created?',
-        a: 'Absolutely! You can edit everything — text, images, colors, layout, pages — just by talking naturally to the AI in the builder chat.',
+        q: 'Can I change what the AI created?',
+        a: 'Yes. You can change text, images, colors, layout and pages by asking the AI in the builder chat.',
       },
       {
         q: 'Can I export my code?',
-        a: 'Yes. All code generated through the platform belongs to you. You can download it and use it anywhere you like.',
+        a: 'Yes. The code of your project belongs to you. You can download it and use it anywhere.',
       },
       {
         q: 'What types of apps can I build?',
-        a: 'You can build landing pages, e-commerce stores, dashboards, 2D games, casino apps, social media clones, portfolios, and much more.',
+        a: 'Landing pages, online stores, dashboards, 2D games, portfolios and many other kinds of apps.',
       },
     ],
   },
   {
-    category: 'Technical Support',
+    category: 'Technical support',
     items: [
       {
-        q: 'The AI generated something wrong. What should I do?',
-        a: 'Simply describe the issue in the builder chat and ask the AI to fix it. You can also start fresh from a template. If the problem persists, submit a support ticket below.',
+        q: 'The AI made a mistake. What should I do?',
+        a: 'Describe the problem in the builder chat and ask the AI to fix it. You can also start again from a template. If the problem does not go away, send us a ticket below.',
       },
       {
-        q: 'My project is not loading. What can I do?',
-        a: 'Try refreshing the page or clearing your browser cache. If the issue continues, make sure you have a stable internet connection and try again. Contact support if needed.',
+        q: 'My project does not load. What can I do?',
+        a: 'Reload the page or clear your browser cache. Check your internet connection and try again. If it still does not load, send us a ticket.',
       },
       {
-        q: 'Is my data secure?',
-        a: 'Yes. All project data is encrypted at rest and in transit. We follow industry-standard security practices. Read more in our Privacy Policy.',
+        q: 'Is my data safe?',
+        a: 'Your data is sent over secure connections (HTTPS), and each account can see only its own projects. Our Privacy Policy explains how we handle your data.',
       },
     ],
   },
@@ -182,11 +183,11 @@ export default function SupportPage() {
     setSending(false)
 
     if (error) {
-      toast.error('Failed to submit ticket. Please try again.')
+      toast.error('We could not send your ticket. Please try again.')
       return
     }
 
-    toast.success('Support ticket submitted successfully!')
+    toast.success('Your ticket was sent.')
     setSubject('')
     setMessage('')
     // Refresh ticket list if already loaded
@@ -194,74 +195,54 @@ export default function SupportPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 glass glass-border">
-        <div className="max-w-4xl mx-auto px-6 h-16 flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="rounded-xl">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <AnimatedLogo size={17} />
-        </div>
-      </header>
+    <SitePage>
+      <PageHeader eyebrow="Support" title="How can we help?">
+        Find answers to common questions, or send a ticket to our team.
+      </PageHeader>
 
-      <main className="max-w-4xl mx-auto px-6 py-16 space-y-20">
-        {/* Hero */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center"
-        >
-          <h1 className="text-4xl md:text-5xl font-display font-bold text-foreground mb-3">
-            Support Center
-          </h1>
-          <p className="text-muted-foreground max-w-lg mx-auto">
-            Find answers to common questions or reach out to our team. We're here to help.
-          </p>
-        </motion.div>
-
-        {/* FAQ Section */}
-        <section>
-          <h2 className="text-2xl font-display font-bold text-foreground mb-8 text-center">
-            Frequently Asked Questions
+      <div className="mx-auto max-w-3xl space-y-24 px-6 pb-24">
+        {/* FAQ */}
+        <section aria-labelledby="support-faq-title">
+          <h2 id="support-faq-title" className="mb-10 text-center text-3xl font-semibold tracking-[-0.02em] text-foreground md:text-4xl">
+            Common questions
           </h2>
 
-          <div className="space-y-10">
+          <div className="space-y-12">
             {faqCategories.map((cat) => (
               <div key={cat.category}>
-                <h3 className="text-xs font-semibold text-primary uppercase tracking-widest mb-4">
-                  {cat.category}
-                </h3>
-                <div className="space-y-2">
+                <h3 className="mb-3 text-sm font-medium text-primary">{cat.category}</h3>
+                <div className={cn(surface.card, 'divide-y divide-white/[0.06] overflow-hidden p-0')}>
                   {cat.items.map((faq, i) => {
                     const key = `${cat.category}-${i}`
+                    const open = openFaq === key
                     return (
-                      <div
-                        key={key}
-                        className="border border-border rounded-xl overflow-hidden bg-card"
-                      >
+                      <div key={key}>
                         <button
-                          onClick={() => setOpenFaq(openFaq === key ? null : key)}
-                          className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-muted/50 transition-colors"
+                          type="button"
+                          aria-expanded={open}
+                          onClick={() => setOpenFaq(open ? null : key)}
+                          className={cn(
+                            'flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition-colors hover:bg-white/[0.03]',
+                            focusRing,
+                          )}
                         >
-                          <span className="font-medium text-foreground text-sm">{faq.q}</span>
+                          <span className="text-[17px] font-medium text-foreground">{faq.q}</span>
                           <ChevronDown
-                            className={`h-4 w-4 text-muted-foreground flex-shrink-0 transition-transform duration-200 ${
-                              openFaq === key ? 'rotate-180' : ''
+                            aria-hidden
+                            className={`h-4 w-4 flex-shrink-0 text-muted-foreground transition-transform duration-200 ${
+                              open ? 'rotate-180' : ''
                             }`}
                           />
                         </button>
                         <AnimatePresence>
-                          {openFaq === key && (
+                          {open && (
                             <motion.div
                               initial={{ height: 0, opacity: 0 }}
                               animate={{ height: 'auto', opacity: 1 }}
                               exit={{ height: 0, opacity: 0 }}
                               transition={{ duration: 0.2 }}
                             >
-                              <p className="px-5 pb-4 text-sm text-muted-foreground leading-relaxed">
-                                {faq.a}
-                              </p>
+                              <p className="px-5 pb-5 text-[15px] leading-relaxed text-muted-foreground">{faq.a}</p>
                             </motion.div>
                           )}
                         </AnimatePresence>
@@ -274,154 +255,121 @@ export default function SupportPage() {
           </div>
         </section>
 
-        {/* Contact Form */}
-        <section>
-          <div className="max-w-xl mx-auto">
-            <h2 className="text-2xl font-display font-bold text-foreground mb-2 text-center">
-              Submit a Ticket
-            </h2>
-            <p className="text-muted-foreground text-center mb-8 text-sm">
-              Didn't find your answer above?{' '}
-              {user ? "Send us a message and we'll get back to you." : 'Log in to submit a support ticket.'}
-            </p>
+        {/* Ticket form */}
+        <section aria-labelledby="ticket-title">
+          <SectionHeading id="ticket-title" title="Send a ticket">
+            {user ? 'Did not find your answer? Send us a message and we will reply.' : 'Log in to send a support ticket.'}
+          </SectionHeading>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Input
-                  placeholder="Subject"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  maxLength={200}
-                  disabled={!user || sending}
-                  className="bg-card border-border rounded-xl"
-                />
-              </div>
-              <div>
-                <Textarea
-                  placeholder="Describe your issue or question in detail..."
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  maxLength={2000}
-                  rows={5}
-                  disabled={!user || sending}
-                  className="bg-card border-border rounded-xl resize-none"
-                />
-                <p className="text-xs text-muted-foreground mt-1 text-right">
-                  {message.length}/2000
-                </p>
-              </div>
-              <Button
-                type="submit"
-                disabled={!user || sending || !subject.trim() || !message.trim()}
-                className="w-full rounded-xl gap-2"
-              >
-                {sending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-                {sending ? 'Sending...' : 'Submit Ticket'}
-              </Button>
-              {!user && (
-                <p className="text-center text-sm text-muted-foreground">
-                  <button
-                    type="button"
-                    onClick={() => navigate('/auth')}
-                    className="text-primary hover:underline"
-                  >
-                    Log in
-                  </button>{' '}
-                  to submit a support ticket.
-                </p>
-              )}
-            </form>
-          </div>
+          <form onSubmit={handleSubmit} className="mx-auto mt-10 max-w-xl space-y-4">
+            <div>
+              <label htmlFor="ticket-subject" className="sr-only">
+                Subject
+              </label>
+              <Input
+                id="ticket-subject"
+                placeholder="Subject"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                maxLength={200}
+                disabled={!user || sending}
+                className="h-12 rounded-xl border-white/[0.08] bg-card/50 text-[15px]"
+              />
+            </div>
+            <div>
+              <label htmlFor="ticket-message" className="sr-only">
+                Message
+              </label>
+              <Textarea
+                id="ticket-message"
+                placeholder="Describe your problem or question"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                maxLength={2000}
+                rows={5}
+                disabled={!user || sending}
+                className="resize-none rounded-xl border-white/[0.08] bg-card/50 text-[15px]"
+              />
+              <p className="mt-1 text-right text-xs text-muted-foreground">{message.length}/2000</p>
+            </div>
+            <Button
+              type="submit"
+              disabled={!user || sending || !subject.trim() || !message.trim()}
+              className="h-11 w-full gap-2 rounded-full"
+            >
+              {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}
+              {sending ? 'Sending…' : 'Send ticket'}
+            </Button>
+            {!user && (
+              <p className="text-center text-[15px] text-muted-foreground">
+                <button
+                  type="button"
+                  onClick={() => navigate('/auth')}
+                  className={cn('rounded-sm text-primary underline-offset-4 hover:underline', focusRing)}
+                >
+                  Log in
+                </button>{' '}
+                to send a support ticket.
+              </p>
+            )}
+          </form>
         </section>
 
-        {/* Ticket History */}
+        {/* Ticket history */}
         {user && (
-          <section>
-            <div className="max-w-xl mx-auto">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-display font-bold text-foreground flex items-center gap-2">
-                  <MessageSquare className="h-5 w-5 text-primary" />
-                  Your Tickets
-                </h2>
-                {!ticketsLoaded && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={loadTickets}
-                    disabled={loadingTickets}
-                    className="rounded-xl"
-                  >
-                    {loadingTickets ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      'Load History'
-                    )}
-                  </Button>
-                )}
-                {ticketsLoaded && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={loadTickets}
-                    disabled={loadingTickets}
-                    className="rounded-xl text-xs text-muted-foreground"
-                  >
-                    Refresh
-                  </Button>
-                )}
-              </div>
-
-              {ticketsLoaded && tickets.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  No tickets yet. Submit one above if you need help!
-                </p>
+          <section aria-labelledby="tickets-title" className="mx-auto max-w-xl">
+            <div className="mb-6 flex items-center justify-between">
+              <h2 id="tickets-title" className="flex items-center gap-2 text-2xl font-semibold tracking-[-0.015em] text-foreground">
+                <MessageSquare className="h-5 w-5 text-primary" aria-hidden />
+                Your tickets
+              </h2>
+              {!ticketsLoaded && (
+                <Button variant="outline" size="sm" onClick={loadTickets} disabled={loadingTickets} className="rounded-full">
+                  {loadingTickets ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : 'Show history'}
+                </Button>
               )}
-
-              {ticketsLoaded && tickets.length > 0 && (
-                <div className="space-y-3">
-                  {tickets.map((t) => (
-                    <div
-                      key={t.id}
-                      className="border border-border rounded-xl bg-card p-4 space-y-2"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <h3 className="font-medium text-sm text-foreground">{t.subject}</h3>
-                        {statusBadge(t.status)}
-                      </div>
-                      <p className="text-xs text-muted-foreground line-clamp-2">{t.message}</p>
-                      <p className="text-[10px] text-muted-foreground/60">
-                        {new Date(t.created_at).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+              {ticketsLoaded && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={loadTickets}
+                  disabled={loadingTickets}
+                  className="rounded-full text-xs text-muted-foreground"
+                >
+                  Refresh
+                </Button>
               )}
             </div>
+
+            {ticketsLoaded && tickets.length === 0 && (
+              <p className="py-8 text-center text-[15px] text-muted-foreground">You have no tickets yet.</p>
+            )}
+
+            {ticketsLoaded && tickets.length > 0 && (
+              <div className="space-y-3">
+                {tickets.map((t) => (
+                  <div key={t.id} className={cn(surface.card, 'space-y-2 p-4')}>
+                    <div className="flex items-start justify-between gap-3">
+                      <h3 className="text-[15px] font-medium text-foreground">{t.subject}</h3>
+                      {statusBadge(t.status)}
+                    </div>
+                    <p className="line-clamp-2 text-[13px] text-muted-foreground">{t.message}</p>
+                    <p className="text-xs text-muted-foreground/70">
+                      {new Date(t.created_at).toLocaleDateString(undefined, {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         )}
-      </main>
-
-      {/* Footer */}
-      <footer className="py-8 px-6 border-t border-border">
-        <div className="max-w-4xl mx-auto text-center space-y-1">
-          <p className="text-xs text-muted-foreground">
-            A product by KUBO PROTOCOL · CNPJ: 65.822.139/0001-66
-          </p>
-          <p className="text-xs text-muted-foreground">
-            © {new Date().getFullYear()} KUBO PROTOCOL. All rights reserved.
-          </p>
-        </div>
-      </footer>
-    </div>
+      </div>
+    </SitePage>
   )
 }

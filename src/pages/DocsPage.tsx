@@ -1,5 +1,7 @@
 import { APP_NAME } from '@/config/brand'
-import AnimatedLogo from '@/components/branding/AnimatedLogo'
+import { VERTAL_DEV_EMBED_SNIPPET } from '@/lib/ecosystem'
+import { INTEGRATIONS, INTEGRATIONS_PATH, integrationGroups, integrationPath } from '@/config/integrations'
+import SitePage from '@/components/site/SitePage'
 import { useState, useMemo, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -52,29 +54,29 @@ const Code = ({ children }: { children: React.ReactNode }) => (
 )
 
 const Pre = ({ children }: { children: React.ReactNode }) => (
-  <pre className="bg-black/60 border border-border rounded-xl p-4 overflow-x-auto text-xs font-mono text-foreground/90 leading-relaxed">
+  <pre className="rounded-xl border border-white/[0.06] bg-black/50 p-4 overflow-x-auto text-xs font-mono text-foreground/90 leading-relaxed">
     {children}
   </pre>
 )
 
 const H2 = ({ children }: { children: React.ReactNode }) => (
-  <h2 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-4 mt-2">
+  <h2 className="mb-4 mt-2 text-3xl font-semibold tracking-[-0.02em] text-foreground md:text-4xl">
     {children}
   </h2>
 )
 
 const H3 = ({ children }: { children: React.ReactNode }) => (
-  <h3 className="text-lg font-display font-semibold text-foreground mt-8 mb-3">
+  <h3 className="mb-3 mt-10 text-xl font-semibold tracking-[-0.01em] text-foreground">
     {children}
   </h3>
 )
 
 const P = ({ children }: { children: React.ReactNode }) => (
-  <p className="text-sm text-muted-foreground leading-relaxed mb-4">{children}</p>
+  <p className="mb-4 text-[17px] leading-relaxed text-foreground/80">{children}</p>
 )
 
 const UL = ({ children }: { children: React.ReactNode }) => (
-  <ul className="text-sm text-muted-foreground space-y-2 mb-4 list-disc pl-5 marker:text-primary/60">
+  <ul className="mb-4 list-disc space-y-2 pl-5 text-[17px] leading-relaxed text-foreground/80 marker:text-muted-foreground">
     {children}
   </ul>
 )
@@ -92,7 +94,7 @@ const Callout = ({
     tip: 'border-emerald-500/30 bg-emerald-500/5',
   }[type]
   return (
-    <div className={`border ${styles} rounded-xl p-4 text-sm text-foreground/90 mb-4`}>
+    <div className={`border ${styles} mb-4 rounded-xl p-4 text-[15px] leading-relaxed text-foreground/90`}>
       {children}
     </div>
   )
@@ -108,11 +110,9 @@ const sections: DocSection[] = [
       <>
         <H2>Welcome to {APP_NAME}</H2>
         <P>
-          {APP_NAME} is an AI-first SaaS platform that turns plain-language ideas into
-          production-ready web applications, Web3 tools, creative media and full 3D experiences.
-          The platform combines a multi-agent code generator, a creative studio, a Web3
-          connector layer, a procedural game engine and a credit-based economy in a single
-          cohesive product.
+          {APP_NAME} turns ideas written in plain words into web apps, Web3 tools, creative
+          media and 3D experiences. It brings together an AI code generator with several agents,
+          a creative studio, Web3 connectors, a game engine and a credit system in one product.
         </P>
         <H3>What you can build</H3>
         <UL>
@@ -125,8 +125,8 @@ const sections: DocSection[] = [
         <H3>Who is it for</H3>
         <UL>
           <li>Founders and indie hackers shipping MVPs.</li>
-          <li>Agencies delivering client work in hours instead of weeks.</li>
-          <li>Creators monetising tools, media and digital products.</li>
+          <li>Agencies that build apps for their clients.</li>
+          <li>Creators who sell tools, media and digital products.</li>
           <li>Web3 builders launching dApps without infra setup.</li>
         </UL>
       </>
@@ -291,7 +291,7 @@ testimonials and a waitlist form.`}</Pre>
           The hub at <Code>/connectors</Code> exposes first-party integrations that
           generated apps can call out of the box.
         </P>
-        <H3>Available connectors</H3>
+        <H3>Highlights</H3>
         <UL>
           <li>
             <strong>GitHub</strong> — real OAuth, repo listing, commits and CI status.
@@ -316,6 +316,30 @@ testimonials and a waitlist form.`}</Pre>
             <strong>IPFS</strong> — one-click deploy of static apps via web3.storage.
           </li>
         </UL>
+        <H3>All connectors ({INTEGRATIONS.length})</H3>
+        <P>
+          Every connector in the catalog has its own public page (in Portuguese) with what it can
+          do, its actions and triggers, how to connect it and examples:{' '}
+          <Link to={INTEGRATIONS_PATH} className="text-primary hover:underline">
+            Integrations
+          </Link>
+          . The list below is generated from the catalog, so new connectors show up here automatically.
+        </P>
+        {integrationGroups().map((g) => (
+          <div key={g.id} className="mb-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">{g.label}</p>
+            <p className="text-sm leading-relaxed">
+              {g.items.map((i, idx) => (
+                <span key={i.slug}>
+                  {idx > 0 ? ' · ' : ''}
+                  <Link to={integrationPath(i)} className="text-primary hover:underline">
+                    {i.name}
+                  </Link>
+                </span>
+              ))}
+            </p>
+          </div>
+        ))}
         <H3>Security</H3>
         <P>
           All credentials are encrypted at rest with AES-256 and scoped per user. RLS
@@ -356,9 +380,9 @@ testimonials and a waitlist form.`}</Pre>
               </Callout>
               <H3>Full documentation</H3>
               <UL>
-                <li><a className="text-primary hover:underline" href={FREE_CRM_DOCS_PATH}>Documentação completa (português)</a></li>
+                <li><a className="text-primary hover:underline" href={FREE_CRM_DOCS_PATH} hrefLang="pt-BR">Full documentation (Portuguese)</a></li>
                 <li><a className="text-primary hover:underline" href={FREE_CRM_EN_DOCS_PATH}>Full documentation (English, 20+ languages)</a></li>
-                <li><a className="text-primary hover:underline" href={FREE_CRM_LANDING_PATH}>CRM grátis</a> · <a className="text-primary hover:underline" href={FREE_CRM_EN_LANDING_PATH}>Free CRM</a></li>
+                <li><a className="text-primary hover:underline" href={FREE_CRM_EN_LANDING_PATH}>Free CRM</a> · <a className="text-primary hover:underline" href={FREE_CRM_LANDING_PATH} hrefLang="pt-BR" lang="pt-BR">CRM grátis (Português)</a></li>
               </UL>
             </>
           ),
@@ -599,16 +623,16 @@ testimonials and a waitlist form.`}</Pre>
         </P>
         <UL>
           <li>
-            <strong>Free</strong> — US$ 0 · 5 credits on signup · ads every 6h.
+            <strong>Free</strong>: US$ 0 · 5 credits on signup · no pop-up ads.
           </li>
           <li>
-            <strong>Starter</strong> — US$ 4.99/mo · 5 credits/day · ads every 12h.
+            <strong>Starter</strong>: US$ 4.99/mo · 5 credits/day · no pop-up ads.
           </li>
           <li>
-            <strong>Pro</strong> — US$ 19.99/mo · 5 credits/day · no ads · email support.
+            <strong>Pro</strong>: US$ 19.99/mo · 5 credits/day · no pop-up ads · email support.
           </li>
           <li>
-            <strong>Premium 1</strong> — US$ 49.99/mo · 5 credits/day · no ads · email support.
+            <strong>Premium 1</strong>: US$ 49.99/mo · 5 credits/day · no pop-up ads · email support.
           </li>
         </UL>
         <Callout type="info">
@@ -620,17 +644,17 @@ testimonials and a waitlist form.`}</Pre>
           Only <strong>Free</strong> and <strong>Starter</strong> show interstitial ads. Every
           other plan is locked ad-free, with or without a partnership agreement. Admins never
           see ads, and ads never fire on <Code>/auth</Code>, <Code>/pricing</Code>,{' '}
-          <Code>/checkout</Code> or <Code>/shortlinks</Code>. Source of truth:{' '}
+          <Code>/checkout</Code> or <Code>/recompensas</Code>. Source of truth:{' '}
           <Code>AD_SUPPORTED_PLANS</Code> in <Code>src/lib/planConfig.ts</Code> (details in{' '}
           <Code>docs/PLANOS_E_ANUNCIOS.md</Code>).
         </P>
         <P>
-          Shortlinks are opt-in on every plan: users open them only if they want extra credits.
+          Rewards (<Code>/recompensas</Code>) are opt-in on every plan: users watch them only if they want extra credits.
         </P>
         <H3>Earning credits</H3>
         <UL>
           <li>Daily streak bonuses and gamification badges.</li>
-          <li>Shortlinks — up to 10 per day, +0.5 credits each and +5 on the 10th (opt-in, every plan).</li>
+          <li>Rewards page — rewarded video, Kubo music and Vertal Node (opt-in, every plan).</li>
           <li>Referrals — 50 credits per invite. The invited user earns 5 credits per day, every 24 hours on login.</li>
           <li>Public leaderboard rewards for top creators.</li>
         </UL>
@@ -804,6 +828,28 @@ testimonials and a waitlist form.`}</Pre>
     ),
   },
   {
+    id: 'embed',
+    title: 'Embed on any website',
+    icon: Code2,
+    group: 'Platform',
+    content: (
+      <>
+        <H2>Embed Vertal Dev on any website</H2>
+        <P>
+          Paste this code into any website or app. People can describe an app, see the live
+          preview, publish it and open the result, right inside your page.
+        </P>
+        <Pre>{VERTAL_DEV_EMBED_SNIPPET}</Pre>
+        <UL>
+          <li>Sign-in opens in a new window, never inside your page, so passwords are never typed in a frame.</li>
+          <li>Optional: add <Code>theme=light</Code> or <Code>theme=dark</Code> to the URL. Keep <Code>ref=</Code> to credit your referral link.</li>
+          <li>Some browsers (Safari, private windows) block sign-in inside frames. The embed then shows an <Code>Open in Vertal Dev</Code> button that opens a new tab.</li>
+          <li>Only <Code>/embed</Code> can be framed. Sign-in, dashboard and settings pages still can't be shown inside other sites, to keep accounts safe.</li>
+        </UL>
+      </>
+    ),
+  },
+  {
     id: 'api',
     title: 'Edge Functions API',
     icon: Code2,
@@ -877,46 +923,19 @@ export default function DocsPage() {
   const current = sections.find((s) => s.id === active) ?? sections[0]
 
   return (
-    <div className="min-h-screen bg-background relative">
-      <div className="absolute inset-0 gradient-mesh pointer-events-none" />
-      <div className="absolute inset-0 dot-pattern opacity-20 pointer-events-none" />
-
-      <header className="sticky top-0 z-50 glass glass-border">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-3 group">
-            <AnimatedLogo size={17} className="group-hover:scale-105 transition-transform" />
-            <span className="text-sm font-display font-semibold text-foreground hidden sm:inline">
-              Documentation
-            </span>
-          </Link>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              asChild
-              className="rounded-xl gap-2 text-muted-foreground hover:text-foreground"
-            >
-              <Link to="/">
-                <ArrowLeft className="h-4 w-4" /> Back to home
-              </Link>
-            </Button>
-            <Button variant="hero" size="sm" asChild className="rounded-xl">
-              <Link to="/auth">Get started</Link>
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-7xl mx-auto px-6 py-10 relative z-10 grid lg:grid-cols-[260px_1fr] gap-10">
+    <SitePage>
+      <h1 className="sr-only">{APP_NAME} documentation</h1>
+      <div className="mx-auto grid max-w-6xl gap-12 px-6 pb-24 pt-12 lg:grid-cols-[240px_1fr]">
         {/* Sidebar */}
-        <aside className="lg:sticky lg:top-24 self-start">
+        <aside aria-label="Documentation" className="self-start lg:sticky lg:top-20">
           <div className="relative mb-4">
             <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search docs..."
+              placeholder="Search the docs"
+              aria-label="Search the docs"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="pl-9 rounded-xl bg-card/50 border-border"
+              className="h-10 rounded-full border-white/[0.08] bg-card/50 pl-9"
             />
           </div>
           <nav className="space-y-6">
@@ -925,7 +944,7 @@ export default function DocsPage() {
               if (!items.length) return null
               return (
                 <div key={group}>
-                  <p className="text-[10px] font-mono tracking-[0.2em] text-muted-foreground/70 uppercase mb-2 px-2">
+                  <p className="mb-2 px-3 text-[13px] font-semibold text-foreground">
                     {group}
                   </p>
                   <div className="space-y-0.5">
@@ -936,10 +955,11 @@ export default function DocsPage() {
                         <button
                           key={s.id}
                           onClick={() => setActive(s.id)}
-                          className={`w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${
+                          aria-current={isActive ? 'page' : undefined}
+                          className={`flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] transition-colors ${
                             isActive
-                              ? 'bg-primary/10 text-primary border border-primary/20'
-                              : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+                              ? 'bg-white/[0.06] text-foreground'
+                              : 'text-muted-foreground hover:bg-white/[0.03] hover:text-foreground'
                           }`}
                         >
                           <Icon className="h-3.5 w-3.5 flex-shrink-0" />
@@ -955,19 +975,19 @@ export default function DocsPage() {
         </aside>
 
         {/* Content */}
-        <motion.main
+        <motion.div
           key={current.id}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2 }}
           className="min-w-0 max-w-3xl"
         >
-          <p className="text-xs font-mono tracking-[0.2em] uppercase text-primary mb-3">
+          <p className="mb-3 text-sm font-medium text-primary">
             {current.group}
           </p>
           {current.content}
 
-          <div className="mt-16 pt-6 border-t border-border flex items-center justify-between text-sm">
+          <div className="mt-16 flex items-center justify-between border-t border-white/[0.06] pt-6 text-[15px]">
             {(() => {
               const idx = sections.findIndex((s) => s.id === current.id)
               const prev = idx > 0 ? sections[idx - 1] : null
@@ -998,8 +1018,8 @@ export default function DocsPage() {
               )
             })()}
           </div>
-        </motion.main>
+        </motion.div>
       </div>
-    </div>
+    </SitePage>
   )
 }

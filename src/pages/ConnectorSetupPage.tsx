@@ -17,15 +17,28 @@ import { ConnectorIcon } from '@/components/connectors/ConnectorIcon'
 import { supabase } from '@/integrations/supabase/client'
 import { FluxosConnectPanel } from '@/components/connectors/FluxosConnectPanel'
 import { WhatsAppConnectPanel } from '@/components/connectors/WhatsAppConnectPanel'
+import { MobileStudioSetupPage } from '@/components/connectors/MobileStudioSetup'
+import { isMobileStudioSlug } from '@/lib/mobileStudio/connectors'
+import { MetaMaskSetupPage } from '@/components/connectors/MetaMaskSetup'
+import { isMetaMaskSlug } from '@/lib/vertalWallet/config'
 import { cn } from '@/lib/utils'
-import { getGitHubOAuthUrl, GITHUB_TOKEN_STEPS } from '@/lib/github/oauth'
+import { getGitHubOAuthUrl } from '@/lib/github/oauth'
+import { localizeConnector } from '@/lib/connectorsCopyEn'
+import { SITE_FONT, siteRoot, surface } from '@/components/site/siteUi'
+
+// English copy of GITHUB_TOKEN_STEPS (src/lib/github/oauth.ts), same three steps.
+const GITHUB_TOKEN_STEPS_EN = [
+  { title: 'Open your GitHub settings', description: 'Go to Settings → Developer settings → Personal access tokens (classic).' },
+  { title: 'Create a new token', description: 'Select the repo and read:user scopes.' },
+  { title: 'Paste the token here', description: 'The token is encrypted and stored by Vertal.' },
+] as const
 
 type GithubProfile = { login: string; avatar_url: string | null; profile_url: string }
 
 export default function ConnectorSetupPage() {
   const { slug = '' } = useParams<{ slug: string }>()
   const navigate = useNavigate()
-  const connector = getConnectorBySlug(slug)
+  const connector = localizeConnector(getConnectorBySlug(slug))
 
   const [accepted, setAccepted] = useState(false)
   const [apiKey, setApiKey] = useState('')
@@ -45,7 +58,7 @@ export default function ConnectorSetupPage() {
       window.location.href = await getGitHubOAuthUrl()
     } catch {
       setOauthStarting(false)
-      toast.error('Não foi possível abrir o login do GitHub. Tente de novo ou use um token abaixo.')
+      toast.error('We could not open the GitHub sign-in. Try again, or use a token below.')
     }
   }
 
@@ -79,9 +92,14 @@ export default function ConnectorSetupPage() {
     return () => { cancelled = true }
   }, [slug])
 
+  // Android Studio, iOS / Xcode e Google Play Console: página própria (abre mesmo com o flag do catálogo desligado).
+  if (isMobileStudioSlug(slug)) return <MobileStudioSetupPage slug={slug} />
+  // MetaMask: página própria (o servidor só responde para quem está liberado em VERTAL_METAMASK_USER_IDS).
+  if (isMetaMaskSlug(slug)) return <MetaMaskSetupPage />
+
   if (!connector) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+      <div className={cn("min-h-screen flex items-center justify-center", siteRoot)} style={SITE_FONT}>
         <div className="text-center space-y-3">
           <p className="text-lg">Connector not found</p>
           <Button onClick={() => navigate('/connectors')}>Back to connectors</Button>
@@ -96,7 +114,7 @@ export default function ConnectorSetupPage() {
       return
     }
     if (apiKey.trim().length < 8) {
-      toast.error('The API Key appears invalid (minimum 8 characters).')
+      toast.error('This key looks too short (8 characters or more).')
       return
     }
     setSaving(true)
@@ -120,11 +138,11 @@ export default function ConnectorSetupPage() {
         setExisting(cred ?? null)
         toast.success(`GitHub linked: @${gh.login}`)
       } else {
-        toast.success(`${connector.name} connected successfully!`)
+        toast.success(`${connector.name} is connected`)
         navigate(`/connectors/${slug}`)
       }
     } catch (e: any) {
-      toast.error(`Failed to save: ${e.message ?? 'unknown error'}`)
+      toast.error(`We could not save the key: ${e.message ?? 'unknown error'}`)
     } finally {
       setSaving(false)
     }
@@ -140,12 +158,12 @@ export default function ConnectorSetupPage() {
       if (error) throw error
       const r = data as any
       setTestResult({ ok: !!r?.ok, status: r?.status ?? 0, account: r?.account, detail: r?.detail })
-      if (r?.ok) toast.success(`Conexão validada${r.account ? ` · ${r.account}` : ''}`)
+      if (r?.ok) toast.success(`Connection works${r.account ? ` · ${r.account}` : ''}`)
       else toast.error(`Test failed: ${r?.detail ?? `HTTP ${r?.status}`}`)
     } catch (e: any) {
       const msg = e?.message ?? 'unknown error'
       setTestResult({ ok: false, status: 0, detail: msg })
-      toast.error(`Error testing: ${msg}`)
+      toast.error(`We could not test the connection: ${msg}`)
     } finally {
       setTesting(false)
     }
@@ -155,8 +173,8 @@ export default function ConnectorSetupPage() {
   // Apps do Vertal Fluxos: conexão direta por usuário (login OAuth do app ou formulário de chave).
   if (connector.fluxosApp && slug.startsWith('fluxos-')) {
     return (
-      <div className="min-h-screen bg-background text-foreground">
-        <div className="border-b border-border bg-card/50 backdrop-blur-xl sticky top-0 z-10">
+      <div className={cn("min-h-screen", siteRoot)} style={SITE_FONT}>
+        <div className={cn("border-b sticky top-0 z-10", surface.bar)}>
           <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate('/connectors')}>
               <ArrowLeft className="h-5 w-5" />
@@ -166,8 +184,8 @@ export default function ConnectorSetupPage() {
                 <ConnectorIcon connector={connector} className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="text-xl font-bold font-display">{connector.name}</h1>
-                <p className="text-xs text-muted-foreground">via Vertal Fluxos · {APP_NAME}</p>
+                <h1 className="text-xl font-semibold tracking-[-0.01em]">{connector.name}</h1>
+                <p className="text-xs text-muted-foreground">Through Vertal Fluxos · {APP_NAME}</p>
               </div>
             </div>
           </div>
@@ -182,9 +200,9 @@ export default function ConnectorSetupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className={cn("min-h-screen", siteRoot)} style={SITE_FONT}>
       {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur-xl sticky top-0 z-10">
+      <div className={cn("border-b sticky top-0 z-10", surface.bar)}>
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => navigate('/connectors')}>
             <ArrowLeft className="h-5 w-5" />
@@ -197,8 +215,8 @@ export default function ConnectorSetupPage() {
               <ConnectorIcon connector={connector} className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-xl font-bold font-display">Connect {connector.name}</h1>
-              <p className="text-xs text-muted-foreground">Internal setup · {APP_NAME}</p>
+              <h1 className="text-xl font-semibold tracking-[-0.01em]">Connect {connector.name}</h1>
+              <p className="text-xs text-muted-foreground">Setup · {APP_NAME}</p>
             </div>
           </div>
         </div>
@@ -211,15 +229,15 @@ export default function ConnectorSetupPage() {
         className="max-w-3xl mx-auto px-4 py-8 space-y-6"
       >
         {/* Responsibility notice */}
-        <Card className="p-5 border-amber-500/30 bg-amber-500/5">
+        <Card className={cn("p-5", surface.card)}>
           <div className="flex gap-3">
             <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
             <div className="space-y-2 text-sm">
               <p className="font-semibold text-foreground">Third-party service</p>
               <p className="text-muted-foreground">
-                <strong>{connector.name}</strong> is an external service, independent of Vertal. Charges,
-                usage limits, API policies, and account security are solely the responsibility
-                of the provider. Vertal only integrates and automates calls using your key.
+                <strong>{connector.name}</strong> is an outside service, not run by Vertal. Its prices, usage
+                limits, API rules and account security are set by the provider. Vertal only makes calls
+                to it with your key.
               </p>
             </div>
           </div>
@@ -230,17 +248,17 @@ export default function ConnectorSetupPage() {
             <div className="flex gap-3 items-start">
               <Github className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
               <div className="text-sm space-y-1">
-                <p className="font-semibold text-foreground">Entrar com GitHub</p>
+                <p className="font-semibold text-foreground">Sign in with GitHub</p>
                 <p className="text-muted-foreground text-xs">
-                  Você faz login no GitHub e autoriza a Vertal (repositórios, perfil e e-mail). O acesso fica
-                  cifrado no servidor e pode ser revogado a qualquer momento no GitHub ou aqui em Desconectar.
+                  You sign in to GitHub and authorize Vertal (repositories, profile and email). The access is
+                  encrypted on the server, and you can revoke it at any time on GitHub or here with Disconnect.
                 </p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button onClick={startGithubOAuth} disabled={oauthStarting} data-testid="github-oauth-start">
                 {oauthStarting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Github className="h-4 w-4 mr-2" />}
-                Entrar com GitHub
+                Sign in with GitHub
               </Button>
               {!existing && (
                 <Button
@@ -251,7 +269,7 @@ export default function ConnectorSetupPage() {
                   data-testid="github-token-toggle"
                 >
                   <KeyRound className="h-4 w-4 mr-2" />
-                  {showToken ? 'Ocultar token' : 'Avançado: usar token'}
+                  {showToken ? 'Hide token' : 'Advanced: use a token'}
                 </Button>
               )}
             </div>
@@ -265,7 +283,7 @@ export default function ConnectorSetupPage() {
               app="cloudflare"
               name="Cloudflare"
               returnPath="/connectors/cloudflare/setup"
-              intro="Você entra na Cloudflare, escolhe a conta e confirma as permissões (domínios, DNS, Workers e, se quiser, Pages, KV e limpeza de cache). Depois, peça no Vertal Chat para listar domínios, criar registros DNS, ver Workers ou limpar o cache (sempre com a sua confirmação). Dá para revogar quando quiser na Cloudflare ou aqui."
+              intro="You sign in to Cloudflare, choose the account and confirm the permissions (domains, DNS, Workers and, if you want, Pages, KV and cache purge). Then ask Vertal Chat to list domains, create DNS records, see Workers or purge the cache (always after you confirm). You can revoke access at any time on Cloudflare or here."
             />
             {!existing && (
               <Button
@@ -276,7 +294,7 @@ export default function ConnectorSetupPage() {
                 data-testid="cloudflare-token-toggle"
               >
                 <KeyRound className="h-4 w-4 mr-2" />
-                {showToken ? 'Ocultar avançado' : 'Avançado: usar API token'}
+                {showToken ? 'Hide advanced' : 'Advanced: use an API token'}
               </Button>
             )}
           </div>
@@ -314,7 +332,7 @@ export default function ConnectorSetupPage() {
           </Card>
         )}
 
-        {/* Status atual + Teste de conexão */}
+        {/* Current status and connection test */}
         {!loadingExisting && existing && (
           <Card className="p-4 border-emerald-500/30 bg-emerald-500/5 space-y-3">
             <div className="flex items-center gap-3">
@@ -364,11 +382,11 @@ export default function ConnectorSetupPage() {
         {((slug !== 'github' && slug !== 'cloudflare') || showToken || Boolean(existing)) && (<>
         {/* Steps */}
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          <h2 className="text-[15px] font-semibold text-foreground">
             How to get your {connector.apiKeyLabel}
           </h2>
-          {(slug === 'github' ? GITHUB_TOKEN_STEPS : connector.setupSteps).map((step, i) => (
-            <Card key={i} className="p-4 flex gap-4">
+          {(slug === 'github' ? GITHUB_TOKEN_STEPS_EN : connector.setupSteps).map((step, i) => (
+            <Card key={i} className={cn("p-4 flex gap-4", surface.card)}>
               <div className="h-7 w-7 rounded-full bg-primary/15 text-primary flex items-center justify-center text-sm font-bold flex-shrink-0">
                 {i + 1}
               </div>
@@ -385,23 +403,23 @@ export default function ConnectorSetupPage() {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
             >
-              Open official page for {connector.name}
+              Open the official {connector.name} page
               <ExternalLink className="h-3 w-3" />
-              <span className="text-muted-foreground">(site externo)</span>
+              <span className="text-muted-foreground">(external site)</span>
             </a>
           )}
         </div>
 
         {/* Form */}
-        <Card className="p-6 space-y-5">
+        <Card className={cn("p-6 space-y-5", surface.card)}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <KeyRound className="h-5 w-5 text-primary" />
-              <h2 className="font-semibold">Connect à Vertal</h2>
+              <h2 className="font-semibold">Connect to Vertal</h2>
             </div>
             {(connector.slug === 'github' || connector.slug === 'cloudflare') && (
-              <Badge variant="outline" className="text-[10px] uppercase font-bold text-primary border-primary/40">
-                {connector.slug === 'cloudflare' ? 'Avançado · API token' : 'Avançado · token pessoal'}
+              <Badge variant="outline" className="text-[11px] font-medium text-primary border-primary/40">
+                {connector.slug === 'cloudflare' ? 'Advanced · API token' : 'Advanced · personal token'}
               </Badge>
             )}
           </div>
@@ -423,9 +441,8 @@ export default function ConnectorSetupPage() {
           <div className="flex items-start gap-3 rounded-lg border border-border p-3 bg-muted/30">
             <ShieldCheck className="h-5 w-5 text-emerald-500 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-muted-foreground">
-              Your key is encrypted with <strong>AES-256-GCM</strong> antes de ser persistida e nunca é
-              devolvida em claro ao navegador. Apenas as edge functions da Vertal podem descifrar para
-              executar ações em seu nome.
+              Your key is encrypted with <strong>AES-256-GCM</strong> before it is stored, and it is never
+              sent back to the browser. Only Vertal's server functions can decrypt it to act for you.
             </p>
           </div>
 
@@ -437,8 +454,8 @@ export default function ConnectorSetupPage() {
               className="mt-0.5"
             />
             <span className="text-sm text-muted-foreground">
-              I have read and accept that <strong>{connector.name}</strong> is a third-party service and that Vertal
-              only integrates/automates calls using my key.
+              I understand that <strong>{connector.name}</strong> is a third-party service and that Vertal only
+              makes calls to it with my key.
             </span>
           </label>
 

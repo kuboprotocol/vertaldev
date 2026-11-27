@@ -80,6 +80,13 @@ import { deleteMemories, listMemories, type MemoryStoreDeps, rememberRun, retrie
 import { analyzeWithDecide, type DecisionQuestions, makeDecider } from "../_shared/vertalCodeAi/decide.ts";
 import { runSandboxTest } from "../_shared/vertalCodeAi/sandbox.ts";
 import { repairAgentJson } from "../_shared/chatOrchestrator.ts";
+// Vertal · conector MetaMask (aditivo, desligado por padrão: VERTAL_METAMASK_ENABLED + VERTAL_METAMASK_USER_IDS
+// dentro do VERTAL_GPU_CONFIG). Ação "wallet": SIWE, leitura de saldo/rede, Starter Web3 e Trader por prompt (testnet).
+// Nada é assinado no servidor; nunca recebe nem guarda frase-semente ou chave privada.
+import { expandWalletEnv, isWeb3HintEnabled } from "../_shared/vertalWallet/core.ts";
+import { handleWallet } from "../_shared/vertalWallet/handler.ts";
+import { withWeb3Hint } from "../_shared/vertalWallet/web3Template.ts";
+import { recoverPersonalSign, supabaseWalletStore } from "../_shared/vertalWallet/deno.ts";
 // Vertal Prospector (aditivo, desligado por padrão: VERTAL_PROSPECTOR_ENABLED + VERTAL_PROSPECTOR_USER_IDS).
 import { isProspectorEnabled } from "../_shared/vertalProspector/core.ts";
 import { handleProspector } from "../_shared/vertalProspector/handler.ts";
@@ -604,6 +611,24 @@ Deno.serve(async (req) => {
     } catch (e) {
       console.error("[vertal-growth] falhou:", e instanceof Error ? e.message : e);
       return json(500, { error: "growth_failed" });
+    }
+  }
+  // Vertal · conector MetaMask: 404 se VERTAL_METAMASK_ENABLED/lista não liberar este usuário. Não muda nada do resto.
+  if (action === "wallet") {
+    try {
+      const r = await handleWallet(body, {
+        env: expandWalletEnv(env()),
+        userId,
+        origin: req.headers.get("Origin"),
+        hmac: hmacHex,
+        recover: async (message, signature) => recoverPersonalSign(message, signature),
+        store: supabaseWalletStore(admin),
+        fetch,
+      });
+      return json(r.status, r.body);
+    } catch (e) {
+      console.error("[vertal-wallet] falhou:", e instanceof Error ? e.message : e);
+      return json(500, { error: "wallet_failed" });
     }
   }
   const origin = ORIGINS.includes(body.origin) ? body.origin : "vertal_code_ai";
@@ -1219,7 +1244,9 @@ Deno.serve(async (req) => {
           {
             mode,
             effort,
-            prompt,
+            // Starter Web3 (VERTAL_METAMASK_CODE_HINT, padrão desligado): só anexa uma dica ao PEDIDO quando ele fala
+            // de carteira/dApp. Desligado = o mesmo prompt de sempre. O prompt de sistema não muda.
+            prompt: isWeb3HintEnabled(expandWalletEnv(env()), userId) ? withWeb3Hint(prompt) : prompt,
             history,
             images,
             attachments,

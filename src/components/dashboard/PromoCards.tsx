@@ -34,24 +34,24 @@ export function PromoCards() {
     try {
       await navigator.clipboard.writeText(referralLink)
       setCopied(true)
-      toast.success('Link copiado!')
+      toast.success('Link copied')
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      toast.error('Erro ao copiar')
+      toast.error('We could not copy the link')
     }
   }
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
       {/* Referral Card */}
-      <div className="glass glass-border rounded-2xl p-5 flex items-center gap-4 hover:border-primary/30 transition-all duration-300 group">
-        <div className="h-12 w-12 rounded-xl gradient-primary flex items-center justify-center shadow-glow shrink-0">
-          <Gift className="h-6 w-6 text-primary-foreground" />
+      <div className="rounded-2xl border border-white/[0.06] bg-card/50 p-5 flex items-center gap-4 transition-colors duration-200 hover:border-white/[0.14] group">
+        <div className="h-12 w-12 rounded-2xl bg-primary/15 flex items-center justify-center shrink-0">
+          <Gift className="h-6 w-6 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-display font-bold text-foreground text-sm">Convide amigos</h3>
+          <h3 className="font-semibold text-foreground text-[15px]">Invite friends</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            +50 créditos por indicação
+            +50 credits for each friend who joins
             {referralCount > 0 && (
               <span className="inline-flex items-center gap-1 ml-2 text-primary">
                 <Users className="h-3 w-3" /> {referralCount}
@@ -63,26 +63,26 @@ export function PromoCards() {
             size="sm"
             onClick={handleCopy}
             disabled={!referralCode}
-            className="mt-2 h-7 px-3 text-xs rounded-lg bg-primary/10 text-primary hover:bg-primary/20 gap-1.5"
+            className="mt-2 h-7 px-3 text-xs rounded-full bg-primary/10 text-primary hover:bg-primary/20 gap-1.5"
           >
             {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-            {copied ? 'Copiado!' : 'Copiar link'}
+            {copied ? 'Copied' : 'Copy link'}
           </Button>
         </div>
       </div>
 
       {/* Upgrade Card */}
       <div
-        className="glass glass-border rounded-2xl p-5 flex items-center gap-4 hover:border-primary/30 transition-all duration-300 cursor-pointer group"
+        className="rounded-2xl border border-white/[0.06] bg-card/50 p-5 flex items-center gap-4 transition-colors duration-200 hover:border-white/[0.14] cursor-pointer group"
         onClick={() => navigate('/pricing')}
       >
-        <div className="h-12 w-12 rounded-xl bg-accent/50 flex items-center justify-center shrink-0">
+        <div className="h-12 w-12 rounded-2xl bg-accent/50 flex items-center justify-center shrink-0">
           <Zap className="h-6 w-6 text-accent-foreground" />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-display font-bold text-foreground text-sm">Upgrade para Business</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Desbloqueie mais recursos e créditos</p>
-          <span className="inline-block mt-2 text-xs text-primary font-medium">Ver planos →</span>
+          <h3 className="font-semibold text-foreground text-[15px]">Upgrade your plan</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Get more credits every month</p>
+          <span className="inline-block mt-2 text-xs text-primary font-medium">See plans</span>
         </div>
       </div>
     </div>

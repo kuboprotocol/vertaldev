@@ -105,7 +105,7 @@ export default function Web3ConnectionList({
       if (error) throw error
       const r = data as { ok: boolean; blockNumber?: number; latencyMs: number; detail?: string; status: number }
       if (r.ok) toast.success(`OK · block ${r.blockNumber ?? '?'} · ${r.latencyMs}ms`)
-      else toast.error(`Falha: ${r.detail ?? `HTTP ${r.status}`}`)
+      else toast.error(`Test failed: ${r.detail ?? `HTTP ${r.status}`}`)
     } catch (e: any) { toast.error(e.message ?? 'erro') }
     finally { setBusyId(null) }
   }
@@ -132,14 +132,14 @@ export default function Web3ConnectionList({
       // Sucesso: substitui o toast anterior pelo de sucesso e remove o botão
       // "Tentar novamente". NÃO restauramos a linha (sem rollback automático).
       if (attempt > 1) {
-        toast.success('Conexão removida', { id: toastId, description: row.connection_name })
+        toast.success('Connection removed', { id: toastId, description: row.connection_name })
       }
     } catch (e: any) {
       // Falha terminal: NÃO restauramos a linha. Re-expomos "Tentar novamente"
       // no MESMO toast id para substituir o anterior (sem empilhamento).
-      toast.error('Falha ao remover conexão', {
+      toast.error('We could not remove the connection', {
         id: toastId,
-        description: e?.message ?? 'Erro ao chamar serviço de remoção.',
+        description: e?.message ?? 'The remove service returned an error.',
         action: {
           label: 'Tentar novamente',
           onClick: () => { commitDelete(row, attempt + 1) },
@@ -162,11 +162,11 @@ export default function Web3ConnectionList({
 
     pendingUndo.current.set(row.id, { row, timer, undone: false })
 
-    toast.success('Conexão removida', {
-      description: `${row.connection_name} · desfazer disponível por ${UNDO_WINDOW_MS / 1000}s`,
+    toast.success('Connection removed', {
+      description: `${row.connection_name} · you can undo this for ${UNDO_WINDOW_MS / 1000}s`,
       duration: UNDO_WINDOW_MS,
       action: {
-        label: 'Desfazer',
+        label: 'Undo',
         onClick: () => {
           const entry = pendingUndo.current.get(row.id)
           if (!entry) return
@@ -174,7 +174,7 @@ export default function Web3ConnectionList({
           window.clearTimeout(entry.timer)
           pendingUndo.current.delete(row.id)
           restoreRow(row)
-          toast.message('Remoção desfeita', { description: row.connection_name })
+          toast.message('Removal undone', { description: row.connection_name })
         },
       },
     })
@@ -207,7 +207,7 @@ export default function Web3ConnectionList({
 
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Conexões salvas</h3>
+      <h3 className="text-[13px] font-medium text-muted-foreground">Saved connections</h3>
       {rows.map((r) => {
         const net = getNetwork(r.network)
         return (
@@ -224,10 +224,10 @@ export default function Web3ConnectionList({
               </p>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" asChild aria-label="Abrir explorer">
+              <Button variant="outline" size="sm" asChild aria-label="Open explorer">
                 <a href={r.explorer_url} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4" /></a>
               </Button>
-              <Button variant="outline" size="sm" onClick={() => handleTest(r.id)} disabled={busyId === r.id} aria-label="Testar" data-testid="row-test">
+              <Button variant="outline" size="sm" onClick={() => handleTest(r.id)} disabled={busyId === r.id} aria-label="Test" data-testid="row-test">
                 {busyId === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plug className="h-4 w-4" />}
               </Button>
               {onEdit && (
@@ -242,7 +242,7 @@ export default function Web3ConnectionList({
                     api_key_hint: r.api_key_hint,
                   })}
                   disabled={busyId === r.id}
-                  aria-label="Editar"
+                  aria-label="Edit"
                   data-testid="row-edit"
                 >
                   <Pencil className="h-4 w-4" />
@@ -256,7 +256,7 @@ export default function Web3ConnectionList({
                 size="sm"
                 onClick={(e) => openDeleteDialog(r, e.currentTarget)}
                 disabled={busyId === r.id}
-                aria-label={`Remover conexão ${r.connection_name}`}
+                aria-label={`Remove connection ${r.connection_name}`}
                 aria-haspopup="dialog"
                 data-testid="row-delete"
               >
@@ -276,15 +276,15 @@ export default function Web3ConnectionList({
           }}
         >
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover conexão Web3?</AlertDialogTitle>
+            <AlertDialogTitle>Remove this Web3 connection?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação é <strong>irreversível</strong> após a janela de desfazer (
-              {UNDO_WINDOW_MS / 1000}s). A conexão{' '}
+              You <strong>cannot undo</strong> this after the undo window (
+              {UNDO_WINDOW_MS / 1000}s). The connection{' '}
               <strong>{pendingDelete?.connection_name}</strong> (
               {getNetwork(pendingDelete?.network ?? '')?.label ?? pendingDelete?.network})
-              será excluída e seus segredos cifrados serão apagados.
+              will be deleted, and its encrypted secrets will be erased.
               <br />
-              Para confirmar, digite exatamente o token abaixo (nome, provider e prefixo do ID):
+              To confirm, type the token below exactly (name, provider and ID prefix):
               <br />
               <code
                 data-testid="web3-delete-confirm-token"
@@ -308,14 +308,14 @@ export default function Web3ConnectionList({
             className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
           <AlertDialogFooter>
-            <AlertDialogCancel data-testid="web3-delete-cancel">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel data-testid="web3-delete-cancel">Cancel</AlertDialogCancel>
             <AlertDialogAction
               data-testid="web3-delete-confirm"
               disabled={!canConfirm}
               onClick={(e) => { e.preventDefault(); if (pendingDelete) performDelete(pendingDelete) }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Remover definitivamente
+              Remove for good
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

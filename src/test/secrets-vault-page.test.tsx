@@ -85,18 +85,18 @@ describe('SecretsVaultPage', () => {
 
   it('marks secrets shared with the user and hides owner-only actions on them', () => {
     renderPage()
-    expect(screen.getByText('Compartilhado')).toBeTruthy()
+    expect(screen.getByText('Shared')).toBeTruthy()
     // Só o segredo próprio tem Excluir/Editar/Acessos: exatamente um de cada.
-    expect(screen.getAllByLabelText('Excluir segredo')).toHaveLength(1)
-    expect(screen.getAllByLabelText('Editar segredo')).toHaveLength(1)
-    expect(screen.getAllByLabelText('Gerenciar acessos')).toHaveLength(1)
+    expect(screen.getAllByLabelText('Delete secret')).toHaveLength(1)
+    expect(screen.getAllByLabelText('Edit secret')).toHaveLength(1)
+    expect(screen.getAllByLabelText('Manage access')).toHaveLength(1)
     // Convidado sem can_reveal não tem botão de revelar: o do segredo próprio é o único.
-    expect(screen.getAllByLabelText('Revelar valor')).toHaveLength(1)
+    expect(screen.getAllByLabelText('Reveal value')).toHaveLength(1)
   })
 
   it('reveals a value only after an explicit click', async () => {
     renderPage()
-    fireEvent.click(screen.getByLabelText('Revelar valor'))
+    fireEvent.click(screen.getByLabelText('Reveal value'))
     await waitFor(() => expect(screen.getByText(REAL_VALUE)).toBeTruthy())
     expect(reveal).toHaveBeenCalledTimes(1)
     expect(reveal).toHaveBeenCalledWith('own-1')
@@ -104,9 +104,9 @@ describe('SecretsVaultPage', () => {
 
   it('hides a revealed value again on demand', async () => {
     renderPage()
-    fireEvent.click(screen.getByLabelText('Revelar valor'))
+    fireEvent.click(screen.getByLabelText('Reveal value'))
     await waitFor(() => expect(screen.getByText(REAL_VALUE)).toBeTruthy())
-    fireEvent.click(screen.getByLabelText('Ocultar valor'))
+    fireEvent.click(screen.getByLabelText('Hide value'))
     await waitFor(() => expect(screen.queryByText(REAL_VALUE)).toBeNull())
   })
 

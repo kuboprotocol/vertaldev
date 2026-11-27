@@ -103,7 +103,7 @@ export function CrmAiDialog({ kind, entityType, entityId, query, open, onOpenCha
             {typeof result.action === 'string' && (
               <div><p className="font-medium">{result.action}</p>{typeof result.why === 'string' && <p className="text-muted-foreground">{result.why}</p>}</div>
             )}
-            {Array.isArray(result.items) && <p>{(result.items as unknown[]).length} {lang === 'en' ? 'results' : 'resultados'}</p>}
+            {Array.isArray(result.items) && <p>{t.ai.results((result.items as unknown[]).length)}</p>}
           </div>
         )}
         {msg && <p className="text-xs text-muted-foreground" role="status">{msg}</p>}

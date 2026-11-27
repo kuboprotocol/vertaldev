@@ -2,14 +2,17 @@
 // Substitui o <input type="date|datetime-local"> nativo, que segue o idioma do navegador (AM/PM, textos em inglês).
 import { useEffect, useState } from 'react';
 import { CalendarDays } from 'lucide-react';
-import { enUS, es, ptBR } from 'date-fns/locale';
+import { ar, de, enUS, es, fr, hi, id, it, ja, ko, nl, pl, pt, ptBR, ru, th, tr, uk, vi, zhCN, zhTW } from 'date-fns/locale';
+import type { Locale } from 'date-fns';
 import { Input } from '@/components/ui/input';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DATE_INPUT_TEXT, formatDateInput, maskDateInput, parseDateInput, withPickedDay } from '@/lib/vertalCrm/dateInput';
 import type { CrmLang } from '@/lib/vertalCrm/i18n';
 
-const DF_LOCALE = { pt: ptBR, es, en: enUS } as const;
+const DF_LOCALE: Record<CrmLang, Locale> = {
+  pt: ptBR, 'pt-PT': pt, es, en: enUS, fr, de, it, nl, pl, tr, ru, uk, ar, hi, id, vi, th, ja, ko, 'zh-CN': zhCN, 'zh-TW': zhTW,
+};
 
 export function LocaleDateInput({
   value, onChange, lang, withTime = false, disabled, ariaLabel, className,
@@ -49,7 +52,7 @@ export function LocaleDateInput({
         disabled={disabled}
         className={invalid ? 'border-destructive' : undefined}
         onChange={(e) => {
-          const next = maskDateInput(e.target.value, withTime);
+          const next = maskDateInput(e.target.value, withTime, lang);
           setText(next);
           const v = parseDateInput(next, lang, withTime);
           if (v !== null) onChange(v);

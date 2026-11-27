@@ -6,6 +6,7 @@
 // https://developers.cloudflare.com/ai-crawl-control/features/pay-per-crawl/use-pay-per-crawl-as-site-owner/advanced-configuration/
 
 import { splitLocalePath } from '../src/config/locales';
+import { INTEGRATION_PATH_PREFIXES } from '../src/config/integrations/locales';
 
 /** Preço mínimo aceito pela Cloudflare, em USD por página. */
 export const MIN_CRAWL_PRICE_USD = 0.001;
@@ -40,6 +41,10 @@ const RULES: PriceRule[] = [
  * traduzidas (`/es/alternativas/...`) seguem a regra da página em português.
  */
 export function crawlPriceFor(pathname: string): number | null {
+  // Páginas de integração em todos os idiomas (/integracoes, /en/integrations, /pa/integrations…): grátis.
+  if (INTEGRATION_PATH_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return 0;
+  // Sitemaps (principal, índice e por idioma): grátis.
+  if (/^\/sitemap[\w.-]*\.xml$/.test(pathname)) return 0;
   const [, path] = splitLocalePath(pathname);
   const rule = RULES.find((r) => r.match(path));
   if (!rule) return null;

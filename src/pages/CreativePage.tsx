@@ -30,8 +30,7 @@ const VertalNotebook = React.lazy(() => import("@/components/notebook/VertalNote
 // O Clock (relógio, alarmes, cronômetro, timer) carrega quando a aba é aberta.
 const VertalClock = React.lazy(() => import("@/components/clock/VertalClock"));
 import { CreativeDesign } from "@/components/CreativeDesign";
-import { SponsoredSlot } from "@/components/creative/SponsoredSlot";
-import { CreativeAdFrame } from "@/components/creative/AdBanner";
+import { AppTopBar, SITE_FONT, siteRoot, surface } from "@/components/site";
 
 type ToolKey = "dashboard" | "chat" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "video_studio" | "unified_history" | "sheet" | "design" | "office" | "notebook" | "clock";
 
@@ -47,21 +46,21 @@ const MOVED_TO_DESIGN: Record<string, DesignOpen> = {
 type DesignOpen = NonNullable<React.ComponentProps<typeof CreativeDesign>["open"]>;
 
 /** Nomes no histórico para execuções antigas dessas ferramentas. */
-const LEGACY_TOOL_TITLES: Record<string, string> = { nano_banana: "Nano Banana", image_editor: "Editor de Imagens" };
+const LEGACY_TOOL_TITLES: Record<string, string> = { nano_banana: "Nano Banana", image_editor: "Image Editor" };
 
 const TOOLS: { key: ToolKey; title: string; desc: string; icon: any; cost: string }[] = [
-  { key: "clock", title: "Vertal Clock", desc: "Relógio mundial, alarmes, cronômetro, timer. Com localizador de cidades em tempo real", icon: Clock, cost: "Grátis" },
-  { key: "notebook", title: "Vertal Notebook", desc: "Converse com PDFs, links e vídeos, com citações. Podcast, quiz e mapa mental com IA", icon: NotebookPen, cost: "Grátis (IA: a partir de 1 crédito)" },
-  { key: "office", title: "Vertal Office", desc: "Documentos e planilhas grátis. Só a IA é paga", icon: FileText, cost: "Grátis (IA: 1 crédito)" },
-  { key: "video_studio", title: "Vertal Video Studio", desc: "1 a 10 fotos viram clipe musical, meme ou anúncio com IA realista", icon: Clapperboard, cost: "a partir de 2 créditos" },
-  { key: "chat", title: "Vertal Chat", desc: "Conversas, resumos, traduções, geração de textos", icon: MessageSquare, cost: "1 crédito/msg" },
-  { key: "downloader", title: "Downloader Universal", desc: "YouTube, Instagram, TikTok, Facebook, Kwai", icon: Download, cost: "2 créditos" },
-  { key: "clips", title: "Vertal Clips", desc: "IA acha os momentos virais, reenquadra em 9:16 e legenda palavra por palavra", icon: Scissors, cost: "1 crédito a cada 5 min" },
-  { key: "avatar", title: "Vertal Avatar AI", desc: "Avatares falantes com narração IA", icon: User2, cost: "4 créditos/s de vídeo" },
-  { key: "shorts", title: "Vertal Shorts", desc: "Vídeos curtos verticais a partir de texto", icon: Video, cost: "3 créditos" },
-  { key: "music", title: "Vertal Music AI", desc: "Música original via MusKAI", icon: Music, cost: "1 crédito" },
-  { key: "ebook", title: "Vertal Ebook AI", desc: "eBooks completos com capa e capítulos", icon: BookOpen, cost: `a partir de ${ebookCost(EBOOK_MIN_CHAPTERS).credits} créditos` },
-  { key: "emo", title: "Vertal EMO AI", desc: "Animação realista de fotos a partir de vídeo", icon: Sparkles, cost: "5 créditos" },
+  { key: "clock", title: "Vertal Clock", desc: "World clock, alarms, stopwatch and timer, with a city finder", icon: Clock, cost: "Free" },
+  { key: "notebook", title: "Vertal Notebook", desc: "Chat with PDFs, links and videos, with citations. AI podcast, quiz and mind map", icon: NotebookPen, cost: "Free (AI: from 1 credit)" },
+  { key: "office", title: "Vertal Office", desc: "Free documents and spreadsheets. Only the AI is paid", icon: FileText, cost: "Free (AI: 1 credit)" },
+  { key: "video_studio", title: "Vertal Video Studio", desc: "Turn 1 to 10 photos into a music clip, meme or ad with AI", icon: Clapperboard, cost: "from 2 credits" },
+  { key: "chat", title: "Vertal Chat", desc: "Chat, summaries, translations and text writing", icon: MessageSquare, cost: "1 credit per message" },
+  { key: "downloader", title: "Universal Downloader", desc: "YouTube, Instagram, TikTok, Facebook, Kwai", icon: Download, cost: "2 credits" },
+  { key: "clips", title: "Vertal Clips", desc: "AI finds the best moments, reframes to 9:16 and adds word-by-word captions", icon: Scissors, cost: "1 credit per 5 min" },
+  { key: "avatar", title: "Vertal Avatar AI", desc: "Talking avatars with AI voice-over", icon: User2, cost: "4 credits per second of video" },
+  { key: "shorts", title: "Vertal Shorts", desc: "Short vertical videos from text", icon: Video, cost: "3 credits" },
+  { key: "music", title: "Vertal Music AI", desc: "Original music with MusKAI", icon: Music, cost: "1 credit" },
+  { key: "ebook", title: "Vertal Ebook AI", desc: "Full eBooks with a cover and chapters", icon: BookOpen, cost: `from ${ebookCost(EBOOK_MIN_CHAPTERS).credits} credits` },
+  { key: "emo", title: "Vertal EMO AI", desc: "Animate a photo from a video", icon: Sparkles, cost: "5 credits" },
 ];
 
 function fnUrl(name: string) {
@@ -121,16 +120,16 @@ function parseRetryAfter(errStr: unknown): { tool?: string; seconds: number } | 
   return { tool: m[1], seconds: Number(m[2]) };
 }
 
-function handleFnError(d: any, fallback = "Erro") {
+function handleFnError(d: any, fallback = "Error") {
   const msg = d?.error || fallback;
   const rl = parseRetryAfter(msg);
   if (rl) {
     setCooldown(rl.tool ?? "global", rl.seconds);
-    toast.error(`Limite atingido — aguarde ${rl.seconds}s`, {
-      description: rl.tool ? `Ferramenta: ${rl.tool}` : undefined,
+    toast.error(`Limit reached. Wait ${rl.seconds}s`, {
+      description: rl.tool ? `Tool: ${rl.tool}` : undefined,
     });
   } else if (typeof msg === "string" && msg.includes("insufficient_credits")) {
-    toast.error("Créditos insuficientes para esta ação.");
+    toast.error("Not enough credits for this action.");
   } else {
     toast.error(typeof msg === "string" ? msg : fallback);
   }
@@ -279,8 +278,8 @@ export default function CreativePage() {
         const cId = crypto.randomUUID().slice(0, 8);
         logAuditAction("Selection", "load_history_failed_simulated", { before }, cId);
         setErrorState({
-          step: "Seleção (Simulado)",
-          message: "Simulação de falha no carregamento do histórico.",
+          step: "Selection (simulated)",
+          message: "Simulated failure while loading the history.",
           correlationId: cId,
           originalAction: () => loadHistory(before)
         });
@@ -327,8 +326,8 @@ export default function CreativePage() {
     } catch (e: any) {
       console.error("[CreativePanel:Selection] history_load_failed", { error: e.message, userId: user.id });
       setErrorState({
-        step: "Seleção (Histórico)",
-        message: "Não foi possível carregar seu histórico de criações.",
+        step: "Selection (history)",
+        message: "Could not load your creation history.",
         originalAction: () => loadHistory(before)
       });
     } finally {
@@ -349,7 +348,7 @@ export default function CreativePage() {
   async function renamePreset(id: string, newName: string) {
     const { error } = await supabase.from("creative_filter_presets").update({ name: newName }).eq("id", id);
     if (!error) {
-      toast.success("Preset renomeado");
+      toast.success("Preset renamed");
       loadPresets();
     }
   }
@@ -435,7 +434,7 @@ export default function CreativePage() {
   async function rerun(asset: any, isBatch = false) {
     const cfg = RERUN_MAP[asset.tool];
     if (!cfg) { 
-      if (!isBatch) toast.error("Reexecução indisponível para esta ferramenta."); 
+      if (!isBatch) toast.error("Run again is not available for this tool."); 
       return; 
     }
     const attempt = (asset.retry_count || 0) + 1;
@@ -445,7 +444,7 @@ export default function CreativePage() {
       if (simulationMode === "execution") {
         const cId = crypto.randomUUID().slice(0, 8);
         await logAuditAction("Execution", "rerun_failed_simulated", { assetId: asset.id }, cId);
-        throw new Error("Falha simulada na execução");
+        throw new Error("Simulated execution failure");
       }
       const r = await authedFetch(cfg.fn, cfg.build(asset), idemKey);
       const d = await r.json().catch(() => ({}));
@@ -460,11 +459,11 @@ export default function CreativePage() {
         });
         if (!isBatch) {
           setErrorState({
-            step: "Execução (Retry)",
-            message: d.error || "Erro ao tentar reexecutar a ferramenta.",
+            step: "Execution (retry)",
+            message: d.error || "Could not run the tool again.",
             correlationId: cId,
             traceId: tId,
-            stack: d.stack || "Nenhum stack trace disponível",
+            stack: d.stack || "No stack trace available",
             originalAction: () => rerun(asset, isBatch)
           });
           handleFnError(d); 
@@ -494,7 +493,7 @@ export default function CreativePage() {
       return true;
     } catch (e: any) {
       console.error("[CreativePanel:Execution] tool_retry_exception", { assetId: asset.id, error: e.message, stack: e.stack });
-      if (!isBatch) toast.error(e?.message ?? "Falha ao reexecutar");
+      if (!isBatch) toast.error(e?.message ?? "Could not run it again");
       return false;
     } finally {
       if (!isBatch) {
@@ -540,11 +539,11 @@ export default function CreativePage() {
         reason: "Cancelado manualmente"
       });
 
-      toast.success("Execução cancelada");
+      toast.success("Run canceled");
       loadHistory(cursorStack.length === 0 ? null : cursorStack[cursorStack.length - 1]);
     } catch (e: any) {
       console.error("[CreativePanel:Execution] cancel_failed", { assetId, error: e.message, userId: user.id });
-      toast.error("Falha ao cancelar: " + e.message);
+      toast.error("Could not cancel: " + e.message);
     } finally {
       setIsCancelling(null);
     }
@@ -569,7 +568,7 @@ export default function CreativePage() {
       }
     }
     setIsBatchRetrying(false);
-    toast.success(`${success} itens reprocessados em lote.`);
+    toast.success(`${success} items run again in a batch.`);
     refetch();
     loadHistory(cursorStack.length === 0 ? null : cursorStack[cursorStack.length - 1]);
   }
@@ -610,9 +609,9 @@ export default function CreativePage() {
       const a = document.createElement("a");
       a.href = url; a.download = filename; a.click();
       URL.revokeObjectURL(url);
-      toast.success(`Relatório de ${step} exportado`);
+      toast.success(`${step} report exported`);
     } catch (e) {
-      toast.error("Erro na exportação");
+      toast.error("Export failed");
     } finally {
       setIsExporting(false);
     }
@@ -673,9 +672,9 @@ export default function CreativePage() {
         a.href = url; a.download = filename; a.click();
         URL.revokeObjectURL(url);
       }
-      toast.success(`Relatório completo (${format.toUpperCase()}) exportado`);
+      toast.success(`Full report (${format.toUpperCase()}) exported`);
     } catch (e: any) {
-      toast.error("Falha ao exportar relatório");
+      toast.error("Could not export the report");
     } finally {
       setIsExporting(false);
     }
@@ -726,9 +725,9 @@ export default function CreativePage() {
         metadata: { format, filename, correlationId, columns: exportColumns }
       });
       
-      toast.success("Relatório exportado com sucesso!");
+      toast.success("Report exported");
     } catch (e: any) {
-      toast.error("Falha ao exportar relatório: " + e.message);
+      toast.error("Could not export the report: " + e.message);
       // System logging for errors
       console.error("[CreativePanel Export Error]", { error: e, userId: user.id });
     } finally {
@@ -739,7 +738,7 @@ export default function CreativePage() {
 
   async function exportAuditTrail(format: "csv" | "json") {
     if (!user || !exportAuditLogs.length) {
-      toast.info("Nenhum dado de auditoria para exportar.");
+      toast.info("No audit data to export.");
       return;
     }
     const timestamp = new Date().toLocaleString('sv-SE', { timeZone: selectedTimezone }).replace(/[: ]/g, '-');
@@ -770,7 +769,7 @@ export default function CreativePage() {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success("Trilha de auditoria exportada");
+    toast.success("Audit trail exported");
   }
 
   async function scheduleAuditExport() {
@@ -784,10 +783,10 @@ export default function CreativePage() {
         is_active: true
       });
       if (error) throw error;
-      toast.success("Exportação de auditoria agendada!");
+      toast.success("Audit export scheduled");
       setShowAuditSchedule(false);
     } catch (e: any) {
-      toast.error("Falha ao agendar: " + e.message);
+      toast.error("Could not schedule: " + e.message);
     }
   }
 
@@ -796,7 +795,7 @@ export default function CreativePage() {
     const { error } = await supabase.from("creative_export_history").update({ status: "failed", error_message: "Cancelado pelo usuário", cancelled_at: new Date().toISOString(), cancelled_by: user.id }).eq("id", id);
     if (!error) {
       await supabase.from("creative_export_audit_log").insert({ export_id: id, user_id: user.id, action: 'cancel', details: { reason: "Cancelado via UI" } });
-      toast.info("Exportação cancelada");
+      toast.info("Export canceled");
       loadExportHistory();
     }
   }
@@ -818,7 +817,7 @@ export default function CreativePage() {
         action: 'retry',
         details: { attempt: (exportToRetry?.retry_count || 0) + 1 }
       });
-      toast.success("Exportação reenfileirada");
+      toast.success("Export queued again");
       loadExportHistory();
     }
   }
@@ -857,7 +856,7 @@ export default function CreativePage() {
       
       setExportAuditLogs(sorted);
     } catch (e: any) {
-      toast.error("Erro ao carregar logs: " + e.message);
+      toast.error("Could not load the logs: " + e.message);
     } finally {
       setIsLoadingAudit(false);
     }
@@ -877,7 +876,7 @@ export default function CreativePage() {
       user_id: user.id,
       ...newPrefs
     });
-    if (error) toast.error("Falha ao salvar preferências");
+    if (error) toast.error("Could not save preferences");
   }
 
 
@@ -897,9 +896,9 @@ export default function CreativePage() {
       setPresets([savedPreset, ...presets]);
       setNewPresetName("");
       setShowPresetDialog(false);
-      toast.success(`Preset "${newPresetName}" salvo!`);
+      toast.success(`Preset "${newPresetName}" saved`);
     } catch (e: any) {
-      toast.error("Erro ao salvar preset: " + e.message);
+      toast.error("Could not save the preset: " + e.message);
     }
   }
 
@@ -908,14 +907,14 @@ export default function CreativePage() {
     setFilter(f.filter || "all");
     setSearchQuery(f.searchQuery || "");
     setSortOrder(f.sortOrder || "desc");
-    toast.success(`Preset "${p.name}" aplicado`);
+    toast.success(`Preset "${p.name}" applied`);
   }
 
   async function deletePreset(id: string) {
     const { error } = await supabase.from("creative_filter_presets").delete().eq("id", id);
     if (!error) {
       setPresets(presets.filter(p => p.id !== id));
-      toast.info("Preset removido");
+      toast.info("Preset removed");
     }
   }
 
@@ -924,53 +923,52 @@ export default function CreativePage() {
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <Card className="max-w-md w-full p-8 text-center space-y-4 border-border/40">
           <AlertCircle className="h-12 w-12 text-destructive mx-auto" />
-          <h2 className="text-xl font-bold">Acesso Restrito</h2>
-          <p className="text-muted-foreground text-sm">Você precisa estar autenticado para acessar o painel de Economia Criativa.</p>
-          <Button onClick={() => navigate("/auth")} className="w-full">Ir para Login</Button>
+          <h2 className="text-xl font-semibold">Sign in required</h2>
+          <p className="text-muted-foreground text-sm">Sign in to open the Creative Economy panel.</p>
+          <Button onClick={() => navigate("/auth")} className="w-full rounded-full">Sign in</Button>
         </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border/40 bg-card p-4">
-        <div className="container max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-          <h1 className="font-bold text-lg flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            Economia Criativa Vertal
-          </h1>
-          <div className="nav-carousel flex-1 max-md:basis-full">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/creative/investigation")}>
-              <AlertTriangle className="h-4 w-4 mr-1" /> Investigação
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/creative/presets")}>Presets</Button>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/creative/notifications")}>Notificações</Button>
-            <span className="font-mono text-sm font-bold ml-2">{editsRemaining} créditos</span>
-            <div className="flex items-center gap-1 ml-4 border-l border-border/40 pl-4">
-              <label className="text-[10px] font-bold uppercase text-muted-foreground mr-1">Simular Falha:</label>
-              <select 
-                value={simulationMode} 
-                onChange={(e) => setSimulationMode(e.target.value as any)}
-                className="bg-muted text-[10px] rounded px-1 py-0.5 border-none outline-none focus:ring-0"
-              >
-                <option value="none">OFF</option>
-                <option value="selection">Seleção</option>
-                <option value="config">Config</option>
-                <option value="execution">Execução</option>
-              </select>
-            </div>
+    <div className={`min-h-screen ${siteRoot}`} style={SITE_FONT}>
+      <AppTopBar
+        back={{ to: "/dashboard", label: "Dashboard" }}
+        title={<span className="inline-flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" aria-hidden />Vertal Creative Economy</span>}
+        actions={<span className="hidden font-mono text-[13px] text-muted-foreground sm:inline">{editsRemaining} credits</span>}
+      />
+      <div className={`border-b ${surface.hairline}`}>
+        <div className="nav-carousel mx-auto flex max-w-7xl items-center gap-1 px-4 py-2 sm:px-6">
+          <Button variant="ghost" size="sm" className="rounded-full" onClick={() => navigate("/creative/investigation")}>
+            <AlertTriangle className="h-4 w-4 mr-1" /> Investigation
+          </Button>
+          <Button variant="ghost" size="sm" className="rounded-full" onClick={() => navigate("/creative/presets")}>Presets</Button>
+          <Button variant="ghost" size="sm" className="rounded-full" onClick={() => navigate("/creative/notifications")}>Notifications</Button>
+          <span className="ml-2 font-mono text-[13px] text-muted-foreground sm:hidden">{editsRemaining} credits</span>
+          <div className="ml-auto flex items-center gap-1 border-l border-white/[0.06] pl-4">
+            <label htmlFor="creative-simulate" className="mr-1 text-[11px] font-medium text-muted-foreground">Simulate failure</label>
+            <select
+              id="creative-simulate"
+              value={simulationMode}
+              onChange={(e) => setSimulationMode(e.target.value as any)}
+              className="rounded-md border-none bg-muted px-1 py-0.5 text-[11px] outline-none focus:ring-0"
+            >
+              <option value="none">Off</option>
+              <option value="selection">Selection</option>
+              <option value="config">Config</option>
+              <option value="execution">Execution</option>
+            </select>
           </div>
-
         </div>
-      </header>
-      <main className="container max-w-7xl mx-auto px-4 py-6">
-        <CreativeAdFrame>
+      </div>
+      <main id="main" className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+        <h1 className="sr-only">Vertal Creative Economy</h1>
         {errorState && (
           <Alert variant="destructive" className="mb-6 bg-destructive/10 border-destructive/30 animate-in fade-in slide-in-from-top-4 duration-300">
             <AlertCircle className="h-5 w-5" />
             <div className="flex-1 ml-3">
-              <AlertTitle className="font-bold">Erro na etapa: {errorState.step}</AlertTitle>
+              <AlertTitle className="font-semibold">Error in step: {errorState.step}</AlertTitle>
               <AlertDescription className="mt-1">
                 <p>{errorState.message}</p>
                 {(errorState.correlationId || errorState.traceId) && (
@@ -991,7 +989,7 @@ export default function CreativePage() {
                         action?.();
                       }}
                     >
-                      <RotateCw className="h-3.5 w-3.5 mr-2" /> Tentar Novamente
+                      <RotateCw className="h-3.5 w-3.5 mr-2" /> Try again
                     </Button>
                   )}
                   <Button 
@@ -1000,7 +998,7 @@ export default function CreativePage() {
                     className="hover:bg-destructive/5"
                     onClick={() => setShowErrorModal(true)}
                   >
-                    Ver Detalhes
+                    View details
                   </Button>
                   <Button 
                     size="sm" 
@@ -1008,7 +1006,7 @@ export default function CreativePage() {
                     className="hover:bg-destructive/5"
                     onClick={() => setErrorState(null)}
                   >
-                    Fechar
+                    Close
                   </Button>
                 </div>
               </AlertDescription>
@@ -1020,34 +1018,34 @@ export default function CreativePage() {
           <DialogContent className="max-w-2xl bg-card border-border/40">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-destructive">
-                <AlertCircle className="h-5 w-5" /> Detalhes do Erro
+                <AlertCircle className="h-5 w-5" /> Error details
               </DialogTitle>
               <DialogDescription>
-                Informações técnicas para suporte e depuração.
+                Technical details for support and debugging.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="space-y-1">
-                  <p className="text-muted-foreground uppercase text-[10px] font-bold">Etapa</p>
+                  <p className="text-muted-foreground text-[11px] font-medium">Step</p>
                   <p className="font-semibold">{errorState?.step}</p>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-muted-foreground uppercase text-[10px] font-bold">Mensagem</p>
+                  <p className="text-muted-foreground text-[11px] font-medium">Message</p>
                   <p className="text-foreground/80">{errorState?.message}</p>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-muted-foreground uppercase text-[10px] font-bold">Correlation ID</p>
+                  <p className="text-muted-foreground text-[11px] font-medium">Correlation ID</p>
                   <p className="font-mono text-xs">{errorState?.correlationId || "N/A"}</p>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-muted-foreground uppercase text-[10px] font-bold">Trace ID</p>
+                  <p className="text-muted-foreground text-[11px] font-medium">Trace ID</p>
                   <p className="font-mono text-xs">{errorState?.traceId || "N/A"}</p>
                 </div>
               </div>
               {errorState?.stack && (
                 <div className="space-y-1 mt-4">
-                  <p className="text-muted-foreground uppercase text-[10px] font-bold">Stack Trace</p>
+                  <p className="text-muted-foreground text-[11px] font-medium">Stack trace</p>
                   <pre className="p-3 bg-muted/50 rounded-lg text-[10px] font-mono overflow-auto max-h-[200px] border border-border/20">
                     {errorState.stack}
                   </pre>
@@ -1057,13 +1055,10 @@ export default function CreativePage() {
           </DialogContent>
         </Dialog>
 
-        {/* Anúncio patrocinado no lugar do fluxo de habilidades (TERRA ADS, só Free e Starter) */}
-        <SponsoredSlot className="max-w-2xl mx-auto" />
-
         <Tabs value={active} onValueChange={(v) => { setActive(v as ToolKey); navigate(v === "dashboard" ? "/creative" : `/creative/${v}`); }}>
-          <TabsList className="mb-6 grid grid-cols-2 max-w-md mx-auto bg-muted/20">
-            <TabsTrigger value="dashboard">Painel de Ferramentas</TabsTrigger>
-            <TabsTrigger value="unified_history">Histórico Unificado</TabsTrigger>
+          <TabsList className="mb-6 grid grid-cols-2 max-w-md mx-auto rounded-full">
+            <TabsTrigger value="dashboard" className="rounded-full">Tools</TabsTrigger>
+            <TabsTrigger value="unified_history" className="rounded-full">History</TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard">
@@ -1071,14 +1066,14 @@ export default function CreativePage() {
                <button
                  type="button"
                  onClick={() => navigate("/creative/chat")}
-                 className="group flex w-full items-center gap-4 rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/15 via-card to-card p-4 text-left transition hover:border-primary/60 sm:p-5"
+                 className="group flex w-full items-center gap-4 rounded-2xl border border-white/[0.06] bg-card/50 p-4 text-left transition-colors hover:border-white/[0.14] hover:bg-card/70 sm:p-5"
                >
                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
                    <MessageSquare className="h-6 w-6" aria-hidden />
                  </span>
                  <span className="min-w-0 flex-1">
-                   <span className="block text-base font-bold">Vertal Chat</span>
-                   <span className="block text-sm text-muted-foreground">Peça em uma frase e o chat cria no Office, no Design Premium, no Canvas e no Dev Code. Todos os painéis abrem dentro dele.</span>
+                   <span className="block text-[15px] font-semibold" translate="no">Vertal Chat</span>
+                   <span className="block text-sm text-muted-foreground">Ask in one sentence and the chat creates it in Office, Design Premium, Canvas or Dev Code. Every panel opens inside the chat.</span>
                  </span>
                  <ArrowRight className="h-5 w-5 shrink-0 text-primary transition group-hover:translate-x-0.5" aria-hidden />
                </button>
@@ -1086,37 +1081,37 @@ export default function CreativePage() {
                <ApiStatusPanel />
                <ManusLauncher setActive={(k) => { setActive(k); navigate(k === "dashboard" ? "/creative" : `/creative/${MOVED_TO_DESIGN[k] ? "design" : k}`); }} />
                
-               <div className="pt-6 border-t border-border/40">
+               <div className="pt-6 border-t border-white/[0.06]">
                  <div className="flex flex-wrap gap-4 items-end mb-4">
                    <div className="space-y-1">
-                     <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</label>
+                     <label className="text-[13px] font-medium text-muted-foreground">Status</label>
                      <select 
                       value={filter} 
                       onChange={(e) => setFilter(e.target.value as any)}
                       className="flex h-10 w-[180px] rounded-md border border-input bg-background/50 px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                      >
-                       <option value="all">Todos os Status</option>
-                       <option value="queued">Na Fila</option>
-                       <option value="processing">Processando</option>
-                       <option value="completed">Concluído</option>
-                       <option value="failed">Falhou</option>
+                       <option value="all">All statuses</option>
+                       <option value="queued">Queued</option>
+                       <option value="processing">Processing</option>
+                       <option value="completed">Completed</option>
+                       <option value="failed">Failed</option>
                      </select>
                    </div>
                    <div className="flex-1 min-w-[200px] space-y-1">
-                     <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Busca</label>
+                     <label className="text-[13px] font-medium text-muted-foreground">Search</label>
                      <div className="relative">
                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                        <Input 
                         value={searchQuery} 
                         onChange={(e) => setSearchQuery(e.target.value)} 
-                        placeholder="Prompt, ferramenta ou erro..." 
+                        placeholder="Prompt, tool or error" 
                         className="pl-9 bg-background/50"
                        />
                      </div>
                    </div>
                     <div className="flex flex-wrap gap-2">
                       <div className="space-y-1">
-                        <label className="text-[10px] font-medium text-muted-foreground uppercase">Fuso Horário</label>
+                        <label className="text-[13px] font-medium text-muted-foreground">Time zone</label>
                         <select 
                           value={selectedTimezone} 
                           onChange={(e) => setSelectedTimezone(e.target.value)}
@@ -1124,7 +1119,7 @@ export default function CreativePage() {
                         >
                           <option value="UTC">UTC</option>
                           <option value="America/Sao_Paulo">Brasília (BRT)</option>
-                          <option value="Europe/London">Londres (GMT)</option>
+                          <option value="Europe/London">London (GMT)</option>
                           <option value="America/New_York">NY (EST)</option>
                         </select>
                       </div>
@@ -1134,7 +1129,7 @@ export default function CreativePage() {
                           onClick={() => { setFilter("all"); setSearchQuery(""); setSortOrder("desc"); setSelectedTimezone("UTC"); }}
                           disabled={isLoadingHistory}
                         >
-                          Resetar
+                          Reset
                         </Button>
                         <Button 
                           variant="secondary" 
@@ -1153,19 +1148,19 @@ export default function CreativePage() {
                              window.dispatchEvent(new CustomEvent('open-audit-export', { detail: { filterFallback: false } }));
                           }}
                           disabled={isExporting || history.length === 0}
-                          title="Exportar tudo em CSV"
+                          title="Export everything as CSV"
                         >
                           {isExporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileDown className="h-4 w-4 mr-2" />}
-                          Exportar Auditoria (CSV)
+                          Export audit (CSV)
                         </Button>
                         <Button 
                           variant="outline" 
                           size="sm"
                           onClick={openAuditTrail}
-                          title="Ver trilha de auditoria completa"
+                          title="View the full audit trail"
                         >
                           <History className="h-4 w-4 mr-2" />
-                          Trilha
+                          Audit trail
                         </Button>
                         <div className="flex gap-1">
                           {["Selection", "Configuration", "Execution"].map((step) => (
@@ -1186,22 +1181,22 @@ export default function CreativePage() {
                      {filter === "failed" && history.some(h => h.status === "failed") && (
                        <Button variant="secondary" onClick={batchRetryFailed} disabled={isBatchRetrying}>
                          {isBatchRetrying ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RotateCw className="h-4 w-4 mr-2" />}
-                         Reprocessar Falhas
+                         Run failed items again
                        </Button>
                      )}
                    </div>
                  </div>
 
-                 <Card className="overflow-hidden border-border/40 bg-card/40 backdrop-blur">
-                    <div className="divide-y divide-border/20">
+                 <Card className="overflow-hidden rounded-2xl border-white/[0.06] bg-card/50">
+                    <div className="divide-y divide-white/[0.06]">
                       {isLoadingHistory ? (
                         <div className="p-10 flex flex-col items-center justify-center text-muted-foreground gap-3">
                           <Loader2 className="h-6 w-6 animate-spin text-primary/60" />
-                          <p className="text-sm font-medium">Carregando histórico...</p>
+                          <p className="text-sm font-medium">Loading history…</p>
                         </div>
                       ) : history.length === 0 ? (
                         <div className="p-10 text-center text-muted-foreground">
-                          <p>Nenhum item encontrado.</p>
+                          <p>No items found.</p>
                         </div>
                       ) : history.map((h: any) => (
                         <div key={h.id} className="p-4 flex flex-wrap items-center justify-between gap-4 transition hover:bg-muted/30">
@@ -1221,7 +1216,7 @@ export default function CreativePage() {
                                  <span className="font-semibold text-sm">{TOOLS.find(t => t.key === h.tool)?.title || LEGACY_TOOL_TITLES[h.tool] || h.tool}</span>
                                  <span className="text-[10px] text-muted-foreground font-mono">{new Date(h.created_at).toLocaleString()}</span>
                                </div>
-                               <p className="text-sm text-foreground/80 line-clamp-1 italic">"{h.prompt || "Sem prompt"}"</p>
+                               <p className="text-sm text-foreground/80 line-clamp-1 italic">"{h.prompt || "No prompt"}"</p>
                                {h.error_message && (
                                  <p className="text-[10px] text-destructive flex items-center gap-1">
                                    <AlertTriangle className="h-3 w-3" /> {h.error_message}
@@ -1231,7 +1226,7 @@ export default function CreativePage() {
                            </div>
                            <div className="flex items-center gap-2">
                               <Button size="sm" variant="ghost" onClick={() => navigate(`/creative/investigation?investigate=${h.id}`)}>
-                                <AlertCircle className="h-4 w-4 mr-2" /> Investigar
+                                <AlertCircle className="h-4 w-4 mr-2" /> Investigate
                               </Button>
                              {(h.status === 'queued' || h.status === 'processing') && (
                                <Button 
@@ -1242,7 +1237,7 @@ export default function CreativePage() {
                                 disabled={isCancelling === h.id}
                                >
                                  {isCancelling === h.id ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <X className="h-4 w-4 mr-2" />} 
-                                 Cancelar
+                                 Cancel
                                </Button>
                              )}
                              {(h.status === 'failed' || h.status === 'error' || h.status === 'completed') && (
@@ -1263,11 +1258,11 @@ export default function CreativePage() {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-2xl font-bold font-orbitron">Histórico de Habilidades</h2>
-                  <p className="text-sm text-muted-foreground">Registro unificado de todas as ferramentas executadas.</p>
+                  <h2 className="text-2xl font-semibold tracking-[-0.01em]">Skill history</h2>
+                  <p className="text-sm text-muted-foreground">One record of every tool you ran.</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => { setActive("dashboard"); navigate("/creative"); }}>
-                   <ArrowLeft className="h-4 w-4 mr-2" /> Voltar
+                   <ArrowLeft className="h-4 w-4 mr-2" /> Back
                 </Button>
               </div>
               <SkillExecutionsList />
@@ -1277,7 +1272,7 @@ export default function CreativePage() {
           <TabsContent value="sheet">
             <div className="space-y-6">
               <Button variant="ghost" size="sm" onClick={() => { setActive("dashboard"); navigate("/creative"); }} className="mb-2">
-                <ArrowLeft className="h-4 w-4 mr-2" /> Voltar ao Painel
+                <ArrowLeft className="h-4 w-4 mr-2" /> Back to tools
               </Button>
               <CreativeSheets creditsAvailable={editsRemaining} />
             </div>
@@ -1286,7 +1281,7 @@ export default function CreativePage() {
           <TabsContent value="office">
             <div className="space-y-6">
               <Button variant="ghost" size="sm" onClick={() => { setActive("dashboard"); navigate("/creative"); }} className="mb-2">
-                <ArrowLeft className="h-4 w-4 mr-2" /> Voltar ao Painel
+                <ArrowLeft className="h-4 w-4 mr-2" /> Back to tools
               </Button>
               <OfficeSuite creditsAvailable={editsRemaining} userId={user?.id} />
             </div>
@@ -1295,7 +1290,7 @@ export default function CreativePage() {
           <TabsContent value="design">
             <div className="space-y-6">
               <Button variant="ghost" size="sm" onClick={() => { setActive("dashboard"); navigate("/creative"); }} className="mb-2">
-                <ArrowLeft className="h-4 w-4 mr-2" /> Voltar ao Painel
+                <ArrowLeft className="h-4 w-4 mr-2" /> Back to tools
               </Button>
               <CreativeDesign creditsAvailable={editsRemaining} open={designOpen} />
             </div>
@@ -1304,9 +1299,9 @@ export default function CreativePage() {
           <TabsContent value="notebook">
             <div className="space-y-6">
               <Button variant="ghost" size="sm" onClick={() => { setActive("dashboard"); navigate("/creative"); }} className="mb-2">
-                <ArrowLeft className="h-4 w-4 mr-2" /> Voltar ao Painel
+                <ArrowLeft className="h-4 w-4 mr-2" /> Back to tools
               </Button>
-              <React.Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin" aria-label="Carregando" /></div>}>
+              <React.Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin" aria-label="Loading" /></div>}>
                 <VertalNotebook />
               </React.Suspense>
             </div>
@@ -1315,9 +1310,9 @@ export default function CreativePage() {
           <TabsContent value="clock">
             <div className="space-y-6">
               <Button variant="ghost" size="sm" onClick={() => { setActive("dashboard"); navigate("/creative"); }} className="mb-2">
-                <ArrowLeft className="h-4 w-4 mr-2" /> Voltar ao Painel
+                <ArrowLeft className="h-4 w-4 mr-2" /> Back to tools
               </Button>
-              <React.Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin" aria-label="Carregando" /></div>}>
+              <React.Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin" aria-label="Loading" /></div>}>
                 <div className="mx-auto max-w-3xl">
                   <VertalClock />
                 </div>
@@ -1325,12 +1320,12 @@ export default function CreativePage() {
             </div>
           </TabsContent>
 
-          {/* "office", "notebook" e "clock" têm aba própria; a genérica não tem configuração e quebraria. */}
+          {/* "office", "notebook" and "clock" have their own tab; the generic one has no config for them. */}
           {TOOLS.filter((t) => t.key !== "office" && t.key !== "notebook" && t.key !== "clock").map((t) => (
             <TabsContent key={t.key} value={t.key}>
               <div className="space-y-6">
                 <Button variant="ghost" size="sm" onClick={() => { setActive("dashboard"); navigate("/creative"); }} className="mb-2">
-                  <ArrowLeft className="h-4 w-4 mr-2" /> Voltar ao Painel
+                  <ArrowLeft className="h-4 w-4 mr-2" /> Back to tools
                 </Button>
                 <CreativeToolInterface 
                   toolKey={t.key as any} 
@@ -1353,7 +1348,6 @@ export default function CreativePage() {
             </React.Suspense>
           );
         })()}
-        </CreativeAdFrame>
       </main>
     </div>
   );

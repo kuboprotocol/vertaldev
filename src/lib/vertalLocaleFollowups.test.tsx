@@ -100,7 +100,8 @@ describe('Growth · etapas e projeto no idioma da tela', () => {
   it('etapas em pt mesmo quando a campanha foi criada em inglês', () => {
     expect(stageLabels('b2b', 'pt')).toEqual({ captacao: 'Captação', conversao: 'Conversão', retencao: 'Retenção' });
     const src = readFileSync('src/pages/VertalGrowthPage.tsx', 'utf8');
-    expect(src).toContain('stageLabels(g.model, lang)');
+    // Agora os nomes das etapas vêm do dicionário da tela (21 idiomas), não do servidor (só pt/en/es).
+    expect(src).toContain("t.stageNames[g.model === 'nonprofit' ? 'donor' : 'business']");
     expect(src).not.toMatch(/\{stages\.(captacao|conversao|retencao)\}/);
     expect(src).toContain('growth-lang-loading');
   });

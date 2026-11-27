@@ -1,13 +1,13 @@
 // Textos da tela de login (/auth) em pt-BR, en e es — antes eram fixos e misturados ("Sign In na conta",
 // "Welcome back" com placeholder "Senha"). Só textos: a lógica de login não muda.
 // Idioma: ?lang → idioma salvo do usuário (Vertal CRM/Growth) → navegador → pt-BR.
-import { preferredUiLang } from '@/lib/vertalGrowth/i18n';
+import { baseUiLang, preferredUiLang } from '@/lib/vertalUiLang';
 
 export type AuthLang = 'pt' | 'en' | 'es';
 
 const en = {
   signingYouOut: 'Signing you out…',
-  signedOut: 'Signed out successfully. You can sign in again below.',
+  signedOut: 'You are signed out. You can sign in again below.',
   couldNotSignOut: 'Could not sign out',
   refCopied: 'Reference ID copied to clipboard',
   refCopyFailed: 'Could not copy reference ID',
@@ -30,22 +30,22 @@ const en = {
   copyRefQuestion: 'Copy Reference ID?',
   copyRef: 'Copy Reference ID',
   googleError: 'Error signing in with Google',
-  recoverySent: 'Recovery email sent! Check your inbox.',
+  recoverySent: 'We sent you a recovery email. Check your inbox.',
   recoveryError: 'Error sending recovery email',
-  accountCreated: 'Account created successfully!',
+  accountCreated: 'Your account was created.',
   authError: 'Authentication error',
   wrongCredentials: 'Incorrect email or password. Check your details or create an account.',
   alreadyRegistered: 'This email is already registered. Try logging in.',
   waitSeconds: 'Please wait a few seconds before trying again.',
   recoverTitle: 'Recover password',
-  recoverSubtitle: 'We will send a link to reset your password',
+  recoverSubtitle: 'We will send you a link to reset your password.',
   yourEmail: 'Your email',
   sendRecovery: 'Send recovery link',
   backToLogin: '← Back to login',
   welcomeBack: 'Welcome back',
   createYourAccount: 'Create your account',
   accessProjects: (app: string) => `Access your projects on ${app}`,
-  startBuilding: 'Start building amazing apps',
+  startBuilding: 'Build your first app with AI',
   signingOut: 'Signing out',
   signOut: 'Sign out',
   connectorsProtectedA: 'The',
@@ -56,12 +56,12 @@ const en = {
   google: 'Sign in with Google',
   github: 'Sign in with GitHub',
   orEmail: 'or use email',
-  tabSignIn: 'Sign In',
-  tabSignUp: 'Sign Up',
+  tabSignIn: 'Sign in',
+  tabSignUp: 'Create account',
   yourName: 'Your name',
   emailPlaceholder: 'Email',
   passwordPlaceholder: 'Password',
-  forgot: 'Forgot my password',
+  forgot: 'Forgot password?',
   submitSignIn: 'Sign in',
   submitSignUp: 'Create my account',
   newHere: 'New here?',
@@ -206,6 +206,7 @@ export const AUTH_UI: Record<AuthLang, AuthUi> = { pt, en, es };
 
 /** Idioma da tela de login: ?lang → idioma salvo do usuário → navegador → pt-BR. */
 export function authLang(explicit?: string | null): AuthLang {
-  return preferredUiLang(explicit);
+  // A tela de login só tem pt/en/es: os outros 18 idiomas do CRM/Growth caem no mais próximo (pt-PT → pt, demais → en).
+  return baseUiLang(preferredUiLang(explicit));
 }
 export const authUi = (lang: AuthLang): AuthUi => AUTH_UI[lang] ?? pt;

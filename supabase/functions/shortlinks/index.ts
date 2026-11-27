@@ -1,6 +1,6 @@
-// Edge function: gerenciar shortlinks (vídeos curtos)
-// POST /functions/v1/shortlinks?action=create|list|delete|get-limits|record-view
-// Recompensa por anúncio TERRA ADS: ?action=ad-status|ad-click|ad-withdraw
+// Edge function `shortlinks`: hoje só atende a recompensa por anúncio TERRA ADS
+// (?action=ad-status|ad-click|ad-withdraw). O sistema de shortlinks (vídeos curtos:
+// create|list|delete|get-limits|record-view) foi desativado em 2026-11-26 e responde 410.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
@@ -8,10 +8,13 @@ import {
   AD_TYPE_CLICK,
   AD_TYPE_WITHDRAWAL,
   handleAdReward,
+  type AdGating,
   type AdRewardAction,
   type AdRewardRow,
   type AdRewardStore,
 } from "../_shared/adRewardsCore.ts";
+
+const SHORTLINK_ACTIONS: readonly string[] = ["create", "list", "delete", "get-limits", "record-view"];
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -73,6 +76,23 @@ function adRewardStore(): AdRewardStore {
       });
       if (error) throw error;
     },
+    // Checklist diário: dias completos e início da regra (public.terra_reward_gating).
+    async gating(userId): Promise<AdGating | null> {
+      const { data, error } = await admin.rpc("terra_reward_gating", { _user_id: userId, _tz: "America/Sao_Paulo" });
+      if (error || !data) {
+        console.error("[shortlinks] terra_reward_gating failed:", error);
+        return null;
+      }
+      const g = data as { gating_started_at: string | null; completed_days: string[] };
+      const startMs = g.gating_started_at ? Date.parse(g.gating_started_at) : NaN;
+      if (!Number.isFinite(startMs)) return null;
+      return { startMs, completedDays: g.completed_days ?? [] };
+    },
+    async afterClick(userId) {
+      const { data, error } = await admin.rpc("release_daily_rewards", { _user_id: userId, _tz: "America/Sao_Paulo" });
+      if (error) throw error;
+      return data as Record<string, unknown>;
+    },
   };
 }
 
@@ -80,32 +100,11 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const url = new URL(req.url);
-  const action = url.searchParams.get("action") || "list";
+  const action = url.searchParams.get("action") || "";
 
-  // For record-view, allow without auth
-  if (action === "record-view") {
-    try {
-      const body = await req.json() as {
-        shortlink_id: string;
-      };
-
-      const db = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_ANON_KEY")!
-      );
-
-      const { error } = await db.rpc("record_shortlink_view", {
-        _shortlink_id: body.shortlink_id,
-        _ip_address: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-                    req.headers.get("x-real-ip") || null,
-        _user_agent: req.headers.get("user-agent"),
-      });
-
-      if (error) throw error;
-      return json({ success: true });
-    } catch (e: any) {
-      return json({ error: e.message }, 400);
-    }
+  // Sistema de shortlinks desativado (2026-11-26): só a recompensa TERRA ADS continua aqui.
+  if (SHORTLINK_ACTIONS.includes(action)) {
+    return json({ error: "shortlinks_discontinued", message: "O sistema de shortlinks foi desativado." }, 410);
   }
 
   // All other actions require auth
@@ -129,125 +128,6 @@ Deno.serve(async (req) => {
     } catch (e: any) {
       console.error("[shortlinks] ad reward failed:", e);
       return json({ error: "ad_reward_failed" }, 500);
-    }
-  }
-
-  // LIST shortlinks
-  if (action === "list") {
-    try {
-      const { data, error } = await db.rpc("get_user_shortlinks_with_stats", {
-        _user_id: userId,
-      });
-
-      if (error) throw error;
-      return json({ shortlinks: data || [] });
-    } catch (e: any) {
-      return json({ error: e.message }, 400);
-    }
-  }
-
-  // GET LIMITS
-  if (action === "get-limits") {
-    try {
-      const { data, error } = await db.rpc("check_shortlink_limits", {
-        _user_id: userId,
-      });
-
-      if (error) throw error;
-
-      const limits = (data as any)?.[0];
-      return json({
-        active_count: limits?.active_count || 0,
-        max_allowed: 10,
-        can_create_more: limits?.can_create_more,
-        daily_base_reward: 5,
-        daily_bonus_reward: limits?.daily_bonus_reward || 0,
-        total_daily_reward: limits?.total_daily_reward || 5,
-      });
-    } catch (e: any) {
-      return json({ error: e.message }, 400);
-    }
-  }
-
-  // CREATE shortlink
-  if (action === "create") {
-    try {
-      const body = await req.json() as {
-        title: string;
-        description?: string;
-        video_url: string;
-        video_duration_seconds: number;
-      };
-
-      // Validate required fields
-      if (!body.title || !body.video_url || !body.video_duration_seconds) {
-        return json({ error: "title, video_url, and video_duration_seconds are required" }, 400);
-      }
-
-      // Validate duration (5-7 seconds)
-      if (body.video_duration_seconds < 5 || body.video_duration_seconds > 7) {
-        return json({ error: "Video duration must be between 5 and 7 seconds" }, 400);
-      }
-
-      // Check limits
-      const { data: limitsData, error: limitsError } = await db.rpc("check_shortlink_limits", {
-        _user_id: userId,
-      });
-
-      if (limitsError) throw limitsError;
-
-      const limits = (limitsData as any)?.[0];
-      if (!limits?.can_create_more) {
-        return json({
-          error: "shortlink_limit_reached",
-          message: `Você atingiu o máximo de 10 shortlinks ativos. Arquive alguns para criar novos.`,
-          active_count: limits?.active_count,
-          max_allowed: 10,
-        }, 403);
-      }
-
-      // Insert shortlink
-      const { data, error } = await db
-        .from("shortlinks")
-        .insert({
-          user_id: userId,
-          title: body.title.substring(0, 200),
-          description: body.description?.substring(0, 1000),
-          video_url: body.video_url,
-          video_duration_seconds: body.video_duration_seconds,
-          status: "active",
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      return json({
-        success: true,
-        shortlink: data,
-        message: "Shortlink criado com sucesso! Começa a ganhar 5 créditos por dia.",
-      });
-    } catch (e: any) {
-      return json({ error: e.message }, 400);
-    }
-  }
-
-  // DELETE/ARCHIVE shortlink
-  if (action === "delete") {
-    try {
-      const body = await req.json() as { shortlink_id: string };
-      if (!body.shortlink_id) return json({ error: "shortlink_id required" }, 400);
-
-      const { error } = await db
-        .from("shortlinks")
-        .update({ status: "archived" })
-        .eq("id", body.shortlink_id)
-        .eq("user_id", userId);
-
-      if (error) throw error;
-      return json({ success: true, message: "Shortlink arquivado" });
-    } catch (e: any) {
-      return json({ error: e.message }, 400);
     }
   }
 

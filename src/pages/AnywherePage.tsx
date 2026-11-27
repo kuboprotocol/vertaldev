@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import SitePage from "@/components/site/SitePage";
+import { MoreLink } from "@/components/site/siteUi";
 import { motion } from "framer-motion";
 import {
   Apple,
@@ -58,19 +60,19 @@ function detectPlatform(): PlatformId {
 const ONBOARDING_STEPS = [
   {
     title: "Install the daemon",
-    body: "A single signed installer drops a lightweight Rust service that runs in the background and keeps a persistent link with Vertal Core AI.",
+    body: "One installer adds a small service that runs in the background and stays connected to Vertal Core AI.",
   },
   {
     title: "Grant a workspace folder",
-    body: "Access is scoped per project. The daemon never watches your whole filesystem — you pick the folders it may read and write.",
+    body: "Access is set per project. The agent never watches your whole file system. You choose the folders it can read and write.",
   },
   {
     title: "Connect your editor",
-    body: "Onboarding detects VS Code and Cursor on the machine and installs the bridge extension with one click. Both share the same daemon.",
+    body: "Setup finds VS Code and Cursor on your computer and installs the bridge extension in one click. Both editors use the same agent.",
   },
   {
     title: "Keep working where you already are",
-    body: "Chat with Vibe Code inside the editor, run real commands in your own shell, and push to GitMoom with the local git binary.",
+    body: "Chat with Vibe Code inside the editor, run commands in your own shell, and push to GitHub with your local git.",
   },
 ] as const;
 
@@ -81,8 +83,8 @@ function PlatformCard({ platform, highlighted }: { platform: PlatformSpec; highl
   return (
     <Card
       className={cn(
-        "flex h-full flex-col gap-4 border-border/50 bg-card/60 p-6 backdrop-blur transition-colors",
-        highlighted && "border-primary/50 shadow-[0_0_40px_-20px_hsl(var(--primary))]",
+        "flex h-full flex-col gap-4 rounded-2xl border-white/[0.06] bg-card/50 p-6 transition-colors",
+        highlighted && "border-primary/50",
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -91,7 +93,7 @@ function PlatformCard({ platform, highlighted }: { platform: PlatformSpec; highl
             <Icon className="h-5 w-5 text-primary" />
           </span>
           <div>
-            <h3 className="font-orbitron text-base font-bold">{platform.name}</h3>
+            <h3 className="text-[17px] font-semibold">{platform.name}</h3>
             <p className="text-xs text-muted-foreground">{platform.client}</p>
           </div>
         </div>
@@ -148,21 +150,8 @@ export default function AnywherePage() {
   const mobile = useMemo(() => platformsByFamily("mobile"), []);
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border/50 bg-background/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4">
-          <Button asChild variant="ghost" size="sm">
-            <Link to="/dashboard">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Dashboard
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/docs">Architecture docs</Link>
-          </Button>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-6xl px-4 py-12">
+    <SitePage>
+      <div className="mx-auto max-w-6xl px-6 pb-24 pt-16 md:pt-24">
         <motion.section
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -171,23 +160,27 @@ export default function AnywherePage() {
           <Badge variant="outline" className="mb-4 border-primary/30 bg-primary/10 text-primary">
             Vertal Anywhere
           </Badge>
-          <h1 className="font-orbitron text-3xl font-bold tracking-tight sm:text-4xl">
+          <h1 className="text-4xl font-semibold leading-[1.08] tracking-[-0.025em] md:text-6xl">
             One workspace. Every device.
           </h1>
-          <p className="mt-4 text-sm text-muted-foreground sm:text-base">
-            On desktop the Vertal Local Agent runs everything on your own hardware. On phone and tablet the client
-            drives an ephemeral container in the Vertal Cloud — the device never executes code. Same project, same
-            chat, same Git history, one credit ledger.
+          <p className="mt-5 text-lg leading-relaxed text-muted-foreground md:text-xl">
+            On a computer, the Vertal Local Agent runs everything on your own hardware. On a phone or tablet, the app
+            controls a temporary container in the Vertal Cloud, so the device never runs code. You keep the same
+            project, the same chat, the same Git history and one credit balance.
           </p>
-          <p className="mt-3 text-xs text-muted-foreground">
-            Detected platform: <span className="font-semibold text-foreground">{detected}</span>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+            <MoreLink to="/dashboard">Open the dashboard</MoreLink>
+            <MoreLink to="/docs">Read the architecture docs</MoreLink>
+          </div>
+          <p className="mt-6 text-[13px] text-muted-foreground">
+            Your platform: <span className="font-semibold text-foreground">{detected}</span>
           </p>
         </motion.section>
 
-        <section className="mt-14">
+        <section className="mt-20">
           <div className="mb-5 flex items-center gap-2">
             <Cpu className="h-4 w-4 text-primary" />
-            <h2 className="font-orbitron text-lg font-bold">Desktop — Vertal Local Agent</h2>
+            <h2 className="text-2xl font-semibold tracking-[-0.015em]">Desktop: Vertal Local Agent</h2>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             {desktop.map((p) => (
@@ -195,8 +188,8 @@ export default function AnywherePage() {
             ))}
           </div>
 
-          <Card className="mt-6 border-border/50 bg-card/60 p-6 backdrop-blur">
-            <h3 className="font-orbitron text-sm font-bold">How the install goes</h3>
+          <Card className="mt-6 rounded-2xl border-white/[0.06] bg-card/50 p-6">
+            <h3 className="text-[17px] font-semibold">How to install</h3>
             <ol className="mt-4 grid gap-4 md:grid-cols-4">
               {ONBOARDING_STEPS.map((step, i) => (
                 <li key={step.title} className="space-y-1.5">
@@ -210,16 +203,16 @@ export default function AnywherePage() {
             </ol>
             <p className="mt-5 flex items-start gap-2 rounded-lg border border-border/50 bg-background/50 p-3 text-xs text-muted-foreground">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-              Installers are code-signed (Authenticode on Windows, Apple notarization on macOS) and the daemon only
-              ever touches folders you explicitly approve.
+              The installers are not code-signed yet (see the Download page). The agent only works in folders that
+              you approve.
             </p>
           </Card>
         </section>
 
-        <section className="mt-14">
+        <section className="mt-20">
           <div className="mb-5 flex items-center gap-2">
             <Cloud className="h-4 w-4 text-primary" />
-            <h2 className="font-orbitron text-lg font-bold">Mobile — Vertal Mobile Agent</h2>
+            <h2 className="text-2xl font-semibold tracking-[-0.015em]">Mobile: Vertal Mobile Agent</h2>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             {mobile.map((p) => (
@@ -228,13 +221,13 @@ export default function AnywherePage() {
           </div>
         </section>
 
-        <section className="mt-14">
+        <section className="mt-20">
           <div className="mb-5 flex items-center gap-2">
             <Coins className="h-4 w-4 text-primary" />
-            <h2 className="font-orbitron text-lg font-bold">How credits are charged</h2>
+            <h2 className="text-2xl font-semibold tracking-[-0.015em]">How credits are charged</h2>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
-            <Card className="space-y-3 border-border/50 bg-card/60 p-6 backdrop-blur">
+            <Card className="space-y-3 rounded-2xl border-white/[0.06] bg-card/50 p-6">
               <h3 className="flex items-center gap-2 text-sm font-semibold">
                 <Cloud className="h-4 w-4 text-primary" /> {BILLING_MODELS.cloud.label}
               </h3>
@@ -256,7 +249,7 @@ export default function AnywherePage() {
               <p className="text-[11px] text-muted-foreground">Applies to iOS, iPadOS and Android.</p>
             </Card>
 
-            <Card className="space-y-3 border-border/50 bg-card/60 p-6 backdrop-blur">
+            <Card className="space-y-3 rounded-2xl border-white/[0.06] bg-card/50 p-6">
               <h3 className="flex items-center gap-2 text-sm font-semibold">
                 <Cpu className="h-4 w-4 text-primary" /> {BILLING_MODELS.local.label}
               </h3>
@@ -275,7 +268,7 @@ export default function AnywherePage() {
                   <dd className="font-semibold">{LOCAL_CREDIT_COSTS.agentRun} credits</dd>
                 </div>
                 <div className="flex justify-between border-t border-border/40 pt-2">
-                  <dt className="text-muted-foreground">Terminal command / git op</dt>
+                  <dt className="text-muted-foreground">Terminal command or git action</dt>
                   <dd className="font-semibold">Free</dd>
                 </div>
               </dl>
@@ -284,7 +277,7 @@ export default function AnywherePage() {
           </div>
         </section>
 
-        <section className="mt-14 overflow-x-auto">
+        <section className="mt-20 overflow-x-auto">
           <table className="w-full min-w-[640px] border-collapse text-left text-xs">
             <thead>
               <tr className="border-b border-border/60 text-[10px] uppercase text-muted-foreground">
@@ -308,7 +301,7 @@ export default function AnywherePage() {
             </tbody>
           </table>
         </section>
-      </main>
-    </div>
+      </div>
+    </SitePage>
   );
 }

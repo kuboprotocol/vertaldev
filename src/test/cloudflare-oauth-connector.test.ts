@@ -45,7 +45,7 @@ describe('Cloudflare por OAuth', () => {
     const page = read('src/pages/ConnectorSetupPage.tsx')
     expect(page).toMatch(/<FluxosConnectPanel\s+app="cloudflare"/)
     expect(page).toMatch(/returnPath="\/connectors\/cloudflare\/setup"/)
-    expect(page).toMatch(/Avançado: usar API token/)
+    expect(page).toMatch(/Advanced: use an API token/)
     expect(page).toMatch(/slug !== 'cloudflare'/)
     // Texto visível do bloco da Cloudflare sem nomes do motor (o import do módulo de sincronização não aparece na tela).
     const block = page.slice(page.indexOf('cloudflare-oauth-panel'), page.indexOf("{slug === 'github' && githubProfile"))

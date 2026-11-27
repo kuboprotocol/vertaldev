@@ -66,7 +66,7 @@ export default function AffiliateInstallsManager() {
       setInstalls(installsRes.data.installs || [])
       setStats(statsRes.data.stats || [])
     } catch (e: any) {
-      toast.error(`Erro: ${e.message}`)
+      toast.error(`Error: ${e.message}`)
     } finally {
       setLoading(false)
     }
@@ -74,7 +74,7 @@ export default function AffiliateInstallsManager() {
 
   const handleCreateInstall = async () => {
     if (!newDomain.trim()) {
-      toast.error('Digite o domínio')
+      toast.error('Enter the domain')
       return
     }
 
@@ -89,21 +89,21 @@ export default function AffiliateInstallsManager() {
 
       // Verificar se há erro anti-fraude
       if (data.error === 'affiliate_not_allowed') {
-        toast.error(`⚠️ ${data.reason}\n${data.details}`)
+        toast.error(`${data.reason}\n${data.details}`)
         return
       }
 
       if (data.error) {
-        toast.error(`Erro: ${data.error}`)
+        toast.error(`Error: ${data.error}`)
         return
       }
 
       setInstalls([data.install, ...installs])
       setNewDomain('')
       setNewDescription('')
-      toast.success('Install criado com sucesso!')
+      toast.success('Website added')
     } catch (e: any) {
-      toast.error(`Erro: ${e.message}`)
+      toast.error(`Error: ${e.message}`)
     } finally {
       setCreatingId(null)
     }
@@ -125,14 +125,14 @@ window.__VERTAL_AFFILIATE = {
       await navigator.clipboard.writeText(text)
       setCopiedCode(code)
       setTimeout(() => setCopiedCode(null), 2000)
-      toast.success('Copiado!')
+      toast.success('Copied')
     } catch {
-      toast.error('Erro ao copiar')
+      toast.error('We could not copy the code')
     }
   }
 
   const handleDeleteInstall = async (installId: string) => {
-    if (!confirm('Tem certeza? Isso removerá o install.')) return
+    if (!confirm('Remove this website? Its code will stop tracking.')) return
 
     try {
       const { error } = await supabase.functions.invoke('affiliate-installs', {
@@ -143,9 +143,9 @@ window.__VERTAL_AFFILIATE = {
       if (error) throw error
 
       setInstalls(installs.filter(i => i.id !== installId))
-      toast.success('Install removido')
+      toast.success('Website removed')
     } catch (e: any) {
-      toast.error(`Erro: ${e.message}`)
+      toast.error(`Error: ${e.message}`)
     }
   }
 
@@ -156,43 +156,43 @@ window.__VERTAL_AFFILIATE = {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <h3 className="text-lg font-semibold text-foreground">Instalações de Embed</h3>
+        <h3 className="text-lg font-semibold text-foreground">Embed installs</h3>
         <p className="text-sm text-muted-foreground">
-          Gerencie os códigos de embed que você instala em seus sites e blogs. Cada site tem seu próprio código único para rastreamento.
+          Manage the embed codes you add to your websites and blogs. Each website has its own tracking code.
         </p>
       </div>
 
       <Tabs defaultValue="create" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="create">Novo Install</TabsTrigger>
-          <TabsTrigger value="list">Meus Installs ({installs.length})</TabsTrigger>
+          <TabsTrigger value="create">Add a website</TabsTrigger>
+          <TabsTrigger value="list">My websites ({installs.length})</TabsTrigger>
         </TabsList>
 
         {/* Criar novo */}
         <TabsContent value="create">
           <Card className="border-primary/20 bg-primary/5">
             <CardHeader>
-              <CardTitle className="text-base">Adicionar novo site</CardTitle>
-              <CardDescription>Registre um site onde você instalará o embed do Vertal</CardDescription>
+              <CardTitle className="text-base">Add a new website</CardTitle>
+              <CardDescription>Register a website where you will add the Vertal embed</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="domain" className="text-sm">Domínio</Label>
+                <Label htmlFor="domain" className="text-sm">Domain</Label>
                 <Input
                   id="domain"
-                  placeholder="exemplo.com.br (sem https://)"
+                  placeholder="example.com (without https://)"
                   value={newDomain}
                   onChange={(e) => setNewDomain(e.target.value)}
                   disabled={creatingId !== null}
                 />
-                <p className="text-xs text-muted-foreground">Apenas o domínio, sem protocolo</p>
+                <p className="text-xs text-muted-foreground">Only the domain, without https://</p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description" className="text-sm">Descrição (opcional)</Label>
+                <Label htmlFor="description" className="text-sm">Description (optional)</Label>
                 <Input
                   id="description"
-                  placeholder="ex: Blog de tecnologia, Site de reviews..."
+                  placeholder="For example: tech blog, review site"
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
                   disabled={creatingId !== null}
@@ -207,12 +207,12 @@ window.__VERTAL_AFFILIATE = {
                 {creatingId ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Criando...
+                    Adding…
                   </>
                 ) : (
                   <>
                     <Plus className="h-4 w-4 mr-2" />
-                    Criar install
+                    Add website
                   </>
                 )}
               </Button>
@@ -220,7 +220,7 @@ window.__VERTAL_AFFILIATE = {
           </Card>
         </TabsContent>
 
-        {/* Listar installs */}
+        {/* List of installs */}
         <TabsContent value="list">
           {loading ? (
             <div className="flex justify-center py-12">
@@ -229,7 +229,7 @@ window.__VERTAL_AFFILIATE = {
           ) : installs.length === 0 ? (
             <Alert>
               <AlertDescription>
-                Nenhum install criado ainda. Crie um novo para começar a rastrear!
+                You have not added a website yet. Add one to start tracking.
               </AlertDescription>
             </Alert>
           ) : (
@@ -259,31 +259,32 @@ window.__VERTAL_AFFILIATE = {
                       {stat && (
                         <div className="grid grid-cols-4 gap-3 rounded-lg bg-secondary/30 p-3">
                           <div className="text-center">
-                            <p className="text-xs text-muted-foreground">Cliques</p>
+                            <p className="text-xs text-muted-foreground">Clicks</p>
                             <p className="text-lg font-semibold">{stat.total_clicks}</p>
                           </div>
                           <div className="text-center">
-                            <p className="text-xs text-muted-foreground">Signups</p>
+                            <p className="text-xs text-muted-foreground">Sign-ups</p>
                             <p className="text-lg font-semibold">{stat.total_signups}</p>
                           </div>
                           <div className="text-center">
-                            <p className="text-xs text-muted-foreground">Conversões</p>
+                            <p className="text-xs text-muted-foreground">Sales</p>
                             <p className="text-lg font-semibold">{stat.total_conversions}</p>
                           </div>
                           <div className="text-center">
-                            <p className="text-xs text-muted-foreground">Taxa</p>
+                            <p className="text-xs text-muted-foreground">Rate</p>
                             <p className="text-lg font-semibold">{stat.conversion_rate}%</p>
                           </div>
                         </div>
                       )}
 
-                      {/* Código de embed */}
+                      {/* Embed code */}
                       <div className="space-y-2">
                         <Label className="text-sm flex items-center gap-2">
-                          Código de embed
+                          Embed code
                           <Button
                             variant="ghost"
                             size="sm"
+                            aria-label={showCode === install.id ? 'Hide code' : 'Show code'}
                             onClick={() => setShowCode(showCode === install.id ? null : install.id)}
                           >
                             {showCode === install.id ? (
@@ -315,12 +316,12 @@ window.__VERTAL_AFFILIATE = {
                               {copiedCode === install.embed_code ? (
                                 <>
                                   <Check className="h-4 w-4 mr-2" />
-                                  Copiado!
+                                  Copied
                                 </>
                               ) : (
                                 <>
                                   <Copy className="h-4 w-4 mr-2" />
-                                  Copiar código completo
+                                  Copy the full code
                                 </>
                               )}
                             </Button>
@@ -334,7 +335,7 @@ window.__VERTAL_AFFILIATE = {
                         )}
                       </div>
 
-                      {/* Ações */}
+                      {/* Actions */}
                       <div className="flex gap-2 pt-2">
                         <Button
                           variant="outline"
@@ -348,13 +349,14 @@ window.__VERTAL_AFFILIATE = {
                             rel="noopener noreferrer"
                           >
                             <ExternalLink className="h-4 w-4 mr-2" />
-                            Visitar
+                            Visit
                           </a>
                         </Button>
                         {install.status === 'active' && (
                           <Button
                             variant="ghost"
                             size="sm"
+                            aria-label="Remove website"
                             onClick={() => handleDeleteInstall(install.id)}
                             className="text-destructive hover:bg-destructive/10"
                           >

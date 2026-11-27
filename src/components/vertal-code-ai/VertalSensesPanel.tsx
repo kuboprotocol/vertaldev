@@ -6,6 +6,7 @@ import { Camera, Clapperboard, Ear, Eye, Film, ImagePlus, Loader2, Mic, Square, 
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { surface } from '@/components/site/siteUi';
 import {
   callNovela,
   callSenses,
@@ -48,8 +49,8 @@ type HearReply = { hear: { transcricao: string; resumo: string; resposta: string
 type FramesReply = { frames: Array<{ t: number; answers: Record<string, Answer> | null }>; top: number[]; model: { label: string }; ms: number; estimate: Estimate };
 
 const CATEGORY_LABEL: Record<string, string> = {
-  calcados: 'Calçados', roupas: 'Roupas e acessórios', eletronicos: 'Eletrônicos', casa: 'Casa', beleza: 'Beleza',
-  alimentos: 'Alimentos', brinquedos: 'Brinquedos', esporte: 'Esporte', veiculos: 'Veículos', outros: 'Outros',
+  calcados: 'Shoes', roupas: 'Clothing and accessories', eletronicos: 'Electronics', casa: 'Home', beleza: 'Beauty',
+  alimentos: 'Food', brinquedos: 'Toys', esporte: 'Sports', veiculos: 'Vehicles', outros: 'Other',
 };
 
 const FRAME_QUESTIONS = {
@@ -148,7 +149,7 @@ export function VertalSensesPanel({ token, onClose }: { token: () => Promise<str
         }
       });
     } catch {
-      setErr('Sem acesso à câmera. Libere a permissão no navegador ou envie uma foto.');
+      setErr('No camera access. Allow it in your browser or send a photo.');
     }
   };
 
@@ -210,7 +211,7 @@ export function VertalSensesPanel({ token, onClose }: { token: () => Promise<str
       setRecording(true);
       timerRef.current = setTimeout(() => stopMic(), MAX_RECORD_SECONDS * 1000);
     } catch {
-      setErr('Sem acesso ao microfone. Libere a permissão no navegador.');
+      setErr('No microphone access. Allow it in your browser.');
     }
   };
 
@@ -239,7 +240,7 @@ export function VertalSensesPanel({ token, onClose }: { token: () => Promise<str
         const s = await callNovela<{ status: string; stage?: string; titulo?: string; estimate?: Estimate }>(t, { op: 'status', job: novela.job });
         setNovela({ ...novela, status: s.status, stage: s.stage, titulo: s.titulo, credits: s.estimate?.credits });
         if (s.status === 'completed') setNovelaUrl(await fetchBinaryAction(t, { action: 'novela', op: 'result', job: novela.job }));
-        if (s.status === 'failed' || s.status === 'expired') setErr('Não consegui montar a novela. Tente outra premissa.');
+        if (s.status === 'failed' || s.status === 'expired') setErr('Could not create the story. Try another idea.');
       } catch {
         setNovela({ ...novela });
       }
@@ -269,15 +270,15 @@ export function VertalSensesPanel({ token, onClose }: { token: () => Promise<str
   ];
 
   return (
-    <div role="dialog" aria-label="Sentidos Vertal" className="fixed inset-0 z-50 flex flex-col bg-background">
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/50 px-3">
-        <h2 className="flex-1 text-sm font-semibold">Visão · Ouvir · Novela</h2>
+    <div role="dialog" aria-label="Vertal Senses" className="fixed inset-0 z-50 flex flex-col bg-background">
+      <header className={cn('flex h-14 shrink-0 items-center gap-2 border-b px-3', surface.bar)}>
+        <h2 className="flex-1 text-[15px] font-semibold">Vision · Listen · Story</h2>
         {(camOn || recording) && (
           <span className="flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-xs text-red-500" aria-live="polite">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" /> {camOn ? 'Câmera ligada' : 'Gravando'}
+            <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" /> {camOn ? 'Camera on' : 'Recording'}
           </span>
         )}
-        <button type="button" aria-label="Fechar" onClick={onClose} className="rounded-lg p-2 text-muted-foreground hover:bg-secondary">
+        <button type="button" aria-label="Close" onClick={onClose} className="rounded-lg p-2 text-muted-foreground hover:bg-secondary">
           <X className="h-5 w-5" />
         </button>
       </header>
@@ -285,7 +286,7 @@ export function VertalSensesPanel({ token, onClose }: { token: () => Promise<str
       {!features ? (
         <div className="flex flex-1 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin" /></div>
       ) : !any ? (
-        <p className="p-6 text-sm text-muted-foreground">Esses recursos ainda não foram liberados na sua conta.</p>
+        <p className="p-6 text-sm text-muted-foreground">These features are not turned on for your account yet.</p>
       ) : (
         <div className="flex flex-1 flex-col overflow-y-auto">
           <nav className="flex gap-1 border-b border-border/50 p-2">
@@ -310,27 +311,27 @@ export function VertalSensesPanel({ token, onClose }: { token: () => Promise<str
 
             {tab === 'visao' && (
               <>
-                <p className="text-xs text-muted-foreground">Mande a foto de um produto: eu identifico na hora e escrevo o anúncio.</p>
+                <p className="text-xs text-muted-foreground">Send a photo of a product. It is identified and an ad text is written for it.</p>
                 <div className="flex flex-wrap gap-2">
                   <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border/60 px-3 py-2 text-xs">
-                    <ImagePlus className="h-4 w-4" /> Enviar foto
+                    <ImagePlus className="h-4 w-4" /> Send photo
                     <input type="file" accept="image/*" className="hidden" onChange={async (e) => e.target.files?.[0] && analyzePhoto(await fileToJpeg(e.target.files[0]))} />
                   </label>
                   {!camOn ? (
-                    <Button size="sm" variant="outline" onClick={openCamera} disabled={busy}><Camera className="mr-1 h-4 w-4" /> Usar câmera</Button>
+                    <Button size="sm" variant="outline" onClick={openCamera} disabled={busy}><Camera className="mr-1 h-4 w-4" /> Use camera</Button>
                   ) : (
-                    <Button size="sm" onClick={capture}><Camera className="mr-1 h-4 w-4" /> Capturar</Button>
+                    <Button size="sm" onClick={capture}><Camera className="mr-1 h-4 w-4" /> Take photo</Button>
                   )}
                   {features.decide && (
                     <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border/60 px-3 py-2 text-xs">
-                      <Film className="h-4 w-4" /> Analisar vídeo
+                      <Film className="h-4 w-4" /> Analyze video
                       <input type="file" accept="video/*" className="hidden" onChange={(e) => e.target.files?.[0] && analyzeVideo(e.target.files[0])} />
                     </label>
                   )}
                 </div>
                 {camOn && <video ref={videoRef} playsInline muted className="w-full rounded-lg bg-black" />}
-                {photo && !camOn && <img src={photo} alt="Foto enviada" className="max-h-64 rounded-lg object-contain" />}
-                {busy && <p className="flex items-center gap-2 text-xs"><Loader2 className="h-4 w-4 animate-spin" /> Analisando…</p>}
+                {photo && !camOn && <img src={photo} alt="Photo sent" className="max-h-64 rounded-lg object-contain" />}
+                {busy && <p className="flex items-center gap-2 text-xs"><Loader2 className="h-4 w-4 animate-spin" /> Analyzing…</p>}
                 {photoReply && (
                   <div className="space-y-2 rounded-lg border border-border/60 p-3 text-sm">
                     {photoReply.decision?.answers.category?.choice && (
@@ -339,26 +340,26 @@ export function VertalSensesPanel({ token, onClose }: { token: () => Promise<str
                         {' '}({Math.round((photoReply.decision.answers.category.confidence ?? 0) * 100)}%) · {(photoReply.decision.ms / 1000).toFixed(1)} s
                       </p>
                     )}
-                    {!photoReply.route.describe && <p>{ROUTE_TEXT[photoReply.route.reason] ?? 'Não consegui analisar essa foto.'}</p>}
+                    {!photoReply.route.describe && <p>{ROUTE_TEXT[photoReply.route.reason] ?? 'Could not analyze this photo.'}</p>}
                     {photoReply.product && (
                       <>
                         <p className="font-semibold">{photoReply.product.titulo_anuncio || photoReply.product.nome}</p>
                         {photoReply.product.preco_sugerido_brl && (
-                          <p className="text-xs">Preço sugerido: R$ {photoReply.product.preco_sugerido_brl.min} – R$ {photoReply.product.preco_sugerido_brl.max} (estimativa)</p>
+                          <p className="text-xs">Suggested price: R$ {photoReply.product.preco_sugerido_brl.min} to R$ {photoReply.product.preco_sugerido_brl.max} (estimate)</p>
                         )}
                         <p className="whitespace-pre-wrap text-xs">{photoReply.product.descricao_venda}</p>
                         {photoReply.product.caracteristicas.length > 0 && <p className="text-xs text-muted-foreground">{photoReply.product.caracteristicas.join(' · ')}</p>}
                       </>
                     )}
                     {photoReply.raw && <p className="whitespace-pre-wrap text-xs">{photoReply.raw}</p>}
-                    <p className="text-[11px] text-muted-foreground">{photoReply.model?.label} · ~{photoReply.estimate.credits} créditos (não cobrado)</p>
+                    <p className="text-[11px] text-muted-foreground">{photoReply.model?.label} · ~{photoReply.estimate.credits} credits (not charged)</p>
                   </div>
                 )}
                 {framesReply && (
                   <div className="space-y-1 rounded-lg border border-border/60 p-3 text-xs">
-                    <p>Cenas-chave em: {framesReply.top.map((t) => `${t.toFixed(1)} s`).join(', ') || '—'}</p>
-                    {framesReply.frames.some((f) => (f.answers?.unsafe?.noul ?? 0) >= 0.7) && <p className="text-red-500">Atenção: há trechos possivelmente impróprios.</p>}
-                    <p className="text-muted-foreground">{framesReply.model.label} · {framesReply.frames.length} quadros em {(framesReply.ms / 1000).toFixed(1)} s</p>
+                    <p>Key scenes at: {framesReply.top.map((t) => `${t.toFixed(1)} s`).join(', ') || '—'}</p>
+                    {framesReply.frames.some((f) => (f.answers?.unsafe?.noul ?? 0) >= 0.7) && <p className="text-red-500">Note: some parts may be inappropriate.</p>}
+                    <p className="text-muted-foreground">{framesReply.model.label} · {framesReply.frames.length} frames in {(framesReply.ms / 1000).toFixed(1)} s</p>
                   </div>
                 )}
               </>
@@ -366,30 +367,30 @@ export function VertalSensesPanel({ token, onClose }: { token: () => Promise<str
 
             {tab === 'ouvir' && (
               <>
-                <p className="text-xs text-muted-foreground">Toque para gravar (até {MAX_RECORD_SECONDS} s). Eu transcrevo, entendo e respondo — posso responder em voz.</p>
+                <p className="text-xs text-muted-foreground">Tap to record (up to {MAX_RECORD_SECONDS} s). Your audio is transcribed and answered, and the answer can be read out loud.</p>
                 {!recording ? (
-                  <Button onClick={startRecording} disabled={busy}><Mic className="mr-1 h-4 w-4" /> Gravar</Button>
+                  <Button onClick={startRecording} disabled={busy}><Mic className="mr-1 h-4 w-4" /> Record</Button>
                 ) : (
-                  <Button variant="destructive" onClick={stopMic}><Square className="mr-1 h-4 w-4" /> Parar</Button>
+                  <Button variant="destructive" onClick={stopMic}><Square className="mr-1 h-4 w-4" /> Stop</Button>
                 )}
-                {busy && <p className="flex items-center gap-2 text-xs"><Loader2 className="h-4 w-4 animate-spin" /> Ouvindo…</p>}
+                {busy && <p className="flex items-center gap-2 text-xs"><Loader2 className="h-4 w-4 animate-spin" /> Listening…</p>}
                 {hearReply?.hear && (
                   <div className="space-y-2 rounded-lg border border-border/60 p-3 text-sm">
-                    <p className="text-xs text-muted-foreground">Você disse:</p>
+                    <p className="text-xs text-muted-foreground">You said:</p>
                     <p>“{hearReply.hear.transcricao}”</p>
                     {hearReply.hear.resposta && (
                       <>
-                        <p className="text-xs text-muted-foreground">Resposta:</p>
+                        <p className="text-xs text-muted-foreground">Answer:</p>
                         <p>{hearReply.hear.resposta}</p>
                         {features.novela && (
                           <Button size="sm" variant="outline" onClick={() => speak(hearReply.hear!.resposta)} disabled={busy}>
-                            <Volume2 className="mr-1 h-4 w-4" /> Ouvir resposta
+                            <Volume2 className="mr-1 h-4 w-4" /> Play answer
                           </Button>
                         )}
                       </>
                     )}
                     {voiceUrl && <audio src={voiceUrl} controls autoPlay className="w-full" />}
-                    <p className="text-[11px] text-muted-foreground">{hearReply.model.label} · ~{hearReply.estimate.credits} créditos (não cobrado)</p>
+                    <p className="text-[11px] text-muted-foreground">{hearReply.model.label} · ~{hearReply.estimate.credits} credits (not charged)</p>
                   </div>
                 )}
               </>
@@ -397,26 +398,26 @@ export function VertalSensesPanel({ token, onClose }: { token: () => Promise<str
 
             {tab === 'novela' && (
               <>
-                <p className="text-xs text-muted-foreground">Conte a ideia em uma ou duas frases. Eu escrevo, ilustro, narro e monto uma novelinha vertical de ~2 minutos.</p>
-                <Textarea value={premise} onChange={(e) => setPremise(e.target.value)} rows={3} placeholder="Ex.: Uma confeiteira descobre que o cliente misterioso é o irmão que ela não vê há 20 anos." />
+                <p className="text-xs text-muted-foreground">Describe the idea in one or two sentences. A short vertical story of about 2 minutes is written, illustrated, narrated and put together for you.</p>
+                <Textarea value={premise} onChange={(e) => setPremise(e.target.value)} rows={3} placeholder="For example: A baker finds out that her mystery customer is the brother she has not seen in 20 years." />
                 <div className="flex items-center gap-2">
-                  <select aria-label="Voz" value={voice} onChange={(e) => setVoice(e.target.value)} className="rounded-md border border-border/60 bg-background px-2 py-1 text-xs">
-                    <option value="pf_dora">Voz feminina</option>
-                    <option value="pm_alex">Voz masculina</option>
-                    <option value="pm_santa">Voz masculina grave</option>
+                  <select aria-label="Voice" value={voice} onChange={(e) => setVoice(e.target.value)} className="rounded-md border border-border/60 bg-background px-2 py-1 text-xs">
+                    <option value="pf_dora">Female voice (Portuguese)</option>
+                    <option value="pm_alex">Male voice (Portuguese)</option>
+                    <option value="pm_santa">Deep male voice (Portuguese)</option>
                   </select>
                   <Button onClick={createNovela} disabled={busy || premise.trim().length < 8 || novela?.status === 'pending'}>
-                    <Clapperboard className="mr-1 h-4 w-4" /> Criar novela
+                    <Clapperboard className="mr-1 h-4 w-4" /> Create story
                   </Button>
                 </div>
                 {novela?.status === 'pending' && (
-                  <p className="flex items-center gap-2 text-xs"><Loader2 className="h-4 w-4 animate-spin" /> {NOVELA_STAGE_TEXT[novela.stage ?? 'queued'] ?? 'Trabalhando…'} (leva alguns minutos)</p>
+                  <p className="flex items-center gap-2 text-xs"><Loader2 className="h-4 w-4 animate-spin" /> {NOVELA_STAGE_TEXT[novela.stage ?? 'queued'] ?? 'Working…'} (takes a few minutes)</p>
                 )}
                 {novelaUrl && (
                   <div className="space-y-1">
                     {novela?.titulo && <p className="text-sm font-semibold">{novela.titulo}</p>}
                     <video src={novelaUrl} controls playsInline className="max-h-[70vh] rounded-lg bg-black" />
-                    <p className="text-[11px] text-muted-foreground">Vertal Novela · Própria{novela?.credits ? ` · ~${novela.credits} créditos (não cobrado)` : ''}</p>
+                    <p className="text-[11px] text-muted-foreground">Vertal Novela · own model{novela?.credits ? ` · ~${novela.credits} credits (not charged)` : ''}</p>
                   </div>
                 )}
               </>

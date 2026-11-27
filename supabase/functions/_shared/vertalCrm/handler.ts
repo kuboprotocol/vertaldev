@@ -11,7 +11,7 @@
 // Nada aqui envia e-mail ou mensagem para ninguém.
 
 import {
-  aiMessages, localizeAiText, API_KEY_PREFIX, compactContext, contactPatch, CRM_AI_COST, CRM_EVENT_TYPES, CRM_SYNC_ACTIVATE_COST,
+  aiMessages, localizeAiText, API_KEY_PREFIX, compactContext, contactPatch, CRM_AI_COST, CRM_DEFAULT_CURRENCY, CRM_DEFAULT_WS_NAME, CRM_EVENT_TYPES, CRM_SYNC_ACTIVATE_COST,
   CRM_SYNC_AI_RUN_COST, crmAiRequiresPlan, crmLang, dealPatch, DEFAULT_MAPPING, defaultPipelineName, defaultStages, EMAIL_RE,
   extractJson, flattenContact, growthContactToCrm, isAiKind, isSafeWebhookUrl, mappingMessages, normalizeEvents,
   normalizeMapping, normalizeStages, parseEmailDraft, parseNextAction, parseScore, plainSyncCost, providerInfo,
@@ -123,7 +123,7 @@ async function resolveWorkspace(deps: CrmDeps, body: Loose): Promise<{ ws: strin
 
 async function createWorkspace(deps: CrmDeps, name: string, lang: CrmLang) {
   const { data: ws, error } = await deps.admin.from("crm_workspaces")
-    .insert({ owner_id: deps.userId, name: name || "Meu CRM", lang, currency: lang === "pt" ? "BRL" : "USD" }).select("*").single();
+    .insert({ owner_id: deps.userId, name: name || (CRM_DEFAULT_WS_NAME[lang] ?? "Meu CRM"), lang, currency: CRM_DEFAULT_CURRENCY[lang] ?? "USD" }).select("*").single();
   if (error || !ws) throw new Error(`workspace_insert: ${error?.message}`);
   const { data: u } = await deps.admin.auth.admin.getUserById(deps.userId).catch(() => ({ data: null }));
   await deps.admin.from("crm_members").insert({ workspace_id: ws.id, user_id: deps.userId, role: "owner", email: u?.user?.email ?? null });

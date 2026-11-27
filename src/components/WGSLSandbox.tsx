@@ -39,22 +39,22 @@ export default function WGSLSandbox() {
       // STEP 2 — only if approved, hand off to WebGPU.
       const device = await requestSafeGPUDevice();
       if (!device) {
-        setCompileLog('[guardian] APROVADO. WebGPU indisponível no preview — em browsers compatíveis seria compilado agora.');
-        toast.success('Shader aprovado pelo guardião');
+        setCompileLog('[guardian] APPROVED. WebGPU is not available in this preview. A compatible browser would compile it now.');
+        toast.success('Shader approved by the guardian');
         return;
       }
       const module = device.createShaderModule({ label: 'kubo-sandbox', code: sanitized.sanitized });
       const info = await module.getCompilationInfo();
-      const msgs = info.messages.map(m => `${m.type}: ${m.message}`).join('\n') || '(sem mensagens)';
-      setCompileLog(`[guardian] APROVADO\n[webgpu] compileShaderModule OK\n${msgs}`);
-      toast.success('Shader compilado com sucesso');
+      const msgs = info.messages.map(m => `${m.type}: ${m.message}`).join('\n') || '(no messages)';
+      setCompileLog(`[guardian] APPROVED\n[webgpu] compileShaderModule OK\n${msgs}`);
+      toast.success('Shader compiled');
     } catch (e) {
       if (e instanceof WGSLBlockedError) {
         setResult({ blocked: true, sanitized: '', violations: e.violations });
-        setCompileLog(`[guardian] BLOQUEADO\n${e.violations.map(v => `${v.severity.toUpperCase()} ${v.rule}: ${v.message}`).join('\n')}`);
-        toast.error('Shader bloqueado pelo guardião');
+        setCompileLog(`[guardian] BLOCKED\n${e.violations.map(v => `${v.severity.toUpperCase()} ${v.rule}: ${v.message}`).join('\n')}`);
+        toast.error('Shader blocked by the guardian');
       } else {
-        setCompileLog(`[erro] ${(e as Error).message}`);
+        setCompileLog(`[error] ${(e as Error).message}`);
         toast.error((e as Error).message);
       }
     } finally { setLoading(false); }
@@ -64,11 +64,11 @@ export default function WGSLSandbox() {
   const approved = result && !result.blocked;
 
   return (
-    <Card className="glass-premium p-4 space-y-3">
+    <Card className="space-y-3 rounded-2xl border-white/[0.06] bg-card/50 p-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Shield className="w-5 h-5 text-primary" />
-          <h3 className="font-display tracking-wider text-sm">WGSL SANDBOX</h3>
+          <h3 className="text-[15px] font-semibold">WGSL sandbox</h3>
         </div>
         <div className="flex gap-1">
           <Button size="sm" variant="ghost" onClick={() => setSrc(SAFE_SAMPLE)}>Safe</Button>
@@ -86,13 +86,13 @@ export default function WGSLSandbox() {
       <div className="flex items-center gap-2">
         <Button onClick={compile} disabled={loading || !src.trim()} size="sm" className="gap-2">
           <Cpu className="w-4 h-4" />
-          {loading ? 'Verificando…' : 'Sanitizar + Compilar'}
+          {loading ? 'Checking…' : 'Sanitize and compile'}
         </Button>
         {approved && (
-          <Badge className="neon-ring-gold gap-1"><CheckCircle2 className="w-3 h-3" /> Aprovado</Badge>
+          <Badge className="gap-1"><CheckCircle2 className="w-3 h-3" /> Approved</Badge>
         )}
         {blocked && (
-          <Badge variant="destructive" className="gap-1"><ShieldAlert className="w-3 h-3" /> Bloqueado</Badge>
+          <Badge variant="destructive" className="gap-1"><ShieldAlert className="w-3 h-3" /> Blocked</Badge>
         )}
       </div>
 

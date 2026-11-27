@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/integrations/supabase/client'
+import { SITE_FONT, siteRoot } from '@/components/site/siteUi'
 
 type Connection = {
   id: string
@@ -98,7 +99,7 @@ export default function ConnectorRenderPage() {
       const r = await call('render-proxy', { action: 'list_services', connection_id: connId, limit: 50 })
       const items = Array.isArray(r.data) ? r.data.map((x: any) => x.service ?? x) : []
       setServices(items)
-    } catch (e: any) { toast({ title: 'Erro ao listar serviços', description: e.message, variant: 'destructive' }) }
+    } catch (e: any) { toast({ title: 'We could not list the services', description: e.message, variant: 'destructive' }) }
   }
 
   useEffect(() => { loadAll() }, [])
@@ -109,7 +110,7 @@ export default function ConnectorRenderPage() {
     setSavingKey(true)
     try {
       await call('render-connect', { action: 'save', api_key: newKey.trim(), name: newName.trim() })
-      toast({ title: 'Conexão Render salva', description: 'API key validada e cifrada.' })
+      toast({ title: 'Render connection saved', description: 'API key checked and encrypted.' })
       setNewKey(''); setNewName('Render'); setShowAdd(false)
       await loadAll()
     } catch (e: any) { toast({ title: 'Erro', description: e.message, variant: 'destructive' }) }
@@ -117,7 +118,7 @@ export default function ConnectorRenderPage() {
   }
 
   async function deleteConn(id: string) {
-    if (!confirm('Remover esta conexão Render?')) return
+    if (!confirm('Remove this Render connection?')) return
     try { await call('render-connect', { action: 'delete', id }); await loadAll(); if (activeConnId === id) setActiveConnId(null) }
     catch (e: any) { toast({ title: 'Erro', description: e.message, variant: 'destructive' }) }
   }
@@ -128,7 +129,7 @@ export default function ConnectorRenderPage() {
     try {
       const d = await call('render-proxy', { action: 'list_deploys', connection_id: activeConnId, service_id: svc.id, limit: 15 })
       setDeploys(Array.isArray(d.data) ? d.data.map((x: any) => x.deploy ?? x) : [])
-    } catch (e: any) { toast({ title: 'Erro deploys', description: e.message, variant: 'destructive' }) }
+    } catch (e: any) { toast({ title: 'We could not load the deploys', description: e.message, variant: 'destructive' }) }
   }
 
   async function refreshLogs() {
@@ -138,7 +139,7 @@ export default function ConnectorRenderPage() {
       const r = await call('render-proxy', { action: 'list_logs', connection_id: activeConnId, service_id: activeService.id, limit: 100 })
       const items = r.data?.logs ?? r.data ?? []
       setLogs(Array.isArray(items) ? items : (items.logs || []))
-    } catch (e: any) { toast({ title: 'Erro logs', description: e.message, variant: 'destructive' }) }
+    } catch (e: any) { toast({ title: 'We could not load the logs', description: e.message, variant: 'destructive' }) }
     setLogsLoading(false)
   }
 
@@ -157,7 +158,7 @@ export default function ConnectorRenderPage() {
   async function savePolicy(p: Policy) {
     try {
       await call('render-policies', { action: 'upsert', ...p })
-      toast({ title: 'Política salva' })
+      toast({ title: 'Policy saved' })
       setEditPolicy(null)
       const ev = await call('render-policies', { action: 'list' })
       setPolicies(ev.policies || [])
@@ -167,28 +168,28 @@ export default function ConnectorRenderPage() {
   async function runHealNow() {
     try {
       const r = await call('render-auto-heal', {})
-      toast({ title: 'Auto-heal executado', description: `${r.count} serviços avaliados` })
+      toast({ title: 'Auto-heal finished', description: `${r.count} services checked` })
       const ev = await call('render-policies', { action: 'events', limit: 50 })
       setEvents(ev.events || [])
     } catch (e: any) { toast({ title: 'Erro', description: e.message, variant: 'destructive' }) }
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <title>{`Render Connector — ${APP_NAME}`}</title>
+    <div className={`min-h-screen ${siteRoot}`} style={SITE_FONT}>
+      <title>{`Render connector · ${APP_NAME}`}</title>
       <div className="container max-w-7xl mx-auto px-4 py-6">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div className="flex items-center gap-3">
             <Link to="/connectors"><Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" />Connectors</Button></Link>
             <div>
               <h1 className="text-2xl font-bold flex items-center gap-2"><Server className="w-6 h-6 text-primary" /> Render</h1>
-              <p className="text-sm text-muted-foreground">Multi-tenant • Auto-healing • Logs • Rollback • E2E hooks</p>
+              <p className="text-sm text-muted-foreground">Auto-healing · Logs · Rollback · Test webhooks</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={loadAll}><RefreshCw className="w-4 h-4 mr-1" />Atualizar</Button>
-            <Button variant="outline" size="sm" onClick={runHealNow}><Heart className="w-4 h-4 mr-1" />Rodar auto-heal</Button>
-            <Button size="sm" onClick={() => setShowAdd(true)}><Plus className="w-4 h-4 mr-1" />Nova conexão</Button>
+            <Button variant="outline" size="sm" onClick={loadAll}><RefreshCw className="w-4 h-4 mr-1" />Refresh</Button>
+            <Button variant="outline" size="sm" onClick={runHealNow}><Heart className="w-4 h-4 mr-1" />Run auto-heal</Button>
+            <Button size="sm" onClick={() => setShowAdd(true)}><Plus className="w-4 h-4 mr-1" />New connection</Button>
           </div>
         </div>
 
@@ -197,9 +198,9 @@ export default function ConnectorRenderPage() {
         {!loading && connections.length === 0 && (
           <Card><CardContent className="py-12 text-center">
             <Server className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
-            <h2 className="font-semibold mb-1">Nenhuma conexão Render</h2>
-            <p className="text-sm text-muted-foreground mb-4">Cole sua API key da Render para começar.</p>
-            <Button onClick={() => setShowAdd(true)}><Plus className="w-4 h-4 mr-1" />Conectar Render</Button>
+            <h2 className="font-semibold mb-1">No Render connection yet</h2>
+            <p className="text-sm text-muted-foreground mb-4">Paste your Render API key to start.</p>
+            <Button onClick={() => setShowAdd(true)}><Plus className="w-4 h-4 mr-1" />Connect Render</Button>
           </CardContent></Card>
         )}
 
@@ -220,9 +221,9 @@ export default function ConnectorRenderPage() {
 
             <Tabs defaultValue="services">
               <TabsList>
-                <TabsTrigger value="services"><Server className="w-4 h-4 mr-1" />Serviços</TabsTrigger>
+                <TabsTrigger value="services"><Server className="w-4 h-4 mr-1" />Services</TabsTrigger>
                 <TabsTrigger value="heal"><ShieldCheck className="w-4 h-4 mr-1" />Auto-heal</TabsTrigger>
-                <TabsTrigger value="events"><Activity className="w-4 h-4 mr-1" />Eventos</TabsTrigger>
+                <TabsTrigger value="events"><Activity className="w-4 h-4 mr-1" />Events</TabsTrigger>
               </TabsList>
 
               <TabsContent value="services" className="mt-4">
@@ -246,12 +247,12 @@ export default function ConnectorRenderPage() {
                       </motion.div>
                     )
                   })}
-                  {services.length === 0 && <p className="text-sm text-muted-foreground col-span-full text-center py-8">Nenhum serviço encontrado.</p>}
+                  {services.length === 0 && <p className="text-sm text-muted-foreground col-span-full text-center py-8">No services found.</p>}
                 </div>
               </TabsContent>
 
               <TabsContent value="heal" className="mt-4 space-y-2">
-                {policies.length === 0 && <p className="text-sm text-muted-foreground">Abra um serviço e configure a política de auto-healing.</p>}
+                {policies.length === 0 && <p className="text-sm text-muted-foreground">Open a service and set its auto-healing policy.</p>}
                 {policies.map(p => (
                   <Card key={p.id}>
                     <CardContent className="p-3 flex items-center justify-between flex-wrap gap-2">
@@ -264,7 +265,7 @@ export default function ConnectorRenderPage() {
                           health: {p.health_url || '—'} • restarts/h ≤ {p.max_restarts_per_hour} • rollback: {p.rollback_on_fail ? 'sim' : 'não'} • E2E: {p.e2e_run_on_deploy ? 'sim' : 'não'}
                         </div>
                       </div>
-                      <Button size="sm" variant="outline" onClick={() => setEditPolicy(p)}>Editar</Button>
+                      <Button size="sm" variant="outline" onClick={() => setEditPolicy(p)}>Edit</Button>
                     </CardContent>
                   </Card>
                 ))}
@@ -273,7 +274,7 @@ export default function ConnectorRenderPage() {
               <TabsContent value="events" className="mt-4">
                 <ScrollArea className="h-[500px] border rounded-lg">
                   <div className="divide-y">
-                    {events.length === 0 && <p className="text-sm text-muted-foreground text-center py-8">Sem eventos ainda.</p>}
+                    {events.length === 0 && <p className="text-sm text-muted-foreground text-center py-8">No events yet.</p>}
                     {events.map(e => (
                       <div key={e.id} className="p-3 text-xs flex items-start gap-3">
                         {e.status === 'success'
@@ -298,15 +299,15 @@ export default function ConnectorRenderPage() {
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Conectar Render</DialogTitle>
-            <DialogDescription>Crie uma API Key em <a className="text-primary underline" href="https://dashboard.render.com/u/settings#api-keys" target="_blank" rel="noreferrer">dashboard.render.com</a>. A chave é cifrada com AES-256-GCM.</DialogDescription>
+            <DialogTitle>Connect Render</DialogTitle>
+            <DialogDescription>Create an API key at <a className="text-primary underline" href="https://dashboard.render.com/u/settings#api-keys" target="_blank" rel="noreferrer">dashboard.render.com</a>. The key is encrypted with AES-256-GCM.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <div><Label>Nome</Label><Input value={newName} onChange={e => setNewName(e.target.value)} /></div>
-            <div><Label>Render API Key</Label><Input type="password" placeholder="rnd_..." value={newKey} onChange={e => setNewKey(e.target.value)} /></div>
+            <div><Label>Name</Label><Input value={newName} onChange={e => setNewName(e.target.value)} /></div>
+            <div><Label>Render API key</Label><Input type="password" placeholder="rnd_..." value={newKey} onChange={e => setNewKey(e.target.value)} /></div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowAdd(false)}>Cancelar</Button>
+            <Button variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Button>
             <Button onClick={saveKey} disabled={savingKey || !newKey}>{savingKey ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar'}</Button>
           </DialogFooter>
         </DialogContent>
@@ -350,7 +351,7 @@ export default function ConnectorRenderPage() {
             <TabsContent value="deploys">
               <ScrollArea className="h-[320px] border rounded">
                 <div className="divide-y">
-                  {deploys.length === 0 && <p className="text-sm text-muted-foreground p-4">Sem deploys.</p>}
+                  {deploys.length === 0 && <p className="text-sm text-muted-foreground p-4">No deploys.</p>}
                   {deploys.map(d => (
                     <div key={d.id} className="p-3 text-xs flex items-center justify-between gap-2">
                       <div className="min-w-0">
@@ -372,7 +373,7 @@ export default function ConnectorRenderPage() {
             <TabsContent value="logs">
               <ScrollArea className="h-[320px] border rounded">
                 <pre className="text-[11px] p-3 whitespace-pre-wrap font-mono">
-                  {logs.length === 0 ? 'Clique em Logs para carregar…' : logs.map((l: any, i) => `[${l.timestamp || ''}] ${l.message || JSON.stringify(l)}`).join('\n')}
+                  {logs.length === 0 ? 'Click Logs to load them…' : logs.map((l: any, i) => `[${l.timestamp || ''}] ${l.message || JSON.stringify(l)}`).join('\n')}
                 </pre>
               </ScrollArea>
             </TabsContent>
@@ -384,23 +385,23 @@ export default function ConnectorRenderPage() {
       <Dialog open={!!editPolicy} onOpenChange={(o) => !o && setEditPolicy(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Política de auto-healing</DialogTitle>
+            <DialogTitle>Auto-healing policy</DialogTitle>
             <DialogDescription>{editPolicy?.service_name || editPolicy?.service_id}</DialogDescription>
           </DialogHeader>
           {editPolicy && (
             <div className="space-y-3">
-              <div className="flex items-center justify-between"><Label>Habilitado</Label><Switch checked={editPolicy.enabled} onCheckedChange={v => setEditPolicy({ ...editPolicy, enabled: v })} /></div>
+              <div className="flex items-center justify-between"><Label>On</Label><Switch checked={editPolicy.enabled} onCheckedChange={v => setEditPolicy({ ...editPolicy, enabled: v })} /></div>
               <div><Label>Health URL</Label><Input value={editPolicy.health_url ?? ''} onChange={e => setEditPolicy({ ...editPolicy, health_url: e.target.value })} placeholder="https://meu-app.onrender.com/health" /></div>
-              <div><Label>Max restarts / hora</Label><Input type="number" value={editPolicy.max_restarts_per_hour} onChange={e => setEditPolicy({ ...editPolicy, max_restarts_per_hour: Number(e.target.value) })} /></div>
-              <div className="flex items-center justify-between"><Label>Rollback se deploy falhar</Label><Switch checked={editPolicy.rollback_on_fail} onCheckedChange={v => setEditPolicy({ ...editPolicy, rollback_on_fail: v })} /></div>
+              <div><Label>Max restarts per hour</Label><Input type="number" value={editPolicy.max_restarts_per_hour} onChange={e => setEditPolicy({ ...editPolicy, max_restarts_per_hour: Number(e.target.value) })} /></div>
+              <div className="flex items-center justify-between"><Label>Roll back if a deploy fails</Label><Switch checked={editPolicy.rollback_on_fail} onCheckedChange={v => setEditPolicy({ ...editPolicy, rollback_on_fail: v })} /></div>
               <div><Label>Webhook E2E (POST)</Label><Input value={editPolicy.e2e_webhook_url ?? ''} onChange={e => setEditPolicy({ ...editPolicy, e2e_webhook_url: e.target.value })} placeholder="https://api.github.com/repos/.../dispatches" /></div>
-              <div className="flex items-center justify-between"><Label>Disparar E2E após deploy live</Label><Switch checked={editPolicy.e2e_run_on_deploy} onCheckedChange={v => setEditPolicy({ ...editPolicy, e2e_run_on_deploy: v })} /></div>
-              <div className="rounded bg-amber-500/10 border border-amber-500/30 p-2 text-xs text-amber-300 flex gap-2"><AlertTriangle className="w-4 h-4 shrink-0" />O motor avalia tudo a cada 2min via cron. Restart respeita o limite acima.</div>
+              <div className="flex items-center justify-between"><Label>Run end-to-end tests after a deploy goes live</Label><Switch checked={editPolicy.e2e_run_on_deploy} onCheckedChange={v => setEditPolicy({ ...editPolicy, e2e_run_on_deploy: v })} /></div>
+              <div className="rounded bg-amber-500/10 border border-amber-500/30 p-2 text-xs text-amber-300 flex gap-2"><AlertTriangle className="w-4 h-4 shrink-0" />A scheduled job checks everything every 2 minutes. Restarts follow the limit above.</div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setEditPolicy(null)}>Cancelar</Button>
-            <Button onClick={() => editPolicy && savePolicy(editPolicy)}>Salvar política</Button>
+            <Button variant="ghost" onClick={() => setEditPolicy(null)}>Cancel</Button>
+            <Button onClick={() => editPolicy && savePolicy(editPolicy)}>Save policy</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

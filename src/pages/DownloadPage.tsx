@@ -1,10 +1,11 @@
 import { APP_NAME } from '@/config/brand'
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
 import { Monitor, Apple, Smartphone, Terminal, Download as DownloadIcon, ExternalLink, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import Navbar from '@/components/landing/Navbar'
+import SitePage from '@/components/site/SitePage'
+import { PageHeader, Reveal, surface } from '@/components/site/siteUi'
+import { cn } from '@/lib/utils'
 import LocalAgentTokens from '@/components/download/LocalAgentTokens'
 import {
   FALLBACK_DOWNLOADS,
@@ -21,7 +22,7 @@ interface PlatformCard {
   name: string
   icon: typeof Monitor
   detail: string
-  /** Comando de primeira execução, mostrado quando o download existe. */
+  /** First-run command, shown when the download exists. */
   install?: string
 }
 
@@ -30,33 +31,33 @@ const PLATFORMS: PlatformCard[] = [
     id: 'windows',
     name: 'Windows',
     icon: Monitor,
-    detail: 'Vertal Local Agent — detecta e integra com VS Code, Cursor, Trae e Antigravity automaticamente.',
+    detail: 'Vertal Local Agent. It finds VS Code, Cursor, Trae and Antigravity and connects to them for you.',
   },
   {
     id: 'mac',
     name: 'macOS',
     icon: Apple,
-    detail: 'Binário universal (Apple Silicon + Intel). Mesma integração com VS Code, Cursor, Trae e Antigravity.',
+    detail: 'Universal binary for Apple silicon and Intel. Works with VS Code, Cursor, Trae and Antigravity.',
     install: 'tar -xzf kubo-vibe-macos.tar.gz && xattr -d com.apple.quarantine kubo-agent; ./kubo-agent',
   },
   {
     id: 'linux',
     name: 'Linux',
     icon: Terminal,
-    detail: 'Binário x86_64 para Ubuntu, Debian, Fedora e derivados.',
+    detail: 'x86_64 binary for Ubuntu, Debian, Fedora and similar systems.',
     install: 'tar -xzf kubo-vibe-linux-x64.tar.gz && ./kubo-agent',
   },
   {
     id: 'ios',
     name: 'iOS / iPadOS',
     icon: Smartphone,
-    detail: 'Workspace remoto na nuvem Vertal, sincronizado em tempo real.',
+    detail: 'Use your remote workspace in the Vertal cloud.',
   },
   {
     id: 'android',
     name: 'Android',
     icon: Smartphone,
-    detail: 'Mesma experiência do app web, otimizada para toque.',
+    detail: 'The same features as the web app, made for touch.',
   },
 ]
 
@@ -83,120 +84,94 @@ export default function DownloadPage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
+    <SitePage>
+      <PageHeader eyebrow="Vertal Local Agent" title={`Run ${APP_NAME} on your computer.`}>
+        Run code on your own machine, inside the editor you already use, while you keep working in {APP_NAME}.
+      </PageHeader>
 
-      <main className="max-w-5xl mx-auto px-6 py-16">
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-14"
-        >
-          <Badge variant="outline" className="mb-4 border-primary/30 bg-primary/5 text-primary">
-            Vertal Local Agent
-          </Badge>
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-foreground">
-            Leve o {APP_NAME} para sua máquina
-          </h1>
-          <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-            Execução local de verdade, integrada ao editor que você já usa — sem sair do {APP_NAME}.
-          </p>
-        </motion.div>
-
+      <div className="mx-auto max-w-5xl px-6 pb-24">
         <div className="grid gap-5 sm:grid-cols-2">
           {PLATFORMS.map((platform, i) => {
             const Icon = platform.icon
             const isDetected = detected === platform.id
             const downloadUrl = downloads.urls[platform.id as AgentPlatform]
             return (
-              <motion.div
+              <Reveal
                 key={platform.id}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className={`relative rounded-2xl border p-6 backdrop-blur-sm transition-colors ${
-                  isDetected
-                    ? 'border-primary/40 bg-primary/5'
-                    : 'border-border/50 bg-card/40'
-                }`}
+                delay={i * 0.05}
+                className={cn(surface.card, 'relative p-6', isDetected && 'border-primary/40')}
               >
-                {isDetected && (
-                  <Badge className="absolute -top-3 left-6 bg-primary text-primary-foreground">
-                    Seu sistema
-                  </Badge>
-                )}
-
                 <div className="flex items-start gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-secondary/60">
-                    <Icon className="h-6 w-6 text-foreground" />
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/[0.06]">
+                    <Icon className="h-6 w-6 text-foreground" aria-hidden />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-lg font-semibold text-foreground">{platform.name}</h3>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-xl font-semibold tracking-[-0.01em] text-foreground">{platform.name}</h2>
+                      {isDetected && (
+                        <Badge className="rounded-full bg-primary/15 font-medium text-primary hover:bg-primary/15">
+                          Your system
+                        </Badge>
+                      )}
                       {!downloadUrl && (
-                        <Badge variant="outline" className="gap-1 text-[10px] text-muted-foreground">
-                          <Clock className="h-3 w-3" /> Em breve
+                        <Badge variant="outline" className="gap-1 rounded-full text-[11px] font-normal text-muted-foreground">
+                          <Clock className="h-3 w-3" aria-hidden /> Coming soon
                         </Badge>
                       )}
                     </div>
-                    <p className="mt-1 text-sm text-muted-foreground">{platform.detail}</p>
+                    <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground">{platform.detail}</p>
 
-                    <div className="mt-4">
+                    <div className="mt-5">
                       {downloadUrl ? (
-                        <Button asChild className="rounded-xl">
+                        <Button asChild className="rounded-full">
                           <a href={downloadUrl} target="_blank" rel="noreferrer noopener">
-                            <DownloadIcon className="h-4 w-4 mr-2" />
-                            Baixar para {platform.name}
+                            <DownloadIcon className="mr-2 h-4 w-4" aria-hidden />
+                            Download for {platform.name}
                           </a>
                         </Button>
                       ) : (
-                        <Button variant="outline" disabled className="rounded-xl">
-                          Em breve
+                        <Button variant="outline" disabled className="rounded-full">
+                          Coming soon
                         </Button>
                       )}
                       {downloadUrl && platform.install && (
-                        <code className="mt-3 block overflow-x-auto whitespace-nowrap rounded-lg bg-secondary/60 px-3 py-2 text-xs text-muted-foreground">
+                        <code className="mt-3 block overflow-x-auto whitespace-nowrap rounded-lg bg-white/[0.05] px-3 py-2 text-xs text-muted-foreground">
                           {platform.install}
                         </code>
                       )}
                     </div>
                   </div>
                 </div>
-              </motion.div>
+              </Reveal>
             )
           })}
         </div>
 
         <LocalAgentTokens />
 
-        <motion.div
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          className="mt-10 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5 text-sm text-muted-foreground"
-        >
+        <Reveal className={cn(surface.card, 'mt-10 p-6 text-[15px] leading-relaxed text-muted-foreground')}>
+          <h2 className="mb-2 text-[17px] font-semibold text-foreground">About these builds</h2>
           <p>
-            <strong className="text-foreground">Sobre os builds:</strong> ainda não estão assinados
-            digitalmente. No Windows, o SmartScreen pode avisar "O Windows protegeu seu PC" — clique em{' '}
-            <strong className="text-foreground">"Mais informações" → "Executar assim mesmo"</strong>. No macOS,
-            o Gatekeeper bloqueia binários baixados sem notarização — o comando{' '}
-            <code className="text-foreground">xattr -d com.apple.quarantine</code> acima libera a execução.
-            Isso é esperado num build recente sem certificado, não é malware.
+            The builds are not digitally signed yet. On Windows, SmartScreen may show "Windows protected your PC".
+            Click <strong className="text-foreground">More info</strong>, then{' '}
+            <strong className="text-foreground">Run anyway</strong>. On macOS, Gatekeeper blocks downloaded binaries
+            that are not notarized. The <code className="text-foreground">xattr -d com.apple.quarantine</code> command
+            above lets the agent run. This is normal for a new build without a certificate. It is not malware.
           </p>
-        </motion.div>
+        </Reveal>
 
-        <div className="mt-6 text-center">
+        <div className="mt-8 text-center">
           <a
             href={RELEASES_PAGE_URL}
             target="_blank"
             rel="noreferrer noopener"
-            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="inline-flex items-center gap-1.5 text-[15px] text-primary underline-offset-4 hover:underline"
           >
-            {downloads.version ? `Versão ${downloads.version} · ` : ''}Ver todas as versões no GitHub{' '}
-            <ExternalLink className="h-3.5 w-3.5" />
+            {downloads.version ? `Version ${downloads.version} · ` : ''}See all versions on GitHub{' '}
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
           </a>
         </div>
-      </main>
-    </div>
+      </div>
+    </SitePage>
   )
 }

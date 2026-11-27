@@ -25,31 +25,31 @@ type Reason = 'enterprise' | 'support' | 'other'
 
 const REASON_META: Record<Reason, { label: string; icon: typeof Crown; placeholder: string }> = {
   enterprise: {
-    label: 'Quero aumentar meu plano (Enterprise)',
+    label: 'Upgrade my plan (Enterprise)',
     icon: Crown,
-    placeholder: 'Ex: equipe de 15 devs, ~5.000 créditos/mês estimados',
+    placeholder: 'Example: a team of 15 developers, about 5,000 credits a month',
   },
   support: {
-    label: 'Suporte técnico',
+    label: 'Technical support',
     icon: LifeBuoy,
-    placeholder: 'Descreva o problema que você está enfrentando',
+    placeholder: 'Describe the problem you have',
   },
   other: {
-    label: 'Outro assunto',
+    label: 'Something else',
     icon: MessageCircle,
-    placeholder: 'Como podemos ajudar?',
+    placeholder: 'How can we help?',
   },
 }
 
 const VOLUME_OPTIONS = [
-  'Até 1.000 créditos/mês',
-  '1.000–5.000 créditos/mês',
-  '5.000–20.000 créditos/mês',
-  'Acima de 20.000 créditos/mês',
-  'Não sei ainda',
+  'Up to 1,000 credits a month',
+  '1,000 to 5,000 credits a month',
+  '5,000 to 20,000 credits a month',
+  'More than 20,000 credits a month',
+  'I do not know yet',
 ]
 
-const TEAM_SIZE_OPTIONS = ['1–5 pessoas', '6–20 pessoas', '21–50 pessoas', '50+ pessoas']
+const TEAM_SIZE_OPTIONS = ['1 to 5 people', '6 to 20 people', '21 to 50 people', 'More than 50 people']
 
 const CONTACT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/contact-request`
 
@@ -67,7 +67,7 @@ export function ContactDialog({ open, onOpenChange, defaultReason = 'enterprise'
   const [message, setMessage] = useState('')
   const [estimatedVolume, setEstimatedVolume] = useState('')
   const [teamSize, setTeamSize] = useState('')
-  const [website, setWebsite] = useState('') // honeypot, sempre vazio para humanos
+  const [website, setWebsite] = useState('') // honeypot: always empty for people
   const [submitting, setSubmitting] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -117,12 +117,12 @@ export function ContactDialog({ open, onOpenChange, defaultReason = 'enterprise'
       })
       const data = await resp.json().catch(() => ({}))
       if (!resp.ok || data?.ok === false) {
-        setError('Não conseguimos enviar sua mensagem agora. Tente de novo em instantes.')
+        setError('We could not send your message. Please try again in a moment.')
         return
       }
       setSent(true)
     } catch {
-      setError('Não conseguimos enviar sua mensagem agora. Tente de novo em instantes.')
+      setError('We could not send your message. Please try again in a moment.')
     } finally {
       setSubmitting(false)
     }
@@ -134,21 +134,21 @@ export function ContactDialog({ open, onOpenChange, defaultReason = 'enterprise'
         {sent ? (
           <div className="flex flex-col items-center gap-3 py-8 text-center">
             <CheckCircle2 className="h-12 w-12 text-primary" />
-            <DialogTitle>Mensagem enviada!</DialogTitle>
+            <DialogTitle>Message sent</DialogTitle>
             <p className="text-sm text-muted-foreground">
-              Recebemos sua mensagem e nossa equipe vai responder em até 1 dia útil.
+              We got your message. We will reply by email.
             </p>
-            <Button onClick={() => handleClose(false)} className="mt-2">Fechar</Button>
+            <Button onClick={() => handleClose(false)} className="mt-2">Close</Button>
           </div>
         ) : (
           <>
             <DialogHeader>
               <Badge className="mb-2 w-fit bg-primary/15 text-primary border-primary/30">
-                <Icon className="mr-1.5 h-3 w-3" /> Falar com a gente
+                <Icon className="mr-1.5 h-3 w-3" /> Contact us
               </Badge>
-              <DialogTitle>Como podemos ajudar?</DialogTitle>
+              <DialogTitle>How can we help?</DialogTitle>
               <DialogDescription>
-                Preencha abaixo — nossa equipe responde em até 1 dia útil.
+                Fill in the form and we will reply by email.
               </DialogDescription>
             </DialogHeader>
 
@@ -165,7 +165,7 @@ export function ContactDialog({ open, onOpenChange, defaultReason = 'enterprise'
               />
 
               <div className="space-y-1.5">
-                <Label htmlFor="contact-reason">Motivo do contato</Label>
+                <Label htmlFor="contact-reason">Reason</Label>
                 <Select value={reason} onValueChange={(v) => setReason(v as Reason)}>
                   <SelectTrigger id="contact-reason">
                     <SelectValue />
@@ -180,27 +180,27 @@ export function ContactDialog({ open, onOpenChange, defaultReason = 'enterprise'
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor="contact-name">Nome completo</Label>
+                  <Label htmlFor="contact-name">Full name</Label>
                   <Input id="contact-name" required value={fullName} onChange={(e) => setFullName(e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="contact-email">E-mail</Label>
+                  <Label htmlFor="contact-email">Email</Label>
                   <Input id="contact-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="contact-company">Empresa (opcional)</Label>
+                <Label htmlFor="contact-company">Company (optional)</Label>
                 <Input id="contact-company" value={company} onChange={(e) => setCompany(e.target.value)} />
               </div>
 
               {reason === 'enterprise' && (
                 <div className="grid gap-4 rounded-xl border border-primary/20 bg-primary/5 p-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <Label htmlFor="contact-volume">Volume estimado</Label>
+                    <Label htmlFor="contact-volume">Expected usage</Label>
                     <Select value={estimatedVolume} onValueChange={setEstimatedVolume}>
                       <SelectTrigger id="contact-volume">
-                        <SelectValue placeholder="Selecione" />
+                        <SelectValue placeholder="Choose one" />
                       </SelectTrigger>
                       <SelectContent>
                         {VOLUME_OPTIONS.map((v) => (
@@ -210,10 +210,10 @@ export function ContactDialog({ open, onOpenChange, defaultReason = 'enterprise'
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="contact-team-size">Tamanho do time</Label>
+                    <Label htmlFor="contact-team-size">Team size</Label>
                     <Select value={teamSize} onValueChange={setTeamSize}>
                       <SelectTrigger id="contact-team-size">
-                        <SelectValue placeholder="Selecione" />
+                        <SelectValue placeholder="Choose one" />
                       </SelectTrigger>
                       <SelectContent>
                         {TEAM_SIZE_OPTIONS.map((v) => (
@@ -226,7 +226,7 @@ export function ContactDialog({ open, onOpenChange, defaultReason = 'enterprise'
               )}
 
               <div className="space-y-1.5">
-                <Label htmlFor="contact-message">Mensagem</Label>
+                <Label htmlFor="contact-message">Message</Label>
                 <Textarea
                   id="contact-message"
                   required
@@ -239,17 +239,17 @@ export function ContactDialog({ open, onOpenChange, defaultReason = 'enterprise'
 
               {reason === 'enterprise' ? (
                 <p className="text-xs text-muted-foreground">
-                  O que você ganha: preço customizado, suporte prioritário e onboarding dedicado.
+                  Enterprise plans include custom pricing, priority support and help with setup.
                 </p>
               ) : (
-                <p className="text-xs text-muted-foreground">Nossa equipe responde em até 1 dia útil.</p>
+                <p className="text-xs text-muted-foreground">We reply by email.</p>
               )}
 
               {error && <p className="text-sm text-destructive">{error}</p>}
 
               <Button type="submit" className="w-full" disabled={submitting}>
                 {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Enviar mensagem
+                Send message
               </Button>
             </form>
           </>

@@ -26,7 +26,7 @@ export function SecretAccessDialog({ secret, onOpenChange, onGrant, onRevoke }: 
       await fn()
       toast({ title: okTitle })
     } catch (e) {
-      toast({ title: 'Não foi possível concluir', description: e instanceof Error ? e.message : undefined, variant: 'destructive' })
+      toast({ title: 'Could not finish', description: e instanceof Error ? e.message : undefined, variant: 'destructive' })
     } finally {
       setBusy(false)
     }
@@ -36,9 +36,9 @@ export function SecretAccessDialog({ secret, onOpenChange, onGrant, onRevoke }: 
     <Dialog open={secret !== null} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Acessos · {secret?.name}</DialogTitle>
+          <DialogTitle>Access · {secret?.name}</DialogTitle>
           <DialogDescription>
-            Quem tiver acesso pode usar este segredo na orquestração. Só quem tiver “ver valor” consegue revelá-lo.
+            People with access can use this secret in orchestration. Only people with "Can see the value" can reveal it.
           </DialogDescription>
         </DialogHeader>
 
@@ -52,43 +52,43 @@ export function SecretAccessDialog({ secret, onOpenChange, onGrant, onRevoke }: 
                 await onGrant(secret.id, email.trim(), canReveal)
                 setEmail('')
                 setCanReveal(false)
-              }, 'Acesso concedido')
+              }, 'Access granted')
             }}
           >
             <div className="grid gap-1.5">
-              <Label htmlFor="grant-email">E-mail da conta</Label>
-              <Input id="grant-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="pessoa@exemplo.com" />
+              <Label htmlFor="grant-email">Account email</Label>
+              <Input id="grant-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="person@example.com" />
             </div>
             <div className="flex items-center justify-between rounded-md border p-3">
               <div>
-                <p className="text-sm font-medium">Pode ver o valor</p>
-                <p className="text-xs text-muted-foreground">Desligado: a pessoa só usa, não lê.</p>
+                <p className="text-sm font-medium">Can see the value</p>
+                <p className="text-xs text-muted-foreground">When off, the person can use the secret but cannot read it.</p>
               </div>
-              <Switch checked={canReveal} onCheckedChange={setCanReveal} aria-label="Permitir ver o valor" />
+              <Switch checked={canReveal} onCheckedChange={setCanReveal} aria-label="Allow seeing the value" />
             </div>
             <Button type="submit" disabled={busy || !email.trim()}>
-              Conceder acesso
+              Grant access
             </Button>
           </form>
 
           <div className="grid gap-2">
-            <p className="text-sm font-medium">Com acesso hoje</p>
+            <p className="text-sm font-medium">Who has access</p>
             {secret && secret.grants.length === 0 && (
-              <p className="text-sm text-muted-foreground">Só você.</p>
+              <p className="text-sm text-muted-foreground">Only you.</p>
             )}
             {secret?.grants.map((g) => (
               <div key={g.grantee_id} className="flex items-center justify-between gap-2 rounded-md border px-3 py-2">
                 <div className="min-w-0">
-                  <p className="truncate text-sm">{g.email ?? 'Conta removida'}</p>
-                  <p className="text-xs text-muted-foreground">{g.can_reveal ? 'Pode ver o valor' : 'Só usa'}</p>
+                  <p className="truncate text-sm">{g.email ?? 'Deleted account'}</p>
+                  <p className="text-xs text-muted-foreground">{g.can_reveal ? 'Can see the value' : 'Can use only'}</p>
                 </div>
                 <Button
                   variant="ghost"
                   size="sm"
                   disabled={busy}
-                  onClick={() => void run(() => onRevoke(secret.id, g.grantee_id), 'Acesso revogado')}
+                  onClick={() => void run(() => onRevoke(secret.id, g.grantee_id), 'Access revoked')}
                 >
-                  Revogar
+                  Revoke
                 </Button>
               </div>
             ))}

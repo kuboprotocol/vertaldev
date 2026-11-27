@@ -1,187 +1,43 @@
-import { Gift, Users, Zap } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { Link } from 'react-router-dom'
+import { MoreLink, Reveal, Section, SectionHeading, primaryButton } from './landingUi'
 
+// Facts from src/lib/planConfig.ts (free: 5 credits on sign-up; Starter: US$4.99/month)
+// and the referral rules in src/pages/AffiliateProgramPage.tsx.
 export default function CreditsPromoSection() {
-  const navigate = useNavigate()
-
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.6 }}
-      className="py-20 px-6 relative overflow-hidden"
-    >
-      {/* Background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 opacity-50" />
-      <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/20 rounded-full blur-3xl opacity-30" />
-      <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-primary/20 rounded-full blur-3xl opacity-30" />
+    <Section labelledBy="free-title" className="border-t border-white/[0.06]">
+      <SectionHeading id="free-title" eyebrow="Pricing" title="Start for free.">
+        You get 5 free credits when you create an account. You do not need a credit card. Paid plans start at
+        US$4.99 per month.
+      </SectionHeading>
 
-      <div className="max-w-6xl mx-auto relative z-10">
-        <div className="text-center mb-16">
-          <Badge variant="outline" className="mb-4 border-primary/30 bg-primary/5">
-            <Zap className="h-3 w-3 mr-1" /> Bônus de Boas-vindas
-          </Badge>
-          <h2 className="text-4xl md:text-5xl font-display font-bold mb-6">
-            Comece com
-            <span className="block bg-gradient-to-r from-primary via-primary/80 to-primary/60 bg-clip-text text-transparent">
-              5 Créditos Grátis
-            </span>
-          </h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Crie, implante e escale seus aplicativos sem limites. Mais bônus ao indicar amigos!
-          </p>
-        </div>
+      <Reveal className="mt-10 flex flex-col items-center gap-5 sm:flex-row sm:justify-center sm:gap-8">
+        <Link to="/auth" className={primaryButton}>
+          Create a free account
+        </Link>
+        <MoreLink to="/pricing">Compare plans</MoreLink>
+      </Reveal>
 
-        <div className="grid md:grid-cols-2 gap-8">
-          {/* Boas-vindas */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="relative group"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-primary/10 rounded-2xl blur-xl group-hover:blur-2xl transition-all opacity-0 group-hover:opacity-100" />
-            <div className="relative bg-card/50 backdrop-blur border border-primary/20 rounded-2xl p-8 hover:border-primary/40 transition-all">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h3 className="text-2xl font-bold font-display">5 Créditos</h3>
-                  <p className="text-sm text-muted-foreground">Ao se cadastrar</p>
-                </div>
-                <div className="p-4 bg-primary/10 rounded-xl">
-                  <Gift className="h-6 w-6 text-primary" />
-                </div>
-              </div>
-
-              <div className="space-y-4 mb-6">
-                <div className="flex items-start gap-3">
-                  <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
-                    <div className="h-2 w-2 rounded-full bg-primary" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-sm">Créditos para IA</p>
-                    <p className="text-xs text-muted-foreground">Use para gerar código e conteúdo</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
-                    <div className="h-2 w-2 rounded-full bg-primary" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-sm">Deploys inclusos</p>
-                    <p className="text-xs text-muted-foreground">Coloque seus apps no ar imediatamente</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
-                    <div className="h-2 w-2 rounded-full bg-primary" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-sm">Sem cartão de crédito</p>
-                    <p className="text-xs text-muted-foreground">Comece agora, pague depois se quiser</p>
-                  </div>
-                </div>
-              </div>
-
-              <Button
-                onClick={() => navigate('/auth')}
-                className="w-full bg-primary hover:bg-primary/90"
-              >
-                Começar Grátis
-              </Button>
-            </div>
-          </motion.div>
-
-          {/* Programa de Afiliados */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="relative group"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-primary/10 rounded-2xl blur-xl group-hover:blur-2xl transition-all opacity-0 group-hover:opacity-100" />
-            <div className="relative bg-card/50 backdrop-blur border border-primary/20 rounded-2xl p-8 hover:border-primary/40 transition-all">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h3 className="text-2xl font-bold font-display">50 Créditos</h3>
-                  <p className="text-sm text-muted-foreground">Ao indicar amigos</p>
-                </div>
-                <div className="p-4 bg-primary/10 rounded-xl">
-                  <Users className="h-6 w-6 text-primary" />
-                </div>
-              </div>
-
-              <div className="space-y-4 mb-6">
-                <div className="flex items-start gap-3">
-                  <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
-                    <div className="h-2 w-2 rounded-full bg-primary" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-sm">Ganhe 50 créditos</p>
-                    <p className="text-xs text-muted-foreground">Por cada amigo que se cadastrar pelo seu link</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
-                    <div className="h-2 w-2 rounded-full bg-primary" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-sm">Seu amigo ganha 5 créditos por dia</p>
-                    <p className="text-xs text-muted-foreground">Por login, a cada 24 horas</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
-                    <div className="h-2 w-2 rounded-full bg-primary" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-sm">Ganhe 5% vitalício</p>
-                    <p className="text-xs text-muted-foreground">De cada amigo que pagar. Use em conta ou créditos, ou saque via PIX</p>
-                  </div>
-                </div>
-              </div>
-
-              <Button
-                onClick={() => navigate('/affiliate')}
-                variant="outline"
-                className="w-full border-primary/30 hover:bg-primary/10"
-              >
-                Ver Programa de Afiliados
-              </Button>
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Stats */}
-        <div className="mt-16 grid md:grid-cols-3 gap-6">
+      <Reveal className="mx-auto mt-20 max-w-3xl rounded-3xl bg-card/60 px-8 py-10 text-center md:px-14 md:py-12">
+        <h3 className="text-2xl font-semibold tracking-[-0.01em] text-foreground md:text-[28px]">
+          Invite friends. Earn credits.
+        </h3>
+        <dl className="mt-8 grid gap-8 text-left sm:grid-cols-3 sm:gap-6">
           {[
-            { label: 'Créditos Distribuídos', value: '10M+' },
-            { label: 'Usuários Ativos', value: '50K+' },
-            { label: 'Apps Deployados', value: '100K+' },
-          ].map((stat, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 10 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: 0.3 + i * 0.1 }}
-              className="text-center"
-            >
-              <p className="text-3xl font-display font-bold text-primary">{stat.value}</p>
-              <p className="text-sm text-muted-foreground mt-2">{stat.label}</p>
-            </motion.div>
+            { term: '50 credits', detail: 'For you, for each friend who signs up with your link.' },
+            { term: '5% for life', detail: 'Of every payment your friends make. Use it as credits or withdraw it by Pix.' },
+            { term: '5 credits a day', detail: 'For your friend, each day they log in.' },
+          ].map((item) => (
+            <div key={item.term} className="sm:text-center">
+              <dt className="text-lg font-semibold text-foreground">{item.term}</dt>
+              <dd className="mt-1 text-[15px] leading-relaxed text-muted-foreground">{item.detail}</dd>
+            </div>
           ))}
+        </dl>
+        <div className="mt-8">
+          <MoreLink to="/affiliate-program">Learn about referrals</MoreLink>
         </div>
-      </div>
-    </motion.section>
+      </Reveal>
+    </Section>
   )
 }

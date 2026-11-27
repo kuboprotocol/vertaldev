@@ -30,85 +30,41 @@ existentes** sigam funcionando até serem canceladas.
 
 ## Anúncios
 
-**Somente Free e Starter (US$ 4,99) exibem anúncio.** Todos os outros planos
-ficam travados sem anúncio intersticial: Pro, Premium 1, os planos legados
-(Premium 2, Business, Enterprise) e Beta. Não importa se há acordo de parceria.
+**Nenhum anúncio de terceiros roda no site (desde 2026-11-27).** O Google Ads
+reprovou o domínio na política "Site comprometido" (redirecionamento malicioso)
+porque o bundle carregava a rede Adsterra / TERRA ADS (`effectivecpmnetwork.com`
+e o banner `bauval.org` com `atOptions`). Saíram do front-end:
 
-| Plano | Intersticial |
-|---|---|
-| Free | A cada 6 h |
-| Starter | A cada 12 h |
-| Qualquer outro | Nunca |
+- o intersticial do `AdGate` (`src/hooks/useAdGate.ts`; `src/components/AdGate.tsx` ficou só com o crédito diário),
+  que abria o Smartlink TERRA numa aba nova 1,5 s depois de navegar (Free e Starter);
+- o banner nativo TERRA (`TerraNativeBanner`, `SponsoredSlot` no Painel Criativo);
+- os banners `AdBanner` / `CreativeAdFrame` / `AdFrameSquare` (`bauval.org`);
+- o painel "Recompensa por anúncio TERRA ADS" de `/recompensas` (`TerraRewardsPanel`).
 
-Como funciona:
+O crédito diário do plano continua rodando no `AdGate` (sem anúncio nenhum).
 
-- `AD_SUPPORTED_PLANS = ['free', 'starter']` em `src/lib/planConfig.ts`.
-  `shouldShowAd()` retorna `false` para qualquer plano fora dessa lista, antes
-  de olhar frequência ou parceria.
-- `src/hooks/useAdGate.ts` lê o plano do usuário em `subscriptions` e a última
-  exibição em `ad_impressions`. Quem não tem assinatura conta como Free.
-- `src/components/AdGate.tsx` dispara o anúncio 1,5 s depois de abrir o app.
-  Nunca dispara em `/auth`, `/login`, `/shortlinks`, `/pricing`, `/checkout`
-  e `/partner-agreement`.
-- Admins nunca veem anúncio.
-- **Teste:** `src/test/ad-policy.test.ts` cobre cada plano.
+`shouldShowAd()` e `AD_SUPPORTED_PLANS` continuam em `src/lib/planConfig.ts`
+(com o teste `src/test/ad-policy.test.ts`) e `public.ad_impressions` continua no
+banco, mas nada no app os usa mais. A coluna "Anúncios" da tabela acima é
+histórica: hoje nenhum plano tem anúncio interruptivo.
 
-### Anúncio patrocinado no Painel Criativo (TERRA ADS)
+A única monetização por anúncio que fica é o **vídeo premiado AppLixir**
+(`src/lib/applixirRewarded.ts`, `RewardedVideoPanel`, função `rewarded-video-claim`),
+que o usuário abre por vontade própria e não redireciona.
 
-Decisão do dono do produto (2026-11-04): um cartão "Patrocinado" em linha, no
-formato de resultado patrocinado, aparece para **todos os usuários**, inclusive
-admin e planos pagos, em:
+### Checklist diário de `/recompensas`
 
-- início do Painel Criativo (`CreativePanel`, sem rota hoje);
-- cada categoria do Painel Criativo, inclusive o Vertal Office (`CreativePanel`, sem rota hoje);
-- Design Premium: topo da coluna em todos os modos, menos o Canvas;
-- Canvas: página inicial do mundo (o editor fica sem anúncio);
-- `/creative/*`: no lugar do antigo bloco "Fluxo de Habilidades" (`CreativePage`).
+O banco ainda exige o passo "TERRA" no checklist (`daily_reward_checklist`).
+Sem o anúncio, o front-end fecha esse passo pelo caminho que já existia para
+anúncio indisponível: ao abrir `/recompensas`, chama `daily-rewards?action=terra-unavailable`
+(`reason: panel_error`, 1 registro por dia), e o passo conta como feito com
+`terra_fallback_videos_required` vídeos premiados no dia (padrão 2). Na tela o
+passo aparece como "Assista a 1 vídeo premiado extra".
 
-- **Componente:** `src/components/creative/SponsoredSlot.tsx`, que carrega o
-  script `TERRA_ADS_NATIVE_BANNER_SRC` de `src/lib/terraAds.ts`. Não há mais
-  checagem de plano nem de admin para este slot.
-- **Quando aparece:** só se o script da Terra preencher o espaço. Sem anúncio
-  em 6 s, o espaço some e a página não fica com caixa vazia.
-- **Acesso às telas:** as rotas `/creative/*` passam por `CreativeEconomyGate`,
-  liberadas com `FEATURES.creativeEconomy` ligado (`src/config/features.ts`,
-  hoje `false`) ou para admin. Enquanto a flag estiver `false`, usuário comum
-  vê "em construção" e não chega ao anúncio.
-- **Limite:** esta decisão vale só para o anúncio patrocinado. A regra de
-  intersticial acima (Free e Starter apenas) continua igual.
-- **Teste:** `src/components/creative/SponsoredSlot.test.tsx`.
-
-### Shortlinks (opcional, todos os planos)
-
-A página `/shortlinks` não é anúncio empurrado: o próprio usuário decide abrir
-o anúncio TERRA ADS para ganhar créditos extras. Por isso ela continua
-disponível em todos os planos, inclusive nos pagos.
-
-Regra da recompensa por anúncio (decisão do dono do produto, 2026-11-10):
-
-- **0,0020 crédito** por anúncio aberto;
-- **um anúncio por hora** por usuário;
-- o valor fica como saldo pendente e só pode ser **retirado a partir de 5 créditos**
-  (saem os créditos inteiros; a fração continua pendente).
-
-Onde está:
-
-- **Tela:** `src/components/shortlinks/TerraRewardsPanel.tsx`, dentro de `/shortlinks`.
-- **Servidor:** ações `ad-status`, `ad-click` e `ad-withdraw` da função `shortlinks`
-  (`supabase/functions/shortlinks/index.ts`). A regra fica em
-  `supabase/functions/_shared/adRewardsCore.ts` e é o servidor que decide a espera
-  de 1 hora e o mínimo de retirada; a tela só mostra.
-- **Banco:** tabela `ad_rewards`, tipos `terra_click` (+0,0020) e `terra_withdrawal`
-  (negativo). A retirada entra no saldo por `execute_atomic_credit_topup`.
-- **Testes:** `src/test/ad-rewards-core.test.ts` e
-  `src/components/shortlinks/TerraRewardsPanel.test.tsx`.
-
-O servidor não tem como confirmar que o anúncio foi visto: ele credita quando o
-usuário abre o anúncio. O limite de um por hora segura o abuso em 0,048 crédito
-por dia por conta.
-
-A função `terra-ad-reward` (regra antiga: +0,5 por anúncio, +5 no 10º, até 10 por
-dia) não está publicada e nenhuma tela a chama.
+Pendente no servidor (não feito neste PR): tirar o passo TERRA do checklist por
+migração, desligar as ações `ad-status`/`ad-click`/`ad-withdraw` da função
+`shortlinks` e a função antiga `terra-ad-reward`, e decidir o que fazer com o saldo
+TERRA pendente de quem ainda não chegou ao mínimo de retirada (tabela `ad_rewards`).
 
 ## Banco de dados (Supabase)
 
@@ -136,10 +92,9 @@ da venda.
 - **Novo plano à venda:** adicione em `PLAN_CONFIG`, em `ESSENTIALS` e em
   `PLAN_PRICES` (valores em centavos). Se passar de US$ 49,99, ajuste também o
   teto em `src/test/pricing-cap.test.ts`, o que deve ser uma decisão explícita.
-- **Colocar ou tirar anúncio de um plano:** edite `AD_SUPPORTED_PLANS` e
-  `adFrequencyHours` em `src/lib/planConfig.ts`. Faça também uma migração
-  alterando `plan_config` e a constraint `plan_config_ads_only_free_starter`.
-  Depois atualize este documento e `src/test/ad-policy.test.ts`.
+- **Voltar a ter anúncio:** hoje não há anúncio de terceiros no site (veja
+  "Anúncios"). Qualquer rede nova precisa passar pelas políticas do Google Ads
+  antes: nada de popunder, smartlink, aba nova ou redirecionamento automático.
 
 ## Créditos no jogo Living Worlds
 

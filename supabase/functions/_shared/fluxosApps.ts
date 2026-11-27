@@ -213,6 +213,11 @@ export const PUBLIC_OAUTH_CLIENT_IDS: Record<string, string> = {
   DISQUS: "g2xONmGKzLvMczFI9qH0ehpRecS5W8WXCjgyFtftmC8AvpkarI6XMYHQ2yPKUe4s",
   GITLAB: "6f676bf3b29c5b4d9d645ba7411c9d8d52711b08d0e42d6dd4a837bd083adca6",
   CLOUDFLARE: "00d74ade9c1be1bfb6b998f7d47d46d7",
+  // App "Vertal Dev" (ID 12877465) no Developer Center do monday.com, publicado para todas as contas.
+  MONDAY: "da03aca0085dc80432eeac8ebab9ed85",
+  // Movidos dos segredos FLUXOS_OAUTH_*_ID para abrir vaga (26/11/2026; valor conferido por SHA-256).
+  PIPEDRIVE: "2df039797d9b4f93",
+  TYPEFORM: "QhuezgRDwP2eTVUrSjosCyKaFYPsHAg3fm8pXSTGJnn",
 };
 
 /**
@@ -280,7 +285,7 @@ export interface FluxosAppDef {
   name: string;
   supportsConnections: boolean;
   oauth: boolean;
-  authFields: Array<{ key: string; label?: string; type?: string; required?: boolean; description?: string; placeholder?: string; value?: unknown; options?: unknown }>;
+  authFields: Array<{ key: string; label?: string; type?: string; required?: boolean; description?: string; placeholder?: string; value?: unknown; options?: unknown; advanced?: boolean; oauthOnly?: boolean }>;
   actions: Array<{ key: string; name: string; description?: string; arguments: FluxosArg[] }>;
   searches: Array<{ key: string; name: string; description?: string; arguments: FluxosArg[] }>;
 }
@@ -292,6 +297,21 @@ export function userAuthFields(def: FluxosAppDef, platform: Record<string, strin
   // FLUXOS_OAUTH_<APP>_CONFIG), nunca do usuário final.
   if (platform && META_APPS.has(def.key)) provided.add("configId");
   return def.authFields.filter((f) => !provided.has(f.key));
+}
+
+/**
+ * Modo token (Avançado): app com login OAuth que também aceita um token pessoal (campo `advanced` no motor,
+ * ex.: monday API token, Firefly III Personal Access Token). Com o token preenchido, a conexão não usa o
+ * cliente OAuth e é verificada direto.
+ */
+export function isTokenMode(def: FluxosAppDef, fields: Record<string, string> | undefined | null): boolean {
+  if (!def.oauth || !fields) return false;
+  return def.authFields.some((f) => f.advanced && typeof fields[f.key] === "string" && fields[f.key].trim() !== "");
+}
+
+/** Campos exigidos no modo token: sem client id/secret (oauthOnly) e sem o cliente do Vertal. */
+export function tokenModeFields(def: FluxosAppDef) {
+  return def.authFields.filter((f) => !f.oauthOnly);
 }
 
 /** Texto curto (DADOS) com ações e buscas de um app para o agente. */

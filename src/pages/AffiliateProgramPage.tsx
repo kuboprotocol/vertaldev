@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
-import AnimatedLogo from '@/components/branding/AnimatedLogo'
+import AppShell, { AppTopBar, PanelHeader } from '@/components/site/AppShell'
 import AffiliateInstallsManager from '@/components/affiliate/AffiliateInstallsManager'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
@@ -55,28 +55,19 @@ export default function AffiliateProgramPage() {
 
       setCommissions(stats)
     } catch (e: any) {
-      toast.error(`Erro ao carregar comissões: ${e.message}`)
+      toast.error(`We could not load your commissions: ${e.message}`)
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-background gradient-mesh">
-      {/* Header */}
-      <header className="glass glass-border sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/profile')} className="hover:bg-accent">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="flex items-center gap-2">
-            <AnimatedLogo size={15} />
-            <h1 className="text-xl font-bold text-foreground font-display">Programa de Afiliados</h1>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-6 py-10">
+    <AppShell topBar={<AppTopBar back={{ to: '/profile', label: 'Profile' }} />}>
+      <PanelHeader
+        title="Affiliate program"
+        description={`Earn ${AFFILIATE_RATE * 100}% of what the people you refer pay.`}
+      />
+      <div>
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
@@ -90,10 +81,10 @@ export default function AffiliateProgramPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.1 }}
             >
-              <Card className="glass glass-border">
+              <Card className="rounded-2xl border-white/[0.06] bg-card/50">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-medium">Comissões Pendentes</CardTitle>
+                    <CardTitle className="text-sm font-medium">Pending commissions</CardTitle>
                     <Gift className="h-4 w-4 text-primary" />
                   </div>
                 </CardHeader>
@@ -102,11 +93,11 @@ export default function AffiliateProgramPage() {
                     <Loader2 className="h-6 w-6 animate-spin" />
                   ) : (
                     <>
-                      <p className="text-2xl font-display font-bold text-foreground">
+                      <p className="text-3xl font-semibold tracking-[-0.02em] text-foreground">
                         {formatCents(commissions.pending)}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {AFFILIATE_RATE * 100}% das vendas de quem você indicou
+                        {AFFILIATE_RATE * 100}% of sales from people you referred
                       </p>
                     </>
                   )}
@@ -119,10 +110,10 @@ export default function AffiliateProgramPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.15 }}
             >
-              <Card className="glass glass-border">
+              <Card className="rounded-2xl border-white/[0.06] bg-card/50">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-medium">Comissões Pagas</CardTitle>
+                    <CardTitle className="text-sm font-medium">Paid commissions</CardTitle>
                     <Zap className="h-4 w-4 text-green-500" />
                   </div>
                 </CardHeader>
@@ -131,11 +122,11 @@ export default function AffiliateProgramPage() {
                     <Loader2 className="h-6 w-6 animate-spin" />
                   ) : (
                     <>
-                      <p className="text-2xl font-display font-bold text-foreground">
+                      <p className="text-3xl font-semibold tracking-[-0.02em] text-foreground">
                         {formatCents(commissions.paid)}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Já transferidas para sua conta
+                        Already sent to your account
                       </p>
                     </>
                   )}
@@ -148,10 +139,10 @@ export default function AffiliateProgramPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.2 }}
             >
-              <Card className="glass glass-border">
+              <Card className="rounded-2xl border-white/[0.06] bg-card/50">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-medium">Total de Comissões</CardTitle>
+                    <CardTitle className="text-sm font-medium">Total commissions</CardTitle>
                     <BarChart3 className="h-4 w-4 text-purple-500" />
                   </div>
                 </CardHeader>
@@ -160,11 +151,11 @@ export default function AffiliateProgramPage() {
                     <Loader2 className="h-6 w-6 animate-spin" />
                   ) : (
                     <>
-                      <p className="text-2xl font-display font-bold text-foreground">
+                      <p className="text-3xl font-semibold tracking-[-0.02em] text-foreground">
                         {formatCents(commissions.total)}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        De todas as vendas do programa
+                        From all your program sales
                       </p>
                     </>
                   )}
@@ -178,35 +169,35 @@ export default function AffiliateProgramPage() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.25 }}
-            className="rounded-2xl border border-primary/20 bg-primary/5 p-6"
+            className="rounded-2xl border border-white/[0.06] bg-card/50 p-6"
           >
-            <h3 className="font-semibold text-foreground mb-2">💡 Como funciona</h3>
+            <h2 className="text-xl font-semibold tracking-[-0.01em] text-foreground mb-2">How it works</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              Você pode monetizar o Vertal de duas formas:
+              You can earn with Vertal in two ways:
             </p>
             <div className="space-y-2 text-sm text-muted-foreground">
               <div className="flex items-start gap-3">
                 <Badge className="mt-1">Referral</Badge>
-                <p>Indique amigos com seu link pessoal: +50 créditos para você por cada cadastro + 5% de tudo que eles pagarem. Quem entra pelo seu link ganha 5 créditos por dia, a cada 24 horas.</p>
+                <p>Invite friends with your personal link. You get 50 credits for each sign-up plus 5% of everything they pay. People who join with your link get 5 credits per day, every 24 hours.</p>
               </div>
               <div className="flex items-start gap-3">
                 <Badge className="mt-1">Embed</Badge>
-                <p>Instale nosso widget em seu blog/site: cada clique é rastreado e você ganha 5% das vendas</p>
+                <p>Add our widget to your blog or website. We track each click, and you earn 5% of the sales.</p>
               </div>
             </div>
           </motion.div>
 
-          {/* Embeds para sites */}
+          {/* Embeds for websites */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.3 }}
           >
-            <Card className="glass glass-border">
+            <Card className="rounded-2xl border-white/[0.06] bg-card/50">
               <CardHeader>
-                <CardTitle>Instale em seus sites</CardTitle>
+                <CardTitle>Add it to your websites</CardTitle>
                 <CardDescription>
-                  Crie códigos únicos para rastrear conversões em cada site/blog que você gerencia
+                  Create a unique code for each website or blog you manage, so we can track its sign-ups and sales.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -215,7 +206,7 @@ export default function AffiliateProgramPage() {
             </Card>
           </motion.div>
         </motion.div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   )
 }

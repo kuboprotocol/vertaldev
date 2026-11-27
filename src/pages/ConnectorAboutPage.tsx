@@ -17,12 +17,22 @@ import {
 import { toast } from 'sonner'
 import { getConnectorBySlug } from '@/lib/connectorsConfig'
 import { ConnectorIcon } from '@/components/connectors/ConnectorIcon'
+import { CATEGORY_LABELS_EN, localizeConnector } from '@/lib/connectorsCopyEn'
+import { SITE_FONT, siteRoot, surface } from '@/components/site/siteUi'
+import { cn } from '@/lib/utils'
 
 const SCROLL_KEY_PREFIX = 'connector-about-scroll:'
 const NAV_STATE_KEY_PREFIX = 'connector-about-nav:'
 const DEFAULT_NAV_LOCK_MS = 600
 
 type NavTarget = 'hub' | 'panel' | 'setup' | 'docs'
+
+const AUTH_LABELS: Record<string, string> = {
+  oauth: 'OAuth',
+  api_key: 'API key',
+  webhook: 'Webhook',
+  manual: 'Manual setup',
+}
 
 const NAV_LABELS: Record<NavTarget, string> = {
   hub: 'connector list',
@@ -38,11 +48,11 @@ interface ConnectorAboutPageProps {
 export default function ConnectorAboutPage({ navLockMs = DEFAULT_NAV_LOCK_MS }: ConnectorAboutPageProps = {}) {
   const { slug = '' } = useParams<{ slug: string }>()
   const navigate = useNavigate()
-  const connector = getConnectorBySlug(slug)
+  const connector = localizeConnector(getConnectorBySlug(slug))
 
   if (!connector) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+      <div className={cn("min-h-screen flex items-center justify-center", siteRoot)} style={SITE_FONT}>
         <div className="text-center space-y-3">
           <p className="text-lg">Connector not found</p>
           <Button onClick={() => navigate('/connectors')}>Back to connectors</Button>
@@ -140,7 +150,7 @@ export default function ConnectorAboutPage({ navLockMs = DEFAULT_NAV_LOCK_MS }: 
     } catch {/* noop */}
     sessionStorage.setItem(scrollKey, String(window.scrollY))
     setNavTarget(target)
-    setAnnouncement(`Abrindo ${NAV_LABELS[target]}…`)
+    setAnnouncement(`Opening ${NAV_LABELS[target]}…`)
     return true
   }, [navLockMs, navStateKey, scrollKey])
 
@@ -174,13 +184,13 @@ export default function ConnectorAboutPage({ navLockMs = DEFAULT_NAV_LOCK_MS }: 
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground" onKeyDownCapture={blockKeyWhenBusy}>
+    <div className={cn("min-h-screen", siteRoot)} style={SITE_FONT} onKeyDownCapture={blockKeyWhenBusy}>
       {/* Live region for navigation announcements */}
       <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {announcement}
       </div>
       {/* Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur-xl sticky top-0 z-10">
+      <div className={cn("border-b sticky top-0 z-10", surface.bar)}>
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={goToHub} aria-label="Back to connectors" disabled={isNavigating} className="min-h-11 min-w-11">
             {navTarget === 'hub' ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowLeft className="h-5 w-5" />}
@@ -193,7 +203,7 @@ export default function ConnectorAboutPage({ navLockMs = DEFAULT_NAV_LOCK_MS }: 
               <ConnectorIcon connector={connector} className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-xl font-bold font-display truncate">{connector.name}</h1>
+              <h1 className="text-xl font-semibold tracking-[-0.01em] truncate">{connector.name}</h1>
               <p className="text-xs text-muted-foreground truncate">
                 Connector details · {APP_NAME}
               </p>
@@ -213,7 +223,7 @@ export default function ConnectorAboutPage({ navLockMs = DEFAULT_NAV_LOCK_MS }: 
         </div>
       </div>
 
-      {/* Breadcrumbs — synced with router */}
+      {/* Breadcrumbs, synced with the router */}
       <div className="max-w-4xl mx-auto px-4 pt-4" data-testid="connector-breadcrumb-region" data-slug={connector.slug}>
         <Breadcrumb data-testid="connector-breadcrumb">
           <BreadcrumbList>
@@ -267,26 +277,20 @@ export default function ConnectorAboutPage({ navLockMs = DEFAULT_NAV_LOCK_MS }: 
         className="max-w-4xl mx-auto px-4 py-8 space-y-6"
       >
         {/* Hero */}
-        <Card className="p-6 sm:p-8 relative overflow-hidden border-primary/20">
-          <div
-            className="absolute inset-0 opacity-10 pointer-events-none"
-            style={{
-              background: `radial-gradient(600px circle at 0% 0%, ${connector.color}, transparent 60%)`,
-            }}
-          />
+        <Card className={cn("p-6 sm:p-8 relative overflow-hidden", surface.card)}>
           <div className="relative space-y-4">
             <div className="flex items-center gap-2 flex-wrap">
-              <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
-                {connector.category}
+              <Badge variant="outline" className="text-[11px]">
+                {CATEGORY_LABELS_EN[connector.category] ?? connector.category}
               </Badge>
-              <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
-                {connector.authType.replace('_', ' ')}
+              <Badge variant="outline" className="text-[11px]">
+                {AUTH_LABELS[connector.authType] ?? connector.authType}
               </Badge>
               {isComingSoon && (
                 <Badge variant="secondary" className="text-[10px]">Coming soon</Badge>
               )}
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold font-display">
+            <h2 className="text-2xl sm:text-3xl font-semibold tracking-[-0.02em]">
               Connect {connector.name} to your workspace
             </h2>
             <p className="text-muted-foreground text-base leading-relaxed max-w-2xl">
@@ -333,7 +337,7 @@ export default function ConnectorAboutPage({ navLockMs = DEFAULT_NAV_LOCK_MS }: 
         </Card>
 
         {/* Features */}
-        <Card className="p-6 space-y-4">
+        <Card className={cn("p-6 space-y-4", surface.card)}>
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
             <h3 className="font-semibold">Available features</h3>
@@ -342,7 +346,7 @@ export default function ConnectorAboutPage({ navLockMs = DEFAULT_NAV_LOCK_MS }: 
             {connector.features.map((feature) => (
               <div
                 key={feature}
-                className="flex items-start gap-2.5 p-3 rounded-lg border border-border bg-muted/30"
+                className="flex items-start gap-2.5 p-3 rounded-lg border border-white/[0.06] bg-muted/20"
               >
                 <CheckCircle2 className="h-4 w-4 text-emerald-500 flex-shrink-0 mt-0.5" />
                 <span className="text-sm">{feature}</span>
@@ -352,13 +356,13 @@ export default function ConnectorAboutPage({ navLockMs = DEFAULT_NAV_LOCK_MS }: 
         </Card>
 
         {connector.mcpUrl && (
-          <Card className="p-6 space-y-3" data-testid="connector-mcp-url">
+          <Card className={cn("p-6 space-y-3", surface.card)} data-testid="connector-mcp-url">
             <div className="flex items-center gap-2">
               <Zap className="h-5 w-5 text-primary" />
-              <h3 className="font-semibold">Servidor MCP</h3>
+              <h3 className="font-semibold">MCP server</h3>
             </div>
             <p className="text-sm text-muted-foreground">
-              Cole esta URL no seu cliente MCP (Claude, ChatGPT, Cursor ou o Vertal Chat).
+              Add this URL to your MCP client (Vertal Chat or any compatible client).
             </p>
             <div className="flex items-center gap-2">
               <code className="flex-1 min-w-0 truncate rounded-md border border-border bg-muted/30 px-3 py-2 font-mono text-xs">
@@ -369,19 +373,19 @@ export default function ConnectorAboutPage({ navLockMs = DEFAULT_NAV_LOCK_MS }: 
                 variant="outline"
                 onClick={() => {
                   navigator.clipboard?.writeText(connector.mcpUrl!).then(
-                    () => toast.success('URL do MCP copiada'),
-                    () => toast.error('Não foi possível copiar'),
+                    () => toast.success('MCP URL copied'),
+                    () => toast.error('We could not copy the URL'),
                   )
                 }}
               >
-                Copiar
+                Copy
               </Button>
             </div>
           </Card>
         )}
 
         {/* Setup steps */}
-        <Card className="p-6 space-y-4">
+        <Card className={cn("p-6 space-y-4", surface.card)}>
           <div className="flex items-center gap-2">
             <Zap className="h-5 w-5 text-primary" />
             <h3 className="font-semibold">How setup works</h3>
@@ -406,7 +410,7 @@ export default function ConnectorAboutPage({ navLockMs = DEFAULT_NAV_LOCK_MS }: 
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
             >
-              Open credentials page for {connector.name}
+              Open the {connector.name} credentials page
               <ExternalLink className="h-3 w-3" />
               <span className="text-muted-foreground">(external site)</span>
             </a>
@@ -414,15 +418,15 @@ export default function ConnectorAboutPage({ navLockMs = DEFAULT_NAV_LOCK_MS }: 
         </Card>
 
         {/* Security */}
-        <Card className="p-6 space-y-3 border-emerald-500/20 bg-emerald-500/5">
+        <Card className={cn("p-6 space-y-3", surface.card)}>
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-emerald-500" />
             <h3 className="font-semibold">Security</h3>
           </div>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Your key is encrypted with <strong>AES-256-GCM</strong> before being stored and is never
-            returned in plaintext to the browser. Only Vertal's edge functions can decrypt it to
-            perform actions on your behalf.
+            Keys and tokens you save here are encrypted with <strong>AES-256-GCM</strong> before they are
+            stored, and they are never sent back to the browser. Only Vertal's server functions can
+            decrypt them to act for you.
           </p>
         </Card>
 
@@ -447,7 +451,7 @@ export default function ConnectorAboutPage({ navLockMs = DEFAULT_NAV_LOCK_MS }: 
               className="text-primary hover:underline inline-flex items-center gap-1.5 font-medium min-h-11 disabled:opacity-60"
             >
               {navTarget === 'panel' ? <Loader2 className="h-4 w-4 animate-spin" /> : <LayoutDashboard className="h-4 w-4" />}
-              {navTarget === 'panel' ? 'Abrindo painel…' : 'Ir para o connector panel'}
+              {navTarget === 'panel' ? 'Opening…' : 'Go to the connector panel'}
               {navTarget !== 'panel' && <ArrowRight className="h-4 w-4" />}
             </button>
           </div>
@@ -461,18 +465,18 @@ export default function ConnectorAboutPage({ navLockMs = DEFAULT_NAV_LOCK_MS }: 
             className="flex-1 min-h-11"
             onClick={goToPanel}
             disabled={isNavigating}
-            aria-label="Abrir connector panel"
+            aria-label="Open connector panel"
             aria-busy={navTarget === 'panel'}
           >
             {navTarget === 'panel' ? <Loader2 className="h-4 w-4 animate-spin" /> : <LayoutDashboard className="h-4 w-4" />}
-            {navTarget === 'panel' ? 'Opening…' : 'Painel'}
+            {navTarget === 'panel' ? 'Opening…' : 'Panel'}
           </Button>
           <Button
             onClick={handleStartSetup}
             disabled={isComingSoon || isNavigating}
             size="lg"
-            className="flex-1 shadow-glow min-h-11"
-            aria-label={isComingSoon ? 'Coming soon' : 'Iniciar connector setup'}
+            className="flex-1 min-h-11"
+            aria-label={isComingSoon ? 'Coming soon' : 'Start connector setup'}
             aria-busy={navTarget === 'setup'}
           >
             {navTarget === 'setup' ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}

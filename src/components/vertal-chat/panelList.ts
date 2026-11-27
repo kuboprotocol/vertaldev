@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import type { PanelKey } from '@/lib/chatAgent/contract';
 import type { DesignCopy } from '@/components/creative/DesignGallery';
+// Ícone dos painéis ocultos (import separado para não mexer na lista de ícones acima).
+import { Mic } from 'lucide-react';
 
 /** Como abrir um painel: além da chave, o que o chat acabou de criar. */
 export interface PanelRequest {
@@ -58,4 +60,14 @@ export const PANEL_LIST: PanelInfo[] = [
   { key: 'agents', label: 'Habilidades', hint: 'Agentes, habilidades extras, Vertal Agentes e Vertal Fluxos', icon: Puzzle, group: 'conectar', route: '/agents' },
 ];
 
-export const PANEL_BY_KEY = Object.fromEntries(PANEL_LIST.map((p) => [p.key, p])) as Record<PanelKey, PanelInfo>;
+/**
+ * Painéis que o chat abre mas que não aparecem no menu lateral. Antes, "voice" (gravador de ditado,
+ * aberto pelo agente com open_panel/voice_input) não estava aqui nem no menu: PANEL_BY_KEY["voice"] era
+ * undefined e o chat quebrava ao abrir (tela de erro, resposta perdida). "voice_clone" é o Clonador de voz (flag).
+ */
+export const HIDDEN_PANELS: PanelInfo[] = [
+  { key: 'voice', label: 'Gravador de voz', hint: 'Fale e o texto vai para a caixa de mensagem', icon: Mic, group: 'midia' },
+  { key: 'voice_clone', label: 'Clonador de voz', hint: 'Sua voz para falar e cantar', icon: Mic, group: 'midia' },
+];
+
+export const PANEL_BY_KEY = Object.fromEntries([...PANEL_LIST, ...HIDDEN_PANELS].map((p) => [p.key, p])) as Record<PanelKey, PanelInfo>;

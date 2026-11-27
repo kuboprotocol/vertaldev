@@ -2,7 +2,7 @@
 // Puro (sem React): a página /mcp usa estas funções e os testes cobrem o texto gerado.
 
 export const MCP_SERVER_NAME = 'vertal'
-export const MCP_KEY_PLACEHOLDER = 'SUA_CHAVE_AQUI'
+export const MCP_KEY_PLACEHOLDER = 'YOUR_KEY_HERE'
 
 export type McpAccessLevel = 'read' | 'write'
 
@@ -20,11 +20,11 @@ export interface McpKeyRecord {
 export type McpClientId = 'claude-code' | 'claude-desktop' | 'cursor' | 'codex' | 'generic'
 
 export const MCP_CLIENTS: { id: McpClientId; label: string; where: string }[] = [
-  { id: 'claude-code', label: 'Claude Code', where: 'Rode no terminal' },
-  { id: 'claude-desktop', label: 'Claude Desktop', where: 'Arquivo claude_desktop_config.json' },
-  { id: 'cursor', label: 'Cursor', where: 'Arquivo ~/.cursor/mcp.json (ou .cursor/mcp.json no projeto)' },
-  { id: 'codex', label: 'Codex', where: 'Arquivo ~/.codex/config.toml' },
-  { id: 'generic', label: 'Outros clientes', where: 'Qualquer cliente com suporte a MCP por HTTP' },
+  { id: 'claude-code', label: 'Claude Code', where: 'Run in the terminal' },
+  { id: 'claude-desktop', label: 'Claude Desktop', where: 'File claude_desktop_config.json' },
+  { id: 'cursor', label: 'Cursor', where: 'File ~/.cursor/mcp.json (or .cursor/mcp.json in the project)' },
+  { id: 'codex', label: 'Codex', where: 'File ~/.codex/config.toml' },
+  { id: 'generic', label: 'Other clients', where: 'Any client that supports MCP over HTTP' },
 ]
 
 /** Cabeçalho de autorização com a chave (ou o placeholder). */
@@ -96,7 +96,7 @@ export function configFor(client: McpClientId, url: string, key: string | null):
 }
 
 export function accessLevelLabel(scopes: readonly string[]): string {
-  return scopes.includes('write') ? 'Leitura e escrita' : 'Somente leitura'
+  return scopes.includes('write') ? 'Read and write' : 'Read only'
 }
 
 /** Escopos enviados à API a partir do nível escolhido na tela. */
@@ -106,12 +106,12 @@ export function scopesForLevel(level: McpAccessLevel): McpAccessLevel[] {
 
 /** Ferramentas expostas, com o escopo que cada uma exige. Espelha supabase/functions/mcp/server.ts. */
 export const MCP_TOOLS: { name: string; description: string; access: McpAccessLevel }[] = [
-  { name: 'list_projects', description: 'Listar seus projetos', access: 'read' },
-  { name: 'get_project', description: 'Ver um projeto e, se pedir, o código gerado', access: 'read' },
-  { name: 'list_agent_jobs', description: 'Ver execuções dos agentes de IA', access: 'read' },
-  { name: 'credit_summary', description: 'Ver saldo e transações de créditos', access: 'read' },
-  { name: 'create_project', description: 'Criar um projeto', access: 'write' },
-  { name: 'update_project', description: 'Renomear ou alterar a descrição de um projeto', access: 'write' },
+  { name: 'list_projects', description: 'List your projects', access: 'read' },
+  { name: 'get_project', description: 'Open a project and, if asked, its generated code', access: 'read' },
+  { name: 'list_agent_jobs', description: 'See AI agent runs', access: 'read' },
+  { name: 'credit_summary', description: 'See your credit balance and transactions', access: 'read' },
+  { name: 'create_project', description: 'Create a project', access: 'write' },
+  { name: 'update_project', description: 'Rename a project or change its description', access: 'write' },
 ]
 
 export function toolsForLevel(level: McpAccessLevel) {

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FileText, Download, Music, Film, Image as ImageIcon, Archive, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { FileText, Download, Music, Film, Image as ImageIcon, Archive, FileSpreadsheet, X, ZoomIn, ZoomOut } from 'lucide-react'
 import type { UploadedFile, FileCategory } from '@/lib/fileUpload'
 
 const categoryIcons: Record<FileCategory, typeof FileText> = {
@@ -8,6 +8,7 @@ const categoryIcons: Record<FileCategory, typeof FileText> = {
   audio: Music,
   document: FileText,
   archive: Archive,
+  spreadsheet: FileSpreadsheet,
   unknown: FileText,
 }
 

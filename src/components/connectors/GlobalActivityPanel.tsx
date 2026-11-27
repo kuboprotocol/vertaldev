@@ -88,7 +88,7 @@ export function GlobalActivityPanel() {
             <Activity className="h-4 w-4 text-primary" />
             <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
           </div>
-          <h3 className="text-sm font-semibold">Atividade Global</h3>
+          <h3 className="text-sm font-semibold">Recent activity</h3>
           <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
             {logs.length}
           </Badge>
@@ -106,10 +106,10 @@ export function GlobalActivityPanel() {
 
       <div className="max-h-[280px] overflow-y-auto">
         {loading ? (
-          <div className="p-8 text-center text-xs text-muted-foreground">Carregando...</div>
+          <div className="p-8 text-center text-xs text-muted-foreground">Loading…</div>
         ) : logs.length === 0 ? (
           <div className="p-8 text-center text-xs text-muted-foreground">
-            Nenhuma atividade ainda. Conecte um serviço para começar.
+            No activity yet. Connect a service to start.
           </div>
         ) : (
           <ul className="divide-y divide-border/50">

@@ -1,14 +1,16 @@
 import { useEffect, useState, useCallback } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
+import AppShell, { AppTopBar, PanelHeader } from "@/components/site/AppShell";
+import { Brand } from "@/components/site/siteUi";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
-  Loader2, Sparkles, Activity, ArrowLeft, CheckCircle2, 
+  Loader2, Sparkles, Activity, CheckCircle2, 
   XCircle, Send, History, Settings, Filter, RefreshCcw, 
   ToggleLeft, ToggleRight, Clock, AlertCircle, Info, MoreVertical,
   Pause, Play, Search, BarChart3, AlertTriangle, Copy, Hash
@@ -147,8 +149,8 @@ export default function OrchestratorPage() {
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast({
-      title: `${label} copiado!`,
-      description: "Valor salvo na área de transferência.",
+      title: `${label} copied`,
+      description: "The value is on your clipboard.",
     });
   };
 
@@ -162,7 +164,7 @@ export default function OrchestratorPage() {
       if (error) throw error;
       setHealth(data ?? null);
     } catch (e) {
-      toast({ title: "Falha ao carregar health", description: (e as Error).message, variant: "destructive" });
+      toast({ title: "Could not load health", description: (e as Error).message, variant: "destructive" });
     } finally {
       setHealthLoading(false);
     }
@@ -204,10 +206,10 @@ export default function OrchestratorPage() {
         const correlationId = slowJob?.correlation_id;
 
         toast({ 
-          title: "Alerta de Performance", 
+          title: "Performance alert", 
           description: (
             <div className="flex flex-col gap-2">
-              <p>Latência p95 ({p95}ms) acima do limite ({latencyThreshold}ms)</p>
+              <p>p95 latency ({p95}ms) is above the limit ({latencyThreshold}ms)</p>
               {correlationId && <p className="text-[10px] font-mono text-muted-foreground break-all">Correlation: {correlationId}</p>}
               {!correlationId && traceId && <p className="text-[10px] font-mono text-muted-foreground break-all">Trace: {traceId}</p>}
               <div className="flex gap-2">
@@ -222,7 +224,7 @@ export default function OrchestratorPage() {
                     }
                   }}
                 >
-                  Filtrar e Ver Detalhes
+                  Filter and see details
                 </Button>
                 <Button
                   size="sm"
@@ -232,7 +234,7 @@ export default function OrchestratorPage() {
                     if (slowJob) openJobDetails(slowJob);
                   }}
                 >
-                  Apenas Abrir
+                  Open only
                 </Button>
               </div>
             </div>
@@ -243,7 +245,7 @@ export default function OrchestratorPage() {
       }
 
     } catch (e) {
-      toast({ title: "Falha ao carregar jobs", description: (e as Error).message, variant: "destructive" });
+      toast({ title: "Could not load jobs", description: (e as Error).message, variant: "destructive" });
     } finally {
       setJobsLoading(false);
     }
@@ -275,10 +277,10 @@ export default function OrchestratorPage() {
         .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
       
       if (error) throw error;
-      toast({ title: "Configuração atualizada" });
+      toast({ title: "Settings saved" });
       void loadConfig();
     } catch (e) {
-      toast({ title: "Erro ao salvar", description: (e as Error).message, variant: "destructive" });
+      toast({ title: "Could not save", description: (e as Error).message, variant: "destructive" });
     }
   };
 
@@ -317,7 +319,7 @@ export default function OrchestratorPage() {
     setActionLoading(true);
     try {
       const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) throw new Error("Usuário não autenticado");
+      if (!userData.user) throw new Error("You are not signed in");
 
       const correlationId = `web-action-${Date.now()}`;
       
@@ -332,7 +334,7 @@ export default function OrchestratorPage() {
       const result = data as any;
       if (result && !result.ok) throw new Error(result.error);
 
-      toast({ title: `Ação ${action} concluída` });
+      toast({ title: `Action ${action} done` });
       void loadJobs();
       
       if (selectedJob?.id === jobId) {
@@ -341,7 +343,7 @@ export default function OrchestratorPage() {
         loadAuditLogs(jobId, correlationId);
       }
     } catch (e) {
-      toast({ title: "Erro na ação", description: (e as Error).message, variant: "destructive" });
+      toast({ title: "Action failed", description: (e as Error).message, variant: "destructive" });
     } finally {
       setActionLoading(false);
     }
@@ -379,7 +381,7 @@ export default function OrchestratorPage() {
             setWebsocketError(null);
           } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
             setConnectionStatus("polling");
-            setWebsocketError(err?.message || "Erro desconhecido no WebSocket");
+            setWebsocketError(err?.message || "Unknown WebSocket error");
             setPollingRetryCount(prev => {
               const nextCount = Math.min(prev + 1, maxRetryLimit);
               const backoff = Math.min(60, Math.pow(2, nextCount) + Math.random() * 5);
@@ -448,7 +450,7 @@ export default function OrchestratorPage() {
 
   const run = async (mode: "classify" | "execute") => {
     if (!prompt.trim()) {
-      toast({ title: "Digite o que deseja", variant: "destructive" });
+      toast({ title: "Type your request", variant: "destructive" });
       return;
     }
     setRunning(true);
@@ -469,7 +471,7 @@ export default function OrchestratorPage() {
       }
       void loadJobs();
     } catch (e) {
-      toast({ title: "Erro no orquestrador", description: (e as Error).message, variant: "destructive" });
+      toast({ title: "Orchestrator error", description: (e as Error).message, variant: "destructive" });
     } finally {
       setRunning(false);
     }
@@ -499,43 +501,42 @@ export default function OrchestratorPage() {
   const categories = Array.from(new Set((health?.agents ?? []).map(a => a.category)));
 
   return (
-    <div className="min-h-screen bg-background text-foreground pb-12">
-      <div className="container mx-auto max-w-6xl px-4 py-8 space-y-8">
-        <div className="flex items-center justify-between">
+    <AppShell topBar={<AppTopBar back={{ to: "/", label: "Home" }} title="Orchestrator" />}>
+      <div className="space-y-8">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex-1">
-            <Link to="/" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
-            </Link>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight">Orquestrador Vertal</h1>
-            <p className="text-muted-foreground">Orquestração full-stack com filas, retries e roteamento dinâmico.</p>
+            <PanelHeader
+              title={<><Brand>Vertal</Brand> Orchestrator</>}
+              description="Runs agent jobs with queues, retries and routing."
+            />
           </div>
-          <div className="flex-1 max-w-sm mx-4">
+          <div className="w-full max-w-sm lg:mx-4 lg:pb-8">
             <div className="relative">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input 
-                placeholder="Busca rápida (CorrelationID)..." 
+                placeholder="Search by CorrelationID..." 
                 className="pl-8" 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
           </div>
-          <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-col items-start gap-2 lg:items-end lg:pb-8">
             <div className="flex items-center gap-3">
               <div 
                 className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium transition-colors ${
-                  connectionStatus === 'polling' ? 'bg-amber-100 text-amber-700 border border-amber-200' : 
-                  connectionStatus === 'live' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-muted/50'
+                  connectionStatus === 'polling' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' : 
+                  connectionStatus === 'live' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-muted/50'
                 }`}
               >
                 <div className={`h-1.5 w-1.5 rounded-full ${
                   connectionStatus === 'live' ? 'bg-emerald-500 animate-pulse' : 
                   connectionStatus === 'connecting' ? 'bg-amber-500' : 'bg-amber-600'
                 }`} />
-                {connectionStatus === 'live' ? 'LIVE' : connectionStatus === 'connecting' ? 'CONECTANDO...' : `POLLING (${nextPollIn}s)`}
+                {connectionStatus === 'live' ? 'LIVE' : connectionStatus === 'connecting' ? 'CONNECTING...' : `POLLING (${nextPollIn}s)`}
               </div>
               <Button variant="outline" size="sm" onClick={() => { loadHealth(); loadJobs(); loadConfig(); }}>
-                <RefreshCcw className="mr-2 h-4 w-4" /> Atualizar
+                <RefreshCcw className="mr-2 h-4 w-4" /> Refresh
               </Button>
               <Badge variant="secondary" className="h-8">V2.1</Badge>
             </div>
@@ -561,26 +562,26 @@ export default function OrchestratorPage() {
         </div>
 
         <Tabs defaultValue="composer" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 lg:w-[750px]">
+          <TabsList className="flex h-auto w-full flex-wrap justify-start lg:w-[750px]">
             <TabsTrigger value="composer"><Sparkles className="mr-2 h-4 w-4" /> Composer</TabsTrigger>
             <TabsTrigger value="jobs"><History className="mr-2 h-4 w-4" /> Jobs</TabsTrigger>
-            <TabsTrigger value="health"><Activity className="mr-2 h-4 w-4" /> Saúde</TabsTrigger>
-            <TabsTrigger value="settings"><Settings className="mr-2 h-4 w-4" /> Config</TabsTrigger>
+            <TabsTrigger value="health"><Activity className="mr-2 h-4 w-4" /> Health</TabsTrigger>
+            <TabsTrigger value="settings"><Settings className="mr-2 h-4 w-4" /> Settings</TabsTrigger>
             <TabsTrigger value="perf"><BarChart3 className="mr-2 h-4 w-4" /> Performance</TabsTrigger>
           </TabsList>
 
           <TabsContent value="perf" className="space-y-6">
-            <Card>
+            <Card className="rounded-xl border-white/[0.06] bg-card/50">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5" /> Configurações de Monitoramento</CardTitle>
-                <CardDescription>Ajuste os limites de latência para alertas em tempo real.</CardDescription>
+                <CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5" /> Monitoring settings</CardTitle>
+                <CardDescription>Set the latency limits for alerts.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <h4 className="text-sm font-medium text-foreground">Limite p95 (ms)</h4>
-                      <p className="text-xs text-muted-foreground">Dispara um alerta quando a latência p95 dos últimos 50 jobs ultrapassar este valor.</p>
+                      <h4 className="text-sm font-medium text-foreground">p95 limit (ms)</h4>
+                      <p className="text-xs text-muted-foreground">Shows an alert when the p95 latency of the last 50 jobs goes above this value.</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <Input 
@@ -599,17 +600,17 @@ export default function OrchestratorPage() {
                   
                   <div className="p-4 rounded-lg bg-muted/30 border border-border space-y-3">
                     <h4 className="text-xs font-semibold flex items-center gap-2 uppercase tracking-wider">
-                      <AlertTriangle className="h-3 w-3 text-amber-500" /> Métricas Atuais
+                      <AlertTriangle className="h-3 w-3 text-amber-500" /> Current metrics
                     </h4>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="bg-background p-3 rounded border">
-                        <p className="text-[10px] text-muted-foreground uppercase">Latência p95</p>
+                        <p className="text-[10px] text-muted-foreground uppercase">p95 latency</p>
                         <p className={`text-2xl font-bold font-mono ${metrics?.latency_p95 && metrics.latency_p95 > latencyThreshold ? 'text-destructive' : 'text-emerald-500'}`}>
                           {metrics?.latency_p95 ? `${metrics.latency_p95}ms` : 'N/A'}
                         </p>
                       </div>
                       <div className="bg-background p-3 rounded border">
-                        <p className="text-[10px] text-muted-foreground uppercase">Tempo de Query</p>
+                        <p className="text-[10px] text-muted-foreground uppercase">Query time</p>
                         <p className="text-2xl font-bold font-mono text-primary">
                           {metrics?.query_time_ms ? `${metrics.query_time_ms}ms` : 'N/A'}
                         </p>
@@ -622,27 +623,27 @@ export default function OrchestratorPage() {
           </TabsContent>
 
           <TabsContent value="composer" className="space-y-6">
-            <Card>
+            <Card className="rounded-xl border-white/[0.06] bg-card/50">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-primary" /> O que você quer fazer?</CardTitle>
-                <CardDescription>O orquestrador escolherá o melhor agente para o seu pedido.</CardDescription>
+                <CardTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-primary" /> What do you want to do?</CardTitle>
+                <CardDescription>The orchestrator picks an agent for your request.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <Textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
-                  placeholder="Escreva seu pedido..."
+                  placeholder="Write your request..."
                   rows={4}
                   disabled={running}
                 />
                 <div className="flex gap-2">
                   <Button onClick={() => run("classify")} disabled={running} variant="secondary">
                     {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Simular Roteamento
+                    Test routing
                   </Button>
                   <Button onClick={() => run("execute")} disabled={running}>
                     {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                    Executar Fluxo
+                    Run
                   </Button>
                 </div>
               </CardContent>
@@ -654,13 +655,13 @@ export default function OrchestratorPage() {
                   <CardTitle className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       {result.ok ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <XCircle className="h-5 w-5 text-destructive" />}
-                      {result.cached ? "Resultado (Cache/Idempotente)" : "Resultado da Execução"}
+                      {result.cached ? "Result (cached)" : "Result"}
                     </div>
                   </CardTitle>
                   <CardDescription className="flex flex-wrap gap-2 pt-2">
-                    <Badge variant="outline">Agente: {result.routing.agent}</Badge>
-                    <Badge variant="secondary">Roteado via: {result.routing.source}</Badge>
-                    <Badge variant="secondary">Confiança: {Math.round(result.routing.confidence * 100)}%</Badge>
+                    <Badge variant="outline">Agent: {result.routing.agent}</Badge>
+                    <Badge variant="secondary">Routed by: {result.routing.source}</Badge>
+                    <Badge variant="secondary">Confidence: {Math.round(result.routing.confidence * 100)}%</Badge>
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -673,11 +674,11 @@ export default function OrchestratorPage() {
           </TabsContent>
 
           <TabsContent value="jobs">
-            <Card>
+            <Card className="rounded-xl border-white/[0.06] bg-card/50">
               <CardHeader className="flex flex-row items-center justify-between space-y-0">
                 <div>
-                  <CardTitle>Histórico de Execuções</CardTitle>
-                  <CardDescription>Monitoramento em tempo real dos jobs processados.</CardDescription>
+                  <CardTitle>Job history</CardTitle>
+                  <CardDescription>Jobs update as they run.</CardDescription>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <div className="relative w-full lg:w-auto">
@@ -694,7 +695,7 @@ export default function OrchestratorPage() {
                       <SelectValue placeholder="Agente" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todos Agentes</SelectItem>
+                      <SelectItem value="all">All agents</SelectItem>
                       {health?.agents.map(a => (
                         <SelectItem key={a.slug} value={a.slug}>{a.name}</SelectItem>
                       ))}
@@ -705,11 +706,11 @@ export default function OrchestratorPage() {
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todos Status</SelectItem>
-                      <SelectItem value="completed">Concluído</SelectItem>
-                      <SelectItem value="failed">Falhou</SelectItem>
-                      <SelectItem value="processing">Processando</SelectItem>
-                      <SelectItem value="paused">Pausado</SelectItem>
+                      <SelectItem value="all">All statuses</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="failed">Failed</SelectItem>
+                      <SelectItem value="processing">Processing</SelectItem>
+                      <SelectItem value="paused">Paused</SelectItem>
                     </SelectContent>
                   </Select>
                   <Button variant="ghost" size="icon" onClick={loadJobs} disabled={jobsLoading}>
@@ -722,12 +723,12 @@ export default function OrchestratorPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Status</TableHead>
-                      <TableHead>Identificadores</TableHead>
-                      <TableHead>Agente</TableHead>
-                      <TableHead>Duração</TableHead>
+                      <TableHead>IDs</TableHead>
+                      <TableHead>Agent</TableHead>
+                      <TableHead>Duration</TableHead>
                       <TableHead>Retries</TableHead>
-                      <TableHead>Criado em</TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -774,26 +775,26 @@ export default function OrchestratorPage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => openJobDetails(job)}>
-                                <Info className="mr-2 h-4 w-4" /> Ver Detalhes
+                                <Info className="mr-2 h-4 w-4" /> See details
                               </DropdownMenuItem>
                               {job.status === "failed" && (
                                 <DropdownMenuItem onClick={() => handleJobAction(job.id, "retry")}>
-                                  <RefreshCcw className="mr-2 h-4 w-4" /> Reexecutar
+                                  <RefreshCcw className="mr-2 h-4 w-4" /> Run again
                                 </DropdownMenuItem>
                               )}
                               {job.status === "processing" && (
                                 <>
                                   <DropdownMenuItem onClick={() => handleJobAction(job.id, "pause")}>
-                                    <Pause className="mr-2 h-4 w-4" /> Pausar
+                                    <Pause className="mr-2 h-4 w-4" /> Pause
                                   </DropdownMenuItem>
                                   <DropdownMenuItem className="text-destructive" onClick={() => handleJobAction(job.id, "cancel")}>
-                                    <XCircle className="mr-2 h-4 w-4" /> Cancelar
+                                    <XCircle className="mr-2 h-4 w-4" /> Cancel
                                   </DropdownMenuItem>
                                 </>
                               )}
                               {job.status === "paused" && (
                                 <DropdownMenuItem onClick={() => handleJobAction(job.id, "resume")}>
-                                  <Play className="mr-2 h-4 w-4" /> Retomar
+                                  <Play className="mr-2 h-4 w-4" /> Resume
                                 </DropdownMenuItem>
                               )}
                             </DropdownMenuContent>
@@ -803,7 +804,7 @@ export default function OrchestratorPage() {
                     ))}
                     {jobs.length === 0 && !jobsLoading && (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum job encontrado.</TableCell>
+                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No jobs found.</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
@@ -814,11 +815,11 @@ export default function OrchestratorPage() {
 
           <TabsContent value="health">
             {health && (
-              <Card>
+              <Card className="rounded-xl border-white/[0.06] bg-card/50">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><Activity className="h-5 w-5 text-primary" /> Diagnóstico do Sistema</CardTitle>
+                  <CardTitle className="flex items-center gap-2"><Activity className="h-5 w-5 text-primary" /> System check</CardTitle>
                   <CardDescription>
-                    {health.summary.healthy}/{health.summary.total} saudáveis · latência média {health.summary.avg_latency_ms}ms
+                    {health.summary.healthy}/{health.summary.total} healthy · average latency {health.summary.avg_latency_ms}ms
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -826,7 +827,7 @@ export default function OrchestratorPage() {
                     <div key={cat} className="space-y-3">
                       <div className="flex items-center justify-between">
                         <h3 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">{cat}</h3>
-                        {disabledCategories.includes(cat) && <Badge variant="destructive">Desativada</Badge>}
+                        {disabledCategories.includes(cat) && <Badge variant="destructive">Off</Badge>}
                       </div>
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
                         {items.map((a) => (
@@ -858,14 +859,14 @@ export default function OrchestratorPage() {
 
           <TabsContent value="settings">
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <Card>
+              <Card className="rounded-xl border-white/[0.06] bg-card/50">
                 <CardHeader>
-                  <CardTitle>Performance & Latência</CardTitle>
-                  <CardDescription>Configure limites para alertas automáticos de regressão.</CardDescription>
+                  <CardTitle>Performance and latency</CardTitle>
+                  <CardDescription>Set limits for slowdown alerts.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Limite p95 (ms)</label>
+                    <label className="text-sm font-medium">p95 limit (ms)</label>
                     <div className="flex items-center gap-4">
                       <Input 
                         type="number" 
@@ -877,7 +878,7 @@ export default function OrchestratorPage() {
                         }}
                         className="w-24"
                       />
-                      <span className="text-xs text-muted-foreground">Jobs acima deste valor dispararão alertas na UI.</span>
+                      <span className="text-xs text-muted-foreground">Jobs above this value show an alert on this page.</span>
                     </div>
                   </div>
                   <Button 
@@ -886,18 +887,18 @@ export default function OrchestratorPage() {
                     onClick={() => {
                       setLatencyThreshold(500);
                       localStorage.setItem('kubo_latency_threshold', '500');
-                      toast({ title: "Limites restaurados", description: "O limite p95 voltou ao padrão de 500ms." });
+                      toast({ title: "Limits reset", description: "The p95 limit is back to the default of 500ms." });
                     }}
                   >
-                    Restaurar Padrões
+                    Reset to defaults
                   </Button>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="rounded-xl border-white/[0.06] bg-card/50">
                 <CardHeader>
-                  <CardTitle>Controle por Categoria</CardTitle>
-                  <CardDescription>Habilite ou desabilite grupos inteiros de agentes instantaneamente.</CardDescription>
+                  <CardTitle>Categories</CardTitle>
+                  <CardDescription>Turn whole groups of agents on or off.</CardDescription>
                 </CardHeader>
 
                 <CardContent className="space-y-4">
@@ -905,7 +906,7 @@ export default function OrchestratorPage() {
                     <div key={cat} className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50">
                       <div className="space-y-0.5">
                         <div className="text-sm font-medium">{cat}</div>
-                        <div className="text-xs text-muted-foreground">Status: {!disabledCategories.includes(cat) ? 'Ativo' : 'Pausado'}</div>
+                        <div className="text-xs text-muted-foreground">Status: {!disabledCategories.includes(cat) ? 'Active' : 'Paused'}</div>
                       </div>
                       <Switch 
                         checked={!disabledCategories.includes(cat)} 
@@ -916,10 +917,10 @@ export default function OrchestratorPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="rounded-xl border-white/[0.06] bg-card/50">
                 <CardHeader>
-                  <CardTitle>Controle por Agente</CardTitle>
-                  <CardDescription>Ajuste fino do roteamento individualmente.</CardDescription>
+                  <CardTitle>Agents</CardTitle>
+                  <CardDescription>Turn single agents on or off for routing.</CardDescription>
                 </CardHeader>
                 <CardContent className="max-h-[500px] overflow-auto space-y-3">
                   {health?.agents.map(a => (
@@ -934,7 +935,7 @@ export default function OrchestratorPage() {
                         onClick={() => toggleAgent(a.slug)}
                       >
                         {disabledAgents.includes(a.slug) ? <ToggleLeft className="mr-2 h-4 w-4" /> : <ToggleRight className="mr-2 h-4 w-4" />}
-                        {disabledAgents.includes(a.slug) ? 'Ativar' : 'Pausar'}
+                        {disabledAgents.includes(a.slug) ? 'Turn on' : 'Pause'}
                       </Button>
                     </div>
                   ))}
@@ -962,6 +963,6 @@ export default function OrchestratorPage() {
           void loadJobs();
         }}
       />
-    </div>
+    </AppShell>
   );
 }

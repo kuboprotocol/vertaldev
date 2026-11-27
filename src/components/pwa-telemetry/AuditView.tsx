@@ -14,13 +14,13 @@ export const AuditView = ({ logs }: AuditViewProps) => {
   const [selectedLog, setSelectedLog] = useState<any>(null);
 
   return (
-    <Card>
+    <Card className="rounded-xl border-white/[0.06] bg-card/50">
       <CardHeader>
         <div className="flex items-center gap-2">
           <History className="w-5 h-5 text-muted-foreground" />
           <div>
-            <CardTitle>Audit Trail de Telemetria</CardTitle>
-            <CardDescription>Registro de ações administrativas (limpeza e exportação).</CardDescription>
+            <CardTitle>Telemetry audit log</CardTitle>
+            <CardDescription>Admin actions (clear and export).</CardDescription>
           </div>
         </div>
       </CardHeader>
@@ -28,18 +28,18 @@ export const AuditView = ({ logs }: AuditViewProps) => {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Data/Hora</TableHead>
-              <TableHead>Usuário</TableHead>
-              <TableHead>Ação</TableHead>
-              <TableHead>Resumo dos Filtros</TableHead>
-              <TableHead className="text-right">Ações</TableHead>
+              <TableHead>Date and time</TableHead>
+              <TableHead>User</TableHead>
+              <TableHead>Action</TableHead>
+              <TableHead>Filters</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {logs.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
-                  Nenhum registro de auditoria encontrado.
+                  No audit entries yet.
                 </TableCell>
               </TableRow>
             ) : logs.map((log) => {
@@ -77,7 +77,7 @@ export const AuditView = ({ logs }: AuditViewProps) => {
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
-                      {summaryElements.length > 0 ? summaryElements : <span className="text-muted-foreground italic text-[10px]">Sem filtros</span>}
+                      {summaryElements.length > 0 ? summaryElements : <span className="text-muted-foreground italic text-[10px]">No filters</span>}
                       {log.deleted_count > 0 && (
                         <Badge variant="secondary" className="text-[10px] px-1 py-0">
                           {log.deleted_count} rem.
@@ -94,27 +94,27 @@ export const AuditView = ({ logs }: AuditViewProps) => {
                       </DialogTrigger>
                       <DialogContent className="max-w-md">
                         <DialogHeader>
-                          <DialogTitle>Detalhes da Auditoria</DialogTitle>
+                          <DialogTitle>Audit entry details</DialogTitle>
                         </DialogHeader>
                         <div className="space-y-4 py-4">
                           <div className="grid grid-cols-2 gap-2 text-sm">
-                            <span className="font-semibold">ID da Ação:</span>
+                            <span className="font-semibold">Action ID:</span>
                             <span className="font-mono text-xs">{log.id}</span>
-                            <span className="font-semibold">Data/Hora:</span>
+                            <span className="font-semibold">Date and time:</span>
                             <span>{new Date(log.created_at).toLocaleString()}</span>
-                            <span className="font-semibold">Usuário:</span>
+                            <span className="font-semibold">User:</span>
                             <span>{log.actor?.email || log.actor_id}</span>
-                            <span className="font-semibold">Ação:</span>
+                            <span className="font-semibold">Action:</span>
                             <span className="capitalize">{log.action_type}</span>
                             {log.deleted_count > 0 && (
                               <>
-                                <span className="font-semibold">Registros Removidos:</span>
+                                <span className="font-semibold">Rows removed:</span>
                                 <span>{log.deleted_count}</span>
                               </>
                             )}
                           </div>
                           <div className="space-y-2">
-                            <span className="text-sm font-semibold">Payload Completo (Filtros):</span>
+                            <span className="text-sm font-semibold">Full payload (filters):</span>
                             <pre className="bg-muted p-3 rounded-md text-[10px] overflow-auto max-h-[200px]">
                               {JSON.stringify(log.filters, null, 2)}
                             </pre>

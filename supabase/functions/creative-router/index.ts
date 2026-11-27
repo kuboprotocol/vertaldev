@@ -94,6 +94,8 @@ import { decodeImageDataUrl, generateChatImage } from "../_shared/chatImage.ts";
 import { GMAIL_SECRETARY_COST } from "../_shared/gmailBilling.ts";
 // Agendador do Vertal Chat: desligado por padrão (VERTAL_CHAT_SCHEDULER_ENABLED + VERTAL_CHAT_SCHEDULER_USER_IDS).
 import { schedulerAllowed, wantsScheduler } from "../_shared/chatScheduler.ts";
+// Clonador de voz: só com VERTAL_OWN_VOICE_ENABLED + conta na lista (padrão: só o Laércio); senão nada muda.
+import { voiceCloneAllowed, voiceCloneCosts, voiceEnvFrom, wantsVoiceClone } from "../_shared/voiceClone.ts";
 import { vertalPersonaEnabled, withVertalPersona } from "../_shared/vertalPersona.ts";
 
 const InputSchema = z.object({
@@ -719,6 +721,9 @@ async function handleAgentChat(
       );
     }
   }
+  const voiceEnv = voiceEnvFrom(Deno.env.toObject());
+  const voiceCloneOk = !delegated && voiceCloneAllowed(voiceEnv, user.id);
+  const voiceCloneOn = voiceCloneOk && wantsVoiceClone([...all.slice(-6), ...results.slice(-4).map((r) => JSON.stringify(r))]);
   const system = buildAgentSystemPrompt({
     secretNames,
     today: new Date().toISOString().slice(0, 10),
@@ -745,6 +750,7 @@ async function handleAgentChat(
     ...(!delegated && schedulerAllowed((k) => Deno.env.get(k), user.id) && wantsScheduler([...all.slice(-6), ...results.slice(-4)])
       ? { scheduler: true }
       : {}),
+    ...(voiceCloneOn ? { voiceClone: voiceCloneCosts(voiceEnv) } : {}),
   }) + (delegated ? DELEGATED_CHAT_PROMPT : "");
   const final = agent.data.final === true || brain.planPhase === "final";
   const convo = results.length
@@ -864,6 +870,8 @@ async function handleAgentChat(
       }
     }
     if (brain.planPhase) actions = actions.filter((a) => a.tool !== "plan");
+    // Clonador de voz: conta fora da lista nunca recebe a ação (o creative-music também recusa).
+    if (!voiceCloneOk) actions = actions.filter((a) => a.tool !== "voice_clone");
     // Pedido do Vibe Code: só leitura/pesquisa/imagem, filtrado AQUI no servidor (nunca vibe_code).
     const originFilter = filterActionsForOrigin(actions, origin);
     actions = originFilter.actions;

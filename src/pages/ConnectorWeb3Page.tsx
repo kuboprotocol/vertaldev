@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card'
 import { getProvider } from '@/lib/web3Providers'
 import Web3ConnectionForm, { type Web3EditingConnection } from '@/components/connectors/Web3ConnectionForm'
 import Web3ConnectionList from '@/components/connectors/Web3ConnectionList'
+import { SITE_FONT, siteRoot } from '@/components/site/siteUi'
 
 export default function ConnectorWeb3Page() {
   const { provider: providerParam = '' } = useParams<{ provider: string }>()
@@ -18,7 +19,7 @@ export default function ConnectorWeb3Page() {
 
   if (!provider) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+      <div className={`min-h-screen flex items-center justify-center ${siteRoot}`} style={SITE_FONT}>
         <div className="text-center space-y-3">
           <p className="text-lg">Web3 provider not found</p>
           <Button onClick={() => navigate('/connectors')}>Back to connectors</Button>
@@ -28,7 +29,7 @@ export default function ConnectorWeb3Page() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className={`min-h-screen ${siteRoot}`} style={SITE_FONT}>
       <div className="border-b border-border bg-card/50 backdrop-blur-xl sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => navigate('/connectors/web3')} aria-label="Back">

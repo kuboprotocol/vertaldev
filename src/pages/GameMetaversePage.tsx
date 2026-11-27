@@ -259,7 +259,7 @@ export default function GameMetaversePage() {
           <Card className="glass-premium p-4 flex flex-col h-[360px]">
             <div className="text-xs tracking-widest text-muted-foreground mb-2">CHAT</div>
             <div className="flex-1 overflow-auto space-y-1 text-sm pr-1">
-              {messages.length === 0 && <p className="text-xs text-muted-foreground">No messages yet — say hi.</p>}
+              {messages.length === 0 && <p className="text-xs text-muted-foreground">No messages yet. Say hi.</p>}
               {messages.map((m) => (
                 <div key={m.id} className="leading-tight">
                   <span className="text-xs font-mono opacity-70">{m.authorName}:</span> <span>{m.text}</span>

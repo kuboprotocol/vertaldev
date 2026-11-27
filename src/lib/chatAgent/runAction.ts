@@ -43,6 +43,9 @@ import { describeHuginnOp, isHuginnWrite, type HuginnOp } from '../../../supabas
 // Agendador (tarefas agendadas): só chega aqui com a flag ligada no servidor para o usuário.
 import { runScheduler } from '@/lib/chatScheduler/runScheduler';
 import type { ApprovalLabels } from '../../../supabase/functions/_shared/chatSchedulerI18n';
+// Clonador de voz (flag no servidor): só chega aqui para contas liberadas.
+import { voiceMessage } from '../../../supabase/functions/_shared/voiceClone';
+import { VoiceCloneError, browserVoiceLang, listVoices, startSing, startSpeak, waitVoiceJob } from '@/lib/voiceClone/client';
 
 export interface ApiApprovalRequest {
   method: string;
@@ -397,6 +400,65 @@ async function runMusic(action: Extract<AgentAction, { tool: 'music' }>, ctx: Ac
     if (typeof st?.status === 'string' && /FAIL|ERROR/i.test(st.status)) break;
   }
   return fail('music', 'A música não ficou pronta a tempo. Ela aparece no histórico do Painel Criativo quando terminar.');
+}
+
+/** Prazos do Clonador no chat: o turno nunca fica preso (antes o chat travava ao pedir para clonar a voz). */
+export const VOICE_CHAT_DEADLINE_MS = { speak: 150_000, sing: 300_000 } as const;
+
+async function runVoiceClone(action: Extract<AgentAction, { tool: 'voice_clone' }>, ctx: ActionContext): Promise<ActionOutcome> {
+  const lang = browserVoiceLang();
+  const openCloner = (summary: string): ActionOutcome => ({
+    panel: 'voice_clone',
+    result: { tool: 'voice_clone', ok: true, summary },
+  });
+  try {
+    if (action.op === 'setup') return openCloner('Clonador de voz aberto ao lado: o usuário grava 10–60 s da própria voz, aceita o consentimento e salva.');
+    const voices = await listVoices();
+    if (action.op === 'list') {
+      const summary = voices.length
+        ? `Vozes clonadas do usuário: ${voices.map((v) => `${v.name} (id ${v.id})`).join('; ')}.`
+        : 'O usuário ainda não tem voz clonada.';
+      return followUp('voice_clone', true, summary);
+    }
+    if (voices.length === 0) {
+      const out = openCloner(voiceMessage('no_voice', lang));
+      return { ...out, error: voiceMessage('no_voice', lang), result: { tool: 'voice_clone', ok: false, summary: voiceMessage('no_voice', lang) } };
+    }
+    const opt = action as { voice_id?: string; source_artifact?: string; audio_url?: string };
+    const voiceId = opt.voice_id && voices.some((v) => v.id === opt.voice_id) ? opt.voice_id : voices[0].id;
+    const voiceName = voices.find((v) => v.id === voiceId)?.name ?? 'sua voz';
+
+    if (action.op === 'speak') {
+      const started = await startSpeak(action.text, voiceId);
+      const job = await waitVoiceJob(started.job_id, { deadlineMs: VOICE_CHAT_DEADLINE_MS.speak });
+      if (job.status !== 'completed' || !job.audio_url) return fail('voice_clone', job.message ?? voiceMessage('failed', lang));
+      return {
+        artifact: { id: ctx.newId(), kind: 'music', title: `${voiceName}: ${titleFrom(action.text, 40)}`, tracks: [{ title: voiceName, audioUrl: job.audio_url }], prompt: action.text },
+        result: { tool: 'voice_clone', ok: true, summary: `Áudio falado com a voz "${voiceName}" pronto e mostrado ao usuário.` },
+      };
+    }
+
+    // sing: a música da conversa (o artefato pedido ou o mais recente) ou um link do próprio usuário.
+    const musics = ctx.artifacts.filter((a): a is Extract<Artifact, { kind: 'music' }> => a.kind === 'music');
+    const source = opt.source_artifact ? musics.find((a) => a.id === opt.source_artifact) : musics[musics.length - 1];
+    const sourceUrl = source?.tracks[0]?.audioUrl ?? opt.audio_url;
+    if (!sourceUrl) return fail('voice_clone', voiceMessage('source_missing', lang));
+    const title = `${source?.title ?? 'Música'} · voz ${voiceName}`;
+    const started = await startSing(sourceUrl, voiceId, title);
+    const job = await waitVoiceJob(started.job_id, { deadlineMs: VOICE_CHAT_DEADLINE_MS.sing });
+    if (job.status !== 'completed' || !job.audio_url) return fail('voice_clone', job.message ?? voiceMessage('failed', lang));
+    return {
+      artifact: { id: ctx.newId(), kind: 'music', title, tracks: [{ title, audioUrl: job.audio_url, imageUrl: source?.tracks[0]?.imageUrl }], prompt: source?.prompt ?? title },
+      result: { tool: 'voice_clone', ok: true, summary: `Nova versão "${title}" cantada com a voz clonada do usuário, pronta e mostrada.` },
+    };
+  } catch (e) {
+    if (e instanceof VoiceCloneError) {
+      if (e.code === 'timeout') return { ...fail('voice_clone', voiceMessage('timeout', lang)), panel: 'voice_clone' };
+      if (e.code === 'no_voice') return { ...openCloner(voiceMessage('no_voice', lang)), error: voiceMessage('no_voice', lang) };
+      return fail('voice_clone', e.message || voiceMessage('failed', lang));
+    }
+    return fail('voice_clone', voiceMessage('failed', lang));
+  }
 }
 
 async function runApi(action: Extract<AgentAction, { tool: 'api_request' }>, ctx: ActionContext): Promise<ActionOutcome> {
@@ -1384,6 +1446,8 @@ export async function runAction(action: AgentAction, ctx: ActionContext): Promis
         return await runFluxos(action, ctx);
       case 'agendador':
         return await runScheduler(action, ctx);
+      case 'voice_clone':
+        return await runVoiceClone(action, ctx);
       case 'weather':
         return await runWeather(action);
       case 'web_search':
@@ -1576,6 +1640,8 @@ export function actionLabel(action: AgentAction): string {
     case 'agendador':
       return action.op === 'create' ? 'Preparando a tarefa agendada (você confirma antes)' : action.op === 'delete' ? 'Apagando tarefa agendada (você confirma antes)' : 'Consultando as tarefas agendadas';
     case 'open_panel': return 'Abrindo painel';
+    case 'voice_clone':
+      return action.op === 'sing' ? 'Cantando a música com a sua voz (1 a 4 min)' : action.op === 'speak' ? 'Gerando o áudio com a sua voz' : action.op === 'list' ? 'Consultando suas vozes' : 'Abrindo o Clonador de voz';
     case 'weather': return 'Consultando o clima';
     case 'web_search': return 'Buscando na web';
     case 'gmail_search': return 'Lendo o Gmail';
