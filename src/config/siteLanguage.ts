@@ -23,6 +23,11 @@ export const ENGLISH_ROUTES: readonly string[] = [
   '/data-deletion',
   '/anywhere',
   '/reset-password',
+  // Logged-in panels
+  '/dashboard',
+  '/profile',
+  '/recompensas',
+  '/affiliate-program',
 ]
 
 /** True when the route (without query or hash) is written in English. */

@@ -12,20 +12,20 @@ export default function DailyChecklistCard({ checklist }: { checklist: DailyChec
   const items = [
     {
       key: "video",
-      label: "Assista ao vídeo premiado",
-      detail: checklist ? `${checklist.videos_today} hoje` : "",
+      label: "Watch the reward video",
+      detail: checklist ? `${checklist.videos_today} today` : "",
       done: checklist?.video_done ?? false,
     },
     {
       key: "music",
-      label: "Ouça as 5 músicas do Kubo",
+      label: "Listen to the 5 Kubo songs",
       detail: checklist ? `${checklist.music_tracks_counted}/${total}` : `0/${total}`,
       done: checklist?.music_done ?? false,
     },
     {
       key: "extra-video",
-      label: "Assista a 1 vídeo premiado extra",
-      detail: checklist ? `${Math.min(checklist.videos_today, extraVideos)}/${extraVideos} vídeos` : "",
+      label: "Watch 1 more reward video",
+      detail: checklist ? `${Math.min(checklist.videos_today, extraVideos)}/${extraVideos} videos` : "",
       done: checklist?.terra_done ?? false,
     },
   ];
@@ -33,15 +33,15 @@ export default function DailyChecklistCard({ checklist }: { checklist: DailyChec
   const completed = checklist?.completed ?? false;
 
   return (
-    <Card className="glass glass-border" data-testid="daily-checklist">
+    <Card className="rounded-2xl border-white/[0.06] bg-card/50" data-testid="daily-checklist">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Gift className="h-5 w-5 text-primary" />
-            Atividades do dia
+            Today's activities
           </CardTitle>
           <span className="text-xs text-muted-foreground" data-testid="daily-checklist-progress">
-            {doneCount}/3 concluídas
+            {doneCount}/3 done
           </span>
         </div>
       </CardHeader>
@@ -79,8 +79,8 @@ export default function DailyChecklistCard({ checklist }: { checklist: DailyChec
 
         <p className="text-xs text-muted-foreground" data-testid="daily-checklist-credits">
           {completed
-            ? `Recompensas de hoje liberadas: ${checklist?.released_credits ?? 0} crédito(s) no seu saldo.`
-            : `Créditos pendentes hoje: ${checklist?.pending_credits ?? 0}. Eles vão para o seu saldo quando você completar as 3 atividades; se o dia acabar antes (meia-noite, horário de Brasília), expiram.`}
+            ? `Today's rewards are released: ${checklist?.released_credits ?? 0} credit(s) added to your balance.`
+            : `Pending credits today: ${checklist?.pending_credits ?? 0}. They go to your balance when you finish the 3 activities. If the day ends first (midnight, Brasília time), they expire.`}
         </p>
       </CardContent>
     </Card>

@@ -29,7 +29,7 @@ describe('VertalNodeCard', () => {
     render(<VertalNodeCard desktopUrl={null} androidUrl={null} partner={null} />)
     const text = screen.getByTestId('vertal-node-disclosure').textContent ?? ''
     expect(text).toMatch(/exit node/)
-    expect(text).toMatch(/consentimento/)
+    expect(text).toMatch(/consent/)
     const card = screen.getByTestId('vertal-node-card').textContent ?? ''
     expect(card).toMatch(/Vertal Node/)
     expect(card).not.toMatch(/Honeygain|Cash Raven|Pawns|Bright|Infatica|EarnFM/i)
@@ -51,7 +51,7 @@ describe('VertalNodeCard', () => {
     render(<VertalNodeCard desktopUrl={null} androidUrl={null} />)
     await screen.findByText('6')
     const footer = screen.getByTestId('vertal-node-partner')
-    expect(footer).toHaveTextContent('Parceiro: Cash Raven')
+    expect(footer).toHaveTextContent('Partner: Cash Raven')
     expect(footer.className).toMatch(/text-\[10px\]/)
     expect(footer.className).toMatch(/text-muted-foreground\/60/)
     vi.unstubAllEnvs()
@@ -59,7 +59,7 @@ describe('VertalNodeCard', () => {
 
   it('mostra dispositivos ativos e crédito do dia', async () => {
     render(<VertalNodeCard desktopUrl={null} androidUrl={null} />)
-    expect(await screen.findByText(/1 dispositivo\(s\) ativo\(s\) · crédito de hoje já recebido/)).toBeInTheDocument()
+    expect(await screen.findByText(/1 active device\(s\) · today's credit received/)).toBeInTheDocument()
   })
 
   it('esconde os botões de download quando as URLs não estão configuradas', async () => {

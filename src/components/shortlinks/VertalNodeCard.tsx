@@ -71,40 +71,40 @@ export default function VertalNodeCard({
   const activeDevices = summary?.devices.filter((d) => d.opted_in && d.running).length ?? 0;
 
   return (
-    <Card className="glass glass-border" data-testid="vertal-node-card">
+    <Card className="rounded-2xl border-white/[0.06] bg-card/50" data-testid="vertal-node-card">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <Wifi className="h-5 w-5 text-primary" />
-          Ganhe compartilhando internet
+          Earn by sharing your internet
         </CardTitle>
         <CardDescription>
-          Instale o <span className="font-medium text-foreground">Vertal Node</span> no computador
-          ou no Android e ganhe {summary?.daily_credits ?? 2} créditos por dia ativo.
+          Install <span className="font-medium text-foreground">Vertal Node</span> on your computer
+          or Android phone and earn {summary?.daily_credits ?? 2} credits for each active day.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
         <p className="text-muted-foreground" data-testid="vertal-node-disclosure">
-          Com a sua permissão, o Vertal Node compartilha uma parte da sua conexão de internet não
-          usada por meio de um parceiro de rede: o aparelho vira um ponto de saída (exit node).
-          Nada é ativado antes de você aceitar a tela de consentimento do parceiro no app, que traz
-          os termos e a política de privacidade, e dá para desligar quando quiser no próprio app.
+          With your permission, Vertal Node shares part of your unused internet connection through a
+          network partner: your device becomes an exit node. Nothing turns on until you accept the
+          partner's consent screen in the app, which shows its terms and privacy policy. You can turn
+          it off at any time in the app.
         </p>
 
         <div className="grid grid-cols-2 gap-3" data-testid="vertal-node-stats">
           <div className="rounded-xl border border-border/60 bg-background/40 p-3">
-            <p className="text-xs text-muted-foreground">Créditos ganhos</p>
+            <p className="text-xs text-muted-foreground">Credits earned</p>
             <p className="text-lg font-semibold">{summary?.total_credits ?? 0}</p>
           </div>
           <div className="rounded-xl border border-border/60 bg-background/40 p-3">
-            <p className="text-xs text-muted-foreground">Dias ativos</p>
+            <p className="text-xs text-muted-foreground">Active days</p>
             <p className="text-lg font-semibold">{summary?.active_days ?? 0}</p>
           </div>
         </div>
         {summary && summary.devices.length > 0 && (
           <p className="text-xs text-muted-foreground">
             {activeDevices > 0
-              ? `${activeDevices} dispositivo(s) ativo(s)${summary.credited_today ? " · crédito de hoje já recebido" : ""}`
-              : "Nenhum dispositivo compartilhando agora."}
+              ? `${activeDevices} active device(s)${summary.credited_today ? " · today's credit received" : ""}`
+              : "No device is sharing right now."}
           </p>
         )}
 
@@ -114,7 +114,7 @@ export default function VertalNodeCard({
               <Button asChild variant="outline" className="flex-1">
                 <a href={desktopUrl} target="_blank" rel="noopener noreferrer" data-testid="vertal-node-desktop">
                   <Download className="mr-2 h-4 w-4" />
-                  Baixar para computador
+                  Download for computer
                 </a>
               </Button>
             )}
@@ -122,7 +122,7 @@ export default function VertalNodeCard({
               <Button asChild variant="outline" className="flex-1">
                 <a href={androidUrl} target="_blank" rel="noopener noreferrer" data-testid="vertal-node-android">
                   <Smartphone className="mr-2 h-4 w-4" />
-                  Baixar para Android
+                  Download for Android
                 </a>
               </Button>
             )}
@@ -134,7 +134,7 @@ export default function VertalNodeCard({
             className="pt-1 text-center text-[10px] leading-tight text-muted-foreground/60"
             data-testid="vertal-node-partner"
           >
-            Parceiro: {partner}
+            Partner: {partner}
           </p>
         ) : null}
       </CardContent>

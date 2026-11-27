@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { fetchCreditBalance } from '@/lib/creditBalance'
-import AnimatedLogo from '@/components/branding/AnimatedLogo'
+import AppShell, { AppTopBar, PanelHeader } from '@/components/site/AppShell'
 import RewardedVideoPanel from '@/components/shortlinks/RewardedVideoPanel'
 import VertalNodeCard from '@/components/shortlinks/VertalNodeCard'
 import KuboMusicPanel from '@/components/shortlinks/KuboMusicPanel'
@@ -48,7 +48,7 @@ export default function RewardsPage() {
         setUserDebt(debtRes.data.debt || 0)
       }
     } catch (e: any) {
-      toast.error(`Erro ao carregar o saldo: ${e.message}`)
+      toast.error(`We could not load your balance: ${e.message}`)
     } finally {
       setLoading(false)
     }
@@ -66,8 +66,8 @@ export default function RewardsPage() {
       const wasCompleted = completedRef.current
       completedRef.current = next.completed
       if (next.just_completed || (wasCompleted === false && next.completed)) {
-        toast.success('Recompensas liberadas!', {
-          description: 'Você completou todas as atividades do dia. Os créditos foram para o seu saldo.',
+        toast.success('Rewards released', {
+          description: 'You finished all of today\'s activities. The credits are in your balance.',
         })
         loadData()
       }
@@ -117,28 +117,19 @@ export default function RewardsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background gradient-mesh">
-      {/* Header */}
-      <header className="glass glass-border sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/profile')} className="hover:bg-accent">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="flex items-center gap-2">
-            <AnimatedLogo size={15} />
-            <h1 className="text-xl font-bold text-foreground font-display">Recompensas</h1>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-5xl mx-auto px-6 py-10">
+    <AppShell topBar={<AppTopBar back={{ to: '/profile', label: 'Profile' }} />}>
+      <PanelHeader
+        title="Rewards"
+        description="Earn extra credits with optional activities. Finish today's activities to release the credits."
+      />
+      <div>
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           className="space-y-8"
         >
-          {/* Checklist do dia (obrigatório para liberar as recompensas) */}
+          {/* Today's checklist (needed to release the rewards) */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -147,31 +138,31 @@ export default function RewardsPage() {
             <DailyChecklistCard checklist={checklist} />
           </motion.div>
 
-          {/* Saldo */}
+          {/* Balance */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.1 }}
           >
-            <Card className="glass glass-border">
+            <Card className="rounded-2xl border-white/[0.06] bg-card/50">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-medium">Saldo</CardTitle>
+                  <CardTitle className="text-sm font-medium">Balance</CardTitle>
                   {userDebt > 0 ? (
-                    <span className="text-destructive">⚠️</span>
+                    <AlertCircle className="h-4 w-4 text-destructive" aria-label="Debt" />
                   ) : (
                     <Wallet className="h-4 w-4 text-primary" />
                   )}
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-display font-bold text-foreground">
-                  {userBalance.toLocaleString('pt-BR')}
+                <p className="text-3xl font-semibold tracking-[-0.02em] text-foreground">
+                  {userBalance.toLocaleString()}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">créditos disponíveis</p>
+                <p className="text-xs text-muted-foreground mt-1">credits available</p>
                 {userDebt > 0 && (
                   <p className="text-xs text-destructive mt-1">
-                    Débito: {userDebt} créditos
+                    Debt: {userDebt} credits
                   </p>
                 )}
               </CardContent>
@@ -188,14 +179,14 @@ export default function RewardsPage() {
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  ⚠️ Você tem um débito de <span className="font-semibold">{userDebt} créditos</span>.
-                  Os créditos ganhos com recompensas serão descontados automaticamente.
+                  You have a debt of <span className="font-semibold">{userDebt} credits</span>.
+                  Credits you earn from rewards pay it off first.
                 </AlertDescription>
               </Alert>
             </motion.div>
           )}
 
-          {/* 1 e 3. Vídeo premiado (AppLixir; o 2º do dia é o extra) e 2. Músicas do Kubo (Spotify) */}
+          {/* 1 and 3. Reward video (AppLixir; the 2nd of the day is the extra one) and 2. Kubo music (Spotify) */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -206,20 +197,20 @@ export default function RewardsPage() {
             <KuboMusicPanel checklist={checklist} onProgress={applyChecklist} />
           </motion.div>
 
-          {/* Bônus opcional: Vertal Node (app desktop/Android), fora do checklist */}
+          {/* Optional bonus: Vertal Node (desktop/Android app), not part of the checklist */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.3 }}
             className="space-y-2"
           >
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Bônus opcional</p>
+            <p className="text-sm font-medium text-muted-foreground">Optional bonus</p>
             <div className="grid gap-4 md:grid-cols-2">
               <VertalNodeCard />
             </div>
           </motion.div>
         </motion.div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   )
 }

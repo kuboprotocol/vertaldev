@@ -33,6 +33,17 @@ const FILES = [
   'pages/DocsMcpPage.tsx',
   'pages/NotFound.tsx',
   'pages/ResetPasswordPage.tsx',
+  // Logged-in panels (batch 2)
+  'pages/DashboardPage.tsx',
+  'components/dashboard/PromoCards.tsx',
+  'pages/ProfilePage.tsx',
+  'pages/RewardsPage.tsx',
+  'components/shortlinks/DailyChecklistCard.tsx',
+  'components/shortlinks/RewardedVideoPanel.tsx',
+  'components/shortlinks/KuboMusicPanel.tsx',
+  'components/shortlinks/VertalNodeCard.tsx',
+  'pages/AffiliateProgramPage.tsx',
+  'components/affiliate/AffiliateInstallsManager.tsx',
 ]
 
 function visibleText(file: string): string {

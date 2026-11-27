@@ -12,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
  * anúncio indisponível (`terra-unavailable` + vídeos extras), sem carregar nada de terceiros.
  */
 export const DAILY_CHECKLIST_NOTICE =
-  "Para ganhar suas recompensas, complete todas as atividades do dia: assista ao vídeo premiado, ouça as 5 músicas do Kubo e assista a 1 vídeo premiado extra.";
+  "To earn your rewards, finish all of today's activities: watch the reward video, listen to the 5 Kubo songs and watch 1 more reward video.";
 
 /** Segundos de reprodução real para uma faixa contar (o servidor tem a palavra final). */
 export const KUBO_MUSIC_MIN_SECONDS = 30;
