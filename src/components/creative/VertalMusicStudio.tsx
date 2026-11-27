@@ -24,6 +24,8 @@ import {
 import {
   buildSuperPrompt, normalizeMusicRequest, type MusicRequest,
 } from "../../../supabase/functions/_shared/music/vertalMusicCore";
+// "Usar minha voz" (Clonador de voz): não renderiza nada para contas fora da flag.
+import { MusicVoiceClone } from "./MusicVoiceClone";
 
 const POLL_MS = 5000;
 const ETA_SECONDS = 90;
@@ -384,6 +386,7 @@ export function VertalMusicStudio() {
                       </Button>
                     </div>
                     <audio controls preload="metadata" src={it.audio_url} className="w-full" />
+                    <MusicVoiceClone audioUrl={it.audio_url} title={it.title || job.title} autoId={i === 0 ? job.asset_id : undefined} />
                   </div>
                 ))}
                 {job.lyrics && (
@@ -404,6 +407,7 @@ export function VertalMusicStudio() {
                   <div key={h.asset_id} className="space-y-1">
                     <p className="text-xs font-medium truncate">{h.title}</p>
                     {h.items[0]?.audio_url && <audio controls preload="none" src={h.items[0].audio_url} className="w-full h-9" />}
+                    {h.items[0]?.audio_url && <MusicVoiceClone audioUrl={h.items[0].audio_url} title={h.title} />}
                   </div>
                 ))}
               </div>

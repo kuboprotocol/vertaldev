@@ -123,6 +123,7 @@ export function VertalChat() {
   const openPanel = useCallback(
     (key: PanelKey, extra: Partial<Pick<PanelRequest, 'office' | 'designOpen' | 'figcraft'>> = {}) => {
       const info = PANEL_BY_KEY[key];
+      if (!info) return; // painel desconhecido: nunca derruba o chat
       if (info.route) {
         navigate(info.route);
         return;
@@ -153,7 +154,7 @@ export function VertalChat() {
     onChatOnly: setChatOnly,
     // Painéis com rota própria viram um botão na mensagem: o agente não tira o usuário do chat.
     onOpenPanel: (key, extra) => {
-      if (PANEL_BY_KEY[key].route || chatOnlyRef.current) return;
+      if (!PANEL_BY_KEY[key] || PANEL_BY_KEY[key].route || chatOnlyRef.current) return;
       openPanel(key, key === 'figcraft' ? { figcraft: { designId: extra?.designId } } : {});
     },
     onArtifact: (artifact) => {
@@ -510,10 +511,10 @@ export function VertalChat() {
             </button>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold">
-                {side?.type === 'panel' && panel ? PANEL_BY_KEY[panel.key].label : side?.type === 'live' ? 'Construindo aplicativo…' : openArtifact?.title ?? 'Artefato'}
+                {side?.type === 'panel' && panel ? PANEL_BY_KEY[panel.key]?.label ?? '' : side?.type === 'live' ? 'Construindo aplicativo…' : openArtifact?.title ?? 'Artefato'}
               </p>
               <p className="truncate text-[11px] text-muted-foreground">
-                {side?.type === 'panel' && panel ? PANEL_BY_KEY[panel.key].hint : side?.type === 'live' ? 'Prévia ao vivo' : openArtifact ? KIND_LABEL[openArtifact.kind] : ''}
+                {side?.type === 'panel' && panel ? PANEL_BY_KEY[panel.key]?.hint ?? '' : side?.type === 'live' ? 'Prévia ao vivo' : openArtifact ? KIND_LABEL[openArtifact.kind] : ''}
               </p>
             </div>
             <button
@@ -809,6 +810,7 @@ function MessageRow({
         <div className="flex flex-wrap gap-2">
           {panels.map((key) => {
             const info = PANEL_BY_KEY[key];
+            if (!info) return null;
             return (
               <button
                 key={key}

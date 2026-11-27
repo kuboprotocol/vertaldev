@@ -19,6 +19,8 @@ import {
   cleanLyrics, fallbackLyrics, lyricsPrompt, mapSunoStatus, musicRequestError, normalizeMusicRequest, ownPayload,
   pickMusicProvider, sunoPayload, type MusicEnv, type MusicRequest, type NormalizedMusicRequest,
 } from "../_shared/music/vertalMusicCore.ts";
+// Clonador de voz (ações voice_*): só com VERTAL_OWN_VOICE_ENABLED e a conta na lista; o resto do arquivo não muda.
+import { handleVoice } from "./voice.ts";
 
 const COST_DOWNLOAD_MP3 = 1;
 const COST_DOWNLOAD_WAV = 2;
@@ -75,6 +77,7 @@ Deno.serve(withRefundOnFailure(async (req) => {
       const provider = pickMusicProvider(env);
       return j(200, { ok: true, available: Boolean(provider), provider, cost: MUSIC_COST_CREDITS });
     }
+    if (typeof action === "string" && action.startsWith("voice_")) return await handleVoice(user, body, req, idempotencyKey);
     if (action === "generate") return await generate(user, body as MusicRequest, idempotencyKey);
     if (action === "status") return await status(user, body);
     if (action === "history") return await history(user);
