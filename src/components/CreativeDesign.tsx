@@ -4,7 +4,6 @@ import { CreativeSlides } from './CreativeSlides';
 import { supabase } from '@/integrations/supabase/client';
 import { AvatarsWorld, CanvasWorld, GalleryWorld, StudioWorld, type StudioPage } from './creative/DesignWorlds';
 import { StartCard } from './creative/DesignWorld';
-import { SponsoredSlot } from './creative/SponsoredSlot';
 import type { DesignCopy } from './creative/DesignGallery';
 import {
   DESIGN_FORMATS,
@@ -127,10 +126,6 @@ export function CreativeDesign({ creditsAvailable, open }: CreativeDesignProps) 
       </nav>
 
       <div className="min-w-0 flex-1 pb-24 md:pb-0">
-        {/* Canvas fica sem anúncio no topo: o editor ocupa a tela toda. O canvas tem o seu, na página inicial. */}
-        <div hidden={mode === 'canvas'} className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <SponsoredSlot />
-        </div>
         <div hidden={mode !== 'home'}>
           <DesignHome onOpenMode={selectMode} />
         </div>

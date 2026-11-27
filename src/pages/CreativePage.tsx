@@ -30,8 +30,6 @@ const VertalNotebook = React.lazy(() => import("@/components/notebook/VertalNote
 // O Clock (relógio, alarmes, cronômetro, timer) carrega quando a aba é aberta.
 const VertalClock = React.lazy(() => import("@/components/clock/VertalClock"));
 import { CreativeDesign } from "@/components/CreativeDesign";
-import { SponsoredSlot } from "@/components/creative/SponsoredSlot";
-import { CreativeAdFrame } from "@/components/creative/AdBanner";
 
 type ToolKey = "dashboard" | "chat" | "downloader" | "clips" | "avatar" | "shorts" | "music" | "ebook" | "emo" | "video_studio" | "unified_history" | "sheet" | "design" | "office" | "notebook" | "clock";
 
@@ -965,7 +963,6 @@ export default function CreativePage() {
         </div>
       </header>
       <main className="container max-w-7xl mx-auto px-4 py-6">
-        <CreativeAdFrame>
         {errorState && (
           <Alert variant="destructive" className="mb-6 bg-destructive/10 border-destructive/30 animate-in fade-in slide-in-from-top-4 duration-300">
             <AlertCircle className="h-5 w-5" />
@@ -1056,9 +1053,6 @@ export default function CreativePage() {
             </div>
           </DialogContent>
         </Dialog>
-
-        {/* Anúncio patrocinado no lugar do fluxo de habilidades (TERRA ADS, só Free e Starter) */}
-        <SponsoredSlot className="max-w-2xl mx-auto" />
 
         <Tabs value={active} onValueChange={(v) => { setActive(v as ToolKey); navigate(v === "dashboard" ? "/creative" : `/creative/${v}`); }}>
           <TabsList className="mb-6 grid grid-cols-2 max-w-md mx-auto bg-muted/20">
@@ -1353,7 +1347,6 @@ export default function CreativePage() {
             </React.Suspense>
           );
         })()}
-        </CreativeAdFrame>
       </main>
     </div>
   );

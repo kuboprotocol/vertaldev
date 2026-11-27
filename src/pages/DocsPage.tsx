@@ -655,7 +655,7 @@ testimonials and a waitlist form.`}</Pre>
         <H3>Earning credits</H3>
         <UL>
           <li>Daily streak bonuses and gamification badges.</li>
-          <li>Rewards page — rewarded video, TERRA ADS and Vertal Node (opt-in, every plan).</li>
+          <li>Rewards page — rewarded video, Kubo music and Vertal Node (opt-in, every plan).</li>
           <li>Referrals — 50 credits per invite. The invited user earns 5 credits per day, every 24 hours on login.</li>
           <li>Public leaderboard rewards for top creators.</li>
         </UL>
