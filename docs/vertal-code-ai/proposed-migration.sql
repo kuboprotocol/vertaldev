@@ -1,4 +1,4 @@
--- VERTAL Code AI — migração PROPOSTA (NÃO APLICADA, fora de supabase/migrations de propósito).
+-- VERTAL Code AI — migração (APLICADA em 2026-11-27 como supabase/migrations/20261127220000_vertal_ai_api.sql; este arquivo fica só como referência).
 -- Para aplicar: revisar, copiar para supabase/migrations/<timestamp>_vertal_code_ai.sql e
 -- aplicar deliberadamente (o deploy não roda db push; ver .github/workflows/deploy.yml).
 -- Nada aqui altera tabelas existentes.
