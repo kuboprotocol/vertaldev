@@ -55,7 +55,12 @@ gpu_image = (
 )
 web_image = modal.Image.debian_slim(python_version="3.12").uv_pip_install("fastapi[standard]")
 
-LANGS = {"pt", "en", "es", "fr", "de", "it", "nl", "pl", "ru", "tr", "ja", "ko", "zh", "ar", "hi"}
+# Os 23 idiomas do Chatterbox Multilingual (chatterbox/mtl_tts.py SUPPORTED_LANGUAGES, v0.1.6). Fora deles: inglês
+# (a edge function já escolhe/recusa antes; isto é só a rede de segurança, nunca quebra).
+LANGS = {
+    "ar", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "it", "ja",
+    "ko", "ms", "nl", "no", "pl", "pt", "ru", "sv", "sw", "tr", "zh",
+}
 
 
 def _fetch(url: str, path: str, limit: int) -> None:
@@ -120,19 +125,38 @@ class Voice:
         t0 = time.time()
         self.tts = ChatterboxMultilingualTTS.from_pretrained(device="cuda")
         self.load_s = round(time.time() - t0, 1)
+        # Tempo de partida a frio entra no custo do 1º trabalho deste contêiner (cobrança por custo real da API).
+        self.pending_load_s = self.load_s
         print(f"tts loaded in {self.load_s}s")
+
+    def _gpu_seconds(self, t0: float) -> float:
+        import time
+
+        extra, self.pending_load_s = getattr(self, "pending_load_s", 0.0), 0.0
+        return round(time.time() - t0 + extra, 1)
+
+    def _gpu_name(self) -> str:
+        try:
+            import torch
+
+            return torch.cuda.get_device_name(0)[:40]
+        except Exception:  # noqa: BLE001
+            return ""
 
     @modal.method()
     def speak(self, req: dict) -> dict:
         import tempfile
+        import time
 
         import torchaudio
 
+        t0 = time.time()
         text = str(req.get("text") or "").strip()[:1500]
         if not text:
             raise ValueError("empty_text")
-        lang = str(req.get("language") or "pt").lower()[:2]
-        lang = lang if lang in LANGS else "pt"
+        lang = str(req.get("language") or "en").lower().split("-")[0]
+        lang = "no" if lang in ("nb", "nn") else lang
+        lang = lang if lang in LANGS else "en"
         with tempfile.TemporaryDirectory() as d:
             raw, ref = f"{d}/ref.bin", f"{d}/ref.wav"
             _fetch(str(req["reference_url"]), raw, MAX_REF_BYTES)
@@ -146,13 +170,16 @@ class Voice:
             out = f"{d}/out.wav"
             torchaudio.save(out, wav, self.tts.sr)
             mp3 = _to_mp3(out, f"{d}/out.mp3")
-            return {"mp3": mp3, "seconds": round(wav.shape[-1] / self.tts.sr, 1)}
+            return {"mp3": mp3, "seconds": round(wav.shape[-1] / self.tts.sr, 1), "language": lang,
+                    "gpu_seconds": self._gpu_seconds(t0), "gpu": self._gpu_name()}
 
     @modal.method()
     def sing(self, req: dict) -> dict:
         import subprocess
         import tempfile
+        import time
 
+        t0 = time.time()
         import soundfile as sf
 
         with tempfile.TemporaryDirectory() as d:
@@ -197,7 +224,7 @@ class Voice:
             )
             info = sf.info(f"{d}/mix.wav")
             mp3 = _to_mp3(f"{d}/mix.wav", f"{d}/mix.mp3")
-            return {"mp3": mp3, "seconds": round(info.duration, 1)}
+            return {"mp3": mp3, "seconds": round(info.duration, 1), "gpu_seconds": self._gpu_seconds(t0), "gpu": self._gpu_name()}
 
 
 def _split_text(text: str, limit: int = 280) -> list[str]:
@@ -280,6 +307,10 @@ def web():
         out = {"status": st}
         if res:
             out.update({"seconds": res["seconds"], "bytes": len(res["mp3"])})
+            # Tempo de GPU do trabalho (+ partida a frio, quando houve): base do preço por custo real da API.
+            for k in ("gpu_seconds", "gpu", "language"):
+                if k in res:
+                    out[k] = res[k]
         if err:
             out["error"] = err
         return out

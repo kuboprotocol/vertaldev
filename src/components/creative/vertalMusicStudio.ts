@@ -1,5 +1,7 @@
 // Constantes e funções puras do Vertal Music Studio (porte do Studio da MusKAI).
 
+import { MUSIC_LYRIC_LANGUAGES } from "../../../supabase/functions/_shared/music/worldGenres";
+
 export const MUSIC_STUDIO_COST = 1; // créditos por música (igual ao creative-router e à edge function creative-music)
 
 export const MUSIC_STUDIO_STYLES = [
@@ -11,7 +13,11 @@ export const MUSIC_STUDIO_MOODS = [
 ];
 export const MUSIC_STUDIO_VOCAL_TYPES = ["Feminino", "Masculino", "Coral", "Robótico", "Sem vocal"];
 export const MUSIC_STUDIO_VOCAL_TONES = ["Suave", "Agressivo", "Espiritual", "Sussurrado", "Operístico", "Rasgado"];
-export const MUSIC_STUDIO_LANGUAGES = ["Português", "English", "Español", "Français", "日本語"];
+// Os 5 de antes primeiro (Português continua o padrão); depois os demais idiomas de letra do ACE-Step 1.5.
+export const MUSIC_STUDIO_LANGUAGES = [
+  "Português", "English", "Español", "Français", "日本語",
+  ...Object.entries(MUSIC_LYRIC_LANGUAGES).filter(([c]) => !["pt", "en", "es", "fr", "ja"].includes(c)).map(([, n]) => n),
+];
 export const MUSIC_STUDIO_KEYS = [
   "C major", "C minor", "C# major", "C# minor", "D major", "D minor", "D# major", "D# minor",
   "E major", "E minor", "F major", "F minor", "F# major", "F# minor", "G major", "G minor",

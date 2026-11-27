@@ -16,7 +16,8 @@ import { deductCredits, keepCharges, refundCharge, supaAdmin } from "../_shared/
 import { resolveEnvForRun } from "../_shared/kuboSecrets.ts";
 import {
   VOICE_CONSENT_TEXT, VOICE_CONSENT_VERSION, VOICE_LIMITS, VOICE_SAMPLE_MIME, cleanSpeakText, cleanVoiceName,
-  consentValid, ownUploadPathFromUrl, ownVoiceSamplePath, voiceCloneAllowed, voiceCloneCosts, voiceEnvFrom, voiceLang, voiceMessage,
+  TTS_LANGUAGES, consentValid, isUnsupportedSpeech, ownUploadPathFromUrl, ownVoiceSamplePath, resolveSpeechLanguage, ttsLangCode,
+  voiceCloneAllowed, voiceCloneCosts, voiceEnvFrom, voiceLang, voiceMessage,
   type VoiceJobKind, type VoiceLang,
 } from "../_shared/voiceClone.ts";
 
@@ -78,6 +79,8 @@ export async function handleVoice(user: Loose, body: Loose, req: Request, idempo
       ok: true, enabled: allowed, engine: allowed ? engine : false, costs,
       consent_version: VOICE_CONSENT_VERSION, consent_text: VOICE_CONSENT_TEXT[lang],
       limits: { max_voices: VOICE_LIMITS.maxVoicesPerUser, min_seconds: VOICE_LIMITS.minSampleSeconds, max_seconds: VOICE_LIMITS.maxSampleSeconds, max_bytes: VOICE_LIMITS.maxSampleBytes, max_text: VOICE_LIMITS.maxTextChars },
+      // Idiomas da fala (Chatterbox Multilingual). Cantar funciona em qualquer idioma.
+      speech_languages: TTS_LANGUAGES,
     });
   }
   if (!allowed) return err(403, "disabled", lang);
@@ -152,7 +155,8 @@ async function createVoice(admin: Loose, user: Loose, body: Loose, req: Request,
   // Consentimento gravado junto com a voz, ANTES de qualquer uso (texto do servidor, não do cliente).
   const { data, error } = await admin.from("vertal_voice_clones").insert({
     user_id: user.id, name, sample_path: path, sample_mime: mime.slice(0, 60), sample_seconds: Math.round(seconds * 10) / 10,
-    language: lang, consent_version: VOICE_CONSENT_VERSION, consent_text: VOICE_CONSENT_TEXT[lang],
+    // Idioma em que a pessoa fala na amostra (qualquer um dos 23 da fala); sem ele, o idioma da tela.
+    language: ttsLangCode(body.voice_language) ?? lang, consent_version: VOICE_CONSENT_VERSION, consent_text: VOICE_CONSENT_TEXT[lang],
     consent_accepted_at: new Date().toISOString(),
     consent_ip: (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim().slice(0, 64) || null,
     consent_user_agent: (req.headers.get("user-agent") ?? "").slice(0, 300) || null,
@@ -180,9 +184,17 @@ async function submitJob(admin: Loose, user: Loose, body: Loose, lang: VoiceLang
   if (kind === "speak") {
     const text = cleanSpeakText(body.text);
     if (text.length < 2) return j(400, { error: "text_required" });
+    // Idioma da fala: seletor (speech_language) → detectado no texto → idioma da voz → inglês.
+    // Antes usava o idioma da TELA (pt/en/es), o que fazia um texto em outro idioma sair com sotaque errado.
+    const choice = resolveSpeechLanguage({ requested: body.speech_language, text, voiceLanguage: voice.language });
+    if (isUnsupportedSpeech(choice)) {
+      return j(422, { error: voiceMessage("language_unsupported", lang), code: "language_unsupported", detected: choice.unsupported, speech_languages: TTS_LANGUAGES });
+    }
     payload.text = text;
-    payload.language = voiceLang(body.language ?? voice.language);
+    payload.language = choice.language;
     input.text = text;
+    input.speech_language = choice.language;
+    input.language_fallback = choice.fallback;
   } else {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const path = ownUploadPathFromUrl(user.id, body.source_url ?? body.source_path, supabaseUrl);
@@ -230,7 +242,10 @@ async function submitJob(admin: Loose, user: Loose, body: Loose, lang: VoiceLang
   if (jErr || !job) return err(500, "unavailable", lang);
   // Daqui em diante o crédito pertence ao trabalho: voice_status devolve se ele falhar.
   keepCharges();
-  return j(200, { ok: true, job_id: job.id, kind, voice: { id: voice.id, name: voice.name }, cost, charged, eta_seconds: kind === "speak" ? 30 : 150 });
+  return j(200, {
+    ok: true, job_id: job.id, kind, voice: { id: voice.id, name: voice.name }, cost, charged, eta_seconds: kind === "speak" ? 30 : 150,
+    ...(kind === "speak" ? { speech_language: input.speech_language, language_fallback: input.language_fallback } : {}),
+  });
 }
 
 async function jobStatus(admin: Loose, user: Loose, body: Loose, lang: VoiceLang, env: Record<string, string | undefined>) {

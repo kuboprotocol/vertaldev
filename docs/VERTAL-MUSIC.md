@@ -40,3 +40,13 @@ Modo Letra pronta usa o texto do usuário. Auto/Assistido escrevem a letra no id
 ## Custos medidos (26/11/2026)
 Motor próprio: carga a frio ~7 s + geração ~2 s para 45 s de música, GPU L4/A10G/L40S, desliga 60 s depois.
 sunoapi.org: preço do plano do provedor (não contratado).
+
+## Ritmos e idiomas do mundo (27/11/2026)
+
+- **Estilo:** campo com busca (catálogo `supabase/functions/_shared/music/worldGenres.ts`, 140+ ritmos do Brasil e do mundo:
+  samba, forró, sertanejo, funk carioca, axé, pagode, MPB, bossa nova, cumbia, reggaeton, bachata, salsa, tango, k-pop,
+  j-pop, afrobeats, amapiano, highlife, bhangra, Bollywood, fado, flamenco, chanson, schlager, raï, dabke, pop árabe,
+  qawwali, gamelan…) ou texto livre. Os 18 estilos antigos seguem primeiro e com o mesmo pedido de antes; ritmos novos
+  levam uma descrição curta de instrumentos/levada para o motor.
+- **Idioma da letra:** os 50 idiomas do ACE-Step 1.5 (`acestep/constants.py` VALID_LANGUAGES); Português continua padrão;
+  idioma fora da lista vai como `unknown` (antes virava `pt` no core e `en` no motor).

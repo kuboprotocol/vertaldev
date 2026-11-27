@@ -8,50 +8,16 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/hooks/useAuth';
+import { VOICE_PANEL_TEXT, voiceUiDict } from '@/lib/voiceClone/i18n';
 import {
-  VoiceCloneError, audioDuration, browserVoiceLang, createVoice, deleteVoice, getVoiceConfig, listVoiceJobs, listVoices,
+  VoiceCloneError, audioDuration, createVoice, deleteVoice, getVoiceConfig, listVoiceJobs, listVoices,
   startSpeak, waitVoiceJob, type SavedVoice, type VoiceCloneConfig, type VoiceJob,
 } from '@/lib/voiceClone/client';
 
-const T = {
-  pt: {
-    title: 'Clonador de voz', intro: 'Grave de 10 a 60 segundos falando normalmente, num lugar silencioso. Quanto mais natural, melhor fica.',
-    disabled: 'O Clonador de voz ainda não está liberado para a sua conta.', engineOff: 'O motor de voz ainda está sendo ligado. Você já pode salvar a voz; falar e cantar ficam disponíveis em breve.',
-    record: 'Gravar', stop: 'Parar', upload: 'Enviar arquivo', name: 'Nome da voz', save: 'Salvar minha voz',
-    consent: 'Confirmo que esta voz é minha ou que tenho autorização por escrito do dono para cloná-la.',
-    saved: 'Suas vozes', none: 'Nenhuma voz salva ainda.', del: 'Apagar', test: 'Testar: escreva algo para a sua voz falar',
-    speak: 'Falar com esta voz', short: 'A amostra precisa ter pelo menos {s} segundos.', long: 'A amostra pode ter no máximo {s} segundos.',
-    ok: 'Voz salva. Agora é só pedir no chat: "canta essa música com a minha voz".', history: 'Últimos áudios',
-    micErr: 'Não consegui acessar o microfone. Libere o microfone no navegador ou envie um arquivo.', free: 'grátis', credits: 'crédito(s)',
-    waiting: 'Gerando… ({s}s)', processing: 'processando', failed: 'falhou (crédito devolvido)',
-  },
-  en: {
-    title: 'Voice cloner', intro: 'Record 10 to 60 seconds speaking normally, in a quiet place. The more natural, the better.',
-    disabled: "The voice cloner isn't enabled for your account yet.", engineOff: 'The voice engine is still being switched on. You can save your voice now; speaking and singing come soon.',
-    record: 'Record', stop: 'Stop', upload: 'Upload file', name: 'Voice name', save: 'Save my voice',
-    consent: "I confirm this voice is mine or that I have the owner's written permission to clone it.",
-    saved: 'Your voices', none: 'No saved voices yet.', del: 'Delete', test: 'Test: type something for your voice to say',
-    speak: 'Speak with this voice', short: 'The sample needs at least {s} seconds.', long: 'The sample can be at most {s} seconds.',
-    ok: 'Voice saved. Now just ask in the chat: "sing this song with my voice".', history: 'Latest audio',
-    micErr: "Couldn't access the microphone. Allow it in the browser or upload a file.", free: 'free', credits: 'credit(s)',
-    waiting: 'Generating… ({s}s)', processing: 'processing', failed: 'failed (credit refunded)',
-  },
-  es: {
-    title: 'Clonador de voz', intro: 'Graba de 10 a 60 segundos hablando normalmente, en un lugar silencioso. Cuanto más natural, mejor.',
-    disabled: 'El clonador de voz aún no está habilitado para tu cuenta.', engineOff: 'El motor de voz aún se está activando. Ya puedes guardar tu voz; hablar y cantar llegan pronto.',
-    record: 'Grabar', stop: 'Parar', upload: 'Subir archivo', name: 'Nombre de la voz', save: 'Guardar mi voz',
-    consent: 'Confirmo que esta voz es mía o que tengo autorización escrita del titular para clonarla.',
-    saved: 'Tus voces', none: 'Aún no hay voces guardadas.', del: 'Borrar', test: 'Prueba: escribe algo para que tu voz lo diga',
-    speak: 'Hablar con esta voz', short: 'La muestra necesita al menos {s} segundos.', long: 'La muestra puede tener como máximo {s} segundos.',
-    ok: 'Voz guardada. Ahora pídelo en el chat: "canta esta canción con mi voz".', history: 'Últimos audios',
-    micErr: 'No pude acceder al micrófono. Permítelo en el navegador o sube un archivo.', free: 'gratis', credits: 'crédito(s)',
-    waiting: 'Generando… ({s}s)', processing: 'procesando', failed: 'falló (crédito devuelto)',
-  },
-} as const;
 
 export function VoiceClonerPanel({ onVoicesChange }: { onVoicesChange?: (voices: SavedVoice[]) => void }) {
-  const lang = browserVoiceLang();
-  const t = T[lang];
+  // Idioma do app (Ajustes → último pedido no chat → navegador → perfil → pt-BR), não só o do navegador.
+  const t = VOICE_PANEL_TEXT[voiceUiDict()];
   const { user } = useAuth();
   const [config, setConfig] = useState<VoiceCloneConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -67,6 +33,8 @@ export function VoiceClonerPanel({ onVoicesChange }: { onVoicesChange?: (voices:
   const [testText, setTestText] = useState('');
   const [testVoice, setTestVoice] = useState<string>('');
   const [speaking, setSpeaking] = useState<string | null>(null);
+  const [sampleLang, setSampleLang] = useState('');
+  const [speechLang, setSpeechLang] = useState('auto');
   const recRef = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -155,7 +123,7 @@ export function VoiceClonerPanel({ onVoicesChange }: { onVoicesChange?: (voices:
     setBusy(true);
     setMsg(null);
     try {
-      await createVoice({ userId: user.id, name: name.trim(), sample: sample.blob, seconds: sample.seconds, consentVersion: config.consent_version });
+      await createVoice({ userId: user.id, name: name.trim(), sample: sample.blob, seconds: sample.seconds, consentVersion: config.consent_version, voiceLanguage: sampleLang || undefined });
       setMsg({ kind: 'ok', text: t.ok });
       URL.revokeObjectURL(sample.url);
       setSample(null);
@@ -186,7 +154,10 @@ export function VoiceClonerPanel({ onVoicesChange }: { onVoicesChange?: (voices:
     setMsg(null);
     setSpeaking(t.waiting.replace('{s}', '0'));
     try {
-      const started = await startSpeak(testText.trim(), testVoice);
+      const started = await startSpeak(testText.trim(), testVoice, speechLang);
+      if (started.language_fallback && started.speech_language) {
+        setMsg({ kind: 'ok', text: t.fallback.replace('{l}', config?.speech_languages?.[started.speech_language] ?? started.speech_language) });
+      }
       const job = await waitVoiceJob(started.job_id, { deadlineMs: 180_000, onTick: (s) => setSpeaking(t.waiting.replace('{s}', String(s))) });
       if (job.status !== 'completed') setMsg({ kind: 'err', text: job.message ?? t.failed });
       await refresh();
@@ -201,6 +172,16 @@ export function VoiceClonerPanel({ onVoicesChange }: { onVoicesChange?: (voices:
   if (!config?.enabled) return <div className="p-6 text-sm text-muted-foreground">{t.disabled}</div>;
   const cost = (n: number) => (n === 0 ? t.free : `${n} ${t.credits}`);
   const canSave = !!sample && consent && !busy && voices.length < config.limits.max_voices;
+  const langs = Object.entries(config.speech_languages ?? {});
+  const langSelect = (value: string, onChange: (v: string) => void, label: string, autoLabel: string) => (
+    <label className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+      {label}
+      <select aria-label={label} className="rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground" value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value={value === '' ? '' : 'auto'}>{autoLabel}</option>
+        {langs.map(([code, native]) => <option key={code} value={code}>{native}</option>)}
+      </select>
+    </label>
+  );
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-5 p-4">
@@ -225,6 +206,7 @@ export function VoiceClonerPanel({ onVoicesChange }: { onVoicesChange?: (voices:
         </div>
         {sample && <audio controls src={sample.url} className="w-full" />}
         <Input placeholder={t.name} value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
+        {langs.length > 0 && langSelect(sampleLang, setSampleLang, t.sampleLang, t.auto)}
         <label className="flex items-start gap-2 text-sm">
           <Checkbox checked={consent} onCheckedChange={(v) => setConsent(v === true)} className="mt-0.5" />
           <span>{t.consent} <span className="block text-xs text-muted-foreground">{config.consent_text}</span></span>
@@ -253,6 +235,8 @@ export function VoiceClonerPanel({ onVoicesChange }: { onVoicesChange?: (voices:
       {voices.length > 0 && config.engine && (
         <div className="flex flex-col gap-2">
           <Textarea placeholder={t.test} value={testText} maxLength={config.limits.max_text} onChange={(e) => setTestText(e.target.value)} rows={3} />
+          {langs.length > 0 && langSelect(speechLang, setSpeechLang, t.speechLang, t.auto)}
+          {langs.length > 0 && <p className="text-xs text-muted-foreground">{t.langNote.replace('{n}', String(langs.length))}</p>}
           <Button type="button" variant="secondary" onClick={speak} disabled={!!speaking || !testText.trim()}>
             {speaking ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {speaking}</> : <><Volume2 className="mr-2 h-4 w-4" /> {t.speak} · {cost(config.costs.speak)}</>}
           </Button>

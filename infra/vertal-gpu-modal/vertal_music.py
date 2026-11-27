@@ -39,7 +39,12 @@ gpu_image = (
 )
 web_image = modal.Image.debian_slim(python_version="3.12").uv_pip_install("fastapi[standard]")
 
-LANGS = {"pt", "en", "es", "fr", "ja", "it", "de", "ko", "zh", "ru"}
+# Idiomas de letra do ACE-Step 1.5 (acestep/constants.py VALID_LANGUAGES): 50 + "unknown" (fora da lista).
+LANGS = {
+    "ar", "az", "bg", "bn", "ca", "cs", "da", "de", "el", "en", "es", "fa", "fi", "fr", "he", "hi", "hr", "ht", "hu", "id",
+    "is", "it", "ja", "ko", "la", "lt", "ms", "ne", "nl", "no", "pa", "pl", "pt", "ro", "ru", "sa", "sk", "sr", "sv", "sw",
+    "ta", "te", "th", "tl", "tr", "uk", "ur", "vi", "yue", "zh", "unknown",
+}
 
 
 @app.function(image=gpu_image, volumes={"/cache/hf": hf_vol}, timeout=3600)
@@ -92,8 +97,8 @@ class AceStep:
         instrumental = bool(req.get("instrumental"))
         lyrics = "[Instrumental]" if instrumental else (str(req.get("lyrics") or "").strip()[:4000] or "[Instrumental]")
         seconds = float(max(10, min(180, int(req.get("seconds") or 60))))
-        lang = str(req.get("language") or "pt").lower()[:2]
-        lang = lang if lang in LANGS else "en"
+        lang = str(req.get("language") or "pt").lower().split("-")[0]
+        lang = lang if lang in LANGS else "unknown"
         bpm = req.get("bpm")
         bpm = int(bpm) if isinstance(bpm, (int, float)) and 40 <= int(bpm) <= 220 else None
         key = str(req.get("key") or "").strip()[:20] or None

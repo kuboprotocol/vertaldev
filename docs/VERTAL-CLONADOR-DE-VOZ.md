@@ -81,3 +81,19 @@ com folga; ajuste pelas chaves acima. Limite do Modal US$30/mês continua igual.
    `modal run vertal_voice.py::download && modal deploy vertal_voice.py` (primeiro deploy pode pedir ajuste de versões).
 3. Em `VERTAL_GPU_CONFIG`: `VERTAL_OWN_VOICE_ENABLED=true`, `VERTAL_OWN_VOICE_URL`, `VERTAL_OWN_VOICE_TOKEN`.
 4. Deploy do front e das funções `creative-music` e `creative-router`.
+
+## Qualquer idioma (27/11/2026)
+
+- **Fala (TTS):** Chatterbox Multilingual (`chatterbox-tts` 0.1.6, MIT). Idiomas (lista `SUPPORTED_LANGUAGES` do pacote):
+  árabe, dinamarquês, alemão, grego, inglês, espanhol, finlandês, francês, hebraico, híndi, italiano, japonês, coreano,
+  malaio, holandês, norueguês, polonês, português, russo, sueco, suaíli, turco e chinês (23).
+- **Escolha do idioma da fala:** seletor "Idioma da fala" (padrão Automático) → idioma detectado no texto → idioma da
+  amostra → inglês. Antes era o idioma da TELA (pt/en/es), o que dava sotaque errado em texto de outro idioma.
+- **Fora dos 23:** texto em alfabeto latino fala no idioma da voz (ou inglês) com `language_fallback: true`; ucraniano/sérvio
+  → russo e persa/urdu → árabe (reserva, avisada); escrita que o motor não lê (tailandês, bengali, tâmil…) → 422
+  `language_unsupported` antes de cobrar. Nunca quebra.
+- **Canto:** Demucs + Seed-VC convertem o timbre da voz cantada; não dependem do idioma da letra (qualquer idioma).
+- **Textos da tela:** seguem o idioma do app (Ajustes → último pedido no chat → navegador → perfil → pt-BR, cadastro de
+  65 idiomas do Vertal Chat). Dicionários completos em pt/en/es/fr/de/it; os demais usam a variante-mãe ou o inglês.
+- **Custo real:** o motor agora devolve `gpu_seconds` (inclui a partida a frio do 1º trabalho do contêiner) e `gpu` no
+  `/status`, base do preço por custo real da API de marca branca.
