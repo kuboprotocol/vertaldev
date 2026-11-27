@@ -80,6 +80,13 @@ import { deleteMemories, listMemories, type MemoryStoreDeps, rememberRun, retrie
 import { analyzeWithDecide, type DecisionQuestions, makeDecider } from "../_shared/vertalCodeAi/decide.ts";
 import { runSandboxTest } from "../_shared/vertalCodeAi/sandbox.ts";
 import { repairAgentJson } from "../_shared/chatOrchestrator.ts";
+// Vertal · conector MetaMask (aditivo, desligado por padrão: VERTAL_METAMASK_ENABLED + VERTAL_METAMASK_USER_IDS
+// dentro do VERTAL_GPU_CONFIG). Ação "wallet": SIWE, leitura de saldo/rede, Starter Web3 e Trader por prompt (testnet).
+// Nada é assinado no servidor; nunca recebe nem guarda frase-semente ou chave privada.
+import { expandWalletEnv, isWeb3HintEnabled } from "../_shared/vertalWallet/core.ts";
+import { handleWallet } from "../_shared/vertalWallet/handler.ts";
+import { withWeb3Hint } from "../_shared/vertalWallet/web3Template.ts";
+import { recoverPersonalSign, supabaseWalletStore } from "../_shared/vertalWallet/deno.ts";
 // Vertal Prospector (aditivo, desligado por padrão: VERTAL_PROSPECTOR_ENABLED + VERTAL_PROSPECTOR_USER_IDS).
 import { isProspectorEnabled } from "../_shared/vertalProspector/core.ts";
 import { handleProspector } from "../_shared/vertalProspector/handler.ts";
@@ -105,13 +112,6 @@ import {
   VcaDataLibrarySender,
   VcaRunTracker,
 } from "../_shared/vertalCodeAi/dataLibrary.ts";
-// Vertal · conector MetaMask (aditivo, desligado por padrão: VERTAL_METAMASK_ENABLED + VERTAL_METAMASK_USER_IDS
-// dentro do VERTAL_GPU_CONFIG). Ação "wallet": SIWE, leitura de saldo/rede, Starter Web3 e Trader por prompt (testnet).
-// Nada é assinado no servidor; nunca recebe nem guarda frase-semente ou chave privada.
-import { expandWalletEnv, isWeb3HintEnabled } from "../_shared/vertalWallet/core.ts";
-import { handleWallet } from "../_shared/vertalWallet/handler.ts";
-import { withWeb3Hint } from "../_shared/vertalWallet/web3Template.ts";
-import { recoverPersonalSign, supabaseWalletStore } from "../_shared/vertalWallet/deno.ts";
 
 // Cliente do Supabase e módulo TypeScript sem tipos gerados (mesmo padrão do vibe-code-agent).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -493,25 +493,6 @@ Deno.serve(async (req) => {
   const action = body.action ?? "run";
   if (action === "status") return json(200, { enabled: true, allowed: true });
 
-  // Vertal · conector MetaMask: 404 se VERTAL_METAMASK_ENABLED/lista não liberar este usuário. Não muda nada do resto.
-  if (action === "wallet") {
-    try {
-      const r = await handleWallet(body, {
-        env: expandWalletEnv(env()),
-        userId,
-        origin: req.headers.get("Origin"),
-        hmac: hmacHex,
-        recover: async (message, signature) => recoverPersonalSign(message, signature),
-        store: supabaseWalletStore(admin),
-        fetch,
-      });
-      return json(r.status, r.body);
-    } catch (e) {
-      console.error("[vertal-wallet] falhou:", e instanceof Error ? e.message : e);
-      return json(500, { error: "wallet_failed" });
-    }
-  }
-
   // Vertal Prospector: desligado (404) se o interruptor/lista não liberar este usuário. Não muda nada do resto.
   if (action === "prospector") {
     if (!isProspectorEnabled(env(), userId)) return json(404, { error: "vertal_prospector_disabled" });
@@ -590,6 +571,24 @@ Deno.serve(async (req) => {
     } catch (e) {
       console.error("[vertal-growth] falhou:", e instanceof Error ? e.message : e);
       return json(500, { error: "growth_failed" });
+    }
+  }
+  // Vertal · conector MetaMask: 404 se VERTAL_METAMASK_ENABLED/lista não liberar este usuário. Não muda nada do resto.
+  if (action === "wallet") {
+    try {
+      const r = await handleWallet(body, {
+        env: expandWalletEnv(env()),
+        userId,
+        origin: req.headers.get("Origin"),
+        hmac: hmacHex,
+        recover: async (message, signature) => recoverPersonalSign(message, signature),
+        store: supabaseWalletStore(admin),
+        fetch,
+      });
+      return json(r.status, r.body);
+    } catch (e) {
+      console.error("[vertal-wallet] falhou:", e instanceof Error ? e.message : e);
+      return json(500, { error: "wallet_failed" });
     }
   }
   const origin = ORIGINS.includes(body.origin) ? body.origin : "vertal_code_ai";

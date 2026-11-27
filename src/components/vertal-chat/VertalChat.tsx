@@ -40,9 +40,9 @@ import { isGrowthCommand as isVertalGrowthCommand, useVertalGrowthAccess, vertal
 // VertalCrm: botão "CRM" no topo e comando "/crm" / "abrir o crm" (não renderiza/age com VITE_VERTAL_CRM desligado).
 import { VertalCrmEntryButton } from '@/components/vertal-crm/VertalCrmEntryButton';
 import { useVertalCrmAccess, VERTAL_CRM_ROUTE } from '@/lib/vertalCrm/client';
-// VertalWallet (MetaMask): botão "Trader" e comando "compre 0.01 ETH de UNI quando cair 5%" (não renderiza/age com VITE_VERTAL_METAMASK desligado).
-import { VertalWalletEntryButton } from '@/components/vertal-wallet/VertalWalletEntryButton';
-import { isVertalTraderCommand as isVertalWalletTraderCommand, useVertalWalletAccess, vertalTraderHrefFromChat as vertalWalletTraderHref } from '@/lib/vertalWallet/client';
+// VertalWallet (MetaMask; servidor = ação "wallet" do VERTAL Code AI): botão "Trader" e comando "compre 0.01 ETH de UNI quando cair 5%" (não renderiza/age com VITE_VERTAL_METAMASK desligado).
+import { VertalWalletEntryButton } from '@/components/vertal-wallet/VertalWalletEntryButton'; // VERTAL Code AI · ação wallet
+import { isVertalTraderCommand as isVertalWalletTraderCommand, useVertalWalletAccess, vertalTraderHrefFromChat as vertalWalletTraderHref } from '@/lib/vertalWallet/client'; // VERTAL Code AI · ação wallet
 
 const SIDEBAR_KEY = 'vertal-chat-sidebar';
 const CHAT_ONLY_KEY = 'vertal-chat-only';
@@ -90,7 +90,7 @@ export function VertalChat() {
   const vertalProspectorAccess = useVertalProspectorAccess(); // Vertal Prospector (desligado por padrão)
   const vertalGrowthAccess = useVertalGrowthAccess(); // Vertal Growth Team (desligado por padrão)
   const vertalCrmAccess = useVertalCrmAccess(); // VertalCrm (desligado por padrão)
-  const vertalWalletTraderAccess = useVertalWalletAccess({ trader: true }); // VertalWallet Trader (desligado por padrão)
+  const vertalWalletTraderAccess = useVertalWalletAccess({ trader: true }); // VertalWallet Trader (desligado por padrão; VERTAL Code AI · ação wallet)
 
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     try {
@@ -219,7 +219,7 @@ export function VertalChat() {
     if (vertalGrowthAccess === 'allowed' && isVertalGrowthCommand(input)) return navigate(vertalGrowthHrefFromChat(input)); // Vertal Growth Team: "buscar clientes para meu app X" abre a equipe (só liberado)
     if (vertalCrmAccess === 'allowed' && /^(\/crm|(abrir|abra|abre|open)( o| el| the| my| meu| mi)? (vertal )?crm)\s*$/i.test(input.trim())) return navigate(VERTAL_CRM_ROUTE); // VertalCrm: abre o CRM (só liberado)
     if (vertalProspectorAccess === 'allowed' && isVertalProspectorCommand(input)) return navigate(vertalProspectorHrefFromChat(input)); // Vertal Prospector: comando abre o pipeline (só liberado)
-    if (vertalWalletTraderAccess === 'allowed' && isVertalWalletTraderCommand(input)) return navigate(vertalWalletTraderHref(input)); // VertalWallet Trader: ordem vai para a MetaMask (testnet, só liberado)
+    if (vertalWalletTraderAccess === 'allowed' && isVertalWalletTraderCommand(input)) return navigate(vertalWalletTraderHref(input)); // VertalWallet Trader: ordem vai para a MetaMask (testnet, só liberado; VERTAL Code AI · ação wallet)
     const text = input;
     setInput('');
     void chat.send(text);
@@ -390,7 +390,7 @@ export function VertalChat() {
           <VertalProspectorEntryButton from="chat" />
           <VertalGrowthEntryButton from="chat" />
           <VertalCrmEntryButton />
-          <VertalWalletEntryButton />
+          <VertalWalletEntryButton />{/* VERTAL Code AI · ação wallet: não renderiza nada com VITE_VERTAL_METAMASK desligado */}
           <button
             type="button"
             onClick={() => setChatOnly(!chatOnly)}

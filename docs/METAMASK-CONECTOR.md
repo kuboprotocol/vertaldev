@@ -109,7 +109,7 @@ com a chave do broker do Fluxos como o Vertal CRM faz (`x-vertal-fluxos-key`). N
   migração acima, testes `src/test/vertal-wallet-*.test.ts(x)`.
 - Compartilhados (só linhas novas, atrás dos flags): `src/lib/connectorsConfig.ts` (spread do catálogo), `src/pages/ConnectorSetupPage.tsx`
   (desvio para a página própria), `src/components/vertal-chat/VertalChat.tsx` (botão + comando), `supabase/functions/vertal-code-ai/index.ts`
-  (ação `wallet` + dica no `run` atrás de `VERTAL_METAMASK_CODE_HINT`), `scripts/vertal-code-ai/engine-guard.mjs` (aceita linhas `VertalWallet`/`VERTAL_METAMASK` nos arquivos com flag, como Prospector/Growth/CRM).
+  (ação `wallet` + dica no `run` atrás de `VERTAL_METAMASK_CODE_HINT`). O guarda do motor (`scripts/vertal-code-ai/engine-guard.mjs`) **não** foi mexido: as linhas novas do `VertalChat.tsx` levam a marca "VERTAL Code AI · ação wallet" (o servidor do Trader é a ação `wallet` da função do VERTAL Code AI) e passam no guarda como estão.
 
 ## Para publicar (decisões do Laércio)
 1. Merge do PR.
