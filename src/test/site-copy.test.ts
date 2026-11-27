@@ -70,6 +70,12 @@ const FILES = [
   'pages/VibeAgentsPage.tsx',
   'components/huginn/HuginnAgentsCard.tsx',
   'components/huginn/FluxosAgentBuilder.tsx',
+  // Creative hub, investigation and audit (batch 4b)
+  'components/creative/ManusLauncher.tsx',
+  'components/creative/ApiStatusPanel.tsx',
+  'components/creative/RetryIndicator.tsx',
+  'pages/creative/InvestigationPage.tsx',
+  'pages/creative/AuditTrailPage.tsx',
 ]
 
 function visibleText(file: string): string {

@@ -32,6 +32,10 @@ export const ENGLISH_ROUTES: readonly string[] = [
   '/connect',
   // Agents
   '/vibe-agents',
+  // Creative hub and its investigation and audit pages
+  '/creative',
+  '/creative/investigation',
+  '/creative/audit',
 ]
 
 /**
