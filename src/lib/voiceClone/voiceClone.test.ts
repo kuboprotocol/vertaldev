@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   VOICE_CLONE_DEFAULT_USER_IDS, VOICE_CONSENT_VERSION, consentValid, ownUploadPathFromUrl, ownVoiceSamplePath,
-  parseVoiceCloneAction, voiceCloneAllowed, voiceCloneCosts, voiceCloneToolPrompt, voiceMessage, wantsVoiceClone,
+  parseVoiceCloneAction, voiceCloneAllowed, voiceCloneCosts, voiceCloneToolPrompt, voiceEnvFrom, voiceMessage, wantsVoiceClone,
 } from '../../../supabase/functions/_shared/voiceClone';
 import { buildAgentSystemPrompt, parseAgentAction, PANELS } from '../../../supabase/functions/_shared/chatAgent';
 import { PANEL_BY_KEY, PANEL_LIST } from '@/components/vertal-chat/panelList';
@@ -24,6 +24,13 @@ describe('flag do Clonador de voz', () => {
     const env = { VERTAL_OWN_VOICE_ENABLED: 'true', VERTAL_OWN_VOICE_USER_IDS: OTHER };
     expect(voiceCloneAllowed(env, OTHER)).toBe(true);
     expect(voiceCloneAllowed(env, LAERCIO)).toBe(false);
+  });
+  it('lê as chaves do VERTAL_GPU_CONFIG (avulso vence)', () => {
+    const env = voiceEnvFrom({ VERTAL_GPU_CONFIG: JSON.stringify({ VERTAL_OWN_VOICE_ENABLED: true, VERTAL_OWN_VOICE_URL: 'https://x', OUTRA: 'y' }), VERTAL_OWN_VOICE_URL: 'https://avulso' });
+    expect(env.VERTAL_OWN_VOICE_ENABLED).toBe('true');
+    expect(env.VERTAL_OWN_VOICE_URL).toBe('https://avulso');
+    expect(env.OUTRA).toBeUndefined();
+    expect(voiceCloneAllowed(env, LAERCIO)).toBe(true);
   });
   it('custos configuráveis com padrão', () => {
     expect(voiceCloneCosts({})).toEqual({ create: 0, speak: 1, sing: 3 });

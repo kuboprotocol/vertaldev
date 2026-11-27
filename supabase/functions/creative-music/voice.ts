@@ -13,11 +13,10 @@
 // Sem as tabelas (migração 20261127210000 não aplicada) responde 503 "voice_clone_unavailable".
 import { corsHeaders } from "../_shared/cors.ts";
 import { deductCredits, keepCharges, refundCharge, supaAdmin } from "../_shared/creative.ts";
-import { expandVcaEnv } from "../_shared/vertalCodeAi/router.ts";
 import { resolveEnvForRun } from "../_shared/kuboSecrets.ts";
 import {
   VOICE_CONSENT_TEXT, VOICE_CONSENT_VERSION, VOICE_LIMITS, VOICE_SAMPLE_MIME, cleanSpeakText, cleanVoiceName,
-  consentValid, ownUploadPathFromUrl, ownVoiceSamplePath, voiceCloneAllowed, voiceCloneCosts, voiceLang, voiceMessage,
+  consentValid, ownUploadPathFromUrl, ownVoiceSamplePath, voiceCloneAllowed, voiceCloneCosts, voiceEnvFrom, voiceLang, voiceMessage,
   type VoiceJobKind, type VoiceLang,
 } from "../_shared/voiceClone.ts";
 
@@ -37,7 +36,7 @@ let vaultCache: { at: number; env: Record<string, string> } | null = null;
 
 /** Segredo avulso vence; depois VERTAL_GPU_CONFIG; depois o cofre da conta dona (mesmo esquema do creative-music). */
 async function voiceEnv(): Promise<Record<string, string | undefined>> {
-  const base = expandVcaEnv(Deno.env.toObject()) as Record<string, string | undefined>;
+  const base = voiceEnvFrom(Deno.env.toObject());
   const missing = VOICE_KEYS.filter((k) => !(base[k] ?? "").trim());
   if (!vaultCache || Date.now() - vaultCache.at > 300_000) {
     const owner = (base.VERTAL_MUSIC_KEYS_OWNER ?? base.VERTAL_FREE_KEYS_OWNER ?? "").trim();

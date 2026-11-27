@@ -250,7 +250,7 @@ const truthy = (v: string | undefined) => /^(1|true|yes|on|sim)$/i.test((v ?? ""
  * (VERTAL_FREE_*, ver freeQuota.ts). Segredo avulso com o mesmo nome vence.
  * Nunca toca em liga/desliga, lista de liberação ou chaves de provedores.
  */
-const GPU_CONFIG_KEY = /^VERTAL_(OLLAMA_[A-Z_]+_2|OLLAMA_2_FIRST_ABOVE_TOKENS|OLLAMA_CLOUD_[A-Z_]+|FREE_[A-Z0-9_]+|OWN_(IMAGE|VIDEO|DECIDE|OMNI|NOVELA|VOICE)_[A-Z_]+)$/;
+const GPU_CONFIG_KEY = /^VERTAL_(OLLAMA_[A-Z_]+_2|OLLAMA_2_FIRST_ABOVE_TOKENS|OLLAMA_CLOUD_[A-Z_]+|FREE_[A-Z0-9_]+|OWN_(IMAGE|VIDEO|DECIDE|OMNI|NOVELA)_[A-Z_]+)$/;
 export function expandVcaEnv(env: VcaEnv): VcaEnv {
   const raw = (env.VERTAL_GPU_CONFIG ?? "").trim();
   if (!raw) return env;

@@ -13,7 +13,7 @@
 //   VERTAL_OWN_VOICE_USER_IDS="uuid,uuid"  quem pode usar (vazio = só a conta do Laércio)
 //   VERTAL_OWN_VOICE_URL / _TOKEN          endereço e token do app Modal vertal-voice
 //   VERTAL_OWN_VOICE_TTS_CREDITS (1), VERTAL_OWN_VOICE_SING_CREDITS (3), VERTAL_OWN_VOICE_CREATE_CREDITS (0)
-// Podem ir no segredo JSON VERTAL_GPU_CONFIG (o projeto está no limite de 100 segredos) ou no cofre da conta dona.
+// Podem ir no segredo JSON VERTAL_GPU_CONFIG (lido por voiceEnvFrom) (o projeto está no limite de 100 segredos) ou no cofre da conta dona.
 
 /** Conta do Laércio (dono do Vertal Dev): o único liberado quando a lista estiver vazia. */
 export const VOICE_CLONE_DEFAULT_USER_IDS = ["5441b397-7be8-44fc-87e8-8057fdb79a0e"] as const;
@@ -55,6 +55,28 @@ export const VOICE_SAMPLE_MIME = /^audio\/(mpeg|mp3|mp4|m4a|x-m4a|wav|x-wav|wave
 type Env = Record<string, string | undefined>;
 const truthy = (v?: string) => /^(1|true|yes|on|sim)$/i.test((v ?? "").trim());
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Lê as chaves VERTAL_OWN_VOICE_* do segredo JSON VERTAL_GPU_CONFIG (o projeto está no limite de 100 segredos).
+ * Segredo avulso com o mesmo nome vence. Leitura própria para não mexer no expandVcaEnv do VERTAL Code AI.
+ */
+export function voiceEnvFrom(env: Env): Env {
+  const out: Env = { ...env };
+  const raw = (env.VERTAL_GPU_CONFIG ?? "").trim();
+  if (!raw) return out;
+  let cfg: unknown;
+  try {
+    cfg = JSON.parse(raw);
+  } catch {
+    return out;
+  }
+  if (!cfg || typeof cfg !== "object" || Array.isArray(cfg)) return out;
+  for (const [k, v] of Object.entries(cfg as Record<string, unknown>)) {
+    if (!/^VERTAL_OWN_VOICE_[A-Z_]+$/.test(k) || (out[k] ?? "").trim()) continue;
+    if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") out[k] = String(v);
+  }
+  return out;
+}
 
 export function voiceCloneUserIds(env: Env): string[] {
   const ids = (env.VERTAL_OWN_VOICE_USER_IDS ?? "").split(/[\s,;]+/).map((s) => s.trim().toLowerCase()).filter((s) => UUID_RE.test(s));

@@ -95,8 +95,7 @@ import { GMAIL_SECRETARY_COST } from "../_shared/gmailBilling.ts";
 // Agendador do Vertal Chat: desligado por padrão (VERTAL_CHAT_SCHEDULER_ENABLED + VERTAL_CHAT_SCHEDULER_USER_IDS).
 import { schedulerAllowed, wantsScheduler } from "../_shared/chatScheduler.ts";
 // Clonador de voz: só com VERTAL_OWN_VOICE_ENABLED + conta na lista (padrão: só o Laércio); senão nada muda.
-import { voiceCloneAllowed, voiceCloneCosts, wantsVoiceClone } from "../_shared/voiceClone.ts";
-import { expandVcaEnv } from "../_shared/vertalCodeAi/router.ts";
+import { voiceCloneAllowed, voiceCloneCosts, voiceEnvFrom, wantsVoiceClone } from "../_shared/voiceClone.ts";
 import { vertalPersonaEnabled, withVertalPersona } from "../_shared/vertalPersona.ts";
 
 const InputSchema = z.object({
@@ -722,7 +721,7 @@ async function handleAgentChat(
       );
     }
   }
-  const voiceEnv = expandVcaEnv(Deno.env.toObject()) as Record<string, string | undefined>;
+  const voiceEnv = voiceEnvFrom(Deno.env.toObject());
   const voiceCloneOk = !delegated && voiceCloneAllowed(voiceEnv, user.id);
   const voiceCloneOn = voiceCloneOk && wantsVoiceClone([...all.slice(-6), ...results.slice(-4).map((r) => JSON.stringify(r))]);
   const system = buildAgentSystemPrompt({
