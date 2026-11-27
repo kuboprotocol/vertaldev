@@ -38,6 +38,8 @@ export interface MmTexts {
   recentTxNeedsKey: string
   noTx: string
   migrationPending: string
+  /** App só-leitura no Vertal Fluxos (aparece só com o servidor liberando). */
+  fluxosAvailable: string
   disabled: string
   errors: Record<string, string>
   templateTitle: string
@@ -191,6 +193,7 @@ const pt: MmTexts = {
   recentTxNeedsKey: 'Lista de transações recentes: precisa da chave do explorador na configuração do servidor.',
   noTx: 'Nenhuma transação.',
   migrationPending: 'Configuração pendente: a tabela de conexões ainda não foi criada. A assinatura funciona, mas nada fica salvo.',
+  fluxosAvailable: 'Também no Vertal Fluxos (só leitura): gatilhos "Nova transação recebida" e "Saldo mudou", ações "Consultar saldo" e "Listar transações recentes". Nada é assinado nem enviado.',
   disabled: 'O conector MetaMask ainda não está liberado para a sua conta.',
   errors: ERR_PT,
   templateTitle: 'Starter Web3 (wagmi + viem)',
@@ -262,6 +265,7 @@ const en: MmTexts = {
   recentTxNeedsKey: 'Recent transaction list: needs the explorer key in the server configuration.',
   noTx: 'No transactions.',
   migrationPending: 'Pending setup: the connections table is not created yet. Signing works, but nothing is saved.',
+  fluxosAvailable: 'Also in Vertal Fluxos (read-only): "New incoming transaction" and "Balance changed" triggers, "Get balance" and "List recent transactions" actions. Nothing is signed or sent.',
   disabled: 'The MetaMask connector is not enabled for your account yet.',
   errors: ERR_EN,
   templateTitle: 'Web3 Starter (wagmi + viem)',
@@ -333,6 +337,7 @@ const es: MmTexts = {
   recentTxNeedsKey: 'Lista de transacciones recientes: necesita la clave del explorador en la configuración del servidor.',
   noTx: 'Ninguna transacción.',
   migrationPending: 'Configuración pendiente: la tabla de conexiones aún no existe. La firma funciona, pero no se guarda nada.',
+  fluxosAvailable: 'También en Vertal Fluxos (solo lectura): disparadores "Nueva transacción recibida" y "Saldo cambió", acciones "Consultar saldo" y "Listar transacciones recientes". No se firma ni se envía nada.',
   disabled: 'El conector MetaMask aún no está habilitado para tu cuenta.',
   errors: ERR_ES,
   templateTitle: 'Starter Web3 (wagmi + viem)',

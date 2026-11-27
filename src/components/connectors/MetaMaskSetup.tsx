@@ -143,6 +143,7 @@ export function MetaMaskSetupPage() {
 
             <TabsContent value="connect" className="space-y-4 pt-4">
               {status?.migrationPending && <p className="text-xs text-amber-500 flex gap-1.5"><AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {t.migrationPending}</p>}
+              {status?.fluxos && <p className="text-xs text-muted-foreground">{t.fluxosAvailable}</p>}
               {status?.connection ? (
                 <Card className="p-6 space-y-4" data-testid="metamask-connected">
                   <div className="flex flex-wrap items-center justify-between gap-3">
