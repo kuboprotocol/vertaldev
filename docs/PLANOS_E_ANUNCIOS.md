@@ -35,14 +35,13 @@ reprovou o domínio na política "Site comprometido" (redirecionamento malicioso
 porque o bundle carregava a rede Adsterra / TERRA ADS (`effectivecpmnetwork.com`
 e o banner `bauval.org` com `atOptions`). Saíram do front-end:
 
-- o intersticial do `AdGate` (`src/components/AdGate.tsx` + `src/hooks/useAdGate.ts`),
+- o intersticial do `AdGate` (`src/hooks/useAdGate.ts`; `src/components/AdGate.tsx` ficou só com o crédito diário),
   que abria o Smartlink TERRA numa aba nova 1,5 s depois de navegar (Free e Starter);
 - o banner nativo TERRA (`TerraNativeBanner`, `SponsoredSlot` no Painel Criativo);
 - os banners `AdBanner` / `CreativeAdFrame` / `AdFrameSquare` (`bauval.org`);
 - o painel "Recompensa por anúncio TERRA ADS" de `/recompensas` (`TerraRewardsPanel`).
 
-O crédito diário do plano, que rodava dentro do `AdGate`, agora roda em
-`src/components/DailyCreditsSync.tsx`.
+O crédito diário do plano continua rodando no `AdGate` (sem anúncio nenhum).
 
 `shouldShowAd()` e `AD_SUPPORTED_PLANS` continuam em `src/lib/planConfig.ts`
 (com o teste `src/test/ad-policy.test.ts`) e `public.ad_impressions` continua no
