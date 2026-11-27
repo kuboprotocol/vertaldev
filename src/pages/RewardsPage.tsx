@@ -8,19 +8,19 @@ import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { fetchCreditBalance } from '@/lib/creditBalance'
 import AnimatedLogo from '@/components/branding/AnimatedLogo'
-import TerraRewardsPanel from '@/components/shortlinks/TerraRewardsPanel'
 import RewardedVideoPanel from '@/components/shortlinks/RewardedVideoPanel'
 import VertalNodeCard from '@/components/shortlinks/VertalNodeCard'
 import KuboMusicPanel from '@/components/shortlinks/KuboMusicPanel'
 import DailyChecklistCard from '@/components/shortlinks/DailyChecklistCard'
-import { fetchDailyChecklist, type DailyChecklist } from '@/lib/dailyRewards'
+import { fetchDailyChecklist, reportTerraUnavailable, type DailyChecklist } from '@/lib/dailyRewards'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 
 /**
  * Painel de recompensas (/recompensas): checklist do dia, vídeo premiado, músicas do Kubo,
- * TERRA ADS, Vertal Node (bônus opcional) e saldo. As recompensas do dia só vão para o saldo
- * quando as 3 atividades obrigatórias (vídeo, 5 músicas, TERRA ADS) estão feitas.
+ * Vertal Node (bônus opcional) e saldo. As recompensas do dia só vão para o saldo quando as
+ * 3 atividades obrigatórias (vídeo, 5 músicas, vídeo extra) estão feitas.
+ * O anúncio TERRA ADS (Adsterra) foi removido do site (política do Google Ads).
  * O antigo sistema de shortlinks (vídeos curtos com crédito diário) foi desativado;
  * /shortlinks redireciona para cá.
  */
@@ -32,6 +32,7 @@ export default function RewardsPage() {
   const [userDebt, setUserDebt] = useState(0)
   const [checklist, setChecklist] = useState<DailyChecklist | null>(null)
   const completedRef = useRef<boolean | null>(null)
+  const extraVideoStepRef = useRef(false)
 
   const loadData = useCallback(async () => {
     if (!user) return
@@ -92,11 +93,20 @@ export default function RewardsPage() {
     refreshChecklist()
   }, [loadData, refreshChecklist])
 
-  // TERRA ADS não carregou: o servidor registrou e devolveu o checklist (passo TERRA via vídeo extra).
-  const onTerraUnavailable = useCallback(
-    (next: DailyChecklist | undefined) => (next ? applyChecklist(next) : refreshChecklist()),
-    [applyChecklist, refreshChecklist],
-  )
+  // Sem anúncio TERRA no site: o passo legado "TERRA" do servidor fecha com 1 vídeo premiado extra.
+  // Registra isso uma vez por visita, só quando o dia ainda não tem o registro (idempotente no servidor).
+  useEffect(() => {
+    if (!user || !checklist || extraVideoStepRef.current) return
+    if (checklist.terra_done || checklist.terra_unavailable) return
+    extraVideoStepRef.current = true
+    reportTerraUnavailable('panel_error')
+      .then((res) => {
+        if (res?.ok && res.checklist) applyChecklist(res.checklist)
+      })
+      .catch(() => {
+        /* tenta de novo na próxima visita */
+      })
+  }, [user, checklist, applyChecklist])
 
   if (loading) {
     return (
@@ -185,7 +195,7 @@ export default function RewardsPage() {
             </motion.div>
           )}
 
-          {/* 1. Vídeo premiado (AppLixir) e 2. Músicas do Kubo (Spotify) */}
+          {/* 1 e 3. Vídeo premiado (AppLixir; o 2º do dia é o extra) e 2. Músicas do Kubo (Spotify) */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -194,19 +204,6 @@ export default function RewardsPage() {
           >
             <RewardedVideoPanel onCredited={onActivity} />
             <KuboMusicPanel checklist={checklist} onProgress={applyChecklist} />
-          </motion.div>
-
-          {/* 3. Recompensa por anúncio TERRA ADS */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.25 }}
-          >
-            <TerraRewardsPanel
-              onWithdrawn={loadData}
-              onActivity={refreshChecklist}
-              onUnavailable={onTerraUnavailable}
-            />
           </motion.div>
 
           {/* Bônus opcional: Vertal Node (app desktop/Android), fora do checklist */}

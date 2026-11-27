@@ -10,7 +10,6 @@ import { FreeCreativeTools } from './FreeCreativeTools';
 import { GridcraftEditor } from './GridcraftEditor';
 import { ManualDesignEditor } from './ManualDesignEditor';
 import { PhotocraftEditor } from './PhotocraftEditor';
-import { SponsoredSlot } from './SponsoredSlot';
 import { VectorcraftEditor } from './VectorcraftEditor';
 import { WordcraftEditor } from './WordcraftEditor';
 
@@ -103,7 +102,6 @@ export function CanvasWorld({
                   },
                 ]}
               />
-              <SponsoredSlot />
             </div>
           ),
         },

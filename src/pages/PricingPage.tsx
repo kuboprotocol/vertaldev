@@ -62,13 +62,9 @@ function featuresFor(plan: string): string[] {
     feats.push(`✓ Inclui 5 créditos/dia`)
   }
 
-  feats.push('✓ Recompensas opcionais (vídeo premiado, TERRA ADS, Vertal Node)')
-  if (cfg.adFrequencyHours === null) {
-    feats.push('✓ Sem anúncios interruptivos')
-  } else {
-    feats.push(`✓ Anúncios a cada ${cfg.adFrequencyHours}h`)
-  }
-  feats.push('✓ TERRA ADS Smartlink incluso')
+  feats.push('✓ Recompensas opcionais (vídeo premiado, músicas do Kubo, Vertal Node)')
+  // Nenhum plano tem anúncio interruptivo: o anúncio que abria em aba nova (TERRA ADS) foi removido.
+  feats.push('✓ Sem anúncios interruptivos')
   if (['pro', 'premium_1', 'premium_2'].includes(plan) || plan.startsWith('business') || plan === 'enterprise') {
     feats.push('✓ Suporte por email')
   }
@@ -425,7 +421,7 @@ export default function PricingPage() {
               <AccordionItem value="q3">
                 <AccordionTrigger className="px-4 text-left">Como ganho créditos extras?</AccordionTrigger>
                 <AccordionContent className="px-4 text-muted-foreground">
-                  No painel de recompensas (/recompensas) você ganha créditos assistindo a vídeos premiados, vendo anúncios TERRA ADS e ativando o Vertal Node. Tudo é opcional e os créditos caem no seu saldo.
+                  No painel de recompensas (/recompensas) você ganha créditos assistindo a vídeos premiados, ouvindo as músicas do Kubo e ativando o Vertal Node. Tudo é opcional e os créditos caem no seu saldo.
                 </AccordionContent>
               </AccordionItem>
               <AccordionItem value="q4">

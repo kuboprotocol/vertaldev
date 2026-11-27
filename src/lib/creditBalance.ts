@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client'
  * O servidor só deixa gastar `subscriptions.edits_limit - edits_used` da
  * assinatura ativa (`execute_atomic_credit_deduction` recusa com
  * `insufficient_credits` abaixo disso — inclusive para admins) e todas as
- * recompensas (vídeo premiado, TERRA ADS, créditos diários do plano) somam em
+ * recompensas (vídeo premiado, créditos diários do plano) somam em
  * `edits_limit`. Todo lugar que mostra "saldo"/"créditos" deve ler daqui.
  *
  * NÃO use `user_credits.balance` (carteira legada, ninguém gasta dela) nem um

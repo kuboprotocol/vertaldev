@@ -4,11 +4,15 @@ import { supabase } from "@/integrations/supabase/client";
  * Checklist diário de recompensas (/recompensas).
  *
  * Para liberar as recompensas do dia (America/Sao_Paulo) o usuário precisa completar TODAS as
- * atividades: assistir 1 vídeo premiado, ouvir as 5 músicas do Kubo e ver 1 anúncio TERRA ADS.
+ * atividades: assistir 1 vídeo premiado, ouvir as 5 músicas do Kubo e assistir 1 vídeo premiado extra.
  * Até lá os créditos ficam pendentes; quem decide é o servidor (função `daily-rewards`).
+ *
+ * O anúncio TERRA ADS (Adsterra) saiu do site (política "Site comprometido" do Google Ads). O banco
+ * ainda tem o passo "TERRA" no checklist; o front-end o fecha pelo caminho que já existia para
+ * anúncio indisponível (`terra-unavailable` + vídeos extras), sem carregar nada de terceiros.
  */
 export const DAILY_CHECKLIST_NOTICE =
-  "Para ganhar suas recompensas, complete todas as atividades do dia: assista ao vídeo, ouça as 5 músicas do Kubo e veja o anúncio TERRA ADS.";
+  "Para ganhar suas recompensas, complete todas as atividades do dia: assista ao vídeo premiado, ouça as 5 músicas do Kubo e assista a 1 vídeo premiado extra.";
 
 /** Segundos de reprodução real para uma faixa contar (o servidor tem a palavra final). */
 export const KUBO_MUSIC_MIN_SECONDS = 30;
@@ -92,9 +96,6 @@ async function callDailyRewards<T>(action: string, body: Record<string, unknown>
   return data as T;
 }
 
-/** Mensagem mostrada quando o anúncio TERRA ADS não carrega. */
-export const TERRA_UNAVAILABLE_MESSAGE = "Anúncio TERRA indisponível — assista mais 1 vídeo para completar";
-
 export type TerraUnavailableReason = "script_error" | "no_fill_timeout" | "panel_error";
 
 export interface TerraUnavailableResult {
@@ -110,7 +111,10 @@ export const startMusicSession = (trackId: string) =>
 export const reportMusicProgress = (nonce: string, listenedSeconds: number) =>
   callDailyRewards<MusicReportResult>("music-report", { nonce, listened_seconds: listenedSeconds });
 
-/** Avisa o servidor que o anúncio TERRA não carregou hoje (idempotente: 1 registro por dia). */
+/**
+ * Fecha o passo legado "TERRA" do checklist com vídeo extra: o anúncio não existe mais no site, então o
+ * servidor registra o dia como "anúncio indisponível" (idempotente: 1 registro por dia).
+ */
 export const reportTerraUnavailable = (reason: TerraUnavailableReason, waitedSeconds?: number) =>
   callDailyRewards<TerraUnavailableResult>("terra-unavailable", {
     reason,

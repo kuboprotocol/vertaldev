@@ -48,7 +48,7 @@ export default function AdminRewardsActivity() {
     <Card>
       <CardContent className="space-y-3 p-4">
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-muted-foreground">Checklist diário (vídeo + 5 músicas do Kubo + TERRA ADS).</span>
+          <span className="text-muted-foreground">Checklist diário (vídeo + 5 músicas do Kubo + 1 vídeo extra). A coluna TERRA mostra só o histórico: o anúncio saiu do site.</span>
           <span className="ml-auto text-xs text-muted-foreground">
             {completedCount}/{rows.length} usuário-dia completos
           </span>
