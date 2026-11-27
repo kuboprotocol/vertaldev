@@ -1,4 +1,5 @@
 import { APP_NAME } from '@/config/brand'
+import { VERTAL_DEV_EMBED_SNIPPET } from '@/lib/ecosystem'
 import { INTEGRATIONS, INTEGRATIONS_PATH, integrationGroups, integrationPath } from '@/config/integrations'
 import AnimatedLogo from '@/components/branding/AnimatedLogo'
 import { useState, useMemo, useEffect } from 'react'
@@ -825,6 +826,28 @@ testimonials and a waitlist form.`}</Pre>
           Published projects can be pinned to IPFS via web3.storage in one click from the
           Connectors hub.
         </P>
+      </>
+    ),
+  },
+  {
+    id: 'embed',
+    title: 'Embed on any website',
+    icon: Code2,
+    group: 'Platform',
+    content: (
+      <>
+        <H2>Embed Vertal Dev on any website</H2>
+        <P>
+          Paste this code into any website or app. People can describe an app, see the live
+          preview, publish it and open the result, right inside your page.
+        </P>
+        <Pre>{VERTAL_DEV_EMBED_SNIPPET}</Pre>
+        <UL>
+          <li>Sign-in opens in a new window, never inside your page, so passwords are never typed in a frame.</li>
+          <li>Optional: add <Code>theme=light</Code> or <Code>theme=dark</Code> to the URL. Keep <Code>ref=</Code> to credit your referral link.</li>
+          <li>Some browsers (Safari, private windows) block sign-in inside frames. The embed then shows an <Code>Open in Vertal Dev</Code> button that opens a new tab.</li>
+          <li>Only <Code>/embed</Code> can be framed. Sign-in, dashboard and settings pages still can't be shown inside other sites, to keep accounts safe.</li>
+        </UL>
       </>
     ),
   },

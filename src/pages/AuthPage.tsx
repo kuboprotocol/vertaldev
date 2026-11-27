@@ -35,7 +35,7 @@ const AuthPage = forwardRef<HTMLDivElement, any>((props, ref) => {
   // lands on an authorized in-app route.
   const ALLOWED_REDIRECT_PREFIXES = [
     '/dashboard', '/connectors', '/builder', '/canvas', '/profile',
-    '/agents', '/docs', '/game', '/oauth/consent', '/',
+    '/agents', '/docs', '/game', '/oauth/consent', '/embed', '/',
   ]
   const isAllowedRedirect = (p: string): boolean => {
     if (typeof p !== 'string' || !p.startsWith('/') || p.startsWith('//')) return false

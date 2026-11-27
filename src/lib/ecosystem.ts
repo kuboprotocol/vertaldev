@@ -55,6 +55,11 @@ export const VERTAL_RUN_REFERRAL_URL = 'https://vertalrun.com/entrar/?ref=c6104d
 // O vertal.dev só lê o ?ref= na página /auth (não guarda para depois), então o link aponta para lá.
 export const VERTAL_DEV_REFERRAL_URL = 'https://vertal.dev/auth?ref=5fe61d6f'
 
+// Embed do Vertal Dev: /embed é a única página do vertal.dev que qualquer site pode
+// emoldurar (worker/embedPolicy.ts). O login abre em popup; o ?ref= segue para o /auth.
+export const VERTAL_DEV_EMBED_URL = 'https://vertal.dev/embed?ref=5fe61d6f'
+export const VERTAL_DEV_EMBED_SNIPPET = `<iframe src="${VERTAL_DEV_EMBED_URL}" width="100%" height="700" style="border:0" allow="clipboard-write" loading="lazy" title="Vertal Dev"></iframe>`
+
 /** Servidor MCP do Vertal Dev (Supabase Edge Function `mcp`). */
 export const VERTAL_DEV_MCP_URL = `${
   (import.meta.env.VITE_SUPABASE_URL as string | undefined) || 'https://sccizjlpwezsgaxkclot.supabase.co'
