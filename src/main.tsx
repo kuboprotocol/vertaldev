@@ -12,6 +12,11 @@ import { redirectNativeToMobileClient } from "./lib/nativeEntry";
 import { installServiceWorkerAutoReload } from "./lib/swAutoReload";
 // vertal.js (Vertal DePIN): só com VITE_VERTAL_JS_SRC + VITE_VERTAL_APP_ID e aceite do Vertal Node.
 import { startVertalJs } from "./lib/vertal-js";
+// vertal.dev/embed: página mínima que qualquer site pode emoldurar (worker/embedPolicy.ts).
+import EmbedRoot from "./embed/app/EmbedRoot";
+import { EMBED_HANDOFF_KEY, isEmbedPath } from "./lib/embedAuth";
+
+const IS_EMBED = isEmbedPath(window.location.pathname);
 
 // Install error beacons FIRST so we catch errors thrown during boot.
 initSentry();
@@ -62,7 +67,7 @@ window.fetch = async (...args) => {
 
 
 const MUTE_LS_KEY = 'kubo:pwa:mute_toasts';
-let ignorePwaToasts = localStorage.getItem(MUTE_LS_KEY) === 'true';
+let ignorePwaToasts = (() => { try { return localStorage.getItem(MUTE_LS_KEY) === 'true'; } catch { return false; } })();
 
 // Listen for PWA asset fallback events
 if (typeof window !== 'undefined') {
@@ -109,10 +114,26 @@ if (typeof window !== 'undefined') {
   }, true);
 }
 
-createRoot(document.getElementById("root")!).render(
+// Blocked storage inside a frame: index.html already shows "Open in Vertal Dev".
+if (!(window as { __VERTAL_EMBED_BLOCKED__?: boolean }).__VERTAL_EMBED_BLOCKED__) createRoot(document.getElementById("root")!).render(
   <ErrorBoundary global resourceName="Root">
-    <App />
+    {IS_EMBED ? <EmbedRoot /> : <App />}
   </ErrorBoundary>
 );
 
-startVertalJs();
+// vertal.js (DePIN) never runs inside the embed on other people's sites.
+if (!IS_EMBED) startVertalJs();
+
+// Embed sign-in popup: if the sign-in provider sent this tab to another page
+// (e.g. /dashboard), bring it back to /embed/login to finish the handoff.
+if (!IS_EMBED && window.opener) {
+  let pending: string | null = null;
+  try { pending = sessionStorage.getItem(EMBED_HANDOFF_KEY); } catch { /* ignore */ }
+  if (pending && /^[A-Za-z0-9_-]{16,128}$/.test(pending)) {
+    void import("./integrations/supabase/client").then(({ supabase }) => {
+      const go = () => window.location.replace(`/embed/login?nonce=${pending}`);
+      supabase.auth.getSession().then(({ data }) => { if (data.session) go(); });
+      supabase.auth.onAuthStateChange((_e, session) => { if (session) go(); });
+    });
+  }
+}
