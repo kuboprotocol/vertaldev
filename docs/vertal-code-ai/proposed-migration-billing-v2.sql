@@ -1,4 +1,4 @@
--- VERTAL · cobrança v2 — migração PROPOSTA (NÃO APLICADA, fora de supabase/migrations de propósito).
+-- VERTAL · cobrança v2 — migração (APLICADA em 2026-11-27 como supabase/migrations/20261127220100_vertal_billing_v2.sql; referência).
 --
 -- Depende de docs/vertal-code-ai/proposed-migration.sql (tabelas vertal_ai_usage e vertal_ai_carry),
 -- que também não foi aplicada. Ordem: (1) proposed-migration.sql, (2) este arquivo.
