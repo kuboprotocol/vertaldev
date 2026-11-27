@@ -126,9 +126,9 @@ const truthy = (v: string | undefined) => /^(1|true|yes|on|sim)$/i.test((v ?? ""
 /**
  * O projeto Supabase está no teto de 100 segredos: as chaves de cobrança v2 moram dentro do
  * segredo JSON que já existe (VERTAL_GPU_CONFIG). Segredo avulso com o mesmo nome vence.
- * Aceita só estas chaves; nenhuma é ligada por padrão.
+ * Aceita só estas chaves (inclui VERTAL_AI_API_ENABLED, o interruptor da API); nenhuma é ligada por padrão.
  */
-const BILLING_KEY = /^VERTAL_(BILLING_[A-Z0-9_]+|LOW_CREDIT_[A-Z_]+|CODE_AI_CHARGE_ENABLED)$/;
+const BILLING_KEY = /^VERTAL_(BILLING_[A-Z0-9_]+|LOW_CREDIT_[A-Z_]+|CODE_AI_CHARGE_ENABLED|AI_API_ENABLED)$/;
 export function expandBillingEnv(env: Env): Env {
   const raw = (env.VERTAL_GPU_CONFIG ?? "").trim();
   if (!raw) return env;
