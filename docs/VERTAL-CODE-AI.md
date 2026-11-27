@@ -659,3 +659,30 @@ pede cartão — basta **um** destino de fora; escrita em CRM **sempre** pede ca
 ## Cobrança v2 (custo real × markup) — desligada
 
 Preço = max(nosso custo real, piso por tipo) × markup: varejo 1,69 (chat, código, imagem, vídeo), 2,59 (clonagem), 5,50 (raspagem); atacado/marca branca 1,20, sem clonagem/raspagem, saldo zero → 402. Crédito US$0,03. 5 mensagens de chat grátis por dia (configurável). Aviso único a 30% da última recarga (in-app, e-mail, CRM do Fluxos) e extrato por tipo. Detalhes, tabela, flags e o que falta aprovar: [docs/vertal-code-ai/BILLING-V2.md](vertal-code-ai/BILLING-V2.md). SQL proposto (não aplicado): [docs/vertal-code-ai/proposed-migration-billing-v2.sql](vertal-code-ai/proposed-migration-billing-v2.sql).
+
+## API VERTAL · voz clonada (marca branca) — 27/11/2026, desligada
+
+Rotas em `vertal-ai-api` (`supabase/functions/vertal-ai-api/voice.ts`), mesma chave `vtl_ai_…`, isoladas por cliente
+da API (dono da chave) e por usuário final (`end_user`, id do usuário no app do cliente):
+
+| Rota | O que faz |
+|---|---|
+| `GET /v1/voices/consent` | termo (pt/en/es), versão e campos obrigatórios do atestado |
+| `GET /v1/voices/languages` | 23 idiomas da fala (Chatterbox Multilingual); cantar: qualquer idioma |
+| `GET /v1/music/genres?q=` | catálogo de ritmos do mundo + 50 idiomas de letra (para o app do cliente) |
+| `POST /v1/voices` | cria a voz: `end_user`, `name`, `language?`, `sample_seconds` (8–90), `sample_url` (https público) **ou** multipart `sample` (≤12 MB), `consent` {version "voice-consent-v1", accepted, owner_confirmed, speaker_name, accepted_at, end_user_ip?, end_user_agent?, authorization_url?} — sem atestado completo → 400 `consent_required`; máx. 5 vozes por usuário final, 500 por cliente |
+| `GET /v1/voices?end_user=` / `DELETE /v1/voices/{id}` | lista / apaga (apaga a amostra) |
+| `POST /v1/audio/speech` | `{voice_id, input, language?: "auto"\|código}` → 202 `{id}`; idioma fora → fallback avisado ou 422 `language_unsupported` sem cobrar |
+| `POST /v1/audio/sing` | `{voice_id, source_url, pitch_shift?}` → 202 `{id}` (música ≤40 MB, ≤5,5 min) |
+| `GET /v1/voice-jobs/{id}` | `processing` / `completed` (+`audio_url` 7 dias, créditos cobrados, `gpu_seconds`) / `failed` (nada cobrado) |
+
+**Preço (cobrança v2, atacado ×1,20, crédito US$0,03, pré-pago, saldo zerado → 402):** custo real = segundos de GPU
+medidos pelo motor (inclui partida a frio) × preço/hora da GPU (L4 US$0,80, A10/A10G US$1,10; `VERTAL_OWN_VOICE_GPU_USD_HOUR`),
+com piso: fala/criar voz US$0,004, canto US$0,03. Exemplos: criar voz 0,16 crédito; fala de ~20 s de L4 ≈ 0,18 crédito
+(30 s de A10 ≈ 0,37); canto de 3 min de L4 = 1,6 crédito (mínimo 1,2). Só cobra o que fica pronto; teto mensal da chave
+vale para o pior caso (fala 300 s, canto 900 s de GPU) antes de enviar.
+
+**Liga/desliga:** `VERTAL_OWN_VOICE_API_ENABLED` (+ `VERTAL_OWN_VOICE_API_USER_IDS` opcional) dentro do `VERTAL_GPU_CONFIG`,
+além do `VERTAL_AI_API_ENABLED` da API. **Para ir ao ar:** merge do #225 (e deste PR), aplicar `proposed-migration.sql`,
+`proposed-migration-billing-v2.sql` e `proposed-migration-voice-api.sql`, criar a função `vertal-ai-api` (o projeto está
+no teto de funções; o deploy só atualiza as existentes) e ligar as flags.

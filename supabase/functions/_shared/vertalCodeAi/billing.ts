@@ -21,12 +21,14 @@
 
 export const MICRO = 1_000_000;
 
-export type BillingKind = "chat" | "code" | "image" | "video" | "clone" | "scrape";
+// "voice" = fala com voz clonada (e criar a voz); "singing" = cantar/converter uma música para a voz clonada.
+// "clone" continua sendo CLONAGEM DE APPS (bloqueada na marca branca), sem relação com voz.
+export type BillingKind = "chat" | "code" | "image" | "video" | "clone" | "scrape" | "voice" | "singing";
 export type BillingChannel = "retail" | "wholesale";
 export type FreePeriod = "day" | "week" | "month" | "lifetime";
 export type BillingLocale = "pt-BR" | "en";
 
-export const BILLING_KINDS: BillingKind[] = ["chat", "code", "image", "video", "clone", "scrape"];
+export const BILLING_KINDS: BillingKind[] = ["chat", "code", "image", "video", "clone", "scrape", "voice", "singing"];
 
 export interface BillingConfig {
   version: string;
@@ -56,10 +58,11 @@ export interface BillingConfig {
 export const DEFAULT_BILLING: BillingConfig = {
   version: "2026-11-26",
   usdPerCredit: 0.03,
-  retailMarkup: { chat: 1.69, code: 1.69, image: 1.69, video: 1.69, clone: 2.59, scrape: 5.5 },
+  retailMarkup: { chat: 1.69, code: 1.69, image: 1.69, video: 1.69, clone: 2.59, scrape: 5.5, voice: 1.69, singing: 1.69 },
   wholesaleMarkup: 1.2,
   wholesaleBlocked: ["clone", "scrape"],
-  floorUsd: { chat: 0.0003, code: 0.002, image: 0.003, video: 0.05, clone: 0.02, scrape: 0.002 },
+  // Voz (27/11/2026): piso = ~18 s de GPU L4 (US$0,80/h) para fala/criar voz; ~2 min 15 s para canto.
+  floorUsd: { chat: 0.0003, code: 0.002, image: 0.003, video: 0.05, clone: 0.02, scrape: 0.002, voice: 0.004, singing: 0.03 },
   freeAllowance: { count: 5, period: "day", kinds: ["chat"], timeZone: "UTC" },
   lowCredit: { thresholdRatio: 0.3, topUpReasons: ["credit_purchase"] },
   links: { topUp: "https://vertal.dev/pricing", usage: "https://vertal.dev/vertal-code-ai" },
@@ -494,7 +497,7 @@ export function summarizeUsage(rows: UsageRow[]): { lines: UsageStatementLine[];
 
 /** Linhas da tabela de preços com um exemplo por categoria (custo de amostra em USD). */
 export function priceTable(c: BillingConfig = DEFAULT_BILLING, sampleCostUsd: Partial<Record<BillingKind, number>> = {}) {
-  const sample: Record<BillingKind, number> = { chat: 0.001, code: 0.01, image: 0.02, video: 0.4, clone: 0.05, scrape: 0.004, ...sampleCostUsd };
+  const sample: Record<BillingKind, number> = { chat: 0.001, code: 0.01, image: 0.02, video: 0.4, clone: 0.05, scrape: 0.004, voice: 0.006, singing: 0.045, ...sampleCostUsd };
   const rows: Array<{ channel: BillingChannel; kind: BillingKind; markup: number | null; floorUsd: number; sampleCostUsd: number; priceUsd: number | null; credits: number | null; note?: string }> = [];
   for (const channel of ["retail", "wholesale"] as BillingChannel[]) {
     for (const kind of BILLING_KINDS) {

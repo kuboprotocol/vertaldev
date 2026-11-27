@@ -25,7 +25,7 @@ const VENDORS = /openai|openrouter|deepseek|cerebras|gemini|google|qwen|ollama|m
 describe('cobrança v2 · preço = nosso custo × markup', () => {
   it('padrões: crédito US$0,03; varejo 1,69 / clonagem 2,59 / raspagem 5,50; atacado 1,20', () => {
     expect(DEFAULT_BILLING.usdPerCredit).toBe(0.03);
-    expect(DEFAULT_BILLING.retailMarkup).toEqual({ chat: 1.69, code: 1.69, image: 1.69, video: 1.69, clone: 2.59, scrape: 5.5 });
+    expect(DEFAULT_BILLING.retailMarkup).toEqual({ chat: 1.69, code: 1.69, image: 1.69, video: 1.69, clone: 2.59, scrape: 5.5, voice: 1.69, singing: 1.69 });
     expect(DEFAULT_BILLING.wholesaleMarkup).toBe(1.2);
     expect(DEFAULT_BILLING.wholesaleBlocked).toEqual(['clone', 'scrape']);
   });
@@ -238,7 +238,7 @@ describe('cobrança v2 · extrato', () => {
 
   it('tabela de preços: um exemplo por categoria; atacado sem clonagem/raspagem', () => {
     const t = priceTable();
-    expect(t).toHaveLength(12);
+    expect(t).toHaveLength(16); // 8 tipos × varejo/atacado (voz e canto entraram em 27/11/2026)
     expect(t.filter((r) => r.channel === 'wholesale' && r.note === 'feature_not_available_white_label').map((r) => r.kind)).toEqual(['clone', 'scrape']);
     expect(t.every((r) => r.credits === null || r.credits > 0)).toBe(true);
   });

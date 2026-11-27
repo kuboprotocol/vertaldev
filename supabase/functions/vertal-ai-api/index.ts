@@ -5,6 +5,7 @@
 //   GET  …/vertal-ai-api/v1/models
 //   POST …/vertal-ai-api/v1/chat/completions      Authorization: Bearer vtl_ai_…
 //   POST …/vertal-ai-api/keys                     (JWT do usuário) create | list | revoke | set_cap | usage | statement
+//   …/v1/voices, /v1/audio/speech, /v1/audio/sing, /v1/voice-jobs/{id}, /v1/music/genres → voice.ts (flag própria)
 //
 // Cobrança v2 (VERTAL_BILLING_V2_ENABLED, desligada): atacado/marca branca = NOSSO custo real
 // (piso por tipo) × 1,20; clonagem/raspagem → 403 feature_not_available_white_label; saldo
@@ -27,6 +28,7 @@ import { aiKeyPrefix, assertOwner, bearerFrom, checkKeyRow, generateAiKey, hashA
 import { billingFlags, billingV2For, expandBillingEnv, isBillingKind, isPriceError, loadBilling, pickBillingLocale, priceRequest, wholesaleBalanceGate } from "../_shared/vertalCodeAi/billing.ts";
 import { type BillingRuntime, notifyIfLow, usageStatement } from "../_shared/vertalCodeAi/billingRuntime.ts";
 import { makeEngine as makeFluxosEngine } from "../_shared/fluxosApps.ts";
+import { handleVoiceApi } from "./voice.ts";
 import { CompatError, completionResponse, completionSse, errorBody, modelsList, parseChatRequest, requestIdFrom } from "../_shared/vertalCodeAi/openaiCompat.ts";
 
 const env = (k: string) => Deno.env.get(k) ?? undefined;
@@ -87,6 +89,9 @@ Deno.serve(async (req) => {
   try {
     if (path.endsWith("/v1/models")) return json(200, modelsList(1764000000));
     if (path.endsWith("/keys")) return await manageKeys(req, admin);
+    // Voz clonada (marca branca): /v1/voices…, /v1/audio/speech|sing, /v1/voice-jobs/{id}, /v1/music/genres.
+    const voice = await handleVoiceApi(req, admin, path);
+    if (voice) return voice;
     if (!path.endsWith("/v1/chat/completions")) return json(404, errorBody("Rota não encontrada.", "not_found"));
     if (req.method !== "POST") return json(405, errorBody("Use POST.", "method_not_allowed"));
     return await chatCompletions(req, admin);
