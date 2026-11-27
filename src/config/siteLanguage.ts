@@ -45,6 +45,18 @@ export const ENGLISH_ROUTES: readonly string[] = [
   '/creative',
   '/creative/investigation',
   '/creative/audit',
+  // VERTAL Code AI and game screens (presentational pass)
+  '/vertal-code-ai',
+  '/game',
+  '/game/editor',
+  '/game/retro',
+  '/game/rpg',
+  '/game/metaverse',
+  '/game/sdk',
+  '/game/vr',
+  '/game/ai',
+  '/game/scene',
+  '/games',
 ]
 
 /**

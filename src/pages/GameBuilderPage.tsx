@@ -31,7 +31,7 @@ export default function GameBuilderPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-muted-foreground">Carregando...</div>
+        <div className="text-muted-foreground">Loading…</div>
       </div>
     )
   }
