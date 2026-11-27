@@ -81,6 +81,17 @@ const FILES = [
   'pages/LeaderboardPage.tsx',
   'pages/EmailDashboardPage.tsx',
   'pages/PlanPage.tsx',
+  // Admin and internal
+  'pages/AdminPage.tsx',
+  'components/admin/AdminRewardsActivity.tsx',
+  'pages/AdminSkillsPage.tsx',
+  'pages/OrchestratorPage.tsx',
+  'pages/PwaTelemetry.tsx',
+  'pages/PwaExportJobDetails.tsx',
+  'components/pwa-telemetry/AuditView.tsx',
+  'components/pwa-telemetry/MetricsView.tsx',
+  'components/pwa-telemetry/ExportJobsView.tsx',
+  'components/connectors/LogSimulator.tsx',
 ]
 
 function visibleText(file: string): string {

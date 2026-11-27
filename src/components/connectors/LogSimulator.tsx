@@ -48,63 +48,63 @@ interface ScenarioDef {
 
 const BUILTIN_SCENARIOS: Record<string, ScenarioDef> = {
   repos_synced: {
-    label: 'Sincronização de Repositórios',
-    description: 'Busca → processamento → sucesso',
+    label: 'Repository sync',
+    description: 'Fetch, process, done',
     steps: [
-      { eventType: 'repos_fetch_started', message: 'Buscando repositórios na API do GitHub...', status: 'info', delayMs: 0 },
-      { eventType: 'repos_processing', message: 'Processando metadados de 12 repositórios', status: 'info', delayMs: 1200, metadata: { count: 12 } },
-      { eventType: 'repos_synced', message: 'Sincronizados 12 repositórios com sucesso', status: 'success', delayMs: 1500, metadata: { count: 12, duration_ms: 2700 } },
+      { eventType: 'repos_fetch_started', message: 'Fetching repositories from the GitHub API...', status: 'info', delayMs: 0 },
+      { eventType: 'repos_processing', message: 'Processing metadata for 12 repositories', status: 'info', delayMs: 1200, metadata: { count: 12 } },
+      { eventType: 'repos_synced', message: 'Synced 12 repositories', status: 'success', delayMs: 1500, metadata: { count: 12, duration_ms: 2700 } },
     ],
   },
   ipfs_deploy_success: {
-    label: 'Deploy IPFS — Sucesso',
-    description: 'Build → upload → publicado com URL',
+    label: 'IPFS deploy: success',
+    description: 'Build, upload, published with a URL',
     steps: [
-      { eventType: 'ipfs_deploy_started', message: 'Deploy IPFS iniciado para awesome-project', status: 'info', delayMs: 0, metadata: { repo: 'awesome-project' } },
-      { eventType: 'ipfs_build', message: 'Compilando arquivos estáticos...', status: 'info', delayMs: 1500 },
-      { eventType: 'ipfs_uploading', message: 'Enviando 142 arquivos para o IPFS', status: 'info', delayMs: 2000, metadata: { files: 142 } },
-      { eventType: 'ipfs_deploy_completed', message: 'Deploy concluído: https://awesome-project.ipfs.dweb.link', status: 'success', delayMs: 2500, metadata: { ipfs_url: 'https://awesome-project.ipfs.dweb.link' } },
+      { eventType: 'ipfs_deploy_started', message: 'IPFS deploy started for awesome-project', status: 'info', delayMs: 0, metadata: { repo: 'awesome-project' } },
+      { eventType: 'ipfs_build', message: 'Building static files...', status: 'info', delayMs: 1500 },
+      { eventType: 'ipfs_uploading', message: 'Uploading 142 files to IPFS', status: 'info', delayMs: 2000, metadata: { files: 142 } },
+      { eventType: 'ipfs_deploy_completed', message: 'Deploy finished: https://awesome-project.ipfs.dweb.link', status: 'success', delayMs: 2500, metadata: { ipfs_url: 'https://awesome-project.ipfs.dweb.link' } },
     ],
   },
   ipfs_deploy_failure: {
-    label: 'Deploy IPFS — Falha',
-    description: 'Build → erro de tamanho/timeout',
+    label: 'IPFS deploy: failure',
+    description: 'Build, then size or timeout error',
     steps: [
-      { eventType: 'ipfs_deploy_started', message: 'Deploy IPFS iniciado para huge-repo', status: 'info', delayMs: 0 },
-      { eventType: 'ipfs_build', message: 'Compilando arquivos...', status: 'info', delayMs: 1500 },
-      { eventType: 'ipfs_size_warning', message: 'Aviso: bundle excede 40MB', status: 'warning', delayMs: 1800, metadata: { size_mb: 42 } },
-      { eventType: 'ipfs_deploy_failed', message: 'Falha: repositório excede limite de 50MB', status: 'error', delayMs: 1500, metadata: { error: 'Size limit exceeded' } },
+      { eventType: 'ipfs_deploy_started', message: 'IPFS deploy started for huge-repo', status: 'info', delayMs: 0 },
+      { eventType: 'ipfs_build', message: 'Building files...', status: 'info', delayMs: 1500 },
+      { eventType: 'ipfs_size_warning', message: 'Warning: bundle is larger than 40MB', status: 'warning', delayMs: 1800, metadata: { size_mb: 42 } },
+      { eventType: 'ipfs_deploy_failed', message: 'Failed: repository is larger than the 50MB limit', status: 'error', delayMs: 1500, metadata: { error: 'Size limit exceeded' } },
     ],
   },
   oauth_lifecycle: {
-    label: 'Ciclo OAuth Completo',
-    description: 'Conectar → uso → desconectar',
+    label: 'Full OAuth cycle',
+    description: 'Connect, use, disconnect',
     steps: [
-      { eventType: 'oauth_started', message: 'Iniciando autorização OAuth com GitHub', status: 'info', delayMs: 0 },
-      { eventType: 'connected', message: 'Conectado como @testuser', status: 'success', delayMs: 1500, metadata: { username: 'testuser' } },
-      { eventType: 'token_refreshed', message: 'Token de acesso renovado automaticamente', status: 'info', delayMs: 2000 },
-      { eventType: 'disconnected', message: 'Conexão removida pelo usuário', status: 'info', delayMs: 1500 },
+      { eventType: 'oauth_started', message: 'Starting OAuth with GitHub', status: 'info', delayMs: 0 },
+      { eventType: 'connected', message: 'Connected as @testuser', status: 'success', delayMs: 1500, metadata: { username: 'testuser' } },
+      { eventType: 'token_refreshed', message: 'Access token renewed', status: 'info', delayMs: 2000 },
+      { eventType: 'disconnected', message: 'Connection removed by the user', status: 'info', delayMs: 1500 },
     ],
   },
   rate_limit: {
     label: 'Rate Limit',
-    description: 'Aviso → erro de limite atingido',
+    description: 'Warning, then limit reached',
     steps: [
-      { eventType: 'api_call', message: 'Requisição à API do GitHub', status: 'success', delayMs: 0 },
-      { eventType: 'rate_limit_warning', message: 'Aviso: 50 requisições restantes', status: 'warning', delayMs: 1000, metadata: { remaining: 50 } },
-      { eventType: 'rate_limit_exceeded', message: 'Limite de requisições excedido — aguarde 1h', status: 'error', delayMs: 1500, metadata: { reset_in_seconds: 3600 } },
+      { eventType: 'api_call', message: 'GitHub API request', status: 'success', delayMs: 0 },
+      { eventType: 'rate_limit_warning', message: 'Warning: 50 requests left', status: 'warning', delayMs: 1000, metadata: { remaining: 50 } },
+      { eventType: 'rate_limit_exceeded', message: 'Request limit reached. Wait 1 hour', status: 'error', delayMs: 1500, metadata: { reset_in_seconds: 3600 } },
     ],
   },
   mixed: {
-    label: 'Cenário Misto',
-    description: 'Variedade de eventos e status',
+    label: 'Mixed scenario',
+    description: 'Different events and statuses',
     steps: [
-      { eventType: 'connected', message: 'Conectado com sucesso', status: 'success', delayMs: 0 },
-      { eventType: 'repos_synced', message: '8 repositórios sincronizados', status: 'success', delayMs: 1000 },
-      { eventType: 'rate_limit_warning', message: 'API próxima do limite', status: 'warning', delayMs: 1200 },
-      { eventType: 'ipfs_deploy_started', message: 'Deploy iniciado', status: 'info', delayMs: 1000 },
-      { eventType: 'ipfs_deploy_failed', message: 'Falha no deploy: timeout', status: 'error', delayMs: 1500 },
-      { eventType: 'ipfs_deploy_completed', message: 'Retry concluído com sucesso', status: 'success', delayMs: 1800 },
+      { eventType: 'connected', message: 'Connected', status: 'success', delayMs: 0 },
+      { eventType: 'repos_synced', message: '8 repositories synced', status: 'success', delayMs: 1000 },
+      { eventType: 'rate_limit_warning', message: 'API close to its limit', status: 'warning', delayMs: 1200 },
+      { eventType: 'ipfs_deploy_started', message: 'Deploy started', status: 'info', delayMs: 1000 },
+      { eventType: 'ipfs_deploy_failed', message: 'Deploy failed: timeout', status: 'error', delayMs: 1500 },
+      { eventType: 'ipfs_deploy_completed', message: 'Retry finished', status: 'success', delayMs: 1800 },
     ],
   },
 }
@@ -165,7 +165,7 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
   // Run history (this connector) — for filtering by runId
   interface RunRecord { id: string; label: string; startedAt: number; eventCount: number; fromDb?: boolean; mine?: boolean }
   const [runs, setRuns] = useState<RunRecord[]>(() =>
-    initialRunId ? [{ id: initialRunId, label: 'Run compartilhado', startedAt: Date.now(), eventCount: 0 }] : []
+    initialRunId ? [{ id: initialRunId, label: 'Shared run', startedAt: Date.now(), eventCount: 0 }] : []
   )
   const [selectedRunId, setSelectedRunId] = useState<string>(initialRunId ?? 'all')
   const [loadingRuns, setLoadingRuns] = useState(false)
@@ -177,7 +177,7 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
     if (initialRunId) {
       setRuns(prev => prev.some(r => r.id === initialRunId)
         ? prev
-        : [{ id: initialRunId, label: 'Run compartilhado', startedAt: Date.now(), eventCount: 0 }, ...prev])
+        : [{ id: initialRunId, label: 'Shared run', startedAt: Date.now(), eventCount: 0 }, ...prev])
     }
   }, [initialRunId])
 
@@ -199,10 +199,10 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
 
   const openEditor = (mode: 'edit' | 'new') => {
     if (mode === 'new') {
-      setEditLabel('Novo Cenário')
-      setEditDescription('Descreva o fluxo aqui')
+      setEditLabel('New scenario')
+      setEditDescription('Describe the flow here')
       setEditSteps([
-        { eventType: 'custom_event', message: 'Primeiro evento', status: 'info', delayMs: 0 },
+        { eventType: 'custom_event', message: 'First event', status: 'info', delayMs: 0 },
       ])
     } else {
       setEditLabel(current.label)
@@ -219,7 +219,7 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
   const addStep = () => {
     setEditSteps(prev => [
       ...prev,
-      { eventType: 'custom_event', message: 'Novo evento', status: 'info', delayMs: 1000 },
+      { eventType: 'custom_event', message: 'New event', status: 'info', delayMs: 1000 },
     ])
   }
 
@@ -239,30 +239,30 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
 
   const handleSaveCustom = () => {
     if (!editLabel.trim()) {
-      toast.error('Dê um nome ao cenário')
+      toast.error('Give the scenario a name')
       return
     }
     if (editSteps.length === 0) {
-      toast.error('Adicione pelo menos um passo')
+      toast.error('Add at least one step')
       return
     }
     const key = `custom_${editLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 40)}_${Date.now().toString(36)}`
     const def: ScenarioDef = {
       label: editLabel.trim(),
-      description: editDescription.trim() || 'Cenário personalizado',
+      description: editDescription.trim() || 'Custom scenario',
       steps: editSteps,
       custom: true,
     }
     setCustomScenarios(prev => ({ ...prev, [key]: def }))
     setScenarioKey(key)
     setEditorOpen(false)
-    toast.success(`Cenário "${def.label}" salvo`)
+    toast.success(`Scenario "${def.label}" saved`)
   }
 
   const handleRunOnce = async () => {
     // Run from the editor without saving — just executes editSteps
     setEditorOpen(false)
-    await runSteps(editSteps, editLabel || 'Cenário customizado')
+    await runSteps(editSteps, editLabel || 'Custom scenario')
   }
 
   const handleDeleteCustom = (key: string) => {
@@ -272,7 +272,7 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
       return next
     })
     if (scenarioKey === key) setScenarioKey('repos_synced')
-    toast.success('Cenário personalizado removido')
+    toast.success('Custom scenario removed')
   }
 
   const runSteps = async (steps: Step[], label: string) => {
@@ -299,9 +299,9 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
       }
       setRuns(prev => [{ id: runId, label, startedAt, eventCount: steps.length }, ...prev].slice(0, 20))
       setSelectedRunId(runId)
-      toast.success(`Cenário "${label}" executado (${steps.length} eventos) • run ${runId.slice(0, 8)}`)
+      toast.success(`Scenario "${label}" ran (${steps.length} events) · run ${runId.slice(0, 8)}`)
     } catch (err) {
-      toast.error('Erro ao gerar logs simulados')
+      toast.error('Could not create simulated logs')
       console.error(err)
     } finally {
       setRunning(false)
@@ -322,7 +322,7 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
       .filter('metadata->>simulated', 'eq', 'true')
     setClearing(false)
     if (error) {
-      toast.error('Erro ao limpar logs simulados')
+      toast.error('Could not clear simulated logs')
       console.error(error)
     } else {
       toast.success(`${count ?? 0} log(s) simulado(s) removido(s)`)
@@ -358,11 +358,11 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
     }
     setClearing(false)
     if (error) {
-      toast.error('Erro ao limpar logs do run')
+      toast.error('Could not clear the run logs')
       console.error(error)
       return
     }
-    toast.success(`${deletedCount} log(s) do run ${selectedRunId.slice(0, 8)} removido(s)`)
+    toast.success(`${deletedCount} logs removed from run ${selectedRunId.slice(0, 8)}`)
     setRuns(prev => prev.filter(r => r.id !== selectedRunId))
     setSelectedRunId('all')
   }
@@ -375,7 +375,7 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
     })
     setLoadingRuns(false)
     if (error) {
-      if (!silent) toast.error('Erro ao carregar runs do banco (apenas admin)')
+      if (!silent) toast.error('Could not load runs from the database (admin only)')
       console.error(error)
       return
     }
@@ -395,7 +395,7 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
       return [...dbRuns, ...sessionOnly]
     })
     onDbRunsActiveChange?.(true)
-    if (!silent) toast.success(`${dbRuns.length} run(s) carregados do banco`)
+    if (!silent) toast.success(`${dbRuns.length} runs loaded from the database`)
   }
 
   // Auto-restore "loaded from DB" state on back/forward without showing toasts.
@@ -415,7 +415,7 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
       <CardHeader>
         <CardTitle className="text-base flex items-center gap-2">
           <FlaskConical className="h-4 w-4 text-amber-500" />
-          Simulador de Logs
+          Log simulator
           <Badge variant="secondary" className="text-[10px] ml-auto bg-amber-500/15 text-amber-600 border-amber-500/30">
             DEV ONLY
           </Badge>
@@ -424,7 +424,7 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <Label className="text-xs">Cenário</Label>
+            <Label className="text-xs">Scenario</Label>
             <Select value={scenarioKey} onValueChange={setScenarioKey} disabled={running}>
               <SelectTrigger className="h-9">
                 <SelectValue />
@@ -435,26 +435,26 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
                 ))}
                 {Object.keys(customScenarios).length > 0 && (
                   <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground/60 border-t border-border mt-1 pt-2">
-                    Personalizados
+                    Custom
                   </div>
                 )}
                 {Object.entries(customScenarios).map(([key, s]) => (
-                  <SelectItem key={key} value={key}>★ {s.label}</SelectItem>
+                  <SelectItem key={key} value={key}>{s.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Forçar status</Label>
+            <Label className="text-xs">Force status</Label>
             <Select value={statusOverride} onValueChange={(v) => setStatusOverride(v as StatusOverride)} disabled={running}>
               <SelectTrigger className="h-9">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="auto">Automático (do cenário)</SelectItem>
-                <SelectItem value="success">Sucesso</SelectItem>
-                <SelectItem value="error">Erro</SelectItem>
-                <SelectItem value="warning">Aviso</SelectItem>
+                <SelectItem value="auto">Automatic (from scenario)</SelectItem>
+                <SelectItem value="success">Success</SelectItem>
+                <SelectItem value="error">Error</SelectItem>
+                <SelectItem value="warning">Warning</SelectItem>
                 <SelectItem value="info">Info</SelectItem>
               </SelectContent>
             </Select>
@@ -463,7 +463,7 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <Label className="text-xs">Velocidade</Label>
+            <Label className="text-xs">Speed</Label>
             <span className="text-xs text-muted-foreground">{speed[0]}x</span>
           </div>
           <Slider value={speed} onValueChange={setSpeed} min={0.5} max={5} step={0.5} disabled={running} />
@@ -526,7 +526,7 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
         <div className="rounded-lg border border-border bg-secondary/20 p-3 space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
             <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-            <Label className="text-xs">Filtrar por execução (runId)</Label>
+            <Label className="text-xs">Filter by run (runId)</Label>
             {selectedRunId !== 'all' && (
               <Badge variant="secondary" className="font-mono text-[10px]">
                 {selectedRunId.slice(0, 8)}
@@ -541,13 +541,13 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
               {loadingRuns
                 ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                 : <Database className="h-3 w-3 mr-1" />}
-              Carregar do banco
+              Load from database
             </Button>
           </div>
 
           {runs.length === 0 ? (
             <p className="text-[11px] text-muted-foreground py-2">
-              Nenhum run nesta sessão. Execute um cenário ou clique em <strong>Carregar do banco</strong> para listar runs anteriores (admin).
+              No runs in this session. Run a scenario or click <strong>Load from database</strong> to list earlier runs (admin).
             </p>
           ) : (
             <>
@@ -557,13 +557,13 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Todos os runs ({runs.length})</SelectItem>
+                    <SelectItem value="all">All runs ({runs.length})</SelectItem>
                     {runs.map(r => (
                       <SelectItem key={r.id} value={r.id} className="text-xs">
                         <span className="font-mono opacity-60">{r.id.slice(0, 8)}</span>
                         {' · '}{r.label} · {r.eventCount} ev · {new Date(r.startedAt).toLocaleTimeString()}
-                        {r.fromDb && r.mine === false && ' · 👥 outra sessão'}
-                        {r.fromDb && r.mine && ' · 💾 banco'}
+                        {r.fromDb && r.mine === false && ' · other session'}
+                        {r.fromDb && r.mine && ' · database'}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -575,31 +575,31 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
                       disabled={selectedRunId === 'all' || running || clearing}
                       className="h-8 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive text-xs"
                     >
-                      <Trash2 className="h-3 w-3 mr-1" /> Limpar este run
+                      <Trash2 className="h-3 w-3 mr-1" /> Clear this run
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Limpar logs deste run?</AlertDialogTitle>
+                      <AlertDialogTitle>Clear the logs of this run?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Apenas os logs do run <code className="text-xs bg-secondary px-1 py-0.5 rounded font-mono">{selectedRunId.slice(0, 8)}</code> serão removidos.
+                        Only the logs of run <code className="text-xs bg-secondary px-1 py-0.5 rounded font-mono">{selectedRunId.slice(0, 8)}</code> are removed.
                         {runs.find(r => r.id === selectedRunId)?.mine === false && (
                           <span className="block mt-2 text-amber-600">
                             <Users className="h-3 w-3 inline mr-1" />
-                            Este run pertence a outra sessão/usuário. Será removido via privilégio de admin.
+                            This run belongs to another session or user. It is removed with admin rights.
                           </span>
                         )}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel disabled={clearing}>Cancelar</AlertDialogCancel>
+                      <AlertDialogCancel disabled={clearing}>Cancel</AlertDialogCancel>
                       <AlertDialogAction
                         onClick={handleClearByRun}
                         disabled={clearing}
                         className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                       >
                         {clearing ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Trash2 className="h-3.5 w-3.5 mr-1.5" />}
-                        Excluir run
+                        Delete run
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
@@ -607,8 +607,8 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
               </div>
               <p className="text-[10px] text-muted-foreground">
                 {selectedRunId === 'all'
-                  ? 'Mostrando todos os logs do conector. Selecione um run para isolar.'
-                  : 'O painel de logs será filtrado para este runId apenas.'}
+                  ? 'Showing all logs of this connector. Pick a run to see only its logs.'
+                  : 'The log panel shows only this runId.'}
               </p>
             </>
           )}
@@ -617,9 +617,9 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
         <div className="flex flex-col sm:flex-row gap-2">
           <Button onClick={handleRun} disabled={running || clearing} className="flex-1" variant="outline">
             {running ? (
-              <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Gerando logs... ({Math.round(progress)}%)</>
+              <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Creating logs... ({Math.round(progress)}%)</>
             ) : (
-              <><Play className="h-3.5 w-3.5 mr-1.5" /> Executar cenário ({current.steps.length} eventos)</>
+              <><Play className="h-3.5 w-3.5 mr-1.5" /> Run scenario ({current.steps.length} events)</>
             )}
           </Button>
 
@@ -631,25 +631,25 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
                 className="sm:w-auto border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
               >
                 {clearing ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Trash2 className="h-3.5 w-3.5 mr-1.5" />}
-                Limpar simulados
+                Clear simulated
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Limpar logs simulados?</AlertDialogTitle>
+                <AlertDialogTitle>Clear simulated logs?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Apenas os logs gerados pelo simulador (com <code className="text-xs bg-secondary px-1 py-0.5 rounded">simulated: true</code>) serão excluídos deste conector. Logs reais serão preservados.
+                  Only logs created by the simulator (with <code className="text-xs bg-secondary px-1 py-0.5 rounded">simulated: true</code>) are deleted from this connector. Real logs are kept.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel disabled={clearing}>Cancelar</AlertDialogCancel>
+                <AlertDialogCancel disabled={clearing}>Cancel</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={handleClearSimulated}
                   disabled={clearing}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
                   {clearing ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Trash2 className="h-3.5 w-3.5 mr-1.5" />}
-                  Excluir simulados
+                  Delete simulated
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -663,30 +663,30 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="h-4 w-4 text-amber-500" />
-              Editor de Cenário
+              Scenario editor
             </DialogTitle>
             <DialogDescription>
-              Personalize a sequência de eventos. Salve como cenário customizado ou execute uma vez sem salvar.
+              Change the order of events. Save it as a custom scenario or run it once without saving.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">Nome</Label>
+                <Label className="text-xs">Name</Label>
                 <Input value={editLabel} onChange={e => setEditLabel(e.target.value)} className="h-9" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Descrição</Label>
+                <Label className="text-xs">Description</Label>
                 <Input value={editDescription} onChange={e => setEditDescription(e.target.value)} className="h-9" />
               </div>
             </div>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label className="text-xs">Passos ({editSteps.length})</Label>
+                <Label className="text-xs">Steps ({editSteps.length})</Label>
                 <Button variant="ghost" size="sm" onClick={addStep} className="h-7 text-xs">
-                  <Plus className="h-3 w-3 mr-1" /> Adicionar passo
+                  <Plus className="h-3 w-3 mr-1" /> Add step
                 </Button>
               </div>
 
@@ -706,7 +706,7 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
                       <Input
                         value={step.message}
                         onChange={e => updateStep(i, { message: e.target.value })}
-                        placeholder="Mensagem do log"
+                        placeholder="Log message"
                         className="h-8 flex-1 text-xs"
                       />
                       <div className="flex gap-0.5 shrink-0">
@@ -724,7 +724,7 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
 
                     <div className="grid grid-cols-3 gap-2 pl-8">
                       <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">Tipo</Label>
+                        <Label className="text-[10px] text-muted-foreground">Type</Label>
                         <Input
                           value={step.eventType}
                           onChange={e => updateStep(i, { eventType: e.target.value })}
@@ -737,15 +737,15 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
                         <Select value={step.status} onValueChange={(v) => updateStep(i, { status: v as StepStatus })}>
                           <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="success">Sucesso</SelectItem>
-                            <SelectItem value="error">Erro</SelectItem>
-                            <SelectItem value="warning">Aviso</SelectItem>
+                            <SelectItem value="success">Success</SelectItem>
+                            <SelectItem value="error">Error</SelectItem>
+                            <SelectItem value="warning">Warning</SelectItem>
                             <SelectItem value="info">Info</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">Atraso (ms)</Label>
+                        <Label className="text-[10px] text-muted-foreground">Delay (ms)</Label>
                         <Input
                           type="number" min={0} step={100}
                           value={step.delayMs}
@@ -760,7 +760,7 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
 
               {editSteps.length === 0 && (
                 <p className="text-xs text-muted-foreground text-center py-6">
-                  Nenhum passo. Adicione um para começar.
+                  No steps. Add one to start.
                 </p>
               )}
             </div>
@@ -768,13 +768,13 @@ export function LogSimulator({ connectorSlug, onRunFilterChange, initialRunId, d
 
           <DialogFooter className="gap-2 sm:gap-2">
             <Button variant="ghost" onClick={() => setEditorOpen(false)}>
-              <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Cancelar
+              <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Cancel
             </Button>
             <Button variant="outline" onClick={handleRunOnce} disabled={editSteps.length === 0}>
-              <Play className="h-3.5 w-3.5 mr-1.5" /> Executar sem salvar
+              <Play className="h-3.5 w-3.5 mr-1.5" /> Run without saving
             </Button>
             <Button onClick={handleSaveCustom} disabled={editSteps.length === 0 || !editLabel.trim()}>
-              <Save className="h-3.5 w-3.5 mr-1.5" /> Salvar cenário
+              <Save className="h-3.5 w-3.5 mr-1.5" /> Save scenario
             </Button>
           </DialogFooter>
         </DialogContent>

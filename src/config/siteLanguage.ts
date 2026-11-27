@@ -33,6 +33,8 @@ export const ENGLISH_ROUTES: readonly string[] = [
   '/mcp',
   '/leaderboard',
   '/emails',
+  // Admin and internal
+  '/orchestrator',
   // Connectors
   '/connect',
   // Agents
@@ -48,6 +50,8 @@ export const ENGLISH_PREFIXES: readonly string[] = [
   '/fluxos/oauth',
   '/agents',
   '/plan',
+  '/admin',
+  '/pwa/telemetry',
 ]
 
 /** True when the route (without query or hash) is written in English. */

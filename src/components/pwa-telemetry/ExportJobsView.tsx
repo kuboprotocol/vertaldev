@@ -33,12 +33,12 @@ type PermissionError = {
 };
 
 const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: "all", label: "Todos os status" },
-  { value: "pending", label: "Pendente" },
-  { value: "processing", label: "Processando" },
-  { value: "completed", label: "Concluído" },
-  { value: "failed", label: "Falhou" },
-  { value: "cancelled", label: "Cancelado" },
+  { value: "all", label: "All statuses" },
+  { value: "pending", label: "Pending" },
+  { value: "processing", label: "Processing" },
+  { value: "completed", label: "Completed" },
+  { value: "failed", label: "Failed" },
+  { value: "cancelled", label: "Cancelled" },
 ];
 
 const RETRY_DELAY_SECONDS = 10;
@@ -66,8 +66,8 @@ export const ExportJobsView = () => {
       if (!sess.session) {
         setPermError({
           kind: "auth",
-          message: "Sua sessão expirou ou você não está autenticado.",
-          hint: "Faça login novamente para ver seus jobs de exportação.",
+          message: "Your session expired or you are not signed in.",
+          hint: "Sign in again to see your export jobs.",
         });
         setJobs([]);
         return;
@@ -85,8 +85,8 @@ export const ExportJobsView = () => {
         if (code === "42501" || /permission denied/i.test(msg) || /row-level security/i.test(msg)) {
           setPermError({
             kind: "permission",
-            message: "Você não tem permissão para visualizar os jobs de exportação.",
-            hint: "Esta página requer a role admin, analyst ou viewer. Se sua role foi alterada recentemente, recarregue a sessão para aplicar as mudanças.",
+            message: "You do not have permission to see export jobs.",
+            hint: "This page needs the admin, analyst or viewer role. If your role changed recently, reload the session to apply it.",
           });
           setJobs([]);
           return;
@@ -107,8 +107,8 @@ export const ExportJobsView = () => {
     } catch (e) {
       setPermError({
         kind: "network",
-        message: "Não foi possível carregar os jobs.",
-        hint: (e as Error).message || "Verifique sua conexão e tente novamente.",
+        message: "Could not load the jobs.",
+        hint: (e as Error).message || "Check your connection and try again.",
       });
     } finally {
       setLoading(false);
@@ -148,10 +148,10 @@ export const ExportJobsView = () => {
     try {
       const { error } = await supabase.auth.refreshSession();
       if (error) throw error;
-      toast.success("Sessão recarregada. Tentando novamente...");
+      toast.success("Session reloaded. Trying again...");
       await fetchJobs();
     } catch (e) {
-      toast.error(`Falha ao recarregar sessão: ${(e as Error).message}. Tente fazer login novamente.`);
+      toast.error(`Could not reload the session: ${(e as Error).message}. Try signing in again.`);
     } finally {
       setReloading(false);
     }
@@ -160,22 +160,22 @@ export const ExportJobsView = () => {
   const getStatusBadge = (status: ExportJob['status']) => {
     switch (status) {
       case 'completed':
-        return <Badge className="bg-green-500/10 text-green-500 hover:bg-green-500/20 border-green-500/20 gap-1"><CheckCircle2 className="w-3 h-3" /> Concluído</Badge>;
+        return <Badge className="bg-green-500/10 text-green-500 hover:bg-green-500/20 border-green-500/20 gap-1"><CheckCircle2 className="w-3 h-3" /> Completed</Badge>;
       case 'processing':
-        return <Badge className="bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 border-blue-500/20 gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Processando</Badge>;
+        return <Badge className="bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 border-blue-500/20 gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Processing</Badge>;
       case 'pending':
-        return <Badge variant="outline" className="gap-1 text-muted-foreground"><Clock className="w-3 h-3" /> Pendente</Badge>;
+        return <Badge variant="outline" className="gap-1 text-muted-foreground"><Clock className="w-3 h-3" /> Pending</Badge>;
       case 'failed':
-        return <Badge variant="destructive" className="gap-1"><XCircle className="w-3 h-3" /> Falhou</Badge>;
+        return <Badge variant="destructive" className="gap-1"><XCircle className="w-3 h-3" /> Failed</Badge>;
       case 'cancelled':
-        return <Badge variant="secondary" className="gap-1"><AlertCircle className="w-3 h-3" /> Cancelado</Badge>;
+        return <Badge variant="secondary" className="gap-1"><AlertCircle className="w-3 h-3" /> Cancelled</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
   };
 
   const getFilterSummary = (filters: ExportJob['filters']) => {
-    if (!filters || Object.keys(filters).length === 0) return "Sem filtros";
+    if (!filters || Object.keys(filters).length === 0) return "No filters";
     return Object.entries(filters)
       .filter(([_, v]) => v !== null && v !== "" && v !== "all")
       .map(([k, v]) => `${k}:${v}`)
@@ -201,19 +201,19 @@ export const ExportJobsView = () => {
     a.download = `export-jobs-${new Date().toISOString().slice(0, 19)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success(`${filteredJobs.length} job(s) exportado(s) como CSV`);
+    toast.success(`${filteredJobs.length} jobs exported as CSV`);
   };
 
   return (
-    <Card>
+    <Card className="rounded-xl border-white/[0.06] bg-card/50">
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <CardTitle>Jobs de Exportação</CardTitle>
-          <CardDescription>Acompanhe o status das exportações em segundo plano.</CardDescription>
+          <CardTitle>Export jobs</CardTitle>
+          <CardDescription>Status of background exports.</CardDescription>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-8 w-[160px]" aria-label="Filtrar por status">
+            <SelectTrigger className="h-8 w-[160px]" aria-label="Filter by status">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -229,9 +229,9 @@ export const ExportJobsView = () => {
             onClick={handleExportList}
             disabled={filteredJobs.length === 0}
           >
-            <FileDown className="w-3 h-3" /> Exportar lista
+            <FileDown className="w-3 h-3" /> Export list
           </Button>
-          <Button variant="ghost" size="icon" onClick={fetchJobs} disabled={loading} aria-label="Atualizar">
+          <Button variant="ghost" size="icon" onClick={fetchJobs} disabled={loading} aria-label="Refresh">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
         </div>
@@ -241,34 +241,34 @@ export const ExportJobsView = () => {
           <Alert variant={permError.kind === "permission" ? "destructive" : "default"} role="alert">
             <ShieldAlert className="h-4 w-4" />
             <AlertTitle>
-              {permError.kind === "permission" && "Acesso negado"}
-              {permError.kind === "auth" && "Sessão expirada"}
-              {permError.kind === "network" && "Erro ao carregar"}
+              {permError.kind === "permission" && "Access denied"}
+              {permError.kind === "auth" && "Session expired"}
+              {permError.kind === "network" && "Could not load"}
             </AlertTitle>
             <AlertDescription className="space-y-3">
               <p>{permError.message}</p>
               <p className="text-xs opacity-90">{permError.hint}</p>
               {retryIn !== null && (
                 <p className="text-xs font-medium" aria-live="polite">
-                  Nova tentativa automática em <span className="font-mono">{retryIn}s</span>…
+                  Trying again in <span className="font-mono">{retryIn}s</span>…
                 </p>
               )}
               <div className="flex flex-wrap gap-2 pt-2">
                 <Button size="sm" variant="outline" onClick={handleReloadSession} disabled={reloading} className="gap-2">
                   <RefreshCw className={`w-3 h-3 ${reloading ? 'animate-spin' : ''}`} />
-                  Recarregar sessão
+                  Reload session
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => { clearRetryTimer(); fetchJobs(); }} className="gap-2">
-                  Tentar agora
+                  Try now
                 </Button>
                 {retryIn !== null && (
                   <Button size="sm" variant="ghost" onClick={clearRetryTimer}>
-                    Cancelar nova tentativa
+                    Stop retrying
                   </Button>
                 )}
                 {permError.kind === "auth" && (
                   <Button size="sm" variant="default" onClick={() => { window.location.href = "/auth"; }} className="gap-2">
-                    <LogIn className="w-3 h-3" /> Ir para login
+                    <LogIn className="w-3 h-3" /> Go to sign in
                   </Button>
                 )}
               </div>
@@ -276,20 +276,20 @@ export const ExportJobsView = () => {
           </Alert>
         ) : filteredJobs.length === 0 ? (
           <div className="text-center py-10 text-muted-foreground">
-            {loading ? "Carregando jobs…" : statusFilter === "all"
-              ? "Nenhum job de exportação encontrado."
-              : `Nenhum job com status "${STATUS_OPTIONS.find(o => o.value === statusFilter)?.label}".`}
+            {loading ? "Loading jobs..." : statusFilter === "all"
+              ? "No export jobs yet."
+              : `No jobs with status "${STATUS_OPTIONS.find(o => o.value === statusFilter)?.label}".`}
           </div>
         ) : (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Formato</TableHead>
-                  <TableHead>Filtros</TableHead>
-                  <TableHead>Status / Progresso</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Format</TableHead>
+                  <TableHead>Filters</TableHead>
+                  <TableHead>Status and progress</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -327,15 +327,15 @@ export const ExportJobsView = () => {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2 justify-end">
-                        <Button variant="ghost" size="sm" asChild className="h-8 gap-1" title="Ver detalhes">
+                        <Button variant="ghost" size="sm" asChild className="h-8 gap-1" title="See details">
                           <Link to={`/pwa/telemetry/jobs/${job.id}`}>
-                            <ExternalLink className="w-3 h-3" /> Detalhes
+                            <ExternalLink className="w-3 h-3" /> Details
                           </Link>
                         </Button>
                         {job.status === 'completed' && job.result_url && (
                           <Button variant="outline" size="sm" asChild className="h-8 gap-2">
                             <a href={job.result_url} download={`telemetry-${job.id}.${job.format}`} target="_blank" rel="noreferrer">
-                              <Download className="w-3 h-3" /> Baixar
+                              <Download className="w-3 h-3" /> Download
                             </a>
                           </Button>
                         )}
@@ -350,14 +350,14 @@ export const ExportJobsView = () => {
                                   body: { action: "retry", jobId: job.id },
                                 });
                                 if (error) throw error;
-                                toast.success("Job reenviado para processamento");
+                                toast.success("Job sent again for processing");
                                 fetchJobs();
                               } catch (e) {
-                                toast.error(`Falha ao reexecutar: ${(e as Error).message}`);
+                                toast.error(`Could not run again: ${(e as Error).message}`);
                               }
                             }}
                           >
-                            <RefreshCw className="w-3 h-3" /> Reexecutar
+                            <RefreshCw className="w-3 h-3" /> Run again
                           </Button>
                         )}
                       </div>
