@@ -43,7 +43,7 @@ export default function ConnectorsHubPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { openEmbed, openMcp, dialogs } = useEcosystemDialogs()
   const vertalCrmAccess = useVertalCrmAccess()
-  // MetaMask: cartão só para quem o servidor libera (VERTAL_METAMASK_USER_IDS); carregando/erro = escondido.
+  // MetaMask: card only for users the server allows (VERTAL_METAMASK_USER_IDS); loading/error = hidden.
   const metamaskAccess = useVertalWalletAccess()
   const allConnectors = useMemo(
     () => filterMetaMaskByAccess(vertalCrmAccess === 'allowed' ? [CRM_CONNECTOR, ...connectors] : connectors, metamaskAccess),
