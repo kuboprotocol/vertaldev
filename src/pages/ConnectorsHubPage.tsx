@@ -17,6 +17,8 @@ import { getEcosystemProduct, siblingsOf } from '@/lib/ecosystem'
 // Vertal CRM: entra na lista (fixado no topo) só com VITE_VERTAL_CRM ligado e o usuário liberado no servidor.
 import { useVertalCrmAccess } from '@/lib/vertalCrm/client'
 import { VERTAL_CRM_CONNECTOR } from '@/lib/vertalCrm/connector'
+import { useVertalWalletAccess } from '@/lib/vertalWallet/client'
+import { filterMetaMaskByAccess } from '@/lib/vertalWallet/config'
 import { useVertalPageTitle, vertalConnectorsTitle } from '@/lib/vertalCrm/pageTitle'
 
 type Availability = 'all' | 'available' | 'coming_soon'
@@ -41,9 +43,11 @@ export default function ConnectorsHubPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { openEmbed, openMcp, dialogs } = useEcosystemDialogs()
   const vertalCrmAccess = useVertalCrmAccess()
+  // MetaMask: cartão só para quem o servidor libera (VERTAL_METAMASK_USER_IDS); carregando/erro = escondido.
+  const metamaskAccess = useVertalWalletAccess()
   const allConnectors = useMemo(
-    () => (vertalCrmAccess === 'allowed' ? [CRM_CONNECTOR, ...connectors] : connectors),
-    [vertalCrmAccess],
+    () => filterMetaMaskByAccess(vertalCrmAccess === 'allowed' ? [CRM_CONNECTOR, ...connectors] : connectors, metamaskAccess),
+    [vertalCrmAccess, metamaskAccess],
   )
   // Vertal CRM: título da aba "Conectores" (só para quem tem o CRM liberado; os demais ficam como estão).
   useVertalPageTitle(vertalCrmAccess === 'allowed' ? vertalConnectorsTitle() : null)
