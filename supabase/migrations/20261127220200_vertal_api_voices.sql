@@ -52,6 +52,10 @@ drop policy if exists "vertal_api_voice_jobs: dono lê" on public.vertal_api_voi
 create policy "vertal_api_voice_jobs: dono lê" on public.vertal_api_voice_jobs for select to authenticated using (owner_id = auth.uid());
 revoke insert, update, delete on public.vertal_api_voices from anon, authenticated;
 revoke insert, update, delete on public.vertal_api_voice_jobs from anon, authenticated;
+grant select on table public.vertal_api_voices to authenticated;
+grant select on table public.vertal_api_voice_jobs to authenticated;
+grant all on table public.vertal_api_voices to service_role;
+grant all on table public.vertal_api_voice_jobs to service_role;
 
 -- Ledger da cobrança v2: aceitar os tipos de voz (só se a tabela já existir).
 do $$
