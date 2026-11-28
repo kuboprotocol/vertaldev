@@ -92,6 +92,14 @@ export const CONNECTOR_FLAGGED = [
 ];
 export const VERTAL_AI_LINE = /vertalAi|VertalAi|VERTAL_AI|vertal_ai|Vertal AI/;
 
+/**
+ * Busca de documentação na web do Vibe Code (VERTAL_VIBE_WEB_SEARCH_ENABLED, desligada por padrão).
+ * Mesma regra: só linhas NOVAS no motor, e toda linha nova tem que ser da busca (VIBE_WEB_LINE).
+ * Lista fechada; coberta por src/test/vibe-web-docs.test.ts ("engine guard").
+ */
+export const VIBE_WEB_FLAGGED = ['supabase/functions/vibe-code-agent/index.ts'];
+export const VIBE_WEB_LINE = /vibeWebDocs|VibeWebDocs|VIBE_WEB_SEARCH/;
+
 const git = (args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 
 export const isProtected = (f) => PROTECTED.some((p) => f === p || f.startsWith(`${p}/`));
@@ -104,7 +112,8 @@ export function checkEngine(base = 'origin/main') {
   const violations = [];
   for (const f of changed) {
     const connector = CONNECTOR_FLAGGED.includes(f);
-    const flagged = FLAGGED.includes(f) || connector;
+    const vibeWeb = VIBE_WEB_FLAGGED.includes(f);
+    const flagged = FLAGGED.includes(f) || connector || vibeWeb;
     if (!flagged && !isProtected(f)) continue;
     if (!flagged) {
       violations.push(`arquivo do motor alterado: ${f}`);
@@ -114,7 +123,7 @@ export function checkEngine(base = 'origin/main') {
     for (const l of diff) {
       if (l.startsWith('+++') || l.startsWith('---')) continue;
       if (l.startsWith('-')) violations.push(`${f}: linha existente removida/alterada: ${l.slice(1).trim().slice(0, 120)}`);
-      else if (l.startsWith('+') && l.slice(1).trim() && !((connector && VERTAL_AI_LINE.test(l)) || (FLAGGED.includes(f) && VCA_LINE.test(l)))) violations.push(`${f}: linha nova fora do ${connector ? 'conector Vertal AI' : 'VERTAL Code AI'}: ${l.slice(1).trim().slice(0, 120)}`);
+      else if (l.startsWith('+') && l.slice(1).trim() && !((connector && VERTAL_AI_LINE.test(l)) || (vibeWeb && VIBE_WEB_LINE.test(l)) || (FLAGGED.includes(f) && VCA_LINE.test(l)))) violations.push(`${f}: linha nova fora do ${connector || vibeWeb ? 'conector Vertal AI / busca na web do Vibe Code' : 'VERTAL Code AI'}: ${l.slice(1).trim().slice(0, 120)}`);
     }
   }
   return { mergeBase, changed, violations };
