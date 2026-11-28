@@ -104,6 +104,8 @@ import { applyVertalAiToRequirements, isVertalAiPath, vertalAiFilesFor, vertalAi
 import { vertalAiForRequest } from "../_shared/vertalAiConnectorStore.ts";
 import { vertalAiAwarenessFor } from "../_shared/vertalAiChatStore.ts"; // Vertal AI: conectores do Dev (só nomes/status)
 import { sanitizeVertalAiReply, vertalAiFixEnvNames } from "../_shared/vertalAiChat.ts"; // Vertal AI: nunca pedir chave/env à mão
+import { vibeWebDocsForRequest } from "../_shared/vibeWebDocsStore.ts"; // VIBE_WEB_SEARCH: docs na web antes de gerar (flag desligada por padrão)
+import { vibeWebDocsMessages } from "../_shared/vibeWebDocs.ts"; // VIBE_WEB_SEARCH: docs entram como DADOS, em mensagem separada
 
 /**
  * Ponte Vibe Code → Vertal Chat: pergunta ao creative-router (tool agent_chat,
@@ -1201,6 +1203,7 @@ Deno.serve(async (req) => {
         const vertalAi = await vertalAiForRequest(admin, Deno.env.toObject(), { userId, projectId, prompt, request: body.vertalAi }).catch(() => ({ state: { mode: "off" as const } })); // Vertal AI
         for (const st of vertalAiSteps(vertalAi.state, vertalAi).filter((x) => x.status !== "success" || x.vertalAi.created)) send(st);
         const vertalAiAwareness = await vertalAiAwarenessFor(admin, Deno.env.toObject(), userId, projectId, connected).catch(() => ""); // Vertal AI: flag off → "" sem banco
+        const vibeWebDocs = await vibeWebDocsForRequest(Deno.env.toObject(), { userId, prompt, send }).catch(() => ({ block: "", sources: [] })); // VIBE_WEB_SEARCH: flag off → vazio, sem rede
 
         // Atitude Vertal: soma a personalidade ao protocolo (JSON e regras intactos).
         // Ligada para todos por padrão; VERTAL_PERSONA_ENABLED=off desliga sem deploy.
@@ -1239,6 +1242,7 @@ Deno.serve(async (req) => {
         const messages: ChatMsg[] = [
           { role: "system", content: system },
           ...history,
+          ...vibeWebDocsMessages(vibeWebDocs.block), // VIBE_WEB_SEARCH: documentação como DADOS (nunca instrução)
           { role: "user", content: prompt + treeBlock },
         ];
 
