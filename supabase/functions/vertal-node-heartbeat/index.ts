@@ -11,7 +11,7 @@
 //   reward_events.metadata.provider.
 // GET ?action=summary -> créditos ganhos compartilhando internet (ledger reward_events), dispositivos
 //   e o último consentimento dado no site ({ accepted, consent_version, at } | null). Tolera as tabelas
-//   ainda não criadas (migração 20261128010000 pendente): devolve listas vazias em vez de 500.
+//   ainda não criadas (migração 20261128020000 pendente): devolve listas vazias em vez de 500.
 // POST ?action=consent -> { accept: boolean, consent_version, platform: "android"|"desktop"|"ios"|"other" }
 //   Registra (append-only, vertal_node_consents) o aceite/revogação do botão "Accept & activate" do
 //   card em /recompensas. Não liga nada no aparelho: o app ainda mostra a tela de consentimento do SDK.

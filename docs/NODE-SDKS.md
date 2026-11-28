@@ -207,7 +207,7 @@ Os apps chamam `POST /functions/v1/vertal-node-heartbeat` com o token do usuári
 ---
 
 ## Deploy (quando aprovar)
-1. Migração `20261128010000_vertal_node_providers_and_consent.sql` (aditiva; substitui a arquivada
+1. Migração `20261128020000_vertal_node_providers_and_consent.sql` (aditiva; substitui a arquivada
    `20261124210000`, que renomeava `honeygain_nodes` e tirava `kubo_music` da CHECK do ledger). Entra
    em produção pela integração Supabase ao fazer merge na `main`.
 2. Publicar as funções `rewarded-video-claim` e `vertal-node-heartbeat` (com verificação de JWT).
