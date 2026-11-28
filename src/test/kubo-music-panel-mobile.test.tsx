@@ -70,6 +70,7 @@ vi.mock('@/lib/spotifyEmbed', async (importOriginal) => {
 })
 
 import KuboMusicPanel from '@/components/shortlinks/KuboMusicPanel'
+import { reportMusicProgress } from '@/lib/dailyRewards'
 
 const IPHONE =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'
@@ -188,5 +189,130 @@ describe('KuboMusicPanel no computador', () => {
     })
     expect(fake.controller!.loadUri).toHaveBeenCalledWith('spotify:track:trackB')
     expect(fake.controller!.play).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ---- Android/Chrome (27/11/2026): prévia de ~15 s, fim sem "pausado", travas, áudio próprio ----
+
+const PIXEL_INSTAGRAM =
+  'Mozilla/5.0 (Linux; Android 14; Pixel 7 Build/UQ1A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/131.0.0.0 Mobile Safari/537.36 Instagram 350.0'
+
+const upd = (position: number, duration: number, isPaused = false, uri = 'spotify:track:trackA') => ({
+  position,
+  duration,
+  isPaused,
+  isBuffering: false,
+  playingURI: uri,
+})
+
+describe('KuboMusicPanel no Android (prévia do Spotify)', () => {
+  it('prévia de 15 s: mostra o aviso, a meta vira 13 s e o relatório leva preview_seconds', async () => {
+    setUserAgent(ANDROID)
+    const now = vi.spyOn(Date, 'now')
+    let t = 1_000_000
+    now.mockImplementation(() => t)
+    await mount()
+    const c = fake.controller!
+    await act(async () => {
+      for (let p = 0; p <= 15_224; p += 1000) {
+        c.emit('playback_update', upd(Math.min(p, 15_224), 15_224))
+        t += 1000
+      }
+      await Promise.resolve()
+    })
+    expect(screen.getByTestId('kubo-preview-hint')).toHaveTextContent(/15-second preview/)
+    expect(screen.getByTestId('kubo-track-trackB')).toHaveTextContent('0/13s')
+    const calls = vi.mocked(reportMusicProgress).mock.calls
+    expect(calls.length).toBeGreaterThan(0)
+    expect(calls[calls.length - 1][2]).toBeCloseTo(15.224, 2)
+    now.mockRestore()
+  })
+
+  it('fim da prévia SEM isPaused (como o embed real): avança para a próxima e pede o toque', async () => {
+    setUserAgent(ANDROID)
+    await mount()
+    const c = fake.controller!
+    await act(async () => {
+      c.emit('playback_update', upd(14_000, 15_224))
+      c.emit('playback_update', upd(15_224, 15_224))
+      c.emit('playback_update', upd(15_224, 15_224))
+      for (let i = 0; i < 6; i++) await Promise.resolve()
+    })
+    expect(c.loadUri).toHaveBeenCalledWith('spotify:track:trackB')
+    expect(c.loadUri).toHaveBeenCalledTimes(1)
+    expect(c.play).not.toHaveBeenCalled()
+    expect(screen.getByTestId('kubo-tap-hint')).toHaveTextContent(/Next song loaded/)
+  })
+
+  it('"tocando" sem a posição andar por 5 s: mostra o aviso de player travado', async () => {
+    setUserAgent(ANDROID)
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      await mount()
+      const c = fake.controller!
+      await act(async () => {
+        c.emit('playback_update', upd(1000, 15_224))
+        c.emit('playback_update', upd(1000, 15_224))
+      })
+      expect(screen.queryByTestId('kubo-stalled-hint')).toBeNull()
+      await act(async () => {
+        vi.advanceTimersByTime(6000)
+      })
+      expect(screen.getByTestId('kubo-stalled-hint')).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('navegador dentro de app (WebView/Instagram): pede para abrir no Chrome', async () => {
+    setUserAgent(PIXEL_INSTAGRAM)
+    await mount()
+    expect(screen.getByTestId('kubo-inapp-hint')).toHaveTextContent(/open vertal.dev\/recompensas in Chrome/)
+  })
+
+  it('Chrome normal: sem aviso de app', async () => {
+    setUserAgent(ANDROID)
+    await mount()
+    expect(screen.queryByTestId('kubo-inapp-hint')).toBeNull()
+    expect(screen.getByTestId('kubo-player-status')).toHaveTextContent(/Spotify/)
+  })
+})
+
+describe('KuboMusicPanel com áudio próprio (flag)', () => {
+  it('modo "mobile" no Android: usa <audio> com o MP3 do Storage e o toque na faixa dá play()', async () => {
+    setUserAgent(ANDROID)
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(() => Promise.resolve())
+    render(<KuboMusicPanel checklist={null} ownAudioMode="mobile" />)
+    await act(async () => {
+      await Promise.resolve()
+    })
+    const audio = screen.getByTestId('kubo-own-audio') as HTMLAudioElement
+    expect(audio.getAttribute('src')).toMatch(/\/storage\/v1\/object\/public\/kubo-music\/trackA\.mp3$/)
+    expect(screen.queryByTestId('kubo-spotify-embed')).toBeNull()
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('kubo-track-trackB'))
+    })
+    expect(play).toHaveBeenCalled()
+    expect(audio.src).toMatch(/kubo-music\/trackB\.mp3$/)
+    play.mockRestore()
+  })
+
+  it('MP3 indisponível: volta para o player do Spotify', async () => {
+    setUserAgent(ANDROID)
+    render(<KuboMusicPanel checklist={null} ownAudioMode="all" />)
+    await act(async () => {
+      fireEvent.error(screen.getByTestId('kubo-own-audio'))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(screen.queryByTestId('kubo-own-audio')).toBeNull()
+    expect(screen.getByTestId('kubo-spotify-embed')).toBeInTheDocument()
+    expect(screen.getByTestId('kubo-own-audio-fallback')).toBeInTheDocument()
+  })
+
+  it('modo "mobile" no computador: continua no Spotify', async () => {
+    setUserAgent(DESKTOP)
+    render(<KuboMusicPanel checklist={null} ownAudioMode="mobile" />)
+    expect(screen.queryByTestId('kubo-own-audio')).toBeNull()
   })
 })

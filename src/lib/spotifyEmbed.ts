@@ -174,3 +174,52 @@ export function hardenSpotifyIframe(host: ParentNode | null): HTMLIFrameElement 
 
 /** Link público da faixa (fallback "Open in Spotify"). */
 export const spotifyTrackUrl = (trackId: string) => `https://open.spotify.com/track/${trackId}`;
+
+// ---------------------------------------------------------------------------
+// Prévia (sem login no Spotify naquele navegador): no celular é sempre assim.
+// Medido em 27/11/2026 (Chromium com perfil de Pixel 7): as faixas do Kubo tocam ~15 s de prévia
+// (playback_update.duration 15–29 s) e, no fim, o embed fica parado em position == duration com
+// isPaused = false (nunca manda "pausado"). Por isso o fim é detectado pela posição.
+// ---------------------------------------------------------------------------
+
+/** Menor tempo real que conta uma faixa em modo prévia (igual ao servidor, KUBO_PREVIEW_MIN_SECONDS). */
+export const KUBO_PREVIEW_MIN_SECONDS = 12;
+
+/** Duração (s) da prévia, ou null quando o player está tocando a faixa inteira. */
+export function previewSecondsFrom(durationMs: number | undefined, minSeconds: number): number | null {
+  if (!durationMs || durationMs <= 0) return null;
+  const s = durationMs / 1000;
+  return s >= 5 && s < minSeconds ? s : null;
+}
+
+/** Quantos segundos a faixa precisa tocar para contar (mesma conta do servidor, sem a folga de 2 s). */
+export function countTargetSeconds(minSeconds: number, previewSeconds: number | null): number {
+  if (previewSeconds === null) return minSeconds;
+  return Math.min(minSeconds, Math.max(KUBO_PREVIEW_MIN_SECONDS, Math.floor(previewSeconds) - 2));
+}
+
+/** A faixa (ou a prévia) chegou ao fim: o embed para em position == duration sem dizer "pausado". */
+export function isAtEnd(position: number, durationMs: number): boolean {
+  return durationMs > 0 && position >= durationMs - 400;
+}
+
+/** Navegador dentro de outro app (WebView do Android, Instagram, Facebook, WhatsApp, TikTok...). */
+export function isInAppBrowser(userAgent: string | undefined): boolean {
+  const ua = userAgent ?? "";
+  return /; wv\)|FBAN|FBAV|FB_IAB|Instagram|WhatsApp|Line\/|TikTok|musical_ly|Snapchat|Twitter|GSA\//i.test(ua);
+}
+
+/**
+ * "Tocando" mas a posição não anda há `stallMs` (e não é o fim da faixa): o player travou ou o
+ * navegador não está tocando o áudio de verdade.
+ */
+export function isStalled(
+  last: { position: number; duration: number; wallMs: number; playing: boolean } | null,
+  lastAdvanceWallMs: number | null,
+  nowMs: number,
+  stallMs = 5000,
+): boolean {
+  if (!last || !last.playing || lastAdvanceWallMs === null) return false;
+  if (isAtEnd(last.position, last.duration)) return false;
+  return nowMs - lastAdvanceWallMs >= stallMs;
+}

@@ -8,7 +8,9 @@
 // Ações (query ?action= ou campo "action" no corpo):
 //   status        -> checklist do dia (vídeo, músicas faixa a faixa, TERRA ADS, créditos pendentes/liberados)
 //   music-start   -> { track_id } abre uma sessão de escuta (nonce); fecha as outras do usuário
-//   music-report  -> { nonce, listened_seconds } tempo de reprodução real acumulado nessa sessão.
+//   music-report  -> { nonce, listened_seconds, preview_seconds? } tempo de reprodução real acumulado
+//                    nessa sessão. preview_seconds = duração da prévia do Spotify (sem login no navegador,
+//                    ~15 s no celular): aí a faixa conta com a prévia inteira (musicThresholdSeconds).
 //                    O servidor aceita no máximo o tempo de relógio desde o music-start (+2 s) e a
 //                    duração da faixa; repetir o mesmo valor não soma de novo.
 //   terra-unavailable -> { reason: script_error|no_fill_timeout|panel_error, waited_seconds? } o anúncio
@@ -21,7 +23,7 @@
 // KUBO_MUSIC_MIN_REPORT_INTERVAL_SECONDS (2); KUBO_MUSIC_MAX_STARTS_PER_HOUR (60).
 import { sanitizeError } from "../_shared/cors.ts";
 import { adminClient, authUserId, json, readJson, rewardsCors } from "../_shared/rewardsHttp.ts";
-import { isValidNonce, REWARDS_TZ } from "../_shared/rewardsCore.ts";
+import { isValidNonce, musicThresholdSeconds, parsePreviewSeconds, REWARDS_TZ } from "../_shared/rewardsCore.ts";
 
 function intEnv(name: string, fallback: number, min: number, max: number): number {
   const n = Number.parseInt(Deno.env.get(name) ?? "", 10);
@@ -89,9 +91,9 @@ Deno.serve(async (req) => {
         _user_id: userId,
         _nonce: body.nonce,
         _listened_seconds: Math.round(listened * 100) / 100,
-        // 2 s de tolerância: os eventos do player chegam em intervalos, e a prévia de quem não está
-        // logado no Spotify tem ~30 s cravados (mediria 29,x s).
-        _threshold_seconds: Math.max(1, threshold - 2),
+        // 2 s de tolerância: os eventos do player chegam em intervalos. Prévia do Spotify (sem login,
+        // 15–29 s): conta com a prévia inteira; ver musicThresholdSeconds em _shared/rewardsCore.ts.
+        _threshold_seconds: musicThresholdSeconds(threshold, parsePreviewSeconds(body.preview_seconds, threshold)),
         _amount: intEnv("KUBO_MUSIC_CREDITS", 1, 0, 100),
         _min_report_interval_seconds: intEnv("KUBO_MUSIC_MIN_REPORT_INTERVAL_SECONDS", 2, 0, 60),
         _tz: REWARDS_TZ,
