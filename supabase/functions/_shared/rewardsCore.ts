@@ -243,3 +243,31 @@ export function parseHeartbeat(
 export function sumCredits(rows: { credits: number }[]): number {
   return rows.reduce((acc, r) => acc + (Number.isFinite(Number(r.credits)) ? Number(r.credits) : 0), 0);
 }
+
+// ---------------------------------------------------------------------------
+// Músicas do Kubo: prévia do Spotify.
+//
+// Quem não está logado no Spotify naquele navegador (quase todo celular, inclusive Chrome no
+// Android) ouve só uma PRÉVIA, e ela é mais curta que 30 s: medido em 27/11/2026 pelo
+// playback_update do embed, as 5 faixas tocavam 15 s (duração da prévia 15–29 s). Com o limite
+// fixo de 30 s (28 com a folga) a faixa nunca contava no celular. Agora, quando o navegador
+// informa que está tocando uma prévia, o limite é a prévia inteira (menos 2 s de folga), com piso.
+// O tempo continua limitado pelo relógio do servidor desde o music-start.
+// ---------------------------------------------------------------------------
+
+/** Menor tempo real que conta uma faixa em modo prévia. */
+export const KUBO_PREVIEW_MIN_SECONDS = 12;
+
+/** Lê `preview_seconds` do corpo: só vale entre 5 s e o limite normal (prévias são curtas). */
+export function parsePreviewSeconds(value: unknown, threshold: number): number | null {
+  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isFinite(n) || n < 5 || n >= threshold) return null;
+  return n;
+}
+
+/** Limite (s) que o servidor usa para contar a faixa, com 2 s de folga dos eventos do player. */
+export function musicThresholdSeconds(threshold: number, previewSeconds: number | null): number {
+  const full = Math.max(1, threshold - 2);
+  if (previewSeconds === null) return full;
+  return Math.min(full, Math.max(KUBO_PREVIEW_MIN_SECONDS, Math.floor(previewSeconds) - 2));
+}

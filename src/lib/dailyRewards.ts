@@ -108,8 +108,13 @@ export interface TerraUnavailableResult {
 export const fetchDailyChecklist = () => callDailyRewards<DailyChecklist>("status");
 export const startMusicSession = (trackId: string) =>
   callDailyRewards<MusicStartResult>("music-start", { track_id: trackId });
-export const reportMusicProgress = (nonce: string, listenedSeconds: number) =>
-  callDailyRewards<MusicReportResult>("music-report", { nonce, listened_seconds: listenedSeconds });
+/** `previewSeconds`: duração da prévia do Spotify (sem login), para o servidor contar a prévia inteira. */
+export const reportMusicProgress = (nonce: string, listenedSeconds: number, previewSeconds?: number | null) =>
+  callDailyRewards<MusicReportResult>("music-report", {
+    nonce,
+    listened_seconds: listenedSeconds,
+    ...(previewSeconds ? { preview_seconds: Math.round(previewSeconds * 10) / 10 } : {}),
+  });
 
 /**
  * Fecha o passo legado "TERRA" do checklist com vídeo extra: o anúncio não existe mais no site, então o
