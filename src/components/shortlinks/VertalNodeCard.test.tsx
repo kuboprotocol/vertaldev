@@ -187,3 +187,71 @@ describe('VertalNodeCard', () => {
     })
   })
 })
+
+describe('VertalNodeCard dentro do app nativo (SDK embutido)', () => {
+  function bridgeMock(activate: Record<string, unknown>) {
+    return {
+      kind: 'capacitor' as const,
+      status: vi.fn().mockResolvedValue({ available: true, optedIn: false, running: false, paused: false }),
+      activate: vi.fn().mockResolvedValue(activate),
+      pause: vi.fn().mockResolvedValue({ available: true, optedIn: true, running: false, paused: true }),
+      optOut: vi.fn().mockResolvedValue({ available: true, optedIn: false, running: false, paused: true }),
+    }
+  }
+  function mockConsent() {
+    invoke.mockImplementation((name: string, opts?: { body?: { accept?: boolean } }) =>
+      Promise.resolve(
+        name.includes('action=consent')
+          ? { data: { ok: true, consent: { accepted: opts?.body?.accept !== false, consent_version: VERTAL_NODE_CONSENT_VERSION, at: 'now' } }, error: null }
+          : { data: { daily_credits: 2, total_credits: 0, active_days: 0, credited_today: false, devices: [], consent: null }, error: null },
+      ),
+    )
+  }
+
+  it('nada liga antes do toque; depois do aceite grava o consentimento e chama o SDK (sem abrir o APK)', async () => {
+    mockConsent()
+    const openUrl = vi.fn()
+    const embedded = bridgeMock({ available: true, optedIn: true, running: true, paused: false, accepted: true })
+    render(<VertalNodeCard platform="android" openUrl={openUrl} embedded={embedded} />)
+    await waitFor(() => expect(embedded.status).toHaveBeenCalled())
+    expect(embedded.activate).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('vertal-node-android')).toBeNull()
+    fireEvent.click(await screen.findByTestId('vertal-node-accept'))
+    expect(embedded.activate).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByTestId('vertal-node-confirm'))
+    await waitFor(() => expect(embedded.activate).toHaveBeenCalledTimes(1))
+    expect(invoke).toHaveBeenCalledWith('vertal-node-heartbeat?action=consent', {
+      method: 'POST',
+      body: { action: 'consent', accept: true, consent_version: VERTAL_NODE_CONSENT_VERSION, platform: 'android' },
+    })
+    expect(openUrl).not.toHaveBeenCalled()
+    expect(await screen.findByTestId('vertal-node-notice')).toHaveTextContent(/Vertal Node is on/)
+    expect(screen.getByTestId('vertal-node-embedded-controls')).toBeInTheDocument()
+  })
+
+  it('recusou a tela do parceiro: avisa que nada ligou', async () => {
+    mockConsent()
+    const embedded = bridgeMock({ available: true, optedIn: false, running: false, paused: false, accepted: false })
+    render(<VertalNodeCard platform="android" embedded={embedded} />)
+    fireEvent.click(await screen.findByTestId('vertal-node-accept'))
+    fireEvent.click(screen.getByTestId('vertal-node-confirm'))
+    expect(await screen.findByTestId('vertal-node-notice')).toHaveTextContent(/nothing was turned on/)
+    expect(screen.queryByTestId('vertal-node-embedded-controls')).toBeNull()
+  })
+
+  it('Turn off: opt-out no SDK e revogação gravada', async () => {
+    mockConsent()
+    const embedded = bridgeMock({ available: true, optedIn: true, running: true, paused: false, accepted: true })
+    render(<VertalNodeCard platform="android" embedded={embedded} />)
+    fireEvent.click(await screen.findByTestId('vertal-node-accept'))
+    fireEvent.click(screen.getByTestId('vertal-node-confirm'))
+    fireEvent.click(await screen.findByTestId('vertal-node-optout'))
+    await waitFor(() => expect(embedded.optOut).toHaveBeenCalledTimes(1))
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('vertal-node-heartbeat?action=consent', {
+        method: 'POST',
+        body: { action: 'consent', accept: false, consent_version: VERTAL_NODE_CONSENT_VERSION, platform: 'android' },
+      }),
+    )
+  })
+})

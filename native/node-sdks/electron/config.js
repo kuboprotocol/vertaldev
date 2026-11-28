@@ -22,7 +22,23 @@ function required(env, name) {
   return String(v).trim();
 }
 
-function makeConfig(env = process.env) {
+/**
+ * Chaves gravadas NO BUILD por scripts/inject-build-config.js (build-config.json, gitignored, vai
+ * dentro do pacote do app). No app instalado não há variável de ambiente: a chave vem daqui.
+ */
+const BUILD_CONFIG_FILE = require("node:path").join(__dirname, "build-config.json");
+function loadBuildConfig(file = BUILD_CONFIG_FILE) {
+  try {
+    const data = JSON.parse(require("node:fs").readFileSync(file, "utf8"));
+    return data && typeof data === "object" ? data : {};
+  } catch {
+    return {};
+  }
+}
+
+function makeConfig(env = process.env, build = loadBuildConfig()) {
+  // Variável de ambiente (desenvolvimento) tem prioridade; no app empacotado vale o build-config.json.
+  env = { ...build, ...Object.fromEntries(Object.entries(env).filter(([, v]) => v !== undefined && v !== "")) };
   return {
     /** Provedor ativo neste dispositivo (só um por vez). */
     provider: () => String(env.NODE_SDK_PROVIDER || DEFAULT_PROVIDER).trim().toLowerCase(),
@@ -42,4 +58,4 @@ function makeConfig(env = process.env) {
   };
 }
 
-module.exports = { ...makeConfig(), makeConfig, API_KEY_ENV, DEFAULT_PROVIDER };
+module.exports = { ...makeConfig(), makeConfig, loadBuildConfig, API_KEY_ENV, DEFAULT_PROVIDER, BUILD_CONFIG_FILE };

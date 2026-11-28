@@ -1,0 +1,66 @@
+// Plugin Capacitor do Vertal Node (Android). Embute o Cash Raven SDK 4.1.4 no app gerado.
+// Chave: CASHRAVEN_API_KEY_ANDROID (propriedade Gradle ou variável de ambiente NO BUILD); vazia =
+// plugin responde "api_key_missing" e nada roda. Nunca commitar a chave.
+// O app que usa o plugin precisa do repositório Maven da Cash Raven em android/build.gradle
+// (allprojects.repositories): maven { url "https://cashraven-downloads.nyc3.digitaloceanspaces.com/maven" }
+ext {
+    junitVersion = project.hasProperty('junitVersion') ? rootProject.ext.junitVersion : '4.13.2'
+    androidxAppCompatVersion = project.hasProperty('androidxAppCompatVersion') ? rootProject.ext.androidxAppCompatVersion : '1.7.1'
+}
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.13.0'
+    }
+}
+
+apply plugin: 'com.android.library'
+
+def cashravenKey = (project.findProperty('CASHRAVEN_API_KEY_ANDROID') ?: System.getenv('CASHRAVEN_API_KEY_ANDROID') ?: '').toString().trim()
+
+android {
+    namespace = "dev.vertal.node.capacitor"
+    compileSdk = project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 36
+    defaultConfig {
+        minSdkVersion project.hasProperty('minSdkVersion') ? rootProject.ext.minSdkVersion : 24 // Cash Raven: 24
+        targetSdkVersion project.hasProperty('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 36
+        buildConfigField "String", "CASHRAVEN_API_KEY", "\"${cashravenKey.replace('\\', '\\\\').replace('"', '\\"')}\""
+        consumerProguardFiles 'proguard-rules.pro'
+    }
+    buildFeatures {
+        buildConfig = true
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+    lint {
+        abortOnError = false
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+    // Cash Raven SDK (io.cashraven:cr-sdk)
+    maven { url = "https://cashraven-downloads.nyc3.digitaloceanspaces.com/maven" }
+}
+
+dependencies {
+    implementation project(':capacitor-android')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation 'io.cashraven:cr-sdk:4.1.4'
+    implementation 'net.java.dev.jna:jna:5.14.0@aar'
+    // cr-sdk é Kotlin (metadata 1.9) e o POM não declara a stdlib
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.24'
+    testImplementation "junit:junit:$junitVersion"
+}

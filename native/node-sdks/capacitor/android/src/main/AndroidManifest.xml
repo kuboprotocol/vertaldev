@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Plugin Vertal Node (Cash Raven SDK 4.1.4). O cr-sdk.aar já traz INTERNET, ACCESS_NETWORK_STATE, o
+     io.cashraven.sdk.CashRavenService (foregroundServiceType="dataSync") e o CrBootReceiver DESLIGADO.
+     Aqui: permissões do serviço em primeiro plano, notificação (pedida em tempo de execução) e boot
+     (o receiver só é ligado por setStartOnBoot(true) depois que o usuário aceitou e ativou). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <application>
+        <!-- Cria o cliente do SDK na partida do processo (o serviço e o boot precisam dele configurado).
+             Só cria; nunca pede consentimento nem inicia. -->
+        <provider
+            android:name="dev.vertal.node.capacitor.VertalNodeInitProvider"
+            android:authorities="${applicationId}.vertalnode-init"
+            android:exported="false"
+            android:initOrder="50" />
+    </application>
+</manifest>

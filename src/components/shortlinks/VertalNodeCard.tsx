@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Download, Power, Smartphone, Wifi } from "lucide-react";
+import { CheckCircle2, Download, Pause, Power, PowerOff, Smartphone, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,6 +16,7 @@ import {
   VERTAL_NODE_CONSENT_VERSION,
   type NodePlatform,
 } from "@/lib/vertalNode";
+import { getEmbeddedNodeBridge, type EmbeddedNodeBridge, type EmbeddedNodeState } from "@/lib/vertalNodeEmbedded";
 
 /** Resposta de `vertal-node-heartbeat?action=summary`. */
 export interface NodeSummary {
@@ -58,6 +59,7 @@ export default function VertalNodeCard({
   partner = envText(import.meta.env.VITE_VERTAL_NODE_PARTNER),
   platform,
   openUrl = (url: string) => window.location.assign(url),
+  embedded,
 }: {
   desktopUrl?: string | null;
   androidUrl?: string | null;
@@ -66,11 +68,31 @@ export default function VertalNodeCard({
   platform?: NodePlatform;
   /** Navegação para o app/download (testes). */
   openUrl?: (url: string) => void;
+  /**
+   * SDK embutido no app nativo (Capacitor Android / Electron). Padrão: detectado, e só com
+   * VITE_VERTAL_NODE_EMBEDDED_SDK=true. null = sempre o fluxo do app separado.
+   */
+  embedded?: EmbeddedNodeBridge | null;
 }) {
   const [summary, setSummary] = useState<NodeSummary | null>(null);
   const [step, setStep] = useState<Step>("idle");
   const [notice, setNotice] = useState<string | null>(null);
   const device = useMemo(() => platform ?? detectNodePlatform(), [platform]);
+  const bridge = useMemo(() => (embedded === undefined ? getEmbeddedNodeBridge() : embedded), [embedded]);
+  const [local, setLocal] = useState<EmbeddedNodeState | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!bridge) return;
+    let alive = true;
+    bridge
+      .status()
+      .then((s) => alive && setLocal(s))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [bridge]);
 
   const refresh = useCallback(async () => {
     try {
@@ -108,6 +130,62 @@ export default function VertalNodeCard({
     }
   }, [androidUrl, desktopUrl, device, openUrl]);
 
+  /** App nativo com o SDK embutido: consentimento do parceiro e serviço com notificação/bandeja. */
+  const runEmbedded = useCallback(async (): Promise<string> => {
+    if (!bridge) return "";
+    setBusy(true);
+    try {
+      const r = await bridge.activate();
+      setLocal(r);
+      if (!r.available) {
+        return r.reason === "api_key_missing"
+          ? "Sharing isn't available in this build of the app yet."
+          : "Sharing couldn't start on this device.";
+      }
+      if (!r.accepted) return "You didn't accept the partner's terms, so nothing was turned on.";
+      return r.running
+        ? `Vertal Node is on. ${bridge.kind === "electron" ? "A tray icon" : "A notification"} shows while it's sharing; pause or turn it off here any time.`
+        : "Accepted. Sharing starts in a moment.";
+    } catch {
+      return "Sharing couldn't start on this device.";
+    } finally {
+      setBusy(false);
+    }
+  }, [bridge]);
+
+  const pauseEmbedded = useCallback(async () => {
+    if (!bridge) return;
+    setBusy(true);
+    try {
+      setLocal(await bridge.pause());
+      setNotice("Paused. Nothing is shared until you activate again.");
+    } catch {
+      /* status segue o anterior */
+    } finally {
+      setBusy(false);
+    }
+  }, [bridge]);
+
+  /** Desativar: opt-out no SDK e revogação gravada em vertal_node_consents (LGPD). */
+  const optOutEmbedded = useCallback(async () => {
+    if (!bridge) return;
+    setBusy(true);
+    try {
+      setLocal(await bridge.optOut());
+      const { data } = await supabase.functions.invoke("vertal-node-heartbeat?action=consent", {
+        method: "POST",
+        body: { action: "consent", accept: false, consent_version: VERTAL_NODE_CONSENT_VERSION, platform: device },
+      });
+      const consent = (data as { consent?: NodeSummary["consent"] } | null)?.consent;
+      if (consent) setSummary((prev) => (prev ? { ...prev, consent } : prev));
+      setNotice("Turned off. Your consent was withdrawn on this device.");
+    } catch {
+      setNotice("Turned off on this device.");
+    } finally {
+      setBusy(false);
+    }
+  }, [bridge, device]);
+
   const confirm = useCallback(async () => {
     setStep("saving");
     setNotice(null);
@@ -132,10 +210,10 @@ export default function VertalNodeCard({
     } catch {
       /* segue: o app ainda pede o consentimento do parceiro antes de ligar */
     }
-    const msg = launch();
+    const msg = bridge ? await runEmbedded() : launch();
     setStep("done");
     setNotice(saved ? msg : `${msg ?? ""} (We couldn't save your choice right now; the app will ask again.)`.trim());
-  }, [device, launch]);
+  }, [bridge, device, launch, runEmbedded]);
 
   return (
     <Card className="rounded-2xl border-white/[0.06] bg-card/50" data-testid="vertal-node-card">
@@ -226,8 +304,11 @@ export default function VertalNodeCard({
         ) : (
           <Button
             className="w-full"
-            onClick={() => {
-              if (accepted) {
+            disabled={busy}
+            onClick={async () => {
+              if (accepted && bridge) {
+                setNotice(await runEmbedded());
+              } else if (accepted) {
                 setNotice(launch());
               } else {
                 setNotice(null);
@@ -237,12 +318,24 @@ export default function VertalNodeCard({
             data-testid="vertal-node-accept"
           >
             <Power className="mr-2 h-4 w-4" />
-            {accepted ? "Open Vertal Node" : "Accept & activate"}
+            {accepted ? (bridge ? (local?.running ? "Sharing on this device" : "Activate on this device") : "Open Vertal Node") : "Accept & activate"}
           </Button>
+        )}
+        {bridge && local?.optedIn && step !== "consent" && (
+          <div className="flex flex-col gap-2 sm:flex-row" data-testid="vertal-node-embedded-controls">
+            <Button variant="outline" className="flex-1" onClick={pauseEmbedded} disabled={busy || !local.running} data-testid="vertal-node-pause">
+              <Pause className="mr-2 h-4 w-4" />
+              Pause
+            </Button>
+            <Button variant="ghost" className="flex-1" onClick={optOutEmbedded} disabled={busy} data-testid="vertal-node-optout">
+              <PowerOff className="mr-2 h-4 w-4" />
+              Turn off
+            </Button>
+          </div>
         )}
         {accepted && step !== "consent" && (
           <p className="text-xs text-muted-foreground" data-testid="vertal-node-accepted">
-            You accepted sharing on this account. Turn it off any time in the app.
+            You accepted sharing on this account. Turn it off any time {bridge ? "here" : "in the app"}.
           </p>
         )}
         {notice && (
@@ -251,7 +344,7 @@ export default function VertalNodeCard({
           </p>
         )}
 
-        {(desktopUrl || androidUrl) && (
+        {!bridge && (desktopUrl || androidUrl) && (
           <div className="flex flex-col gap-2 sm:flex-row">
             {desktopUrl && (
               <Button asChild variant="outline" className="flex-1">
