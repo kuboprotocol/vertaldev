@@ -703,8 +703,8 @@ Primeiro cliente: o MūskAI ("Vídeo de verdade" e "Vídeo com capa" do pacote d
   O orçamento de GPU enviado ao motor sai desse teto e o motor **para de gerar cenas** antes de passar dele
   (contando a subida do contêiner); a cobrança é o custo real medido (GPU L40S US$1,95/h + CPU), nunca acima do teto.
   Vídeo curto (< 1 min) usa 1 minuto de teto (US$ 0,30). Sem espaço para nem 1 cena → 503 `video_cost_guard`.
-- **Limites:** `VERTAL_VIDEO_API_MAX_SECONDS` 300, `_MAX_CLIPS` 24 (5 min ≈ 2 min de cenas únicas), `_STEPS` 20,
-  `_CLIP_GPU_S` 45 / `_COLD_START_S` 90 (só estimativas para planejar), `_GPU_USD_HOUR` 1,95, `_CPU_USD_PER_S` 0,000016.
+- **Limites:** `VERTAL_VIDEO_API_MAX_SECONDS` 300, `_MAX_CLIPS` 16 (5 min ≈ 80 s de cenas únicas em ciclo), `_STEPS` 16,
+  `_CLIP_GPU_S` 80 / `_COLD_START_S` 90 (estimativas para planejar; medido 28/11: ~4,4 s por passo numa cena de 5 s na L40S), `_GPU_USD_HOUR` 1,95, `_CPU_USD_PER_S` 0,000016.
   Todos opcionais, no `VERTAL_GPU_CONFIG`.
 - **Cobrança:** kind `video` da cobrança v2 (atacado ×1,20, piso US$ 0,05), pré-pago, saldo zerado → 402, teto mensal
   da chave vale para o pior caso antes de enviar; idempotente por job (`video-job:<id>`), só cobra o que fica pronto.

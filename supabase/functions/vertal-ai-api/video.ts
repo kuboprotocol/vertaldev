@@ -114,7 +114,7 @@ async function create(req: Request, admin: any, k: { row: KeyRow; spentMicro: nu
   const est = priceRequest(billing, { channel: "wholesale", kind: "video", costUsd: plan.estimatedCostUsd });
   return json(202, {
     id, object: "video.job", mode, status: "processing", duration_seconds: plan.seconds, end_user: endUser,
-    eta_seconds: mode === "cover" ? 30 : 90 + plan.clips * 45,
+    eta_seconds: mode === "cover" ? 30 : 90 + plan.clips * 80,
     estimate: { price_usd: est.ok ? est.priceUsd : null, credits: est.ok ? est.credits : null, max_price_usd: plan.priceCapUsd, scenes: plan.clips },
     poll: `/v1/videos/${id}`,
   });

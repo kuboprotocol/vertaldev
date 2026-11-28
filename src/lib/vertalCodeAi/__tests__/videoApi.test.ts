@@ -49,7 +49,7 @@ describe('API de vídeo (marca branca)', () => {
     const ten = planVideo(cfg, 'ai', 10);
     expect(ten.ok && ten.plan.clips).toBe(2);
     const five = planVideo(cfg, 'ai', 300);
-    expect(five.ok && five.plan.clips).toBe(24);
+    expect(five.ok && five.plan.clips).toBe(16);
   });
 
   it('trava fecha quando nem uma cena cabe no teto', () => {

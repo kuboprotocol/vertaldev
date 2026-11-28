@@ -54,10 +54,10 @@ export function loadVideoApiConfig(env: Env, wholesaleMarkup = 1.2): VideoApiCon
     // Modal L40S ≈ US$ 1,95/h (US$ 0,000542/s).
     gpuUsdPerHour: num(env.VERTAL_VIDEO_API_GPU_USD_HOUR, 1.95, 0.1, 20),
     coldStartGpuS: num(env.VERTAL_VIDEO_API_COLD_START_S, 90, 0, 900),
-    clipGpuS: num(env.VERTAL_VIDEO_API_CLIP_GPU_S, 45, 5, 900),
+    clipGpuS: num(env.VERTAL_VIDEO_API_CLIP_GPU_S, 80, 5, 900),
     clipSeconds: Math.floor(num(env.VERTAL_VIDEO_API_CLIP_SECONDS, 5, 2, 5)),
-    steps: Math.floor(num(env.VERTAL_VIDEO_API_STEPS, 20, 10, 50)),
-    maxClips: Math.floor(num(env.VERTAL_VIDEO_API_MAX_CLIPS, 24, 1, 120)),
+    steps: Math.floor(num(env.VERTAL_VIDEO_API_STEPS, 16, 10, 50)),
+    maxClips: Math.floor(num(env.VERTAL_VIDEO_API_MAX_CLIPS, 16, 1, 120)),
     // Modal: 1 núcleo (US$ 0,0000131/s) + 1 GiB (US$ 0,00000222/s), arredondado para cima.
     cpuUsdPerSecond: num(env.VERTAL_VIDEO_API_CPU_USD_PER_S, 0.000016, 0, 0.01),
   };
