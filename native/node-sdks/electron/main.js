@@ -102,7 +102,27 @@ function setupVertalNode({ app, ipcMain, getWindow, config = defaultConfig, adap
       // Diagnóstico opcional do adapter (ex.: Cash Raven: STOPPED|CONNECTING|SHARING|PAUSED|ERROR).
       sdkStatus: sdk.enabled && typeof sdk.status === "function" ? await sdk.status().catch(() => null) : null,
       signedIn: Boolean(accessToken),
+      // Pausado pelo usuário (Pausar / Desativar): não religa sozinho ao abrir o app.
+      paused: kv.get("userPaused") === true,
     };
+  }
+
+  const stateListeners = new Set();
+  async function publish() {
+    let s;
+    try {
+      s = await state();
+    } catch {
+      return null;
+    }
+    for (const cb of stateListeners) {
+      try {
+        cb(s);
+      } catch {
+        /* listener com erro não derruba os outros */
+      }
+    }
+    return s;
   }
 
   async function heartbeat() {
@@ -151,31 +171,42 @@ function setupVertalNode({ app, ipcMain, getWindow, config = defaultConfig, adap
     if (!sdk.enabled) return state();
     const win = getWindow && getWindow();
     const accepted = (await sdk.isOptedIn()) || (await sdk.requestConsent({ parent: win || undefined }));
-    if (accepted && !(await sdk.isRunning())) await sdk.start();
+    if (accepted) {
+      kv.set("userPaused", false);
+      if (!(await sdk.isRunning())) await sdk.start();
+    }
     void heartbeat();
-    return state();
+    return (await publish()) || state();
+  }
+
+  /** Pausar: para de compartilhar; o consentimento continua, mas não religa sozinho. */
+  async function pause() {
+    await ready;
+    kv.set("userPaused", true);
+    if (sdk.enabled) await sdk.stop();
+    void heartbeat();
+    return (await publish()) || state();
   }
 
   async function optOut() {
     await ready;
+    kv.set("userPaused", true);
     await sdk.optOut();
     void heartbeat();
-    return state();
+    return (await publish()) || state();
   }
 
   ipcMain.handle(CH.activate, () => activate());
   ipcMain.handle(CH.start, async () => {
     await ready;
-    if (await sdk.isOptedIn()) await sdk.start();
+    if (await sdk.isOptedIn()) {
+      kv.set("userPaused", false);
+      await sdk.start();
+    }
     void heartbeat();
-    return state();
+    return (await publish()) || state();
   });
-  ipcMain.handle(CH.stop, async () => {
-    await ready;
-    await sdk.stop();
-    void heartbeat();
-    return state();
-  });
+  ipcMain.handle(CH.stop, () => pause());
   ipcMain.handle(CH.optOut, () => optOut());
   ipcMain.handle(CH.status, () => state());
   ipcMain.handle(CH.setToken, (_e, token) => {
@@ -188,14 +219,17 @@ function setupVertalNode({ app, ipcMain, getWindow, config = defaultConfig, adap
   if (typeof sdk.onChange === "function") {
     sdk.onChange((s) => {
       send(CH.state, { provider, ...s });
+      void publish();
       void heartbeat();
     });
   }
 
-  // Retoma sozinho se o usuário já tinha aceitado antes (nunca pede consentimento sem clique).
+  // Retoma sozinho se o usuário já tinha aceitado e não pausou (nunca pede consentimento sem clique).
   void ready
     .then(async () => {
+      if (kv.get("userPaused") === true) return;
       if (sdk.enabled && (await sdk.isOptedIn()) && !(await sdk.isRunning())) await sdk.start();
+      void publish();
     })
     .catch((err) => console.error("[vertal-node] falha ao iniciar o SDK:", err && err.message ? err.message : err));
 
@@ -211,8 +245,14 @@ function setupVertalNode({ app, ipcMain, getWindow, config = defaultConfig, adap
     deviceId,
     ready,
     activate,
+    pause,
     optOut,
     state,
+    /** Estado novo a cada mudança (bandeja: tray.js). */
+    onState: (cb) => {
+      stateListeners.add(cb);
+      return () => stateListeners.delete(cb);
+    },
     heartbeat,
     setAccessToken: (token) => {
       accessToken = token || null;

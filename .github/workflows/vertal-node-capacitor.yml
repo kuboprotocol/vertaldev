@@ -1,0 +1,61 @@
+name: Vertal Node Capacitor (plugin Android)
+
+# Compila o plugin Capacitor do Vertal Node (native/node-sdks/capacitor) com o Cash Raven SDK 4.1.4.
+# Não publica nada. A chave entra só no build, pelo secret CASHRAVEN_API_KEY_ANDROID (BuildConfig);
+# sem ela o plugin compila e responde "api_key_missing".
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'native/node-sdks/capacitor/**'
+      - '.github/workflows/vertal-node-capacitor.yml'
+
+concurrency:
+  group: vertal-node-capacitor-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: native/node-sdks/capacitor
+    env:
+      CASHRAVEN_API_KEY_ANDROID: ${{ secrets.CASHRAVEN_API_KEY_ANDROID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21' # Capacitor 8
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+
+      - name: Capacitor Android (para compilar o plugin sozinho)
+        run: npm install --no-package-lock --no-audit --no-fund @capacitor/android@^8.3.0 @capacitor/core@^8.3.0
+
+      - name: Chave do SDK presente?
+        run: |
+          if [ -n "$CASHRAVEN_API_KEY_ANDROID" ]; then echo "CASHRAVEN_API_KEY_ANDROID: presente" >> "$GITHUB_STEP_SUMMARY";
+          else echo "CASHRAVEN_API_KEY_ANDROID: AUSENTE (plugin responde api_key_missing)" >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Build do plugin (AAR)
+        run: gradle --no-daemon --stacktrace -p android assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vertal-node-capacitor-plugin
+          path: native/node-sdks/capacitor/android/build/outputs/aar/*.aar
+          if-no-files-found: error

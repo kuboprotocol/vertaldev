@@ -263,3 +263,46 @@ aba volta a ficar visível (no máximo a cada 10 min). Sem logs no console. Test
 
 - [ ] Publicar o gateway com `/sdk/v1/vertal.js` e definir `VITE_VERTAL_JS_SRC` / `VITE_VERTAL_APP_ID` no build.
 - [ ] Liberar o domínio do gateway na CSP do site (`script-src` e `connect-src`), se houver CSP.
+
+## Fase 2: SDK embutido no app nativo (Capacitor Android e Electron)
+
+Desligado por padrão. Liga só com `VITE_VERTAL_NODE_EMBEDDED_SDK=true` **no build do app nativo**
+(o site normal continua abrindo/baixando o app separado do Vertal Node).
+
+Fluxo (igual nas duas plataformas): o usuário toca em **Accept & activate** no card de `/recompensas`
+→ o aceite é gravado em `vertal_node_consents` (`vertal-node-heartbeat?action=consent`) → o app chama o
+SDK embutido → aparece a **tela de consentimento da Cash Raven** (nomeia o fornecedor, termos e
+privacidade) → só depois do aceite começa a compartilhar. **Pause** e **Turn off** (opt-out, que também
+grava a revogação) ficam no card. Nada liga antes do toque; abrir o app só retoma quem já aceitou e não pausou.
+
+### Android (Capacitor) — `native/node-sdks/capacitor` (`@vertal/node-sdk-capacitor`)
+- Plugin `VertalNode`: `status()`, `activate()`, `pause()`, `optOut()`. Cash Raven SDK 4.1.4 (modo
+  SDK-managed), serviço em primeiro plano `dataSync` com notificação fixa, retomada após reiniciar
+  (`setStartOnBoot(true)` só depois do aceite; Pausar/Desativar desligam).
+- Chave: `CASHRAVEN_API_KEY_ANDROID` (secret do repositório) entra no `BuildConfig` do plugin **no build**.
+  Nunca commitar. Toda chave dentro de um APK pode ser extraída; é o normal nesses SDKs.
+- No app Capacitor: `npm i ./native/node-sdks/capacitor && npx cap sync android` e adicionar em
+  `android/build.gradle` → `allprojects.repositories`:
+  `maven { url "https://cashraven-downloads.nyc3.digitaloceanspaces.com/maven" }`.
+- **iOS: não suportado** (a Cash Raven não tem SDK iOS); o card mostra "not available" no iPhone.
+- CI: `.github/workflows/vertal-node-capacitor.yml` compila o plugin (AAR) a cada PR.
+
+### Computador (Electron) — `native/node-sdks/electron`
+- `scripts/inject-build-config.js` grava `CASHRAVEN_API_KEY_DESKTOP` (e Supabase/App ID) em
+  `build-config.json` (gitignored) **no build**; o app instalado lê dali. Nunca imprime valores.
+- `tray.js`: ícone na bandeja com estado, **Ativar…** (abre o consentimento do parceiro), **Pausar** e
+  **Desativar (opt-out)**. Windows x64, macOS universal e Linux x64 (plataformas do SDK 4.1.4).
+- `window.vertalNode` (preload) é a ponte que o card usa dentro do Electron.
+- O SDK Electron (`cr-sdk-electron.zip`) não é público: para empacotar no CI, defina
+  `CASHRAVEN_ELECTRON_SDK_URL` (URL privada) e rode `scripts/fetch-sdk.sh cashraven electron`.
+
+### Google Play / Play Protect (declarar antes de publicar)
+- **Data safety**: declarar o SDK da Cash Raven como coleta/compartilhamento de *Device or other IDs*
+  (id pseudônimo do aparelho) e *App info and performance* (diagnóstico); finalidade: funcionalidade do
+  app (compartilhamento de banda com consentimento). Dados criptografados em trânsito; o usuário pode
+  pedir exclusão (opt-out + revogação gravada).
+- **Foreground service** `dataSync` com notificação visível o tempo todo; justificar o tipo no Play Console.
+- Descrição da loja e tela do app devem dizer claramente que o app compartilha a internet ociosa como
+  ponto de saída de um parceiro, com consentimento e opt-out (política de *Device and Network Abuse* /
+  *Mobile Unwanted Software*). Sem ativação silenciosa: cumprido pelo fluxo acima.
+- `RECEIVE_BOOT_COMPLETED` só retoma quem aceitou e deixou ligado.

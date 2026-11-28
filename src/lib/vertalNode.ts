@@ -6,7 +6,7 @@
  * Atualize junto com uma nova pré-release, ou defina VITE_VERTAL_NODE_ANDROID_URL no build.
  */
 export const DEFAULT_VERTAL_NODE_ANDROID_URL =
-  "https://github.com/kuboprotocol/vertaldev/releases/download/vertal-node-android-test-b7d04f2/vertal-node-android-test-b7d04f2.apk";
+  "https://github.com/kuboprotocol/vertaldev/releases/download/vertal-node-android-test-3cbbeec/vertal-node-android-test-3cbbeec.apk";
 
 /** applicationId do app Android (native/node-sdks/android/app/build.gradle.kts). */
 export const VERTAL_NODE_ANDROID_PACKAGE = "dev.vertal.node";

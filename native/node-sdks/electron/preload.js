@@ -8,7 +8,9 @@ const vertalNode = {
   /** Abre a tela de consentimento do SDK (se preciso) e inicia só se o usuário aceitou. */
   activate: () => ipcRenderer.invoke("vertal-node:activate"),
   start: () => ipcRenderer.invoke("vertal-node:start"),
+  /** Pausar: para de compartilhar; não religa sozinho até o próximo activate(). */
   stop: () => ipcRenderer.invoke("vertal-node:stop"),
+  pause: () => ipcRenderer.invoke("vertal-node:stop"),
   /** Opt-out: retira o consentimento e para na hora. */
   optOut: () => ipcRenderer.invoke("vertal-node:opt-out"),
   /** { provider, enabled, deviceId, optedIn, running, signedIn } */

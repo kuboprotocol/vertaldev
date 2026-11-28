@@ -1,0 +1,19 @@
+{
+  "name": "@vertal/node-sdk-capacitor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Plugin Capacitor do Vertal Node: Cash Raven SDK embutido no app Android gerado pelo Vertal Dev (start/pause/opt-out/status). Só Android: a Cash Raven não tem SDK iOS. A chave entra no build (CASHRAVEN_API_KEY_ANDROID), nunca no repositório.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "files": ["android/src/main/", "android/build.gradle", "src/"],
+  "capacitor": {
+    "android": { "src": "android" }
+  },
+  "peerDependencies": {
+    "@capacitor/core": "^8.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.3.0",
+    "@capacitor/core": "^8.3.0"
+  }
+}
