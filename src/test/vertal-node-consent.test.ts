@@ -41,9 +41,9 @@ describe('parseConsent', () => {
   })
 })
 
-describe('migração 20261128010000 (aditiva)', () => {
+describe('migração 20261128020000 (aditiva)', () => {
   const sql = readFileSync(
-    join(__dirname, '../../supabase/migrations/20261128010000_vertal_node_providers_and_consent.sql'),
+    join(__dirname, '../../supabase/migrations/20261128020000_vertal_node_providers_and_consent.sql'),
     'utf8',
   )
   const code = sql.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n')
