@@ -104,6 +104,8 @@ interface AgentResponse {
   reply: string;
   actions: AgentAction[];
   memory?: { saved: number; forgotten: number };
+  /** Conector Vertal AI (flag no servidor): app com IA sem conector → cartão "Ativar Vertal AI" no chat. */
+  vertal_ai_offer?: { video?: boolean };
 }
 
 interface AgentCallOptions {
@@ -172,6 +174,8 @@ export function useVertalChat(options: {
   const [formApproval, setFormApproval] = useState<PendingFormApproval | null>(null);
   /** Prévia ao vivo do app em construção. */
   const [livePreview, setLivePreview] = useState<string | null>(null);
+  /** Cartão "Ativar Vertal AI" pendente (some ao mandar a próxima mensagem). */
+  const [vertalAiOffer, setVertalAiOffer] = useState<{ video: boolean } | null>(null);
 
   // Refs: o turno do agente é longo e não pode ler estado velho de um render anterior.
   const messagesRef = useRef(messages);
@@ -209,12 +213,14 @@ export function useVertalChat(options: {
     setMessages([]);
     setError(null);
     setLivePreview(null);
+    setVertalAiOffer(null);
     allowedHostsRef.current = new Set();
   }, []);
 
   const openConversation = useCallback(async (id: string) => {
     setLoadingConversation(true);
     setError(null);
+    setVertalAiOffer(null);
     try {
       const rows = await conversationService.loadConversation(id);
       setConversationId(id);
@@ -326,6 +332,7 @@ export function useVertalChat(options: {
     rememberRequestLang(text); // idioma do pedido: painéis sem i18n próprio (Clonador de voz) seguem a língua da conversa
     setBusy(true);
     setError(null);
+    setVertalAiOffer(null);
 
     // Parar: cancela a chamada ao agente em voo e larga a ação em andamento (ela termina sozinha).
     const controller = new AbortController();
@@ -467,6 +474,7 @@ export function useVertalChat(options: {
             memory.forgotten += turn.memory.forgotten;
           }
           if (turn.reply) replies.push(turn.reply);
+          if (turn.vertal_ai_offer) setVertalAiOffer({ video: !!turn.vertal_ai_offer.video });
           if (opts.show) {
             shownText = replies.join('\n\n');
             patchDraft((m) => ({ ...m, text: shownText }));
@@ -617,6 +625,7 @@ export function useVertalChat(options: {
     conversationId, conversations, loadingConversation,
     newConversation, openConversation, removeConversation, renameConversation, pinConversation,
     send, stop, approval, formApproval, livePreview, replaceArtifact, execute,
+    vertalAiOffer, dismissVertalAiOffer: () => setVertalAiOffer(null),
     credits: editsRemaining,
   };
 }

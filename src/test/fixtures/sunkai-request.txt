@@ -1,0 +1,27 @@
+Build SunkAI, an AI video generation web app for the US market. UI in English.
+
+Brand
+• Name: SunkAI. Samurai theme: black, chrome silver, gold (#F5B400) and electric blue (#2F8CFF) accents, subtle lightning glow
+• Premium dark UI, glassmorphism cards, Inter font, smooth Framer Motion transitions
+
+Stack
+• Next.js App Router, TypeScript, Tailwind, shadcn/ui
+• Supabase (auth, Postgres, storage for uploads and generated videos)
+• Stripe for credit packs and monthly plans
+
+Pages
+• Landing: hero with a looping sample video, "Slice ideas into video" headline, examples gallery, pricing, FAQ
+• Sign up / log in (email and Google)
+• Studio: prompt box, mode switch (Text to Video, Image to Video), style presets (Cinematic, Anime, Ad, Vlog), aspect ratio (16:9, 9:16, 1:1), duration (5s, 10s), Generate button showing credit cost
+• Job queue with progress status, then preview player with download and share
+• My Videos gallery with filters and delete
+• Billing: credit balance, buy credits, plan management
+• Admin: users, jobs, credits used
+
+Backend
+• Video generation through the Vertal AI API behind a provider interface, so models can be swapped
+• Async jobs with webhook or polling, retries and error messages
+• Credits deducted only on successful generation
+• Rate limits and basic content moderation on prompts
+
+Deliver a working MVP with seed sample videos on the landing page.

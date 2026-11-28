@@ -26,6 +26,7 @@ import { FormApprovalDialog } from './FormApprovalDialog';
 import { NavigatorApprovalDialog } from './NavigatorApprovalDialog';
 import { VertalNavigatorInline } from './VertalNavigatorCard';
 import { previewHtml } from '@/lib/chatAgent/previewHtml';
+import { VertalAiOfferCard } from '@/components/vertal-ai/VertalAiOfferCard'; // Vertal AI: cartão de um clique no chat
 import { toast } from 'sonner';
 import { DICTATION_ERROR_TEXT, useDictation } from '@/lib/voice/useDictation';
 import { VertalCodeAiEntryButton } from '@/components/vertal-code-ai/VertalCodeAiEntryButton';
@@ -460,6 +461,7 @@ export function VertalChat() {
                     onOpenMemory={() => setMemoryOpen(true)}
                   />
                 ))}
+                {chat.vertalAiOffer && <VertalAiOfferCard projectId={null} needsVideo={chat.vertalAiOffer.video} disabled={chat.busy} onActivated={(vertalAiPrompt) => void chat.send(vertalAiPrompt)} />}
                 <div ref={endRef} />
               </div>
             </div>

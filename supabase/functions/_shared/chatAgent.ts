@@ -325,6 +325,8 @@ export interface AgentPromptContext {
   authKit?: boolean;
   /** Conector Vertal AI (flag VERTAL_AI_CONNECTOR_ENABLED + allowlist) E a conversa fala de app com IA: inclui VERTAL_AI_RULES. */
   vertalAi?: boolean;
+  /** Conectores do Dev lidos agora (Vertal AI, Cofre, Fluxos, MetaMask; só nomes/status) + como agir. Só com a flag VERTAL_AI_CONNECTOR_ENABLED + allowlist. */
+  vertalAiConnectors?: string;
   /** A conversa fala de Huginn: inclui a ferramenta huginn (ver wantsHuginn). */
   huginn?: boolean;
   /** Pedido sobre o e-mail do usuário (ver emailRoute): "gmail" inclui as regras do conector. */
@@ -589,6 +591,7 @@ function buildPrompt(ctx: AgentPromptContext): string {
     ctx.automatisch || ctx.huginn ? `${BRAND_RULES}\n` : "",
     ctx.authKit ? `${AUTH_KIT_RULES}\n` : "",
     ctx.vertalAi ? `${VERTAL_AI_RULES}\n` : "",
+    ctx.vertalAiConnectors ? `${ctx.vertalAiConnectors}\n` : "",
     ctx.scheduler ? `${SCHEDULER_RULES}\n` : "",
     ctx.voiceClone ? `${VOICE_CLONE_RULES}\n` : "",
     ctx.memoryEnabled === false ? MEMORY_OFF : ctx.memoryEnabled === null ? MEMORY_UNAVAILABLE : MEMORY_RULES,

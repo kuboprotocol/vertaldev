@@ -102,6 +102,8 @@ import {
 // Conector Vertal AI (flag VERTAL_AI_CONNECTOR_ENABLED, desligada por padrão; ver docs/VERTAL-AI-CONECTOR.md).
 import { applyVertalAiToRequirements, isVertalAiPath, vertalAiFilesFor, vertalAiPromptBlock, vertalAiSteps } from "../_shared/vertalAiConnector.ts";
 import { vertalAiForRequest } from "../_shared/vertalAiConnectorStore.ts";
+import { vertalAiAwarenessFor } from "../_shared/vertalAiChatStore.ts"; // Vertal AI: conectores do Dev (só nomes/status)
+import { sanitizeVertalAiReply, vertalAiFixEnvNames } from "../_shared/vertalAiChat.ts"; // Vertal AI: nunca pedir chave/env à mão
 
 /**
  * Ponte Vibe Code → Vertal Chat: pergunta ao creative-router (tool agent_chat,
@@ -1198,6 +1200,7 @@ Deno.serve(async (req) => {
         // Conector Vertal AI: flag desligada → {mode:"off"} sem tocar no banco; vertalAi* abaixo não muda nada.
         const vertalAi = await vertalAiForRequest(admin, Deno.env.toObject(), { userId, projectId, prompt, request: body.vertalAi }).catch(() => ({ state: { mode: "off" as const } })); // Vertal AI
         for (const st of vertalAiSteps(vertalAi.state, vertalAi).filter((x) => x.status !== "success" || x.vertalAi.created)) send(st);
+        const vertalAiAwareness = await vertalAiAwarenessFor(admin, Deno.env.toObject(), userId, projectId, connected).catch(() => ""); // Vertal AI: flag off → "" sem banco
 
         // Atitude Vertal: soma a personalidade ao protocolo (JSON e regras intactos).
         // Ligada para todos por padrão; VERTAL_PERSONA_ENABLED=off desliga sem deploy.
@@ -1205,6 +1208,7 @@ Deno.serve(async (req) => {
           withVertalPersona(SYSTEM, "vibe", vertalPersonaEnabled(Deno.env.get("VERTAL_PERSONA_ENABLED"))) +
           (authKit.enabled ? formatAuthKitForPrompt(authKit.options) : authOffer ? AUTH_KIT_OFFER_PROMPT : "") +
           vertalAiPromptBlock(vertalAi.state) +
+          vertalAiAwareness +
           (design.enabled ? buildDesignPrompt(design.surface, { target: "react" }) : "") +
           formatMemoriesForPrompt(memories) +
           formatConnectorsForPrompt(connected) +
@@ -1548,6 +1552,7 @@ Deno.serve(async (req) => {
         // Conector Vertal AI ativo: helper e proxy determinísticos (o agente não escreve esses paths). Off/oferta: nada.
         if (vertalAi.state.mode === "active") for (const path of [...proposed.keys()]) if (isVertalAiPath(path)) proposed.delete(path);
         for (const f of vertalAiFilesFor(vertalAi.state)) proposed.set(f.path, { content: f.content, reason: f.reason }); // Vertal AI
+        if (vertalAi.state.mode !== "off") for (const [p, f] of proposed) if (!isVertalAiPath(p)) proposed.set(p, { ...f, content: vertalAiFixEnvNames(f.content) }); // Vertal AI: VERTAL_API_KEY → VERTAL_AI_API_KEY
         for (const st of vertalAiSteps(vertalAi.state).filter((x) => x.status === "success" && !x.vertalAi.created)) send(st);
 
         if (Object.keys(reviewProblems).length) {
@@ -1721,6 +1726,7 @@ Deno.serve(async (req) => {
           rejected,
           pendingRequirements: pendingForReply,
         });
+        if (vertalAi.state.mode !== "off") replyText = sanitizeVertalAiReply(replyText, { mode: vertalAi.state.mode === "active" ? "active" : "offer" }); // Vertal AI: sem "configure a chave/env"
         send({ kind: "reply", status: "success", title: "Resposta do agente", detail: replyText });
 
         if (origin === "vertal_chat") {
