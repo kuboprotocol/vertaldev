@@ -5,6 +5,7 @@
 // (allprojects.repositories): maven { url "https://cashraven-downloads.nyc3.digitaloceanspaces.com/maven" }
 ext {
     junitVersion = project.hasProperty('junitVersion') ? rootProject.ext.junitVersion : '4.13.2'
+    androidxAppCompatVersion = project.hasProperty('androidxAppCompatVersion') ? rootProject.ext.androidxAppCompatVersion : '1.7.1'
 }
 
 buildscript {
@@ -56,6 +57,7 @@ repositories {
 
 dependencies {
     implementation project(':capacitor-android')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation 'io.cashraven:cr-sdk:4.1.4'
     implementation 'net.java.dev.jna:jna:5.14.0@aar'
     // cr-sdk é Kotlin (metadata 1.9) e o POM não declara a stdlib

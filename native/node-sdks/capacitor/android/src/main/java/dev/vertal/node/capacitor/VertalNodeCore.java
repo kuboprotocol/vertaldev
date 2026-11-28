@@ -1,5 +1,6 @@
 package dev.vertal.node.capacitor;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -126,10 +127,12 @@ final class VertalNodeCore {
     }
 
     /** Tocar na notificação abre o app. */
-    private static Class<?> launchActivity(Context app) {
+    private static Class<? extends Activity> launchActivity(Context app) {
         try {
             Intent i = app.getPackageManager().getLaunchIntentForPackage(app.getPackageName());
-            if (i != null && i.getComponent() != null) return Class.forName(i.getComponent().getClassName());
+            if (i != null && i.getComponent() != null) {
+                return Class.forName(i.getComponent().getClassName()).asSubclass(Activity.class);
+            }
         } catch (Throwable ignored) {
             // sem activity de lançamento: a notificação só não abre nada
         }
