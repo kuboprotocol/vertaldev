@@ -159,7 +159,21 @@ Os apps chamam `POST /functions/v1/vertal-node-heartbeat` com o token do usuári
   importa quantos dispositivos ou provedores. Com `VERTAL_NODE_CREDIT_PER_PROVIDER=true` vira 1x por
   provedor por dia (chave `vertal_node:<provedor>:<dia SP>`).
 - O provedor vai em `reward_events.metadata.provider` (fonte `vertal_node`) e no metadata do topup.
-- `GET ?action=summary` alimenta o card (total, dias ativos, dispositivos com provedor).
+- `GET ?action=summary` alimenta o card (total, dias ativos, dispositivos com provedor e `consent`, o
+  último aceite do site). Tolera as tabelas ainda não criadas (devolve zeros em vez de 500).
+- `POST ?action=consent` `{ accept, consent_version, platform: "android"|"desktop"|"ios"|"other" }`
+  grava o aceite do botão **Accept & activate** em `vertal_node_consents` (append-only, com versão do
+  texto, plataforma, user agent e data = prova de consentimento LGPD). Não liga nada: o app ainda
+  mostra a tela de consentimento do SDK do parceiro.
+
+### Botão "Accept & activate" (card em /recompensas)
+1. Clique → texto de consentimento (exit node, só banda ociosa, desliga quando quiser, registro LGPD).
+2. "I agree, activate" → `action=consent`. Sem login (401) pede para entrar; outro erro não bloqueia.
+3. Android → `intent://open?source=recompensas#Intent;scheme=vertalnode;package=dev.vertal.node;S.browser_fallback_url=<APK>;end`
+   (abre o app instalado ou baixa o APK). Computador → baixa `VITE_VERTAL_NODE_DESKTOP_URL` (sem URL:
+   aviso "not available for download yet"). iPhone/iPad/outros → "not available yet".
+4. APK padrão: `DEFAULT_VERTAL_NODE_ANDROID_URL` em `src/lib/vertalNode.ts` (última pré-release
+   `vertal-node-android-test-*`), usado quando `VITE_VERTAL_NODE_ANDROID_URL` está vazio.
 
 > O crédito é por dia ativo informado pelo app. Os parceiros pagam por usuário ativo (Cash Raven:
 > 60 min/dia UTC). Vale conferir os ganhos nos dashboards contra `reward_events` para calibrar.
@@ -172,7 +186,7 @@ Os apps chamam `POST /functions/v1/vertal-node-heartbeat` com o token do usuári
 |---|---|---|---|
 | `VITE_GAM_REWARDED_AD_UNIT` | build do site | vazio (botão "em breve") | ad unit GAM rewarded |
 | `VITE_VERTAL_NODE_DESKTOP_URL` | build do site | vazio (botão some) | download desktop (https) |
-| `VITE_VERTAL_NODE_ANDROID_URL` | build do site | vazio (botão some) | download APK (https) |
+| `VITE_VERTAL_NODE_ANDROID_URL` | build do site | APK da última pré-release `vertal-node-android-test-*` | download APK (https) e fallback do intent |
 | `VITE_VERTAL_NODE_PARTNER` | build do site | vazio (rodapé some) | rodapé discreto "Parceiro: …" no card |
 | `REWARDED_VIDEO_CREDITS` | secret Supabase | 1 | créditos por vídeo (inteiro) |
 | `REWARDED_VIDEO_COOLDOWN_SECONDS` | secret Supabase | 60 | espera entre vídeos |
@@ -193,8 +207,9 @@ Os apps chamam `POST /functions/v1/vertal-node-heartbeat` com o token do usuári
 ---
 
 ## Deploy (quando aprovar)
-1. Aplicar as migrações `20261124170000_rewarded_video_and_honeygain.sql` e
-   `20261124210000_vertal_node_providers.sql` (nessa ordem).
+1. Migração `20261128010000_vertal_node_providers_and_consent.sql` (aditiva; substitui a arquivada
+   `20261124210000`, que renomeava `honeygain_nodes` e tirava `kubo_music` da CHECK do ledger). Entra
+   em produção pela integração Supabase ao fazer merge na `main`.
 2. Publicar as funções `rewarded-video-claim` e `vertal-node-heartbeat` (com verificação de JWT).
 3. Definir as env vars do site e rebuild.
 

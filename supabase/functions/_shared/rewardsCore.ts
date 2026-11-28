@@ -239,6 +239,47 @@ export function parseHeartbeat(
   };
 }
 
+/** Versão do texto de consentimento mostrado no card do Vertal Node (site). */
+export const VERTAL_NODE_CONSENT_VERSION = "2026-11-28";
+
+export interface ConsentInput {
+  accepted: boolean;
+  consent_version: string;
+  platform: "android" | "desktop" | "ios" | "other";
+  user_agent: string | null;
+}
+
+/**
+ * Valida o aceite/revogação do card "Accept & activate" (action=consent).
+ * Corpo: { accept: boolean, consent_version: string, platform: "android"|"desktop"|"ios"|"other" }.
+ * O user agent vem do cabeçalho (cortado em 300 caracteres).
+ */
+export function parseConsent(
+  body: unknown,
+  userAgent: string | null = null,
+): { ok: true; value: ConsentInput } | { ok: false; error: string } {
+  if (!body || typeof body !== "object") return { ok: false, error: "invalid_body" };
+  const b = body as Record<string, unknown>;
+  if (typeof b.accept !== "boolean") return { ok: false, error: "invalid_accept" };
+  if (typeof b.consent_version !== "string" || !/^[A-Za-z0-9._-]{1,32}$/.test(b.consent_version)) {
+    return { ok: false, error: "invalid_consent_version" };
+  }
+  const platform = b.platform ?? "other";
+  if (platform !== "android" && platform !== "desktop" && platform !== "ios" && platform !== "other") {
+    return { ok: false, error: "invalid_platform" };
+  }
+  const ua = typeof userAgent === "string" && userAgent.trim() ? userAgent.trim().slice(0, 300) : null;
+  return { ok: true, value: { accepted: b.accept, consent_version: b.consent_version, platform, user_agent: ua } };
+}
+
+/** Erro do PostgREST de tabela/visão inexistente (migração ainda não aplicada). */
+export function isMissingRelation(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { code?: unknown; message?: unknown };
+  return e.code === "42P01" || e.code === "PGRST205" ||
+    (typeof e.message === "string" && /does not exist|Could not find the table/i.test(e.message));
+}
+
 /** Soma dos créditos de um ledger (reward_events) por fonte. */
 export function sumCredits(rows: { credits: number }[]): number {
   return rows.reduce((acc, r) => acc + (Number.isFinite(Number(r.credits)) ? Number(r.credits) : 0), 0);

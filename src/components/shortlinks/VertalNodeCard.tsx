@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Download, Smartphone, Wifi } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { CheckCircle2, Download, Power, Smartphone, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -9,6 +9,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  activationTarget,
+  DEFAULT_VERTAL_NODE_ANDROID_URL,
+  detectNodePlatform,
+  VERTAL_NODE_CONSENT_VERSION,
+  type NodePlatform,
+} from "@/lib/vertalNode";
 
 /** Resposta de `vertal-node-heartbeat?action=summary`. */
 export interface NodeSummary {
@@ -24,7 +31,11 @@ export interface NodeSummary {
     running: boolean;
     last_seen_at: string;
   }[];
+  /** Último aceite/revogação feito pelo botão "Accept & activate" (null = nunca). */
+  consent?: { accepted: boolean; consent_version: string; at: string } | null;
 }
+
+type Step = "idle" | "consent" | "saving" | "done";
 
 function envUrl(v: unknown): string | null {
   return typeof v === "string" && /^https:\/\//.test(v.trim()) ? v.trim() : null;
@@ -43,14 +54,23 @@ function envText(v: unknown): string | null {
  */
 export default function VertalNodeCard({
   desktopUrl = envUrl(import.meta.env.VITE_VERTAL_NODE_DESKTOP_URL),
-  androidUrl = envUrl(import.meta.env.VITE_VERTAL_NODE_ANDROID_URL),
+  androidUrl = envUrl(import.meta.env.VITE_VERTAL_NODE_ANDROID_URL) ?? DEFAULT_VERTAL_NODE_ANDROID_URL,
   partner = envText(import.meta.env.VITE_VERTAL_NODE_PARTNER),
+  platform,
+  openUrl = (url: string) => window.location.assign(url),
 }: {
   desktopUrl?: string | null;
   androidUrl?: string | null;
   partner?: string | null;
+  /** Plataforma do aparelho (testes); padrão = detectada pelo user agent. */
+  platform?: NodePlatform;
+  /** Navegação para o app/download (testes). */
+  openUrl?: (url: string) => void;
 }) {
   const [summary, setSummary] = useState<NodeSummary | null>(null);
+  const [step, setStep] = useState<Step>("idle");
+  const [notice, setNotice] = useState<string | null>(null);
+  const device = useMemo(() => platform ?? detectNodePlatform(), [platform]);
 
   const refresh = useCallback(async () => {
     try {
@@ -69,6 +89,53 @@ export default function VertalNodeCard({
   }, [refresh]);
 
   const activeDevices = summary?.devices.filter((d) => d.opted_in && d.running).length ?? 0;
+  const accepted = summary?.consent?.accepted === true;
+
+  /** Abre o app (Android), baixa o agente (computador) ou avisa que ainda não há app. */
+  const launch = useCallback((): string | null => {
+    const target = activationTarget(device, { androidUrl: androidUrl ?? DEFAULT_VERTAL_NODE_ANDROID_URL, desktopUrl });
+    switch (target.kind) {
+      case "android":
+        openUrl(target.url);
+        return "Opening Vertal Node… If it isn't installed, the download starts. Then accept the consent screen in the app to start sharing.";
+      case "desktop":
+        openUrl(target.url);
+        return "Downloading Vertal Node for your computer. Open it and sign in to start sharing.";
+      case "desktop_unavailable":
+        return "The computer app isn't available for download yet. Use the Android app for now.";
+      default:
+        return "Vertal Node isn't available for iPhone, iPad or this device yet.";
+    }
+  }, [androidUrl, desktopUrl, device, openUrl]);
+
+  const confirm = useCallback(async () => {
+    setStep("saving");
+    setNotice(null);
+    let saved = false;
+    try {
+      const { data, error } = await supabase.functions.invoke("vertal-node-heartbeat?action=consent", {
+        method: "POST",
+        body: { action: "consent", accept: true, consent_version: VERTAL_NODE_CONSENT_VERSION, platform: device },
+      });
+      if (error) {
+        const status = (error as { context?: Response }).context?.status;
+        if (status === 401) {
+          setStep("consent");
+          setNotice("Sign in to activate Vertal Node.");
+          return;
+        }
+      } else if (data && (data as { ok?: boolean }).ok) {
+        saved = true;
+        const consent = (data as { consent?: NodeSummary["consent"] }).consent ?? null;
+        setSummary((prev) => (prev ? { ...prev, consent } : prev));
+      }
+    } catch {
+      /* segue: o app ainda pede o consentimento do parceiro antes de ligar */
+    }
+    const msg = launch();
+    setStep("done");
+    setNotice(saved ? msg : `${msg ?? ""} (We couldn't save your choice right now; the app will ask again.)`.trim());
+  }, [device, launch]);
 
   return (
     <Card className="rounded-2xl border-white/[0.06] bg-card/50" data-testid="vertal-node-card">
@@ -105,6 +172,82 @@ export default function VertalNodeCard({
             {activeDevices > 0
               ? `${activeDevices} active device(s)${summary.credited_today ? " · today's credit received" : ""}`
               : "No device is sharing right now."}
+          </p>
+        )}
+
+        {step === "consent" || step === "saving" ? (
+          <div
+            className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-3"
+            role="region"
+            aria-label="Vertal Node consent"
+            data-testid="vertal-node-consent"
+          >
+            <p className="font-medium text-foreground">Before you activate</p>
+            <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+              <li>
+                Your device becomes an <span className="text-foreground">exit node</span>: verified business traffic
+                from the network partner is routed through part of your unused internet connection.
+              </li>
+              <li>Vertal Node never reads your files, messages or browsing, and it only uses idle bandwidth.</li>
+              <li>You can turn it off at any time in the app, and withdraw this consent whenever you want.</li>
+              <li>
+                We record your acceptance (date, version and device type) as proof of consent under Brazil's LGPD. See
+                our{" "}
+                <a href="/privacy" className="underline" target="_blank" rel="noopener noreferrer">
+                  privacy policy
+                </a>
+                .
+              </li>
+            </ul>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                className="flex-1"
+                onClick={confirm}
+                disabled={step === "saving"}
+                data-testid="vertal-node-confirm"
+              >
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                {step === "saving" ? "Activating…" : "I agree, activate"}
+              </Button>
+              <Button
+                variant="ghost"
+                className="flex-1"
+                onClick={() => {
+                  setStep("idle");
+                  setNotice(null);
+                }}
+                disabled={step === "saving"}
+                data-testid="vertal-node-cancel"
+              >
+                Not now
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button
+            className="w-full"
+            onClick={() => {
+              if (accepted) {
+                setNotice(launch());
+              } else {
+                setNotice(null);
+                setStep("consent");
+              }
+            }}
+            data-testid="vertal-node-accept"
+          >
+            <Power className="mr-2 h-4 w-4" />
+            {accepted ? "Open Vertal Node" : "Accept & activate"}
+          </Button>
+        )}
+        {accepted && step !== "consent" && (
+          <p className="text-xs text-muted-foreground" data-testid="vertal-node-accepted">
+            You accepted sharing on this account. Turn it off any time in the app.
+          </p>
+        )}
+        {notice && (
+          <p className="text-xs text-muted-foreground" role="status" data-testid="vertal-node-notice">
+            {notice}
           </p>
         )}
 
