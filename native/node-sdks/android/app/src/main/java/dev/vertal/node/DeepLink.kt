@@ -10,15 +10,20 @@ import java.net.URLDecoder
  * `intent://open#Intent;scheme=vertalnode;package=dev.vertal.node;[S.browser_fallback_url=…;]end`,
  * que o Chrome entrega como ACTION_VIEW + BROWSABLE com data `vertalnode://open`.
  *
- * O link SÓ abre a tela. Nunca liga o compartilhamento: isso continua exigindo o toque em
- * "Ativar" e o consentimento do parceiro. Os parâmetros são informativos (linha discreta na tela),
- * passam por lista branca e validação; qualquer outro parâmetro ou valor inválido é ignorado.
+ * Com `source=recompensas` (botão "Accept & activate" do vertal.dev/recompensas, onde o usuário já
+ * aceitou e o aceite foi gravado em vertal_node_consents) o app segue direto para o fluxo de ativação:
+ * abre a tela de consentimento DO PARCEIRO (se o SDK ainda não tem a decisão) e só inicia depois do
+ * aceite. Nenhum link liga o compartilhamento sem consentimento no SDK. Os outros parâmetros são
+ * informativos (linha discreta na tela), passam por lista branca e validação; o resto é ignorado.
  */
 data class DeepLink(
     val appId: String? = null,
     val ref: String? = null,
     val source: String? = null,
 ) {
+    /** Veio do "Accept & activate" do vertal.dev/recompensas: seguir para o fluxo de ativação. */
+    val fromAcceptActivate: Boolean get() = source == SOURCE_ACCEPT_ACTIVATE
+
     /** Linha discreta para a tela. */
     fun statusLine(): String {
         val parts = mutableListOf("Aberto por link")
@@ -31,6 +36,8 @@ data class DeepLink(
     companion object {
         const val SCHEME = "vertalnode"
         const val HOST = "open"
+        /** `source` que o vertal.dev manda depois do aceite (src/lib/vertalNode.ts androidIntentUrl). */
+        const val SOURCE_ACCEPT_ACTIVATE = "recompensas"
 
         private const val MAX_QUERY = 1024
         private val SAFE_VALUE = Regex("^[A-Za-z0-9._-]{1,64}$")
