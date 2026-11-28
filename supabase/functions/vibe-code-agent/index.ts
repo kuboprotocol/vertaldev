@@ -99,6 +99,9 @@ import {
   resolveManagedAuth,
   wantsAuthKit,
 } from "../_shared/vertalAuthKit.ts";
+// Conector Vertal AI (flag VERTAL_AI_CONNECTOR_ENABLED, desligada por padrão; ver docs/VERTAL-AI-CONECTOR.md).
+import { applyVertalAiToRequirements, isVertalAiPath, vertalAiFilesFor, vertalAiPromptBlock, vertalAiSteps } from "../_shared/vertalAiConnector.ts";
+import { vertalAiForRequest } from "../_shared/vertalAiConnectorStore.ts";
 
 /**
  * Ponte Vibe Code → Vertal Chat: pergunta ao creative-router (tool agent_chat,
@@ -540,6 +543,8 @@ Deno.serve(async (req) => {
     record?: unknown;
     /** Login com Google gerenciado pelo Vertal: {enabled, appName?, branding?, logoUrl?, termsAccepted?, termsVersion?}. */
     authKit?: unknown;
+    /** Conector Vertal AI: {enabled:true} = o Dev aceitou (ativa de forma idempotente). Só vale com a flag ligada. */
+    vertalAi?: unknown;
   };
   try {
     body = await req.json();
@@ -1190,11 +1195,16 @@ Deno.serve(async (req) => {
           for (const w of authKit.warnings) send({ kind: "auth_kit", status: "skipped", title: "Login Vertal", detail: w });
         }
 
+        // Conector Vertal AI: flag desligada → {mode:"off"} sem tocar no banco; vertalAi* abaixo não muda nada.
+        const vertalAi = await vertalAiForRequest(admin, Deno.env.toObject(), { userId, projectId, prompt, request: body.vertalAi }).catch(() => ({ state: { mode: "off" as const } })); // Vertal AI
+        for (const st of vertalAiSteps(vertalAi.state, vertalAi).filter((x) => x.status !== "success" || x.vertalAi.created)) send(st);
+
         // Atitude Vertal: soma a personalidade ao protocolo (JSON e regras intactos).
         // Ligada para todos por padrão; VERTAL_PERSONA_ENABLED=off desliga sem deploy.
         const system =
           withVertalPersona(SYSTEM, "vibe", vertalPersonaEnabled(Deno.env.get("VERTAL_PERSONA_ENABLED"))) +
           (authKit.enabled ? formatAuthKitForPrompt(authKit.options) : authOffer ? AUTH_KIT_OFFER_PROMPT : "") +
+          vertalAiPromptBlock(vertalAi.state) +
           (design.enabled ? buildDesignPrompt(design.surface, { target: "react" }) : "") +
           formatMemoriesForPrompt(memories) +
           formatConnectorsForPrompt(connected) +
@@ -1535,6 +1545,11 @@ Deno.serve(async (req) => {
           });
         }
 
+        // Conector Vertal AI ativo: helper e proxy determinísticos (o agente não escreve esses paths). Off/oferta: nada.
+        if (vertalAi.state.mode === "active") for (const path of [...proposed.keys()]) if (isVertalAiPath(path)) proposed.delete(path);
+        for (const f of vertalAiFilesFor(vertalAi.state)) proposed.set(f.path, { content: f.content, reason: f.reason }); // Vertal AI
+        for (const st of vertalAiSteps(vertalAi.state).filter((x) => x.status === "success" && !x.vertalAi.created)) send(st);
+
         if (Object.keys(reviewProblems).length) {
           send({
             kind: "review",
@@ -1638,6 +1653,8 @@ Deno.serve(async (req) => {
           ),
           vaultKeys,
         );
+        // Conector Vertal AI: tira chaves de outros provedores de IA e mostra "Vertal AI" conectada. Off: nada.
+        if (vertalAi.state.mode !== "off") requirements.splice(0, requirements.length, ...applyVertalAiToRequirements(requirements, vertalAi.state, prompt));
         let pendingForReply: Parameters<typeof composeAgentReply>[0]["pendingRequirements"] = [];
         if (requirements.length) {
           const scoped = (q: any) => (projectId ? q.eq("project_id", projectId) : q.is("project_id", null));

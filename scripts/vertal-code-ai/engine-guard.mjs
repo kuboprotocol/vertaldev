@@ -74,6 +74,22 @@ export const FLAGGED = ['src/App.tsx', 'src/components/vertal-chat/VertalChat.ts
 // Vertal CRM (conector próprio do Vertal) idem, atrás de VITE_VERTAL_CRM / VERTAL_CRM_ENABLED.
 export const VCA_LINE = /VertalCodeAi|VertalCodeAI|VERTAL_CODE_AI|VERTAL Code AI|VertalProspector|vertalProspector|VERTAL_PROSPECTOR|VertalGrowth|vertalGrowth|VERTAL_GROWTH|VertalCrm|vertalCrm|VERTAL_CRM/;
 
+/**
+ * Conector Vertal AI (VERTAL_AI_CONNECTOR_ENABLED, desligado por padrão): pontos do motor que ele precisa tocar.
+ * Mesma regra dos FLAGGED: só linhas NOVAS (nenhuma existente removida/alterada) e toda linha nova tem que ser
+ * do conector (VERTAL_AI_LINE). Lista fechada; cada linha está listada no PR e coberta por
+ * src/test/vertal-ai-connector.test.ts ("engine guard").
+ */
+export const CONNECTOR_FLAGGED = [
+  'supabase/functions/vibe-code-agent/index.ts',
+  'supabase/functions/creative-router/index.ts',
+  'supabase/functions/_shared/chatAgent.ts',
+  'src/lib/chatAgent/vibeBridge.ts',
+  'src/lib/vibeCodeAgentTypes.ts',
+  'src/components/vibe-code/VibeCodeAgentChat.tsx',
+];
+export const VERTAL_AI_LINE = /vertalAi|VertalAi|VERTAL_AI|vertal_ai|Vertal AI/;
+
 const git = (args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 
 export const isProtected = (f) => PROTECTED.some((p) => f === p || f.startsWith(`${p}/`));
@@ -85,7 +101,8 @@ export function checkEngine(base = 'origin/main') {
   const changed = git(['diff', '--name-only', mergeBase]).split('\n').filter(Boolean);
   const violations = [];
   for (const f of changed) {
-    const flagged = FLAGGED.includes(f);
+    const connector = CONNECTOR_FLAGGED.includes(f);
+    const flagged = FLAGGED.includes(f) || connector;
     if (!flagged && !isProtected(f)) continue;
     if (!flagged) {
       violations.push(`arquivo do motor alterado: ${f}`);
@@ -95,7 +112,7 @@ export function checkEngine(base = 'origin/main') {
     for (const l of diff) {
       if (l.startsWith('+++') || l.startsWith('---')) continue;
       if (l.startsWith('-')) violations.push(`${f}: linha existente removida/alterada: ${l.slice(1).trim().slice(0, 120)}`);
-      else if (l.startsWith('+') && l.slice(1).trim() && !VCA_LINE.test(l)) violations.push(`${f}: linha nova fora do VERTAL Code AI: ${l.slice(1).trim().slice(0, 120)}`);
+      else if (l.startsWith('+') && l.slice(1).trim() && !(connector ? VERTAL_AI_LINE : VCA_LINE).test(l)) violations.push(`${f}: linha nova fora do ${connector ? 'conector Vertal AI' : 'VERTAL Code AI'}: ${l.slice(1).trim().slice(0, 120)}`);
     }
   }
   return { mergeBase, changed, violations };

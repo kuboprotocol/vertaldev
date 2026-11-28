@@ -168,6 +168,8 @@ export type AgentAction =
   // Ponte Chat → Vibe Code: start/continue/ask levam prompt; continue/status exigem a conversa.
   // authKit: o Dev aceitou o "Login com Google gerenciado pelo Vertal" (logo do Vertal; marca branca só no Vertal Code).
   | { tool: "vibe_code"; op: VibeCodeOp; prompt: string; conversationId?: string; authKit?: boolean }
+  // Conector Vertal AI: o Dev aceitou no chat → o Vibe Code ativa (idempotente; flag e allowlist no servidor).
+  | { tool: "vibe_code"; op: VibeCodeOp; prompt: string; conversationId?: string; authKit?: boolean; vertalAi: true }
   // Navegador na nuvem: lê, pré-visualiza e (com aprovação do usuário) envia formulários de sites.
   | { tool: "browser_form"; op: BrowserFormOp; url: string; values?: FormValues; submitSelector?: string }
   // Vertal Navigator: navegador na nuvem com sessão persistente (login, navegar, pesquisar dentro de sites).
@@ -321,6 +323,8 @@ export interface AgentPromptContext {
   fluxosApps?: Array<{ key: string; name: string }>;
   /** A conversa fala de login/cadastro: inclui a oferta do Login com Google gerenciado pelo Vertal (ver wantsAuthKit). */
   authKit?: boolean;
+  /** Conector Vertal AI (flag VERTAL_AI_CONNECTOR_ENABLED + allowlist) E a conversa fala de app com IA: inclui VERTAL_AI_RULES. */
+  vertalAi?: boolean;
   /** A conversa fala de Huginn: inclui a ferramenta huginn (ver wantsHuginn). */
   huginn?: boolean;
   /** Pedido sobre o e-mail do usuário (ver emailRoute): "gmail" inclui as regras do conector. */
@@ -442,6 +446,10 @@ const AUTOMATISCH_RULES =
  * fase 3 (github, youtube) só entram se couberem; em conversas muito longas
  * (memória, resumo e plano cheios) a de menor prioridade fica de fora.
  */
+/** Conector Vertal AI no Vertal Chat: oferece uma vez; aceitou → vibe_code com "vertal_ai":true (o Vibe Code ativa, idempotente). */
+export const VERTAL_AI_RULES =
+  'IA em apps: app/site que usa IA (texto, vídeo, voz) → ofereça UMA vez ativar a "Vertal AI" (um clique: chave do projeto guardada no Cofre, uso nos créditos Vertal dele, nada para configurar). Aceitou: vibe_code start/continue com "vertal_ai":true. Nunca peça variáveis de ambiente nem chaves de IA, e nunca sugira OpenAI, Anthropic, Gemini ou outros provedores, a menos que ele peça um deles explicitamente.';
+
 export const AGENT_PROMPT_BUDGET = 25_950;
 
 const MEMORY_RULES = [
@@ -580,6 +588,7 @@ function buildPrompt(ctx: AgentPromptContext): string {
     ctx.huginn ? `${HUGINN_RULES}\n` : "",
     ctx.automatisch || ctx.huginn ? `${BRAND_RULES}\n` : "",
     ctx.authKit ? `${AUTH_KIT_RULES}\n` : "",
+    ctx.vertalAi ? `${VERTAL_AI_RULES}\n` : "",
     ctx.scheduler ? `${SCHEDULER_RULES}\n` : "",
     ctx.voiceClone ? `${VOICE_CLONE_RULES}\n` : "",
     ctx.memoryEnabled === false ? MEMORY_OFF : ctx.memoryEnabled === null ? MEMORY_UNAVAILABLE : MEMORY_RULES,
@@ -684,6 +693,11 @@ export function parseVibeCodeAction(a: Record<string, unknown>): Extract<AgentAc
   if (op === "continue" && !conversationId) return null;
   // "start" sempre abre uma conversa nova no Vibe Code: ignora um id que tenha vindo junto.
   const authKit = (a.auth_kit === true || a.authKit === true) && op !== "ask" ? { authKit: true } : {};
+  // Conector Vertal AI: só entra quando o modelo manda "vertal_ai":true (a regra só está no prompt com a flag).
+  const vertalAi = (a.vertal_ai === true || a.vertalAi === true) && op !== "ask";
+  if (vertalAi && op === "start") return { tool: "vibe_code", op, prompt, ...authKit, vertalAi: true };
+  if (vertalAi && conversationId) return { tool: "vibe_code", op, prompt, conversationId, ...authKit, vertalAi: true };
+  if (vertalAi) return { tool: "vibe_code", op, prompt, ...authKit, vertalAi: true };
   if (op === "start") return { tool: "vibe_code", op, prompt, ...authKit };
   return conversationId ? { tool: "vibe_code", op, prompt, conversationId, ...authKit } : { tool: "vibe_code", op, prompt, ...authKit };
 }

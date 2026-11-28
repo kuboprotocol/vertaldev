@@ -25,7 +25,9 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { buildChain, estimateCostUsd, type VcaChatMessage as ChatMessage } from "../_shared/vertalCodeAi/router.ts";
 import { callMetered, GatewayError, estimateTokens } from "../_shared/vertalCodeAi/gateway.ts";
 import { apiCostMicro, apiMaxCostMicro, checkSpend, loadPricing, MICRO, worstClass } from "../_shared/vertalCodeAi/pricing.ts";
-import { aiKeyPrefix, assertOwner, bearerFrom, checkKeyRow, generateAiKey, hashAiKey, parseNewKey } from "../_shared/vertalCodeAi/apiKeys.ts";
+import { assertOwner, bearerFrom, checkKeyRow, hashAiKey } from "../_shared/vertalCodeAi/apiKeys.ts";
+import { AI_KEY_COLS, createAiKeyRecord } from "../_shared/vertalCodeAi/apiKeysStore.ts";
+import { handleConnector } from "./connector.ts";
 import { billingFlags, billingV2For, expandBillingEnv, isBillingKind, isPriceError, loadBilling, pickBillingLocale, priceRequest, wholesaleBalanceGate } from "../_shared/vertalCodeAi/billing.ts";
 import { type BillingRuntime, notifyIfLow, usageStatement } from "../_shared/vertalCodeAi/billingRuntime.ts";
 import { makeEngine as makeFluxosEngine } from "../_shared/fluxosApps.ts";
@@ -89,23 +91,32 @@ Deno.serve(async (req) => {
   const admin: any = createClient(env("SUPABASE_URL")!, env("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
   try {
-    if (path.endsWith("/v1/models")) return json(200, modelsList(1764000000));
-    if (path.endsWith("/keys")) return await manageKeys(req, admin);
-    // Voz clonada (marca branca): /v1/voices…, /v1/audio/speech|sing, /v1/voice-jobs/{id}, /v1/music/genres.
-    const voice = await handleVoiceApi(req, admin, path);
-    if (voice) return voice;
-    // Vídeo (marca branca): /v1/videos/generations, /v1/videos/{id} → video.ts (liberado por chave).
-    const video = await handleVideoApi(req, admin, path);
-    if (video) return video;
-    if (!path.endsWith("/v1/chat/completions")) return json(404, errorBody("Rota não encontrada.", "not_found"));
-    if (req.method !== "POST") return json(405, errorBody("Use POST.", "method_not_allowed"));
-    return await chatCompletions(req, admin);
+    // Conector Vertal AI (flag própria, desligada por padrão): /connector (JWT) e proxy /p/<ref>/v1/… → connector.ts.
+    // Desligado: devolve null e tudo abaixo segue exatamente como antes.
+    const connector = await handleConnector(req, admin, path, (r, p) => route(r, admin, p));
+    if (connector) return connector;
+    return await route(req, admin, path);
   } catch (e) {
     if (e instanceof CompatError) return json(e.status, errorBody(e.message, e.code));
     console.error("[vertal-ai-api] erro:", e instanceof Error ? e.message : e);
     return json(500, errorBody("Erro interno.", "internal_error", "api_error"));
   }
 });
+
+/** Rotas da API (as mesmas de antes). O proxy do conector reentra aqui com a chave do projeto. */
+async function route(req: Request, admin: any, path: string): Promise<Response> {
+  if (path.endsWith("/v1/models")) return json(200, modelsList(1764000000));
+  if (path.endsWith("/keys")) return await manageKeys(req, admin);
+  // Voz clonada (marca branca): /v1/voices…, /v1/audio/speech|sing, /v1/voice-jobs/{id}, /v1/music/genres.
+  const voice = await handleVoiceApi(req, admin, path);
+  if (voice) return voice;
+  // Vídeo (marca branca): /v1/videos/generations, /v1/videos/{id} → video.ts (liberado por chave).
+  const video = await handleVideoApi(req, admin, path);
+  if (video) return video;
+  if (!path.endsWith("/v1/chat/completions")) return json(404, errorBody("Rota não encontrada.", "not_found"));
+  if (req.method !== "POST") return json(405, errorBody("Use POST.", "method_not_allowed"));
+  return await chatCompletions(req, admin);
+}
 
 async function chatCompletions(req: Request, admin: any): Promise<Response> {
   // 1) Chave
@@ -261,7 +272,7 @@ async function manageKeys(req: Request, admin: any): Promise<Response> {
   if (!u?.user) return json(401, { error: "Sessão inválida." });
   const userId = u.user.id;
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-  const COLS = "id, name, key_prefix, monthly_cap_credits, rpm, spent_micro, spent_period, created_at, last_used_at, expires_at, revoked_at";
+  const COLS = AI_KEY_COLS;
 
   const ownRow = async (id: unknown) => {
     if (typeof id !== "string") throw new CompatError("id inválido");
@@ -276,23 +287,11 @@ async function manageKeys(req: Request, admin: any): Promise<Response> {
 
   switch (body.action) {
     case "create": {
-      const { count } = await admin.from("vertal_ai_api_keys").select("id", { count: "exact", head: true }).eq("owner_id", userId).is("revoked_at", null);
-      if ((count ?? 0) >= 10) return json(400, { error: "Limite de 10 chaves ativas." });
-      let fields;
-      try {
-        fields = parseNewKey(body, PRICING.keyDefaults);
-      } catch (e) {
-        return json(400, { error: e instanceof Error ? e.message : "Dados inválidos." });
-      }
-      const key = generateAiKey();
-      const { data, error } = await admin
-        .from("vertal_ai_api_keys")
-        .insert({ owner_id: userId, ...fields, key_hash: await hashAiKey(key), key_prefix: aiKeyPrefix(key) })
-        .select(COLS)
-        .single();
-      if (error) return json(500, { error: "Não consegui criar a chave." });
+      // Mesma criação usada pelo conector Vertal AI (apiKeysStore.ts): limite, validação, hash.
+      const r = await createAiKeyRecord(admin, userId, body, PRICING.keyDefaults);
+      if (r.ok === false) return json(r.status, { error: r.error });
       // A chave inteira aparece só agora.
-      return json(200, { key, record: data });
+      return json(200, { key: r.key, record: r.record });
     }
     case "list": {
       const { data } = await admin.from("vertal_ai_api_keys").select(COLS).eq("owner_id", userId).order("created_at", { ascending: false });

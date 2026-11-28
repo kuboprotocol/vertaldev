@@ -102,6 +102,7 @@ import { autoImport as vertalCrmAutoImport, handleCrm, hashApiKey as hashVertalC
 import { verifyFluxosKey as verifyVertalCrmFluxosKey } from "../_shared/fluxosBroker.ts";
 import { makeEngine as makeVertalCrmEngine } from "../_shared/fluxosApps.ts";
 import { vertalPersonaEnabled } from "../_shared/vertalPersona.ts";
+import { loadConnectorConfig, withVertalAiHint } from "../_shared/vertalAiConnector.ts";
 // VERTAL Code AI → Vertal Data Library (Vertaldephin): desligado por padrão (config VERTAL_DATA_LIBRARY); só com consentimento gravado.
 import {
   dataLibraryConfig as vcaDataLibraryConfig,
@@ -824,7 +825,8 @@ Deno.serve(async (req) => {
             {
               mode,
               effort,
-              prompt,
+              // Conector Vertal AI: regra anexada ao pedido só com a flag + allowlist (ver withVertalAiHint).
+              prompt: withVertalAiHint(prompt, loadConnectorConfig(Deno.env.toObject()), userId),
               history,
               images,
               attachments,
@@ -1273,7 +1275,9 @@ Deno.serve(async (req) => {
             effort,
             // Starter Web3 (VERTAL_METAMASK_CODE_HINT, padrão desligado): só anexa uma dica ao PEDIDO quando ele fala
             // de carteira/dApp. Desligado = o mesmo prompt de sempre. O prompt de sistema não muda.
-            prompt: isWeb3HintEnabled(expandWalletEnv(env()), userId) ? withWeb3Hint(prompt) : prompt,
+            // Conector Vertal AI (VERTAL_AI_CONNECTOR_ENABLED + allowlist, padrão desligado): só anexa a regra ao PEDIDO
+            // quando ele fala de IA no app. Desligado = o mesmo prompt de sempre.
+            prompt: withVertalAiHint(isWeb3HintEnabled(expandWalletEnv(env()), userId) ? withWeb3Hint(prompt) : prompt, loadConnectorConfig(Deno.env.toObject()), userId),
             history,
             images,
             attachments,

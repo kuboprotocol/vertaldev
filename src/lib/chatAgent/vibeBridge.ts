@@ -40,6 +40,8 @@ export function vibeCodeRequestBody(action: VibeCodeAction, chatConversationId?:
   switch (action.op) {
     case 'start':
     case 'continue':
+      // Conector Vertal AI: o Dev aceitou no chat → o Vibe Code ativa (idempotente; flag e allowlist no servidor).
+      if ('vertalAi' in action && action.vertalAi) return { ...base, prompt: action.prompt, mode: 'preview', ...(action.authKit ? { authKit: { enabled: true, branding: 'vertal' } } : {}), vertalAi: { enabled: true } };
       // Pelo chat, o kit sai sempre com o logo do Vertal: marca branca exige o checkbox no Vertal Code.
       return { ...base, prompt: action.prompt, mode: 'preview', ...(action.authKit ? { authKit: { enabled: true, branding: 'vertal' } } : {}) };
     case 'ask':
