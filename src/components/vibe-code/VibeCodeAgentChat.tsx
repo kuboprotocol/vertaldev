@@ -56,6 +56,7 @@ import { VibeConversationList } from "./VibeConversationList";
 import { VibeRequirementsCard } from "./VibeRequirementsCard";
 import { VibeAuthKitButton } from "./VibeAuthKitButton";
 import { authKitRequestFromPrefs, loadAuthKitPrefs, saveAuthKitPrefs, type AuthKitPrefs } from "@/lib/vertalAuthKit";
+import { VertalAiOfferCard } from "@/components/vertal-ai/VertalAiOfferCard";
 import { VibeFixQueueCard } from "./VibeFixQueueCard";
 import { VibePlanPanel } from "./VibePlanPanel";
 import { VibeStagedChanges } from "./VibeStagedChanges";
@@ -139,6 +140,7 @@ const STEP_ICON: Record<VibeStepKind, typeof Brain> = {
   delegate: MessagesSquare,
   navigator: Globe,
   auth_kit: ShieldCheck,
+  vertal_ai: Sparkles, // Vertal AI
   handoff: MessagesSquare,
   reply: MessageSquare,
   error: AlertCircle,
@@ -1307,6 +1309,9 @@ export function VibeCodeAgentChat({
                     </Button>
                   </div>
                 )}
+
+                {/* Conector Vertal AI: cartão de um clique (só com VITE_VERTAL_AI_CONNECTOR e oferta do servidor). */}
+                {(m.steps ?? []).some((st) => st.kind === "vertal_ai" && st.vertalAi?.offer) && <VertalAiOfferCard projectId={projectId ?? null} needsVideo={(m.steps ?? []).some((st) => st.kind === "vertal_ai" && st.vertalAi?.needs?.video === true)} disabled={running} onActivated={(vertalAiFollowUp) => void send(vertalAiFollowUp)} />}
 
                 {requirementsStep?.requirements && (
                   <div className="pl-8">

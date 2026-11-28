@@ -90,6 +90,7 @@ import {
 } from "../_shared/chatDelegate.ts";
 import { validatePublicUrl } from "../_shared/security.ts";
 import { wantsAuthKit } from "../_shared/vertalAuthKit.ts";
+import { connectorAllowed, detectAiNeeds, loadConnectorConfig } from "../_shared/vertalAiConnector.ts"; // Vertal AI
 import { decodeImageDataUrl, generateChatImage } from "../_shared/chatImage.ts";
 import { GMAIL_SECRETARY_COST } from "../_shared/gmailBilling.ts";
 // Agendador do Vertal Chat: desligado por padrão (VERTAL_CHAT_SCHEDULER_ENABLED + VERTAL_CHAT_SCHEDULER_USER_IDS).
@@ -709,6 +710,9 @@ async function handleAgentChat(
   const huginnOn = !delegated && wantsHuginn([...all.slice(-8), ...results.slice(-6)]);
   // Login com Google gerenciado pelo Vertal: a oferta só entra quando o Dev fala de login.
   const authKitOn = !delegated && wantsAuthKit(all.filter((m) => m.role === "user").slice(-6));
+  // Conector Vertal AI: só com a flag ligada para este usuário E a conversa falando de app com IA; senão o prompt é o mesmo.
+  const vertalAiText = all.filter((m) => m.role === "user").slice(-6).map((m) => m.content).join("\n");
+  const vertalAiOn = !delegated && connectorAllowed(loadConnectorConfig(Deno.env.toObject()), user.id) && /\b(app|aplicativo|site|sistema|plataforma|saas|ferramenta|gerador)\b/i.test(vertalAiText) && detectAiNeeds(vertalAiText).any;
   // Apps do Vertal Fluxos conectados pelo usuário: a ferramenta fluxos entra quando a conversa cita algum.
   let fluxosApps: Array<{ key: string; name: string }> = [];
   if (!delegated) {
@@ -743,6 +747,7 @@ async function handleAgentChat(
     automatisch: automatischOn,
     huginn: huginnOn,
     authKit: authKitOn,
+    ...(vertalAiOn ? { vertalAi: true } : {}),
     fluxosApps,
     // Atitude Vertal: ligada para todos por padrão; VERTAL_PERSONA_ENABLED=off desliga na hora.
     persona: vertalPersonaEnabled(Deno.env.get("VERTAL_PERSONA_ENABLED")),

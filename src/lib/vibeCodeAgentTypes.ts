@@ -41,6 +41,8 @@ export type VibeStepKind =
   | "navigator"
   /** Login com Google gerenciado pelo Vertal: kit adicionado (success) ou oferecido (skipped + authKit.offer). */
   | "auth_kit"
+  /** Conector Vertal AI: oferecido (skipped + vertalAi.offer), ativado/conectado (success) ou falha (failed). */
+  | "vertal_ai"
   /** Resposta em texto do agente ao usuário (o balão do chat). */
   | "reply"
   | "error"
@@ -83,6 +85,8 @@ export interface VibeStep {
   navigator?: unknown;
   /** Kit de login (kind "auth_kit"). */
   authKit?: { offer?: boolean; branding?: "vertal" | "white_label"; managed?: boolean };
+  /** Conector Vertal AI (kind "vertal_ai"). */
+  vertalAi?: { offer?: boolean; active?: boolean; created?: boolean; video?: boolean; needs?: { any: boolean; text: boolean; image: boolean; video: boolean; voice: boolean } };
   /** Botão de ação do passo (só rota interna, ex.: /connectors/github). */
   link?: { href: string; label: string };
   /** O cliente deve seguir sozinho para a próxima tarefa (autonomia semi/full). */
@@ -154,6 +158,8 @@ export interface VibeAgentRequest {
   devContext?: DevContext;
   /** Login com Google gerenciado pelo Vertal (ver src/lib/vertalAuthKit.ts). */
   authKit?: AuthKitRequest;
+  /** Conector Vertal AI: {enabled:true} quando o Dev aceitou (o servidor ativa, idempotente). */
+  vertalAi?: { enabled: boolean };
 }
 
 export type VibePlanAction =
