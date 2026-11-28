@@ -540,6 +540,9 @@ export function applyVertalAiToRequirements<T extends RequirementLike>(reqs: T[]
     if (keepOthers) return true;
     if (r.slug === VERTAL_AI_CONNECTOR_SLUG || r.slug === "ai-gateway") return false;
     if (r.secrets.some((s) => OTHER_AI_SECRETS.has(s))) return false;
+    // A própria Vertal AI pedida como chave manual (VERTAL_API_KEY etc.): o conector cobre, nunca vira pedido de variável.
+    if (r.secrets.some((s) => /^(?:VITE_|NEXT_PUBLIC_)?VERTAL_(?:AI_)?(?:API_KEY|API_URL|BASE_URL)$/.test(s))) return false;
+    if (/^custom:.*vertal|vertal[\s-]*(?:ai|api)/i.test(`${r.slug} ${r.label}`)) return false;
     return !(r.slug.startsWith("custom:") && OTHER_AI_NAME.test(`${r.slug} ${r.label}`));
   });
   if (state.mode === "active") {

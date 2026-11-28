@@ -426,14 +426,20 @@ describe("engine guard (vibe-code-agent)", () => {
     expect(touched).toEqual([
       "import { applyVertalAiToRequirements, isVertalAiPath, vertalAiFilesFor, vertalAiPromptBlock, vertalAiSteps } from \"../_shared/vertalAiConnector.ts\";",
       "import { vertalAiForRequest } from \"../_shared/vertalAiConnectorStore.ts\";",
+      "import { vertalAiAwarenessFor } from \"../_shared/vertalAiChatStore.ts\"; // Vertal AI: conectores do Dev (só nomes/status)",
+      "import { sanitizeVertalAiReply, vertalAiFixEnvNames } from \"../_shared/vertalAiChat.ts\"; // Vertal AI: nunca pedir chave/env à mão",
       "vertalAi?: unknown;",
       "const vertalAi = await vertalAiForRequest(admin, Deno.env.toObject(), { userId, projectId, prompt, request: body.vertalAi }).catch(() => ({ state: { mode: \"off\" as const } })); // Vertal AI",
       "for (const st of vertalAiSteps(vertalAi.state, vertalAi).filter((x) => x.status !== \"success\" || x.vertalAi.created)) send(st);",
+      "const vertalAiAwareness = await vertalAiAwarenessFor(admin, Deno.env.toObject(), userId, projectId, connected).catch(() => \"\"); // Vertal AI: flag off → \"\" sem banco",
       "vertalAiPromptBlock(vertalAi.state) +",
+      "vertalAiAwareness +",
       "if (vertalAi.state.mode === \"active\") for (const path of [...proposed.keys()]) if (isVertalAiPath(path)) proposed.delete(path);",
       "for (const f of vertalAiFilesFor(vertalAi.state)) proposed.set(f.path, { content: f.content, reason: f.reason }); // Vertal AI",
+      "if (vertalAi.state.mode !== \"off\") for (const [p, f] of proposed) if (!isVertalAiPath(p)) proposed.set(p, { ...f, content: vertalAiFixEnvNames(f.content) }); // Vertal AI: VERTAL_API_KEY → VERTAL_AI_API_KEY",
       "for (const st of vertalAiSteps(vertalAi.state).filter((x) => x.status === \"success\" && !x.vertalAi.created)) send(st);",
       "if (vertalAi.state.mode !== \"off\") requirements.splice(0, requirements.length, ...applyVertalAiToRequirements(requirements, vertalAi.state, prompt));",
+      "if (vertalAi.state.mode !== \"off\") replyText = sanitizeVertalAiReply(replyText, { mode: vertalAi.state.mode === \"active\" ? \"active\" : \"offer\" }); // Vertal AI: sem \"configure a chave/env\"",
     ]);
   });
 });

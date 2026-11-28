@@ -39,6 +39,37 @@ oferece uma vez; se o Dev aceitar, manda `vibe_code` com `"vertal_ai":true` e o 
 **VERTAL Code AI:** com a flag, quando o pedido fala de IA, `withVertalAiHint` anexa a regra ao PEDIDO
 (o prompt de sistema não muda): usar a Vertal AI pelo servidor e nunca pedir variáveis nem outros provedores.
 
+## Vertal Chat e consciência de conectores (fix 28/11, depois do teste SunkAI)
+
+**O que falhou no teste do Laércio (28/11 07:08, Vertal Chat):** o app SunkAI tinha sido criado às 01:38 pela
+ferramenta `app` do chat (HTML único via `generate-code`, que não conhece o conector). Às 07:08/07:09 o
+`creative-router` respondeu só com texto: escreveu "[artefato a3: aplicativo …]" sem rodar ferramenta e pediu
+`VERTAL_API_KEY` nas variáveis de ambiente / painel de segredos (regra do `api_request`). `VERTAL_AI_RULES`
+só sabia oferecer por `vibe_code`, o chat não tinha cartão e o conector da conta seguia inativo.
+
+**Agora (mesma flag + allowlist; flag off = nada muda, sem tocar no banco):**
+- `_shared/vertalAiChat.ts` (puro) + `_shared/vertalAiChatStore.ts` (só leitura de nomes/status).
+- Antes de responder, o chat e o Vibe Code leem **CONECTORES DO DEV**: Vertal AI (ativa ou não), Login Vertal,
+  MetaMask (rede), Fluxos conectados, nomes do Cofre. Nunca valores.
+- Decisão por rodada no chat: `active` (conector da conta já existe) → usa; `activate` (o Dev disse "use a Vertal AI",
+  "a chave já está conectada", "conecte a LLM", citou `VERTAL_API_KEY`… em pt/en/es) → ativa sem perguntar;
+  `offer` (app com IA, sem pedido) → cartão **Ativar Vertal AI** no chat (um clique, escopo `default`).
+- Reescrita determinística das ações: `app` de app com IA → `vibe_code` (projeto real, onde entram
+  `src/lib/vertalAi.ts` e o proxy `/p/<ref>`), com `"vertal_ai":true` quando ativo/ativando; `open_panel secrets`
+  sai (a menos que o Dev peça o painel); pedido explícito sem build → `vibe_code` continue/start. Na rodada com
+  resultados não repete o build.
+- Resposta limpa: sem "[artefato …]" inventado, sem pedir env/chave/Vercel/.env/painel de segredos, `VERTAL_API_KEY`
+  → `VERTAL_AI_API_KEY`, `VERTAL_API_URL` → `VERTAL_AI_BASE_URL`.
+- Vibe Code: pedido explícito ativa sem cartão (`vertalAiForRequest`); código gerado com `VERTAL_API_KEY`
+  (inclusive `VITE_`/`NEXT_PUBLIC_`) vira os nomes do servidor; requisito "Vertal AI API"/`VERTAL_API_KEY` sai; resposta
+  final sem "configure a chave".
+- Linhas novas no motor (só adição, todas com `vertalAi`): `creative-router/index.ts` (2 imports, snapshot, contexto,
+  reescrita, `reply`/`vertal_ai_offer` na resposta), `_shared/chatAgent.ts` (campo `vertalAiConnectors` + linha do prompt),
+  `vibe-code-agent/index.ts` (2 imports, bloco de conectores, nomes no código, resposta). Front: `useVertalChat.ts`
+  (estado do cartão) e `VertalChat.tsx` (cartão; arquivo entrou em `CONNECTOR_FLAGGED`).
+- Testes: `src/test/vertal-ai-chat.test.ts` (pedido SunkAI exato em `src/test/fixtures/sunkai-request.txt`).
+- Lacuna: a ferramenta `app` (HTML único) e o /builder seguem sem conector; app com IA sai dela para o Vibe Code.
+
 ## Onde a chave fica e como é protegida
 
 - **Banco:** `vertal_ai_api_keys` guarda só o SHA-256 (como no /keys). A chave inteira existe uma vez, na criação.

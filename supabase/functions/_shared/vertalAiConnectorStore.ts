@@ -30,6 +30,7 @@ import {
   VERTAL_AI_VAULT_GROUP,
   vaultNamesFor,
 } from "./vertalAiConnector.ts";
+import { explicitVertalAiIntent } from "./vertalAiChat.ts";
 
 const notExpired = (r: { expires_at?: string | null }) => !r.expires_at || Date.parse(r.expires_at) > Date.now();
 
@@ -149,7 +150,7 @@ export async function resolveProxyKey(admin: any, ref: string): Promise<ProxyKey
 /**
  * Estado do conector para um pedido do Vibe Code. Flag desligada → {mode:"off"} SEM tocar no
  * banco (o motor segue byte a byte igual). Com body.vertalAi.enabled (o Dev aceitou no Vertal Chat
- * ou clicou no cartão), ativa de forma idempotente antes de montar o prompt.
+ * ou clicou no cartão) ou pedido explícito no texto, ativa de forma idempotente antes de montar o prompt.
  */
 export async function vertalAiForRequest(
   admin: any,
@@ -162,7 +163,10 @@ export async function vertalAiForRequest(
   let created: boolean | undefined;
   let error: string | undefined;
   const needs = detectAiNeeds(input.prompt);
-  if (parseVertalAiRequest(input.request).enabled && (!active || (needs.video && !active.video))) {
+  // Aceite = clique no cartão / "vertal_ai":true do chat OU o Dev disse no pedido "use a Vertal AI",
+  // "a chave já está conectada", "conecte a LLM para vídeo" (verificado acima: sem conector, ativa agora).
+  const accepted = parseVertalAiRequest(input.request).enabled || explicitVertalAiIntent(input.prompt);
+  if (accepted && (!active || (needs.video && !active.video))) {
     const r = await ensureProjectConnector(makeConnectorDeps(admin, input.userId), { cfg, ownerId: input.userId, projectId: input.projectId, needsVideo: needs.video });
     if (r.ok === false) error = r.message;
     else {

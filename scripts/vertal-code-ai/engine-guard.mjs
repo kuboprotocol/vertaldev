@@ -87,6 +87,8 @@ export const CONNECTOR_FLAGGED = [
   'src/lib/chatAgent/vibeBridge.ts',
   'src/lib/vibeCodeAgentTypes.ts',
   'src/components/vibe-code/VibeCodeAgentChat.tsx',
+  // Cartão "Ativar Vertal AI" no Vertal Chat (também é FLAGGED do VERTAL Code AI: vale a linha de qualquer um dos dois).
+  'src/components/vertal-chat/VertalChat.tsx',
 ];
 export const VERTAL_AI_LINE = /vertalAi|VertalAi|VERTAL_AI|vertal_ai|Vertal AI/;
 
@@ -112,7 +114,7 @@ export function checkEngine(base = 'origin/main') {
     for (const l of diff) {
       if (l.startsWith('+++') || l.startsWith('---')) continue;
       if (l.startsWith('-')) violations.push(`${f}: linha existente removida/alterada: ${l.slice(1).trim().slice(0, 120)}`);
-      else if (l.startsWith('+') && l.slice(1).trim() && !(connector ? VERTAL_AI_LINE : VCA_LINE).test(l)) violations.push(`${f}: linha nova fora do ${connector ? 'conector Vertal AI' : 'VERTAL Code AI'}: ${l.slice(1).trim().slice(0, 120)}`);
+      else if (l.startsWith('+') && l.slice(1).trim() && !((connector && VERTAL_AI_LINE.test(l)) || (FLAGGED.includes(f) && VCA_LINE.test(l)))) violations.push(`${f}: linha nova fora do ${connector ? 'conector Vertal AI' : 'VERTAL Code AI'}: ${l.slice(1).trim().slice(0, 120)}`);
     }
   }
   return { mergeBase, changed, violations };

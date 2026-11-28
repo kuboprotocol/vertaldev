@@ -91,6 +91,8 @@ import {
 import { validatePublicUrl } from "../_shared/security.ts";
 import { wantsAuthKit } from "../_shared/vertalAuthKit.ts";
 import { connectorAllowed, detectAiNeeds, loadConnectorConfig } from "../_shared/vertalAiConnector.ts"; // Vertal AI
+import { applyVertalAiChat } from "../_shared/vertalAiChat.ts"; // Vertal AI no chat: app com IA → Vibe Code com o conector
+import { loadVertalAiChat } from "../_shared/vertalAiChatStore.ts"; // Vertal AI: conectores do Dev (só nomes/status)
 import { decodeImageDataUrl, generateChatImage } from "../_shared/chatImage.ts";
 import { GMAIL_SECRETARY_COST } from "../_shared/gmailBilling.ts";
 // Agendador do Vertal Chat: desligado por padrão (VERTAL_CHAT_SCHEDULER_ENABLED + VERTAL_CHAT_SCHEDULER_USER_IDS).
@@ -713,6 +715,8 @@ async function handleAgentChat(
   // Conector Vertal AI: só com a flag ligada para este usuário E a conversa falando de app com IA; senão o prompt é o mesmo.
   const vertalAiText = all.filter((m) => m.role === "user").slice(-6).map((m) => m.content).join("\n");
   const vertalAiOn = !delegated && connectorAllowed(loadConnectorConfig(Deno.env.toObject()), user.id) && /\b(app|aplicativo|site|sistema|plataforma|saas|ferramenta|gerador)\b/i.test(vertalAiText) && detectAiNeeds(vertalAiText).any;
+  // Vertal AI (flag + allowlist; senão null sem tocar no banco): conectores do Dev no prompt e decisão da rodada (ativa/oferece/usa).
+  const vertalAiChat = delegated ? null : await loadVertalAiChat(supaAdmin(), Deno.env.toObject(), user.id, { userTexts: all.filter((m) => m.role === "user").map((m) => m.content), assistantTexts: [...all.filter((m) => m.role === "assistant").map((m) => m.content), ...results.map((r) => JSON.stringify(r))], secretNames, firstRound: results.length === 0 }).catch((e) => { console.warn("[creative-router] vertalAi snapshot falhou:", sanitizeError(e)); return null; });
   // Apps do Vertal Fluxos conectados pelo usuário: a ferramenta fluxos entra quando a conversa cita algum.
   let fluxosApps: Array<{ key: string; name: string }> = [];
   if (!delegated) {
@@ -748,6 +752,7 @@ async function handleAgentChat(
     huginn: huginnOn,
     authKit: authKitOn,
     ...(vertalAiOn ? { vertalAi: true } : {}),
+    ...(vertalAiChat ? { vertalAi: vertalAiOn || vertalAiChat.ctx.mode !== "off", vertalAiConnectors: vertalAiChat.block } : {}),
     fluxosApps,
     // Atitude Vertal: ligada para todos por padrão; VERTAL_PERSONA_ENABLED=off desliga na hora.
     persona: vertalPersonaEnabled(Deno.env.get("VERTAL_PERSONA_ENABLED")),
@@ -874,6 +879,9 @@ async function handleAgentChat(
         actions = mail.actions as typeof actions;
       }
     }
+    // Vertal AI no chat: app com IA vira Vibe Code com o conector, sem painel de segredos e sem artefato escrito como texto.
+    const vertalAiOut = vertalAiChat ? applyVertalAiChat({ actions: final ? [] : actions, reply: turn.reply, ctx: vertalAiChat.ctx }) : null;
+    if (vertalAiOut) { actions = vertalAiOut.actions as typeof actions; turn = { ...turn, reply: vertalAiOut.reply }; if (vertalAiOut.rewrote) console.warn(`[creative-router] vertalAi mode=${vertalAiChat?.ctx.mode} ${vertalAiOut.rewrote} ação(ões) ajustada(s)`); }
     if (brain.planPhase) actions = actions.filter((a) => a.tool !== "plan");
     // Clonador de voz: conta fora da lista nunca recebe a ação (o creative-music também recusa).
     if (!voiceCloneOk) actions = actions.filter((a) => a.tool !== "voice_clone");
@@ -891,6 +899,8 @@ async function handleAgentChat(
     return jsonResponse(200, {
       reply: after.reply, actions, provider: gw.provider, model: gw.model, creditsCharged: cost,
       tier: gw.tier, ...(route.tier === "pro" ? { escalated: route.reason } : {}), ...(retried ? { retried: true } : {}),
+      ...(vertalAiOut ? { reply: applyVertalAiChat({ actions: [], reply: after.reply, ctx: vertalAiChat!.ctx }).reply } : {}),
+      ...(vertalAiOut?.offer ? { vertal_ai_offer: vertalAiOut.offer } : {}),
       ...(after.memory ? { memory: after.memory } : {}),
       ...(after.reviewed ? { reviewed: true } : {}),
       ...(delegated ? { origin, refused: originFilter.refused } : {}),
