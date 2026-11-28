@@ -686,3 +686,29 @@ vale para o pior caso (fala 300 s, canto 900 s de GPU) antes de enviar.
 além do `VERTAL_AI_API_ENABLED` da API. **Para ir ao ar:** merge do #225 (e deste PR), aplicar `proposed-migration.sql`,
 `proposed-migration-billing-v2.sql` e `proposed-migration-voice-api.sql`, criar a função `vertal-ai-api` (o projeto está
 no teto de funções; o deploy só atualiza as existentes) e ligar as flags.
+
+## API VERTAL · vídeo (marca branca) — 28/11/2026, liberado por chave
+
+Primeiro cliente: o MūskAI ("Vídeo de verdade" e "Vídeo com capa" do pacote de US$ 99). Motor = o mesmo app Modal
+`vertal-video` do "Vertal Vídeo" (Wan2.1-T2V-1.3B próprio, L40S), nova rota `/video`.
+
+| Rota (`Authorization: Bearer vtl_ai_…`) | O que faz |
+|---|---|
+| `POST /v1/videos/generations` | `{mode?: "ai"\|"cover", prompt?, duration_seconds (1–300), audio_url?, image_url?, end_user?}` → 202 `{id, status:"processing", eta_seconds, estimate:{price_usd, credits, max_price_usd, scenes}}` |
+| `GET /v1/videos/{id}` | `processing` / `completed` (+`video_url` 7 dias, `billing.credits`, `billing.price_usd`, `scenes`, `gpu_seconds`) / `failed` (nada cobrado) |
+
+- **"ai"**: gera N cenas de 5 s (480p, 16 qps) e monta em sequência (repetindo o ciclo) até a duração; com `audio_url`
+  a música vai por baixo. **"cover"**: capa parada + áudio (só CPU, ffmpeg, 1280×720, 2 qps).
+- **Trava de custo (fail closed):** preço de atacado ≤ `VERTAL_VIDEO_API_MAX_USD_PER_MIN` (0,30) × max(minutos, 1).
+  O orçamento de GPU enviado ao motor sai desse teto e o motor **para de gerar cenas** antes de passar dele
+  (contando a subida do contêiner); a cobrança é o custo real medido (GPU L40S US$1,95/h + CPU), nunca acima do teto.
+  Vídeo curto (< 1 min) usa 1 minuto de teto (US$ 0,30). Sem espaço para nem 1 cena → 503 `video_cost_guard`.
+- **Limites:** `VERTAL_VIDEO_API_MAX_SECONDS` 300, `_MAX_CLIPS` 24 (5 min ≈ 2 min de cenas únicas), `_STEPS` 20,
+  `_CLIP_GPU_S` 45 / `_COLD_START_S` 90 (só estimativas para planejar), `_GPU_USD_HOUR` 1,95, `_CPU_USD_PER_S` 0,000016.
+  Todos opcionais, no `VERTAL_GPU_CONFIG`.
+- **Cobrança:** kind `video` da cobrança v2 (atacado ×1,20, piso US$ 0,05), pré-pago, saldo zerado → 402, teto mensal
+  da chave vale para o pior caso antes de enviar; idempotente por job (`video-job:<id>`), só cobra o que fica pronto.
+- **Sem tabela nova:** o id do job é assinado (HMAC) e amarrado à chave; o MP4 fica em `uploads/{dono}/videos/api/`.
+- **Liga/desliga (por chave):** `vertal_ai_api_keys.features = {"video": true}` (migração `20261128010000`), ou
+  `VERTAL_VIDEO_API_ENABLED=true` + `VERTAL_VIDEO_API_KEY_IDS` no `VERTAL_GPU_CONFIG`. `VERTAL_VIDEO_API_ENABLED=false`
+  desliga para todas as chaves.

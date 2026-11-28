@@ -29,10 +29,10 @@ import { MUSIC_LYRIC_LANGUAGES, WORLD_GENRES, searchMusicStyles } from "../_shar
 type Env = Record<string, string | undefined>;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function json(status: number, body: unknown, extra: Record<string, string> = {}) {
+export function json(status: number, body: unknown, extra: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json", ...extra } });
 }
-const fail = (status: number, code: string, message: string, extra: Record<string, unknown> = {}) =>
+export const fail = (status: number, code: string, message: string, extra: Record<string, unknown> = {}) =>
   json(status, { error: { message, type: status === 402 ? "insufficient_quota" : status === 401 ? "authentication_error" : "invalid_request_error", code, ...extra } });
 const missingTable = (e: any) => !!e && (e.code === "42P01" || e.code === "PGRST205" || /does not exist|schema cache/i.test(String(e.message ?? "")));
 
@@ -41,9 +41,9 @@ function voiceEnv(): Env {
   return expandBillingEnv(voiceEnvFrom(Deno.env.toObject()));
 }
 
-interface KeyRow { id: string; owner_id: string; rpm: number | null; monthly_cap_credits: number | null }
+export interface KeyRow { id: string; owner_id: string; rpm: number | null; monthly_cap_credits: number | null }
 
-async function authKey(req: Request, admin: any): Promise<{ row: KeyRow; spentMicro: number } | Response> {
+export async function authKey(req: Request, admin: any): Promise<{ row: KeyRow; spentMicro: number } | Response> {
   const token = bearerFrom(req.headers);
   if (!token) return fail(401, "invalid_api_key", "Send Authorization: Bearer vtl_ai_…");
   const { data: row } = await admin
@@ -60,7 +60,7 @@ async function authKey(req: Request, admin: any): Promise<{ row: KeyRow; spentMi
   return { row, spentMicro: kc.spentThisMonthMicro };
 }
 
-async function balanceOf(admin: any, ownerId: string): Promise<number> {
+export async function balanceOf(admin: any, ownerId: string): Promise<number> {
   const [{ data: sub }, { data: owed }] = await Promise.all([
     admin.from("subscriptions").select("edits_limit, edits_used").eq("user_id", ownerId).eq("is_active", true).maybeSingle(),
     admin.from("vertal_ai_usage").select("debit_credits").eq("owner_id", ownerId).eq("charge_status", "owed").limit(500),
