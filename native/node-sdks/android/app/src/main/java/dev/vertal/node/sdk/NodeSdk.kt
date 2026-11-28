@@ -40,6 +40,12 @@ interface NodeSdk {
     fun stop()
     /** Retira o consentimento e para na hora. */
     fun optOut()
+
+    /**
+     * Retomar depois de reiniciar o aparelho (só se o SDK suportar). O SDK reconfere o consentimento
+     * no boot e só religa se estava compartilhando quando o aparelho desligou. Padrão: não faz nada.
+     */
+    fun setStartOnBoot(context: android.content.Context, enabled: Boolean) = Unit
 }
 
 /** Provedores conhecidos, com a URL da doc. `enabled = false` = aguardando aprovação do parceiro. */

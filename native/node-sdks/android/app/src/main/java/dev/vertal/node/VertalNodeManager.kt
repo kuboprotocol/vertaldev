@@ -33,7 +33,8 @@ class VertalNodeManager(
     private val supabaseAnonKey: String,
     private val appVersion: String?,
 ) {
-    private val prefs = context.getSharedPreferences("vertal_node", Context.MODE_PRIVATE)
+    private val appContext: Context = context.applicationContext
+    private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private val http = OkHttpClient()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var heartbeatJob: Job? = null
@@ -42,27 +43,49 @@ class VertalNodeManager(
     private var accessToken: String? = null
 
     /** Id pseudônimo do aparelho (também é o `uid` passado ao SDK). */
-    val deviceId: String = prefs.getString(KEY_DEVICE_ID, null) ?: "andr-${UUID.randomUUID()}".also {
-        prefs.edit().putString(KEY_DEVICE_ID, it).apply()
-    }
+    val deviceId: String = loadDeviceId(context)
 
     val provider: String get() = sdk.id
     val isOptedIn: Boolean get() = sdk.isOptedIn
     val isRunning: Boolean get() = sdk.isRunning
     val lastError: Throwable? get() = sdk.lastError
 
-    /** Botão "Ativar": abre o consentimento do SDK se preciso; se já aceitou, inicia. */
-    fun activate(activity: Activity?) {
-        if (!sdk.enabled) return
+    /** PAUSAR / DESATIVAR gravam isto: o app não religa sozinho (abrir o app, reiniciar) até o próximo "Ativar". */
+    val isPausedByUser: Boolean get() = prefs.getBoolean(KEY_USER_PAUSED, false)
+
+    /**
+     * Botão "Ativar" (ou o deep link do "Accept & activate" do vertal.dev, que o usuário já aceitou lá).
+     * Abre o consentimento DO SDK se preciso; só inicia depois do aceite. Nunca chama optIn() por conta própria.
+     */
+    fun activate(activity: Activity?, onDone: (Boolean) -> Unit = {}) {
+        if (!sdk.enabled) return onDone(false)
         if (sdk.isOptedIn) {
-            sdk.start()
-            sendHeartbeatAsync()
+            onDone(startAfterConsent())
         } else {
             sdk.requestConsent(activity) { accepted ->
-                if (accepted && !sdk.isRunning) sdk.start()
+                onDone(if (accepted) startAfterConsent() else false)
                 sendHeartbeatAsync()
             }
         }
+    }
+
+    /** Só com consentimento: inicia o serviço do SDK, lembra a escolha e liga a retomada após reiniciar. */
+    private fun startAfterConsent(): Boolean {
+        if (!sdk.isOptedIn) return false
+        prefs.edit().putBoolean(KEY_USER_PAUSED, false).apply()
+        val ok = safeStart()
+        if (ok) runCatching { sdk.setStartOnBoot(appContext, true) }
+        sendHeartbeatAsync()
+        return ok
+    }
+
+    /** start() do SDK sem derrubar o app (ex.: Android 12+ recusa serviço em primeiro plano vindo do fundo). */
+    private fun safeStart(): Boolean = try {
+        if (!sdk.isRunning) sdk.start()
+        true
+    } catch (e: Exception) {
+        Log.w(TAG, "start do SDK falhou", e)
+        false
     }
 
     /** Chamar no onResume da Activity: inicia se o usuário acabou de aceitar. */
@@ -71,19 +94,23 @@ class VertalNodeManager(
         sendHeartbeatAsync()
     }
 
-    /** Retoma só se o usuário já aceitou antes. Nunca abre o consentimento sozinho. */
+    /** Retoma só se o usuário já aceitou e não pausou. Nunca abre o consentimento sozinho. */
     fun resumeIfConsented() {
-        if (sdk.enabled && sdk.isOptedIn && !sdk.isRunning) sdk.start()
+        if (sdk.enabled && sdk.isOptedIn && !isPausedByUser && !sdk.isRunning) safeStart()
     }
 
+    /** PAUSAR: para o serviço; o consentimento continua, mas não religa sozinho. */
     fun stop() {
-        sdk.stop()
+        prefs.edit().putBoolean(KEY_USER_PAUSED, true).apply()
+        runCatching { sdk.stop() }.onFailure { Log.w(TAG, "stop falhou", it) }
         sendHeartbeatAsync()
     }
 
-    /** Opt-out: retira o consentimento e para o SDK imediatamente. */
+    /** DESATIVAR (opt-out): retira o consentimento, para na hora e desliga a retomada no boot. */
     fun optOut() {
-        sdk.optOut()
+        prefs.edit().putBoolean(KEY_USER_PAUSED, true).apply()
+        runCatching { sdk.setStartOnBoot(appContext, false) }
+        runCatching { sdk.optOut() }.onFailure { Log.w(TAG, "optOut falhou", it) }
         sendHeartbeatAsync()
     }
 
@@ -137,7 +164,17 @@ class VertalNodeManager(
 
     companion object {
         private const val TAG = "VertalNode"
+        private const val PREFS = "vertal_node"
+
+        /** Id pseudônimo do aparelho, criado uma vez (também é o `uid` passado ao SDK no init). */
+        fun loadDeviceId(context: Context): String {
+            val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            return p.getString(KEY_DEVICE_ID, null) ?: "andr-${UUID.randomUUID()}".also {
+                p.edit().putString(KEY_DEVICE_ID, it).apply()
+            }
+        }
         private const val KEY_DEVICE_ID = "device_id"
+        private const val KEY_USER_PAUSED = "user_paused"
         private const val HEARTBEAT_INTERVAL_MS = 30L * 60L * 1000L
     }
 }

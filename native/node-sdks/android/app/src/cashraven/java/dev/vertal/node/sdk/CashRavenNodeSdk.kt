@@ -89,4 +89,9 @@ class CashRavenNodeSdk : NodeSdk {
         need().optOut() // retira o consentimento
         CashRavenService.stop(appContext)
     }
+
+    /** cr.setStartOnBoot liga/desliga o CrBootReceiver do SDK (exige RECEIVE_BOOT_COMPLETED no manifest). */
+    override fun setStartOnBoot(context: Context, enabled: Boolean) {
+        cr?.setStartOnBoot(context, enabled)
+    }
 }

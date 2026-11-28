@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- API 34+: tipo do serviço em primeiro plano usado pelo CashRavenService -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <!-- Opcional: retomar depois de reiniciar o aparelho exige RECEIVE_BOOT_COMPLETED aqui e
-         cr.setStartOnBoot(ctx, true) (o consentimento é reconferido a cada boot). Não ligado ainda. -->
+    <!-- Retomar depois de reiniciar o aparelho: o CrBootReceiver do SDK vem DESLIGADO e só é ligado por
+         cr.setStartOnBoot(ctx, true), que o app chama depois que o usuário aceitou e ativou. No boot o SDK
+         reconfere o consentimento e só religa se estava compartilhando ao desligar (Pausar/Desativar = não). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 </manifest>

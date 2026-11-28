@@ -35,4 +35,12 @@ class DeepLinkTest {
         assertNull(DeepLink.parse("vertalnode:open"))
         assertNull(DeepLink.parse("not a uri"))
     }
+
+    @Test fun acceptActivateSoComSourceRecompensas() {
+        assertEquals(true, DeepLink.parse("vertalnode://open?source=recompensas")!!.fromAcceptActivate)
+        assertEquals(false, DeepLink.parse("vertalnode://open")!!.fromAcceptActivate)
+        assertEquals(false, DeepLink.parse("vertalnode://open?source=vertal-js")!!.fromAcceptActivate)
+        // parâmetros "activate"/"autostart" continuam ignorados
+        assertEquals(false, DeepLink.parse("vertalnode://open?activate=1&autostart=true")!!.fromAcceptActivate)
+    }
 }

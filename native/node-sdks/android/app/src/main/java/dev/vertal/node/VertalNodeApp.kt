@@ -20,11 +20,19 @@ class VertalNodeApp : Application() {
         // SDKs que rodam em processo próprio (Bright): nada do app roda nesse processo.
         if (NodeSdkFactory.isSdkServiceProcess()) return
         val apiKey = BuildConfig.NODE_SDK_API_KEY // chave do app ANDROID do provedor do flavor; nunca logar
-        val sdk = if (apiKey.isBlank()) {
-            Log.w(TAG, "Chave do SDK ${NodeSdkFactory.PROVIDER} ausente: o Vertal Node fica desligado neste build.")
-            DisabledNodeSdk(NodeSdkFactory.PROVIDER, NodeSdkFactory.PROVIDER, "api_key_missing")
-        } else {
-            NodeSdkFactory.create(BuildConfig.DEBUG)
+        val deviceId = VertalNodeManager.loadDeviceId(this)
+        val sdk = when {
+            apiKey.isBlank() -> {
+                Log.w(TAG, "Chave do SDK ${NodeSdkFactory.PROVIDER} ausente: o Vertal Node fica desligado neste build.")
+                DisabledNodeSdk(NodeSdkFactory.PROVIDER, NodeSdkFactory.PROVIDER, "api_key_missing")
+            }
+            else -> try {
+                NodeSdkFactory.create(BuildConfig.DEBUG).also { if (it.enabled) it.init(this, apiKey, uid = deviceId) }
+            } catch (e: Throwable) {
+                // Init do SDK não pode derrubar o app: fica desligado e a tela mostra o motivo.
+                Log.e(TAG, "init do SDK ${NodeSdkFactory.PROVIDER} falhou", e)
+                DisabledNodeSdk(NodeSdkFactory.PROVIDER, NodeSdkFactory.PROVIDER, "sdk_init_failed")
+            }
         }
 
         node = VertalNodeManager(
@@ -34,8 +42,7 @@ class VertalNodeApp : Application() {
             supabaseAnonKey = BuildConfig.VERTAL_SUPABASE_ANON_KEY,
             appVersion = BuildConfig.VERSION_NAME,
         )
-        if (sdk.enabled) sdk.init(this, apiKey, uid = node.deviceId)
-        // Se o usuário já aceitou antes, retoma. Nunca abre o consentimento sozinho.
+        // Se o usuário já aceitou e não pausou, retoma. Nunca abre o consentimento sozinho.
         node.resumeIfConsented()
     }
 

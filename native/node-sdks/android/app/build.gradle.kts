@@ -31,7 +31,7 @@ android {
         minSdk = 24
         targetSdk = 34
         versionCode = prop("VERTAL_NODE_VERSION_CODE").ifBlank { "1" }.toInt()
-        versionName = prop("VERTAL_NODE_VERSION_NAME").ifBlank { "0.1.0-test" }
+        versionName = prop("VERTAL_NODE_VERSION_NAME").ifBlank { "0.2.0-test" }
         buildConfigField("String", "VERTAL_SUPABASE_URL", "\"${prop("VERTAL_SUPABASE_URL")}\"")
         buildConfigField("String", "VERTAL_SUPABASE_ANON_KEY", "\"${prop("VERTAL_SUPABASE_ANON_KEY")}\"")
     }
